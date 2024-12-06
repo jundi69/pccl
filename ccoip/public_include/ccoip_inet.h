@@ -2,19 +2,20 @@
 
 #include <stdint.h>
 
-typedef enum ccoip_inet_protocol_t
-{
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+typedef enum ccoip_inet_protocol_t {
     inetIPv4,
     inetIPv6
 } ccoip_inet_protocol_t;
 
-typedef struct ccoip_ipv4_address_t
-{
+typedef struct ccoip_ipv4_address_t {
     uint8_t data[4];
 } ccoip_ipv4_address_t;
 
-inline ccoip_ipv4_address_t from_octets(const uint8_t octet1, const uint8_t octet2, const uint8_t octet3, const uint8_t octet4)
-{
+inline ccoip_ipv4_address_t from_octets(const uint8_t octet1, const uint8_t octet2, const uint8_t octet3, const uint8_t octet4) {
     ccoip_ipv4_address_t address;
     address.data[0] = octet1;
     address.data[1] = octet2;
@@ -23,8 +24,7 @@ inline ccoip_ipv4_address_t from_octets(const uint8_t octet1, const uint8_t octe
     return address;
 }
 
-typedef struct ccoip_ipv6_address_t
-{
+typedef struct ccoip_ipv6_address_t {
     uint8_t data[16];
 } ccoip_ipv6_address_t;
 
@@ -41,3 +41,6 @@ typedef struct ccoip_socket_address_t {
     uint16_t port;
 } ccoip_socket_address_t;
 
+#ifdef __cplusplus
+}
+#endif

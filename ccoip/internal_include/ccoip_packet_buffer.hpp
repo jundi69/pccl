@@ -8,13 +8,17 @@
 
 #include <type_utils.hpp>
 
+
+template<typename T>
+concept BufferPOD = std::is_arithmetic_v<T>;
+
 /**
  * @class PacketReadBuffer
  * @brief A utility class for reading data from a byte buffer in big-endian format.
  *
  * PacketBuffer wraps a raw buffer (uint8_t*) with a specified length, providing methods to read various data types.
  */
-class PacketReadBuffer {
+class PacketReadBuffer final {
 public:
     PacketReadBuffer(const uint8_t *data, size_t length);
 
@@ -26,10 +30,8 @@ public:
      * @return The value of type T read from the buffer.
      * @throws std::out_of_range if reading exceeds the buffer length.
      */
-    template<typename T>
+    template<typename T> requires BufferPOD<T>
     T read() {
-        static_assert(std::is_arithmetic_v<T>, "Only arithmetic types are supported");
-
         if (read_index_ + sizeof(T) > length_) {
             throw std::out_of_range("Read exceeds buffer length");
         }
@@ -58,7 +60,7 @@ public:
      * @return The array of type T read from the buffer.
      * @throws std::out_of_range if reading exceeds the bounded array length.
      */
-    template<typename T, size_t N>
+    template<typename T, size_t N> requires BufferPOD<T>
     std::array<T, N> readFixedArray() {
         std::array<T, N> array;
         for (size_t i = 0; i < N; ++i) {
@@ -72,16 +74,16 @@ public:
      * @tparam T The type of the list to read from the buffer.
      * @return The list of type T read from the buffer.
      */
-    template<typename T>
+    template<typename T> requires BufferPOD<T>
     std::vector<T> readVarLenList() {
         const auto list_size = read<uint32_t>();
         std::vector<T> list;
         list.reserve(list_size);
         for (size_t i = 0; i < list_size; ++i) {
             if constexpr (is_std_array_v<T>) {
-                list.push_back(readFixedArray<typename extract_array_type<T>::type, extract_array_type<T>::size>());
+                list.emplace_back(readFixedArray<typename extract_array_type<T>::type, extract_array_type<T>::size>());
             } else {
-                list.push_back(read<T>());
+                list.emplace_back(read<T>());
             }
         }
         return list;

@@ -5,8 +5,7 @@
 #include <netinet/in.h>
 
 int convert_to_sockaddr(const ccoip_socket_address_t &ccoip_addr, sockaddr_in &sock_addr_out) {
-    memset(&sock_addr_out, 0, sizeof(sock_addr_out));
-
+    sock_addr_out = {};
     if (ccoip_addr.inet.protocol == inetIPv4) {
         // IPv4 conversion
         auto *addr_in = reinterpret_cast<sockaddr_in *>(&sock_addr_out);
@@ -21,11 +20,10 @@ int convert_to_sockaddr(const ccoip_socket_address_t &ccoip_addr, sockaddr_in &s
         auto *addr_in6 = reinterpret_cast<sockaddr_in6 *>(&sock_addr_out);
         addr_in6->sin6_family = AF_INET6;
         addr_in6->sin6_port = htons(ccoip_addr.port);
-#pragma unroll
         for (int i = 0; i < 16; i++) {
             addr_in6->sin6_addr.s6_addr[i] = ccoip_addr.inet.address.ipv6.data[i];
         }
-    } else {
+    } else [[unlikely]] {
         return -1; // Unsupported protocol
     }
 
@@ -47,11 +45,10 @@ int convert_from_sockaddr(const sockaddr *sock_addr, ccoip_socket_address_t &cco
         auto *addr_in6 = reinterpret_cast<const sockaddr_in6 *>(sock_addr);
         ccoip_addr.inet.protocol = inetIPv6;
         ccoip_addr.port = ntohs(addr_in6->sin6_port);
-#pragma unroll
         for (int i = 0; i < 16; i++) {
             ccoip_addr.inet.address.ipv6.data[i] = addr_in6->sin6_addr.s6_addr[i];
         }
-    } else {
+    } else [[unlikely]] {
         return -1; // Unsupported protocol
     }
     return 0; // Success

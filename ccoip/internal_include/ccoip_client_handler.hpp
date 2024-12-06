@@ -14,9 +14,10 @@ namespace ccoip {
     public:
         explicit CCoIPClientHandler(const ccoip_socket_address_t &address);
 
-        CCoIPClientHandler(const CCoIPClientHandler &other) = delete; /// delete copy constructor
-        CCoIPClientHandler(CCoIPClientHandler &&other) = delete; /// delete move constructor
-        CCoIPClientHandler &operator=(const CCoIPClientHandler &other) = delete; /// delete assignment operator
+        CCoIPClientHandler(const CCoIPClientHandler &other) = delete;
+        CCoIPClientHandler(CCoIPClientHandler &&other) = delete;
+        CCoIPClientHandler &operator=(const CCoIPClientHandler &other) = delete;
+        CCoIPClientHandler &operator=(CCoIPClientHandler &&other) = delete;
 
         [[nodiscard]] bool connect();
 

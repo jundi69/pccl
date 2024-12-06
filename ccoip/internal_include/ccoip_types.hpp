@@ -20,10 +20,8 @@ enum CCoIPDataType : uint8_t {
     UINT64 = 0x0C
 };
 
-typedef uint8_t boolean;
-
-#define CCOIP_UUID_N_BYTES 16
-typedef std::array<uint8_t, CCOIP_UUID_N_BYTES> ccoip_uuid;
+constexpr std::size_t CCOIP_UUID_N_BYTES = 16;
+using ccoip_uuid = std::array<uint8_t, CCOIP_UUID_N_BYTES>;
 
 struct ccoip_uuid_t
 {
@@ -38,7 +36,8 @@ struct ccoip_uuid_t
     {
         return !(lhs == rhs);
     }
-} __attribute((packed));
+};
+static_assert(sizeof(ccoip_uuid_t) == 16);
 
 // Custom hash specialization for uuid_t
 template <>
@@ -72,5 +71,3 @@ inline std::string uuid_to_string(const ccoip_uuid_t& uuid)
     }
     return uuid_str;
 }
-
-#define UUID_TO_STR(uuid) uuid_to_string(uuid)
