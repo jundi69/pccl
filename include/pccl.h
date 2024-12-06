@@ -55,6 +55,11 @@ typedef struct pcclReduceInfo_t {
     uint64_t rx_bytes;
 } pcclReduceInfo_t;
 
+typedef struct {
+    pcclComm_t *comm;
+    uint64_t tag;
+} pcclAsyncReduceOp_t;
+
 /**
  * Uniquely identifies a rank in a communicator.
  * Even if a rank ordinal is reused after a rank is removed and a new rank added in its place, the UUID will be unique.
@@ -157,7 +162,7 @@ PCCL_EXPORT pcclResult_t pcclConnectMaster(pcclComm_t *communicator, ccoip_socke
 PCCL_EXPORT pcclResult_t pcclAcceptNewPeers(pcclComm_t *communicator);
 
 /**
- * Performs an all reduce operation on a communicator.
+ * Performs an all reduce operation on a communicator. Blocks untill the all reduce is complete.
  *
  * @param sendbuff The buffer to send data from.
  * @param recvbuff The buffer to receive data into.
@@ -176,6 +181,40 @@ PCCL_EXPORT pcclResult_t pcclAcceptNewPeers(pcclComm_t *communicator);
 PCCL_EXPORT pcclResult_t pcclAllReduce(const void *sendbuff, void *recvbuff, size_t count, pcclDataType_t datatype,
                                        pcclRedOp_t op, uint64_t tag, const pcclComm_t *communicator,
                                        pcclReduceInfo_t *reduce_info_out);
+
+/**
+* Performs an all reduce operation on a communicator. Async version of @code pcclAllReduce@endcode.
+*
+* @param sendbuff The buffer to send data from.
+* @param recvbuff The buffer to receive data into.
+* @param count The number of elements in the buffer.
+* @param datatype The data type of the elements in the buffer.
+* @param op The reduction operation to perform.
+* @param tag The tag to identify the operation.
+* @param communicator The communicator to perform the operation on.
+* @param reduce_info_out The reduce info to be filled with information about the operation.
+* @param reduce_handle_out The reduce op handle to be filled with an async handle to the operation.
+*
+* @return @code pcclSuccess@endcode if the all reduce operation was successful.
+* @return @code pcclInvalidArgument@endcode if the communicator, sendbuff, recvbuff, count is less or equal to zero, or tag is less than zero.
+* @return @code pcclNotInitialized@endcode if @code pcclInit@endcode has not been called yet.
+* @return @code pcclInvalidUsage@endcode if the communicator is not connected to a master node.
+* @return @code pcclInvalidArgument@endcode if the reduce handle output is null.
+*/
+PCCL_EXPORT pcclResult_t pcclAllReduceAsync(const void *sendbuff, void *recvbuff, size_t count, pcclDataType_t datatype,
+                                            pcclRedOp_t op, uint64_t tag, const pcclComm_t *communicator,
+                                            pcclReduceInfo_t *reduce_info_out,
+                                            pcclAsyncReduceOp_t *reduce_handle_out);
+
+/**
+ * Awaits the completion of an async reduce operation. Blocks until the operation is complete.
+ *
+ * @param reduce_handle The handle to the async reduce operation.
+ *
+ * @return @code pcclSuccess@endcode if the async reduce operation was successful.
+ * @return @code pcclInvalidArgument@endcode if the reduce handle is null or invalid.
+ */
+PCCL_EXPORT pcclResult_t pcclAwaitAsyncReduce(const pcclAsyncReduceOp_t *reduce_handle);
 
 /**
  * Synchronizes the shared state between all peers that are currently accepted.
