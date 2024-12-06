@@ -1,0 +1,31 @@
+#include <pccl.h>
+
+#include <thread>
+
+#define PCCL_CHECK(status) { pcclResult_t status_val = status; if (status_val != pcclSuccess) { std::cerr << "Error: " << status_val << std::endl; exit(1); } }
+
+static pcclMasterInstance_t master_instance{};
+
+void signal_handler(const int signal) {
+    if (signal == SIGINT) {
+        PCCL_CHECK(pcclInterruptMaster(master_instance));
+    }
+}
+
+int main() {
+    constexpr ccoip_socket_address_t listen_address{
+        .address = {
+            .ipv4 = {0, 0, 0, 0}
+        },
+        .port = 48148
+    };
+
+    // install signal handler for interrupt
+    signal(SIGINT, signal_handler);
+
+    PCCL_CHECK(pcclCreateMaster(listen_address, &master_instance));
+    PCCL_CHECK(pcclRunMaster(master_instance));
+
+    PCCL_CHECK(pcclMasterAwaitTermination(master_instance));
+    PCCL_CHECK(pcclDestroyMaster(master_instance));
+}

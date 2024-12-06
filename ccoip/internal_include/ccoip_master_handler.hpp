@@ -1,0 +1,29 @@
+#pragma once
+
+#include <ccoip_inet.h>
+#include <memory>
+#include <thread>
+
+namespace ccoip {
+    struct CCoIPMaster;
+
+    class CCoIPMasterHandler {
+    private:
+        ccoip_socket_address_t listen_address;
+        std::unique_ptr<CCoIPMaster> master;
+        std::unique_ptr<std::thread> main_thread;
+
+    public:
+        explicit CCoIPMasterHandler(const ccoip_socket_address_t &listen_address);
+
+        /// returns false if the handler is already running or has been interrupted
+        [[nodiscard]] bool launch();
+
+        /// returns false if the handler has already been interrupted or was never launched
+        [[nodiscard]] bool interrupt() const;
+
+        /// returns false if the handler is not running
+        /// blocks until the handler has terminated
+        [[nodiscard]] bool join() const;
+    };
+};
