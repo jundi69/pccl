@@ -1,2 +1,2 @@
-add_library(log STATIC src/pccl_log.cpp)
-target_include_directories(log PUBLIC include)
+add_library(pccl_log STATIC src/pccl_log.cpp)
+target_include_directories(pccl_log PUBLIC include)

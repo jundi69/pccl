@@ -1,17 +1,52 @@
 #include "pccl.h"
+#include "pccl_internal.h"
 
-#include <ccoip_master_handler.h>
+#include <ccoip_master_handler.hpp>
+
+static bool pccl_initialized = false;
+
+#define PCCL_VALIDATE_INITIALIZED() \
+    if (!pccl_initialized) { \
+        PCCL_FAIL(pcclNotInitialized); \
+    }
+
+static pcclResult_t internalPcclInit() {
+    PCCL_SUCCEED();
+}
 
 pcclResult_t pcclInit() {
+    if (pccl_initialized) {
+        return pcclSuccess;
+    }
+    PCCL_ERR_PROPAGATE(internalPcclInit());
+    pccl_initialized = true;
     PCCL_SUCCEED();
 }
 
 pcclResult_t pcclCreateCommunicator(struct pcclComm_t **comm_out) {
+    PCCL_VALIDATE_INITIALIZED();
+    PCCL_VALIDATE(comm_out != nullptr, pcclInvalidArgument);
+    *comm_out = new pcclComm_t();
     PCCL_SUCCEED();
 }
 
-pcclResult_t pcclGetAttribute(const struct pcclComm_t *communicator, enum pcclAttribute_t attribute,
+pcclResult_t pcclGetAttribute(const struct pcclComm_t *communicator,
+                              enum pcclAttribute_t attribute,
                               int *p_attribute_out) {
+    PCCL_VALIDATE_INITIALIZED();
+    PCCL_VALIDATE(communicator != nullptr, pcclInvalidArgument);
+    PCCL_VALIDATE(p_attribute_out != nullptr, pcclInvalidArgument);
+
+    switch (attribute) {
+        case PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE: {
+            // const size_t world_size = communicator->ccoip_handler->get_world_size();
+            // *p_attribute_out = static_cast<int>(world_size);
+            break;
+        }
+        default: {
+            PCCL_FAIL(pcclInvalidArgument);
+        }
+    }
     PCCL_SUCCEED();
 }
 
@@ -24,14 +59,26 @@ pcclResult_t pcclSaveReducePlan(const struct pcclComm_t *communicator, const cha
 }
 
 pcclResult_t pcclDestroyCommunicator(struct pcclComm_t *communicator) {
+    PCCL_VALIDATE_INITIALIZED();
+    PCCL_VALIDATE(communicator != nullptr, pcclInvalidArgument);
+    if (!communicator->ccoip_handler->interrupt()) {
+        PCCL_FAIL(pcclInvalidUsage);
+    }
+    if (!communicator->ccoip_handler->join()) {
+        PCCL_FAIL(pcclInvalidUsage);
+    }
+    delete communicator;
     PCCL_SUCCEED();
 }
 
-pcclResult_t pcclConnectMaster(struct pcclComm_t *comm, struct ccoip_socket_address_t socket_address) {
+pcclResult_t pcclConnectMaster(struct pcclComm_t *communicator, struct ccoip_socket_address_t socket_address) {
     PCCL_SUCCEED();
 }
 
-pcclResult_t pcclAcceptNewPeers(struct pcclComm_t *comm) {
+pcclResult_t pcclAcceptNewPeers(struct pcclComm_t *communicator) {
+    PCCL_VALIDATE_INITIALIZED();
+    PCCL_VALIDATE(communicator != nullptr, pcclInvalidArgument);
+    communicator->ccoip_handler->acceptNewPeers();
     PCCL_SUCCEED();
 }
 
@@ -41,7 +88,7 @@ pcclResult_t pcclAllReduce(const void *sendbuff, void *recvbuff, size_t count, e
     PCCL_SUCCEED();
 }
 
-pcclResult_t pcclCommunicateSharedState(const struct pcclComm_t *comm, struct pcclSharedState_t *shared_state) {
+pcclResult_t pcclSynchronizeSharedState(const struct pcclComm_t *comm, struct pcclSharedState_t *shared_state) {
     PCCL_SUCCEED();
 }
 
@@ -81,7 +128,9 @@ pcclResult_t pcclInterruptMaster(const pcclMasterInstance_t master_instance) {
 
 pcclResult_t pcclMasterAwaitTermination(struct pcclMasterInstance_t master_handle) {
     PCCL_VALIDATE(master_handle.state != nullptr, pcclInvalidArgument);
-
+    if (!master_handle.state->master_handler->join()) {
+        PCCL_FAIL(pcclInvalidUsage);
+    }
     PCCL_SUCCEED();
 }
 

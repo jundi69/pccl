@@ -1,33 +1,32 @@
-#include "ccoip_master_handler.h"
+#include "ccoip_master_handler.hpp"
 
-#include "ccoip_master.h"
+#include "ccoip_master.hpp"
 
-#include <thread>
-
-ccoip::CCoIPMasterHandler::CCoIPMasterHandler(const ccoip_socket_address_t &listen_address): listen_address(listen_address) {
+ccoip::CCoIPMasterHandler::CCoIPMasterHandler(const ccoip_socket_address_t &listen_address): listen_address(listen_address), master(nullptr) {
 }
 
 bool ccoip::CCoIPMasterHandler::launch() {
-    if (master != nullptr || main_thread != nullptr) {
+    if (master != nullptr) {
         return false;
     }
-    master = std::make_unique<ccoip::CCoIPMaster>(listen_address);
-    main_thread = std::make_unique<std::thread>(&CCoIPMaster::run, master.get());
-    return true;
+    master = new CCoIPMaster(listen_address);
+    return master->run();
 }
 
 bool ccoip::CCoIPMasterHandler::interrupt() const {
-    if (master == nullptr || main_thread == nullptr) {
+    if (master == nullptr) {
         return false;
     }
-    master->interrupted = true;
-    return true;
+    return master->interrupt();
 }
 
 bool ccoip::CCoIPMasterHandler::join() const {
-    if (master == nullptr || main_thread == nullptr) {
+    if (master == nullptr) {
         return false;
     }
-    main_thread->join();
-    return true;
+    return master->join();
+}
+
+ccoip::CCoIPMasterHandler::~CCoIPMasterHandler() {
+    delete master;
 }

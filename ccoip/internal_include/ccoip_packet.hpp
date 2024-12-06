@@ -1,8 +1,31 @@
-//
-// Created by Michael on 12/5/24.
-//
+#pragma once
 
-#ifndef CCOIP_PACKET_H
-#define CCOIP_PACKET_H
+#include "ccoip_packet_buffer.hpp"
 
-#endif //CCOIP_PACKET_H
+namespace ccoip {
+    typedef uint16_t packetId_t;
+
+    class Packet {
+    public:
+        virtual ~Packet() = default;
+
+        Packet(const Packet &other) = delete;
+
+        Packet(const Packet &&other) = delete;
+
+        virtual void serialize(PacketWriteBuffer &buffer) = 0;
+
+        virtual void deserialize(PacketReadBuffer &buffer) = 0;
+    };
+
+    class EmptyPacket : public Packet {
+    public:
+        EmptyPacket();
+
+        static size_t serialized_size;
+
+        void serialize(PacketWriteBuffer &buffer) override;
+
+        void deserialize(PacketReadBuffer &buffer) override;
+    };
+}

@@ -1,10 +1,12 @@
-add_library(ccoip_private STATIC src/ccoip_master_handler.cpp src/ccoip_master.cpp)
+add_library(ccoip_private STATIC src/ccoip_master_handler.cpp src/ccoip_client_handler.cpp src/ccoip_master.cpp src/ccoip_packets.cpp)
 
 add_library(ccoip_public INTERFACE)
 target_include_directories(ccoip_public INTERFACE public_include)
 
 target_include_directories(ccoip_private PUBLIC internal_include)
+target_link_libraries(ccoip_public INTERFACE tinysockets)
 target_link_libraries(ccoip_private PUBLIC ccoip_public)
-target_link_libraries(ccoip_private PRIVATE tinysockets)
 
 target_include_directories(ccoip_private PRIVATE internal)
+
+target_link_libraries(ccoip_private PRIVATE pccl_log)

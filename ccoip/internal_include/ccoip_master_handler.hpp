@@ -1,8 +1,6 @@
 #pragma once
 
 #include <ccoip_inet.h>
-#include <memory>
-#include <thread>
 
 namespace ccoip {
     struct CCoIPMaster;
@@ -10,8 +8,7 @@ namespace ccoip {
     class CCoIPMasterHandler {
     private:
         ccoip_socket_address_t listen_address;
-        std::unique_ptr<CCoIPMaster> master;
-        std::unique_ptr<std::thread> main_thread;
+        CCoIPMaster *master;
 
     public:
         explicit CCoIPMasterHandler(const ccoip_socket_address_t &listen_address);
@@ -25,5 +22,7 @@ namespace ccoip {
         /// returns false if the handler is not running
         /// blocks until the handler has terminated
         [[nodiscard]] bool join() const;
+
+        ~CCoIPMasterHandler();
     };
 };

@@ -3,11 +3,16 @@ project(pccl)
 
 set(CMAKE_CXX_STANDARD 20)
 
-add_library(pccl STATIC src/pccl.cpp)
+# add third party libraries
+add_subdirectory(third_party)
 
+# add internal libraries
+add_subdirectory(log)
 add_subdirectory(ccoip)
+add_subdirectory(ccoip_master)
 add_subdirectory(tinysockets)
 
+add_library(pccl STATIC src/pccl.cpp)
 target_include_directories(pccl PUBLIC include)
 target_include_directories(pccl PRIVATE internal)
 

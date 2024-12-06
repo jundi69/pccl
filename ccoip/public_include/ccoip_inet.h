@@ -27,12 +27,16 @@ struct ccoip_ipv6_address_t
     uint8_t data[16];
 };
 
-
-struct ccoip_socket_address_t {
+struct ccoip_inet_address_t {
     enum ccoip_inet_protocol_t protocol;
     union {
         struct ccoip_ipv4_address_t ipv4;
         struct ccoip_ipv6_address_t ipv6;
     } address;
+};
+
+struct ccoip_socket_address_t {
+    struct ccoip_inet_address_t inet_address;
     uint16_t port;
 };
+

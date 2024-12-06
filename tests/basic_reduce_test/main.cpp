@@ -1,22 +1,66 @@
 #include <pccl.h>
+#include <random>
 
-#include <thread>
+#define PCCL_CHECK(status) { pcclResult_t status_val = status; if (status_val != pcclSuccess) { std::cerr << "Error: " << status_val << std::endl; exit(1); } }
 
-#define PCCL_CHECK(status) { pcclResult_t status_val = status; if (status_val != pcclSuccess) { std::cerr << "Error: " << status_val << std::endl; return status_val; } }
+void fill_uniform(float *data, const size_t count) {
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_real_distribution dis(0.0f, 1.0f);
+    for (size_t i = 0; i < count; ++i) {
+        data[i] = dis(gen);
+    }
+}
+
+#define MAX_STEPS 100
 
 int main() {
-    constexpr ccoip_socket_address_t listen_address{
-        .address = {
-            .ipv4 = {0, 0, 0, 0}
-        },
-        .port = 48148
+    pcclInit();
+
+    pcclComm_t *communicator{};
+    PCCL_CHECK(pcclCreateCommunicator(&communicator));
+
+    constexpr ccoip_socket_address_t connect_address{
+        .inet_address.protocol = inetIPv4,
+        .inet_address.address.ipv4 = {127, 0, 0, 1},
+        .port = 48148,
     };
 
-    pcclMasterInstance_t master_instance{};
-    PCCL_CHECK(pcclCreateMaster(listen_address, &master_instance));
-    PCCL_CHECK(pcclRunMaster(master_instance));
-    std::this_thread::sleep_for(std::chrono::seconds(10));
-    PCCL_CHECK(pcclInterruptMaster(master_instance));
-    PCCL_CHECK(pcclMasterAwaitTermination(master_instance));
-    PCCL_CHECK(pcclDestroyMaster(master_instance));
+    PCCL_CHECK(pcclConnectMaster(communicator, connect_address));
+
+    int world_size{};
+    pcclGetAttribute(communicator, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size);
+
+    constexpr size_t n_weights = 1024;
+    const auto weights = new float[n_weights];
+    fill_uniform(weights, n_weights);
+
+    constexpr size_t count = 1;
+    pcclTensorInfo_t infos[count] = {
+        {"weights", weights, n_weights, pcclFloat, false}
+    };
+    pcclSharedState_t shared_state = {
+        .revision = 1,
+        .count = count,
+        .infos = infos,
+    };
+
+    constexpr size_t n_peers = 1;
+    const auto gradients = new float[n_peers];
+
+    while (true) {
+        PCCL_CHECK(pcclAcceptNewPeers(communicator));
+        PCCL_CHECK(pcclSynchronizeSharedState(communicator, &shared_state));
+
+        if (shared_state.revision >= MAX_STEPS) {
+            break;
+        }
+
+        fill_uniform(gradients, n_peers);
+        PCCL_CHECK(pcclAllReduce(gradients, weights, n_peers, pcclFloat, pcclSum, 0, communicator, nullptr));
+
+        shared_state.revision++;
+    }
+
+    PCCL_CHECK(pcclDestroyCommunicator(communicator));
 }

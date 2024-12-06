@@ -146,11 +146,11 @@ PCCL_EXPORT pcclResult_t pcclConnectMaster(struct pcclComm_t *comm, struct ccoip
 /**
  * Will block if new peers are joining the session and will handle connection establishment with them.
  *
- * @param comm the communicator to accept new peers on.
+ * @param communicator the communicator to accept new peers on.
  *
  * @return @code pcclSuccess@endcode if the new peers were accepted successfully.
  */
-PCCL_EXPORT pcclResult_t pcclAcceptNewPeers(struct pcclComm_t *comm);
+PCCL_EXPORT pcclResult_t pcclAcceptNewPeers(struct pcclComm_t *communicator);
 
 /**
  * Performs an all reduce operation on a communicator.
@@ -174,20 +174,12 @@ PCCL_EXPORT pcclResult_t pcclAllReduce(const void *sendbuff, void *recvbuff, siz
                                        struct pcclReduceInfo_t *reduce_info_out);
 
 /**
- * Communicates the shared state of a communicator. The shared state is a collection of tensors that is synchronized between nodes.
- * Will block if there is a pending shared state transmit request.
- * Only blocks when another peer requests transmission from this peer specifically.
- * If no transmission is requested, this function will return immediately.
+ * Synchronizes the shared state between all peers that are currently accepted.
+ * If the shared state revision of this peer is outdated, the shared state will be updated.
+ * The function will not unblock until it is confirmed all peers have the same shared state revision.
  */
-PCCL_EXPORT pcclResult_t pcclCommunicateSharedState(const struct pcclComm_t *comm,
+PCCL_EXPORT pcclResult_t pcclSynchronizeSharedState(const struct pcclComm_t *comm,
                                                     struct pcclSharedState_t *shared_state);
-
-/**
- * Poll the shared state of a communicator. The shared state is a collection of tensors that is synchronized between nodes.
- * Destination memory for the expected tensors of the shared state must be pre-allocated by the user.
- */
-PCCL_EXPORT pcclResult_t pcclPollSharedState(const struct pcclComm_t *comm,
-                                             struct pcclSharedState_t *shared_state);
 
 struct pcclMasterInstanceState_t;
 
@@ -201,7 +193,8 @@ struct pcclMasterInstance_t {
  * @param p_master_handle_out Pointer to the master node handle to be created.
  * @return @code pcclSuccess@endcode if the master node handle was created successfully.
  */
-PCCL_EXPORT pcclResult_t pcclCreateMaster(ccoip_socket_address_t listen_address, struct pcclMasterInstance_t *p_master_handle_out);
+PCCL_EXPORT pcclResult_t pcclCreateMaster(ccoip_socket_address_t listen_address,
+                                          struct pcclMasterInstance_t *p_master_handle_out);
 
 /**
  * Runs a master node. This function is non-blocking.
