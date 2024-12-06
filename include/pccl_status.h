@@ -24,9 +24,9 @@ typedef enum pcclResult_t {
 } pcclResult_t;
 
 #ifdef __cplusplus
-#define PCCL_DEBUG(msg) std::cerr << "[OpenNCCL Debug]: " << msg << std::endl
+#define PCCL_DEBUG(msg) std::cerr << "[PCCL Debug]: " << msg << std::endl
 #else
-#define PCCL_DEBUG(msg) printf("[OpenNCCL Debug]: %s\n", msg)
+#define PCCL_DEBUG(msg) printf("[PCCL Debug]: %s\n", msg)
 #endif
 
 #define __PCCL_STRINGIFY(x) #x
