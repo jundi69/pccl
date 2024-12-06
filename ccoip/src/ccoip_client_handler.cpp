@@ -49,7 +49,7 @@ bool ccoip::CCoIPClientHandler::acceptNewPeers() {
         p2p_connections.push_back(establishP2PConnection(new_peer));
     }
 
-    // wait on signal until notify, check if all p2p connection
+    // wait on signal until notify, check if all p2p connection have been established tx side and rx side
     */
 
     return true;
