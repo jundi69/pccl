@@ -13,6 +13,9 @@ add_subdirectory(ccoip_master)
 add_subdirectory(tinysockets)
 
 add_library(pccl STATIC src/pccl.cpp)
+if (NOT WIN32)
+    target_compile_options(pccl PRIVATE -Wall -Wextra -Werror -Wpedantic -Wno-unused-parameter)
+endif()
 target_include_directories(pccl PUBLIC include)
 target_include_directories(pccl PRIVATE internal)
 

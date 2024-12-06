@@ -17,7 +17,7 @@ void ccoip::EmptyPacket::deserialize(PacketReadBuffer &buffer) {
 void ccoip::M2CPacketNewPeers::serialize(PacketWriteBuffer &buffer) const {
     buffer.write<uint64_t>(new_peers.size());
     for (auto &new_peer: new_peers) {
-        buffer.write<boolean>(new_peer.inet_address.protocol == inetIPv4);
+        buffer.write<bool>(new_peer.inet_address.protocol == inetIPv4);
         if (new_peer.inet_address.protocol == inetIPv4) {
             std::array<uint8_t, 4> ipv4_data{};
             for (size_t i = 0; i < 4; i++) {
@@ -40,7 +40,7 @@ void ccoip::M2CPacketNewPeers::deserialize(PacketReadBuffer &buffer) {
     new_peers.reserve(n_peers);
     for (size_t i = 0; i < n_peers; i++) {
         M2CPacketNewPeerInfo peer_info{};
-        if (buffer.read<boolean>()) {
+        if (buffer.read<bool>()) {
             peer_info.inet_address.protocol = inetIPv4;
             for (unsigned char &octet: peer_info.inet_address.address.ipv4.data) {
                 octet = buffer.read<uint8_t>();

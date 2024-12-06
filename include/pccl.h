@@ -2,22 +2,26 @@
 
 #include <ccoip_inet.h>
 
-#ifndef __cplusplus
-#include <stddef.h>
-#define bool _Bool
-#else
+#ifdef __cplusplus
 #include <cstddef>
+#else
+#include <stddef.h>
+#include <stdbool.h>
 #endif
 
 #include "pccl_status.h"
 
-#ifdef __cplusplus
-#define PCCL_EXPORT extern "C"
+#ifdef _MSC_VER
+#define PCCL_EXPORT __declspec(dllexport)
 #else
-#define PCCL_EXPORT extern
+#define PCCL_EXPORT __attribute__((visibility("default")))
 #endif
 
-enum pcclDataType_t {
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+typedef enum pcclDataType_t {
     pcclUint8 = 0,
     pcclInt8 = 1,
     pcclUint16 = 2,
@@ -27,51 +31,51 @@ enum pcclDataType_t {
     pcclInt64 = 6,
     pcclFloat = 7,
     pcclDouble = 8
-};
+} pcclDataType_t;
 
-enum pcclRedOp_t {
+typedef enum pcclRedOp_t {
     pcclSum,
     pcclAvg,
     pcclProd,
     pcclMax,
     pcclMin
-};
+} pcclRedOp_t;
 
-enum pcclAttribute_t {
+typedef enum pcclAttribute_t {
     PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE = 1
-};
+} pcclAttribute_t;
 
-struct pcclComm_t;
+typedef struct pcclComm_t pcclComm_t;
 
-struct pcclRankInfo_t;
+typedef struct pcclRankInfo_t pcclRankInfo_t;
 
-struct pcclReduceInfo_t {
+typedef struct pcclReduceInfo_t {
     uint32_t world_size;
     uint64_t tx_bytes;
     uint64_t rx_bytes;
-};
+} pcclReduceInfo_t;
 
 /**
  * Uniquely identifies a rank in a communicator.
  * Even if a rank ordinal is reused after a rank is removed and a new rank added in its place, the UUID will be unique.
  */
-struct pcclRankUuid_t {
+typedef struct pcclRankUuid_t {
     uint8_t data[16];
-};
+} pcclRankUuid_t;
 
-struct pcclTensorInfo_t {
+typedef struct pcclTensorInfo_t {
     const char *name;
     void *data;
     size_t count;
     pcclDataType_t datatype;
     bool allow_content_inequality;
-};
+} pcclTensorInfo_t;
 
-struct pcclSharedState_t {
+typedef struct pcclSharedState_t {
     uint64_t revision;
     size_t count;
     pcclTensorInfo_t *infos;
-};
+} pcclSharedState_t;
 
 /**
  * Initializes the pccl library.
@@ -85,7 +89,7 @@ PCCL_EXPORT pcclResult_t pcclInit();
  * @return @code pcclSuccess@endcode if the communicator was created successfully.
  * @return @code pcclNotInitialized@endcode if @code pcclInit@endcode has not been called yet.
  */
-PCCL_EXPORT pcclResult_t pcclCreateCommunicator(struct pcclComm_t **comm_out);
+PCCL_EXPORT pcclResult_t pcclCreateCommunicator(pcclComm_t **comm_out);
 
 /**
  * Gets an attribute of a communicator.
@@ -97,7 +101,7 @@ PCCL_EXPORT pcclResult_t pcclCreateCommunicator(struct pcclComm_t **comm_out);
  * @return @code pcclNotInitialized@endcode if @code pcclInit@endcode has not been called yet.
  * @return @code pcclInvalidArgument@endcode if the communicator or pAttributeOut is null or if the specified attribute type is unknown.
  */
-PCCL_EXPORT pcclResult_t pcclGetAttribute(const struct pcclComm_t *communicator, enum pcclAttribute_t attribute,
+PCCL_EXPORT pcclResult_t pcclGetAttribute(const pcclComm_t *communicator, pcclAttribute_t attribute,
                                           int *p_attribute_out);
 
 /**
@@ -108,7 +112,7 @@ PCCL_EXPORT pcclResult_t pcclGetAttribute(const struct pcclComm_t *communicator,
  *
  * @return pcclSuccess if the topology was saved successfully.
  */
-PCCL_EXPORT pcclResult_t pcclTopologySaveGraph(const struct pcclComm_t *communicator, const char *filename);
+PCCL_EXPORT pcclResult_t pcclTopologySaveGraph(const pcclComm_t *communicator, const char *filename);
 
 /**
  * Saves the reduce plan instructions of a communicator to a file for inspection.
@@ -117,7 +121,7 @@ PCCL_EXPORT pcclResult_t pcclTopologySaveGraph(const struct pcclComm_t *communic
  *
  * @return pcclSuccess if the reduce plan was saved successfully.
  */
-PCCL_EXPORT pcclResult_t pcclSaveReducePlan(const struct pcclComm_t *communicator, const char *filename);
+PCCL_EXPORT pcclResult_t pcclSaveReducePlan(const pcclComm_t *communicator, const char *filename);
 
 /**
  * Destroys a communicator.
@@ -127,7 +131,7 @@ PCCL_EXPORT pcclResult_t pcclSaveReducePlan(const struct pcclComm_t *communicato
  *
  * @return pcclSuccess if the communicator was destroyed successfully.
  */
-PCCL_EXPORT pcclResult_t pcclDestroyCommunicator(struct pcclComm_t *communicator);
+PCCL_EXPORT pcclResult_t pcclDestroyCommunicator(pcclComm_t *communicator);
 
 /**
  * Establishes a connection to a master node.
@@ -140,7 +144,7 @@ PCCL_EXPORT pcclResult_t pcclDestroyCommunicator(struct pcclComm_t *communicator
  * @return @code pcclInvalidArgument@endcode if the communicator is null.
  * @return @code pcclInvalidUsage@endcode if the communicator is already connected to a master node.
  */
-PCCL_EXPORT pcclResult_t pcclConnectMaster(struct pcclComm_t *communicator, struct ccoip_socket_address_t socket_address);
+PCCL_EXPORT pcclResult_t pcclConnectMaster(pcclComm_t *communicator, ccoip_socket_address_t socket_address);
 
 
 /**
@@ -150,7 +154,7 @@ PCCL_EXPORT pcclResult_t pcclConnectMaster(struct pcclComm_t *communicator, stru
  *
  * @return @code pcclSuccess@endcode if the new peers were accepted successfully.
  */
-PCCL_EXPORT pcclResult_t pcclAcceptNewPeers(struct pcclComm_t *communicator);
+PCCL_EXPORT pcclResult_t pcclAcceptNewPeers(pcclComm_t *communicator);
 
 /**
  * Performs an all reduce operation on a communicator.
@@ -169,23 +173,23 @@ PCCL_EXPORT pcclResult_t pcclAcceptNewPeers(struct pcclComm_t *communicator);
  * @return @code pcclNotInitialized@endcode if @code pcclInit@endcode has not been called yet.
  * @return @code pcclInvalidUsage@endcode if the communicator is not connected to a master node.
  */
-PCCL_EXPORT pcclResult_t pcclAllReduce(const void *sendbuff, void *recvbuff, size_t count, enum pcclDataType_t datatype,
-                                       enum pcclRedOp_t op, uint64_t tag, const struct pcclComm_t *communicator,
-                                       struct pcclReduceInfo_t *reduce_info_out);
+PCCL_EXPORT pcclResult_t pcclAllReduce(const void *sendbuff, void *recvbuff, size_t count, pcclDataType_t datatype,
+                                       pcclRedOp_t op, uint64_t tag, const pcclComm_t *communicator,
+                                       pcclReduceInfo_t *reduce_info_out);
 
 /**
  * Synchronizes the shared state between all peers that are currently accepted.
  * If the shared state revision of this peer is outdated, the shared state will be updated.
  * The function will not unblock until it is confirmed all peers have the same shared state revision.
  */
-PCCL_EXPORT pcclResult_t pcclSynchronizeSharedState(const struct pcclComm_t *comm,
-                                                    struct pcclSharedState_t *shared_state);
+PCCL_EXPORT pcclResult_t pcclSynchronizeSharedState(const pcclComm_t *comm,
+                                                    pcclSharedState_t *shared_state);
 
-struct pcclMasterInstanceState_t;
+typedef struct pcclMasterInstanceState_t pcclMasterInstanceState_t;
 
-struct pcclMasterInstance_t {
-    struct pcclMasterInstanceState_t *state;
-};
+typedef struct pcclMasterInstance_t {
+    pcclMasterInstanceState_t *state;
+} pcclMasterInstance_t;
 
 /**
  * Creates a master node handle.
@@ -194,7 +198,7 @@ struct pcclMasterInstance_t {
  * @return @code pcclSuccess@endcode if the master node handle was created successfully.
  */
 PCCL_EXPORT pcclResult_t pcclCreateMaster(ccoip_socket_address_t listen_address,
-                                          struct pcclMasterInstance_t *p_master_handle_out);
+                                          pcclMasterInstance_t *p_master_handle_out);
 
 /**
  * Runs a master node. This function is non-blocking.
@@ -202,14 +206,14 @@ PCCL_EXPORT pcclResult_t pcclCreateMaster(ccoip_socket_address_t listen_address,
  * @return @code pcclSuccess@endcode if the master node was run successfully.
  * @return @code pcclInvalidArgument@endcode if the master handle is already running.
  */
-PCCL_EXPORT pcclResult_t pcclRunMaster(struct pcclMasterInstance_t master_instance);
+PCCL_EXPORT pcclResult_t pcclRunMaster(pcclMasterInstance_t master_instance);
 
 /**
  * Interrupts a master node.
  * @param master_instance The master node handle to interrupt.
  * @return @code pcclSuccess@endcode if the master node was interrupted successfully.
  */
-PCCL_EXPORT pcclResult_t pcclInterruptMaster(struct pcclMasterInstance_t master_instance);
+PCCL_EXPORT pcclResult_t pcclInterruptMaster(pcclMasterInstance_t master_instance);
 
 /**
  * Awaits termination of a master node. This function is blocking.
@@ -217,15 +221,15 @@ PCCL_EXPORT pcclResult_t pcclInterruptMaster(struct pcclMasterInstance_t master_
  * @return @code pcclSuccess@endcode if the master node was terminated successfully.
  * @return @code pcclInvalidArgument@endcode if the master handle is not running / was never interrupted.
  */
-PCCL_EXPORT pcclResult_t pcclMasterAwaitTermination(struct pcclMasterInstance_t master_instance);
+PCCL_EXPORT pcclResult_t pcclMasterAwaitTermination(pcclMasterInstance_t master_instance);
 
 /**
  * Destroys a master node. Must only be called after pcclMasterAwaitTermination has been called and returned.
  * @param master_instance The master node handle to destroy.
  * @return @code pcclSuccess@endcode if the master node was destroyed successfully.
  */
-PCCL_EXPORT pcclResult_t pcclDestroyMaster(struct pcclMasterInstance_t master_instance);
+PCCL_EXPORT pcclResult_t pcclDestroyMaster(pcclMasterInstance_t master_instance);
 
-#ifndef __cplusplus
-#undef bool
+#ifdef __cplusplus
+}
 #endif

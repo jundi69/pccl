@@ -7,7 +7,7 @@
 #include <stdio.h>
 #endif
 
-typedef enum {
+typedef enum pcclResult_t {
     pcclSuccess = 0,
     pcclNotInitialized = 1,
     pcclSystemError = 2,
@@ -22,7 +22,6 @@ typedef enum {
     pcclRankConnectionLost = 11,
     pcclNoSharedStateAvailable = 12,
 } pcclResult_t;
-
 
 #ifdef __cplusplus
 #define PCCL_DEBUG(msg) std::cerr << "[OpenNCCL Debug]: " << msg << std::endl
@@ -40,7 +39,4 @@ typedef enum {
     }                                        \
 }
 
-#define PCCL_SUCCEED() { return pcclSuccess; }
-#define PCCL_FAIL(status) { return status; }
-
-#define PCCL_ERR_PROPAGATE(status) { pcclResult_t status_val = status; if (status_val != pcclSuccess) { PCCL_FAIL(status_val); } }
+#define PCCL_ERR_PROPAGATE(status) { pcclResult_t status_val = status; if (status_val != pcclSuccess) { return (status_val); } }

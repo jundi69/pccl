@@ -1,6 +1,7 @@
 #include <pccl.h>
 
 #include <thread>
+#include <csignal>
 
 #define PCCL_CHECK(status) { pcclResult_t status_val = status; if (status_val != pcclSuccess) { std::cerr << "Error: " << status_val << std::endl; exit(1); } }
 
@@ -8,18 +9,15 @@ static pcclMasterInstance_t master_instance{};
 
 void signal_handler(const int signal) {
     if (signal == SIGINT || signal == SIGTERM) {
-        std::cout << "Interrupting master node..." << std::endl;
+        std::cout << "Interrupting master node..." << std::endl; // is this signal async safe?
         PCCL_CHECK(pcclInterruptMaster(master_instance));
     }
 }
 
 int main() {
-    constexpr ccoip_socket_address_t listen_address{
-        .inet.address = {
-            .ipv4 = {0, 0, 0, 0}
-        },
-        .port = 48148
-    };
+    ccoip_socket_address_t listen_address {};
+    listen_address.inet.address.ipv4 = {0, 0, 0, 0};
+    listen_address.port = 48148;
 
     // install signal handler for interrupt & termination signals
     signal(SIGINT, signal_handler);

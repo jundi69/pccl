@@ -3,6 +3,9 @@
 #include <ccoip_inet.h>
 #include <ccoip_packet.hpp>
 #include <pccl_log.hpp>
+
+#include <optional>
+#include <functional>
 #include <thread>
 #include <span>
 
@@ -14,9 +17,10 @@ namespace tinysockets {
 
     struct ServerSocketState;
 
-    typedef std::function<void(ccoip_socket_address_t, std::span<uint8_t>)> ServerSocketReadCallback;
+    using ServerSocketReadCallback = std::function<void(ccoip_socket_address_t, std::span<std::uint8_t>)>;
 
-    class ServerSocket {
+    class ServerSocket final {
+    private:
         ccoip_socket_address_t listen_address;
         ServerSocketState *server_socket_state;
         std::thread server_thread;
@@ -28,9 +32,10 @@ namespace tinysockets {
     public:
         explicit ServerSocket(const ccoip_socket_address_t &listen_address);
 
-        ServerSocket(const ServerSocket &other) = delete; /// delete copy constructor
-        ServerSocket(ServerSocket &&other) = delete; /// delete move constructor
-        ServerSocket &operator=(const ServerSocket &other) = delete; /// delete assignment operator
+        ServerSocket(const ServerSocket &other) = delete;
+        ServerSocket(ServerSocket &&other) = delete;
+        ServerSocket &operator=(const ServerSocket &other) = delete;
+        ServerSocket &operator=(ServerSocket &&other) = delete;
 
         /// Returns false if already bound or if listen_address is invalid
         [[nodiscard]] bool bind();
@@ -60,30 +65,31 @@ namespace tinysockets {
         void onClientRead(uv_stream_s *stream, ssize_t n_read, const uv_buf_t *buf) const;
     };
 
-    class BlockingIOSocket {
+    class BlockingIOSocket final {
+    private:
         int socket_fd;
         ccoip_socket_address_t connect_sockaddr;
 
     public:
         explicit BlockingIOSocket(const ccoip_socket_address_t &address);
 
-        BlockingIOSocket(const BlockingIOSocket &other) = delete; /// delete copy constructor
-        BlockingIOSocket(BlockingIOSocket &&other) = delete; /// delete move constructor)
+        BlockingIOSocket(const BlockingIOSocket &other) = delete;
+        BlockingIOSocket(BlockingIOSocket &&other) = delete;
+        BlockingIOSocket &operator=(const BlockingIOSocket &other) = delete;
+        BlockingIOSocket &operator=(BlockingIOSocket &&other) = delete;
 
         [[nodiscard]] bool establishConnection();
 
-        template<typename T>
+        template<typename T> requires std::is_base_of_v<ccoip::Packet, T>
         [[nodiscard]] bool sendPacket(T &packet) {
-            static_assert(std::is_base_of_v<ccoip::Packet, T>, "T must be a subclass of ccoip::Packet");
             const ccoip::packetId_t id = T::packet_id;
             PacketWriteBuffer buffer{};
             packet.serialize(buffer);
             return sendTlvPacket(id, buffer);
         }
 
-        template<typename T>
+        template<typename T> requires std::is_base_of_v<ccoip::Packet, T>
         [[nodiscard]] std::optional<T> recvPacket() {
-            static_assert(std::is_base_of_v<ccoip::Packet, T>, "T must be a subclass of ccoip::Packet");
             const ccoip::packetId_t id = T::packet_id;
             return receiveTlvPacket<T>(id);
         }
@@ -95,23 +101,21 @@ namespace tinysockets {
 
         [[nodiscard]] size_t receivePacketLength() const;
 
-        [[nodiscard]] bool receivePacketData(std::span<uint8_t> &dst) const;
+        [[nodiscard]] bool receivePacketData(std::span<std::uint8_t> dst) const;
 
-        template<typename T>
+        template <typename T> requires std::is_base_of_v<ccoip::Packet, T>
         [[nodiscard]] std::optional<T> receiveTlvPacket(const ccoip::packetId_t packet_id) {
-            static_assert(std::is_base_of_v<ccoip::Packet, T>, "T must be a subclass of ccoip::Packet");
             if (const ccoip::packetId_t actual_packet_id = receivePacketType(); actual_packet_id != packet_id) {
                 LOG(ERROR) << "Expected packet ID " << packet_id << " but received " << actual_packet_id;
                 return std::nullopt;
             }
-            const uint64_t length = receivePacketLength();
-            const std::unique_ptr<uint8_t[]> data_ptr{new uint8_t[length]};
-            std::span data{data_ptr.get(), length};
+            std::vector<std::uint8_t> data{};
+            data.resize(receivePacketLength());
             if (!receivePacketData(data)) {
-                LOG(ERROR) << "Failed to receive packet data for packet ID " << packet_id << " with length " << length;
+                LOG(ERROR) << "Failed to receive packet data for packet ID " << packet_id << " with length " << data.size();
                 return std::nullopt;
             }
-            PacketReadBuffer buffer{data.data(), length};
+            PacketReadBuffer buffer{data.data(), data.size()};
             T packet{};
             packet.deserialize(buffer);
             return packet;
