@@ -20,14 +20,14 @@ pcclResult_t pcclInit() {
     }
     PCCL_ERR_PROPAGATE(internalPcclInit());
     pccl_initialized = true;
-   return pcclSuccess;
+    return pcclSuccess;
 }
 
 pcclResult_t pcclCreateCommunicator(pcclComm_t **comm_out) {
     PCCL_VALIDATE_INITIALIZED();
     PCCL_VALIDATE(comm_out != nullptr, pcclInvalidArgument);
     *comm_out = new pcclComm_t();
-   return pcclSuccess;
+    return pcclSuccess;
 }
 
 pcclResult_t pcclGetAttribute(const pcclComm_t *communicator,
@@ -44,19 +44,19 @@ pcclResult_t pcclGetAttribute(const pcclComm_t *communicator,
                 *p_attribute_out = 128; // for python test
             break;
         }
-        default: { [[unlikely]]
-            return pcclInvalidArgument;
+        default: {
+            [[unlikely]] return pcclInvalidArgument;
         }
     }
-   return pcclSuccess;
+    return pcclSuccess;
 }
 
 pcclResult_t pcclTopologySaveGraph(const pcclComm_t *communicator, const char *filename) {
-   return pcclSuccess;
+    return pcclSuccess;
 }
 
 pcclResult_t pcclSaveReducePlan(const pcclComm_t *communicator, const char *filename) {
-   return pcclSuccess;
+    return pcclSuccess;
 }
 
 pcclResult_t pcclDestroyCommunicator(pcclComm_t *communicator) {
@@ -69,7 +69,7 @@ pcclResult_t pcclDestroyCommunicator(pcclComm_t *communicator) {
         return pcclInvalidUsage;
     }
     delete communicator;
-   return pcclSuccess;
+    return pcclSuccess;
 }
 
 pcclResult_t pcclConnectMaster(pcclComm_t *communicator, ccoip_socket_address_t socket_address) {
@@ -80,7 +80,7 @@ pcclResult_t pcclConnectMaster(pcclComm_t *communicator, ccoip_socket_address_t 
     if (!communicator->ccoip_handler->connect()) [[unlikely]] {
         return pcclInvalidUsage;
     }
-   return pcclSuccess;
+    return pcclSuccess;
 }
 
 pcclResult_t pcclAcceptNewPeers(pcclComm_t *communicator) {
@@ -89,21 +89,37 @@ pcclResult_t pcclAcceptNewPeers(pcclComm_t *communicator) {
     if (!communicator->ccoip_handler->acceptNewPeers()) [[unlikely]] {
         return pcclInvalidUsage;
     }
-   return pcclSuccess;
+    return pcclSuccess;
 }
 
 pcclResult_t pcclAllReduce(const void *sendbuff, void *recvbuff, size_t count, pcclDataType_t datatype,
                            pcclRedOp_t op, uint64_t tag, const pcclComm_t *communicator,
                            pcclReduceInfo_t *reduce_info_out) {
-   return pcclSuccess;
+    PCCL_VALIDATE_INITIALIZED();
+    PCCL_VALIDATE(communicator != nullptr, pcclInvalidArgument);
+    return pcclSuccess;
+}
+
+pcclResult_t pcclAllReduceAsync(const void *sendbuff, void *recvbuff, size_t count, pcclDataType_t datatype,
+    pcclRedOp_t op, uint64_t tag, const pcclComm_t *communicator, pcclReduceInfo_t *reduce_info_out,
+    pcclAsyncReduceOp_t *reduce_handle_out) {
+    PCCL_VALIDATE_INITIALIZED();
+    PCCL_VALIDATE(communicator != nullptr, pcclInvalidArgument);
+    PCCL_VALIDATE(reduce_handle_out != nullptr, pcclInvalidArgument);
+    return pcclSuccess;
+}
+
+pcclResult_t pcclAwaitAsyncReduce(const pcclAsyncReduceOp_t *reduce_handle) {
+    PCCL_VALIDATE_INITIALIZED();
+    return pcclSuccess;
 }
 
 pcclResult_t pcclSynchronizeSharedState(const pcclComm_t *comm, pcclSharedState_t *shared_state) {
-   return pcclSuccess;
+    return pcclSuccess;
 }
 
 pcclResult_t pcclPollSharedState(const pcclComm_t *comm, pcclSharedState_t *shared_state) {
-   return pcclSuccess;
+    return pcclSuccess;
 }
 
 struct pcclMasterInstanceState_t {
@@ -117,7 +133,7 @@ pcclResult_t pcclCreateMaster(ccoip_socket_address_t listen_address, pcclMasterI
             .master_handler = std::make_unique<ccoip::CCoIPMasterHandler>(listen_address),
         }
     };
-   return pcclSuccess;
+    return pcclSuccess;
 }
 
 pcclResult_t pcclRunMaster(const pcclMasterInstance_t master_instance) {
@@ -125,7 +141,7 @@ pcclResult_t pcclRunMaster(const pcclMasterInstance_t master_instance) {
     if (!master_instance.state->master_handler->launch()) [[unlikely]] {
         return pcclInvalidUsage;
     }
-   return pcclSuccess;
+    return pcclSuccess;
 }
 
 pcclResult_t pcclInterruptMaster(const pcclMasterInstance_t master_instance) {
@@ -133,7 +149,7 @@ pcclResult_t pcclInterruptMaster(const pcclMasterInstance_t master_instance) {
     if (!master_instance.state->master_handler->interrupt()) [[unlikely]] {
         return pcclInvalidUsage;
     }
-   return pcclSuccess;
+    return pcclSuccess;
 }
 
 pcclResult_t pcclMasterAwaitTermination(pcclMasterInstance_t master_handle) {
@@ -141,12 +157,12 @@ pcclResult_t pcclMasterAwaitTermination(pcclMasterInstance_t master_handle) {
     if (!master_handle.state->master_handler->join()) [[unlikely]] {
         return pcclInvalidUsage;
     }
-   return pcclSuccess;
+    return pcclSuccess;
 }
 
 pcclResult_t pcclDestroyMaster(pcclMasterInstance_t master_instance) {
     PCCL_VALIDATE(master_instance.state != nullptr, pcclInvalidArgument);
     delete master_instance.state;
     master_instance.state = nullptr;
-   return pcclSuccess;
+    return pcclSuccess;
 }
