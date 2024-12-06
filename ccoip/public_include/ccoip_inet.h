@@ -36,7 +36,7 @@ struct ccoip_inet_address_t {
 };
 
 struct ccoip_socket_address_t {
-    struct ccoip_inet_address_t inet_address;
+    struct ccoip_inet_address_t inet;
     uint16_t port;
 };
 

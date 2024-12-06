@@ -15,7 +15,7 @@ void signal_handler(const int signal) {
 
 int main() {
     constexpr ccoip_socket_address_t listen_address{
-        .inet_address.address = {
+        .inet.address = {
             .ipv4 = {0, 0, 0, 0}
         },
         .port = 48148

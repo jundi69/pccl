@@ -21,8 +21,8 @@ int main() {
     PCCL_CHECK(pcclCreateCommunicator(&communicator));
 
     constexpr ccoip_socket_address_t connect_address{
-        .inet_address.protocol = inetIPv4,
-        .inet_address.address.ipv4 = {127, 0, 0, 1},
+        .inet.protocol = inetIPv4,
+        .inet.address.ipv4 = {127, 0, 0, 1},
         .port = 48148,
     };
 

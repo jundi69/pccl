@@ -1,9 +1,13 @@
 #include "ccoip_master.hpp"
 
+#include <ccoip_inet_utils.hpp>
 #include <tinysockets.hpp>
 
 
 ccoip::CCoIPMaster::CCoIPMaster(const ccoip_socket_address_t &listen_address) : server_socket(listen_address) {
+    server_socket.addReadCallback([this](const ccoip_socket_address_t &client_address, const std::span<uint8_t> data) {
+        onClientRead(client_address, data);
+    });
 }
 
 bool ccoip::CCoIPMaster::run() {
@@ -37,6 +41,10 @@ bool ccoip::CCoIPMaster::join() {
     }
     server_socket.join();
     return true;
+}
+
+void ccoip::CCoIPMaster::onClientRead(const ccoip_socket_address_t &client_address, std::span<uint8_t> data) {
+    LOG(INFO) << "Received " << data.size() << " bytes from " << CCOIP_SOCKET_ADDR_TO_STRING(client_address);
 }
 
 ccoip::CCoIPMaster::~CCoIPMaster() = default;

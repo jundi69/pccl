@@ -6,20 +6,19 @@
 #include <thread>
 #include <span>
 
-struct uv_loop_s;
-struct uv_tcp_s;
-struct uv_async_s;
 struct uv_server_stream_t;
-
 struct uv_stream_s;
 struct uv_buf_t;
 
 namespace tinysockets {
+
+    struct ServerSocketState;
+
+    typedef std::function<void(ccoip_socket_address_t, std::span<uint8_t>)> ServerSocketReadCallback;
+
     class ServerSocket {
         ccoip_socket_address_t listen_address;
-        uv_loop_s *loop;
-        uv_tcp_s *tcp_server;
-        uv_async_s *async_handle;
+        ServerSocketState *server_socket_state;
         std::thread server_thread;
 
         bool bound = false;
@@ -48,14 +47,17 @@ namespace tinysockets {
         /// Wait for the server thread to exit
         void join();
 
+        /// Add a callback to be called when new data is received from a client
+        void addReadCallback(const ServerSocketReadCallback &callback) const;
+
         ~ServerSocket();
 
     private:
         void onAsyncSignal() const;
 
-        void onNewConnection(uv_server_stream_t *server, int status) const;
+        void onNewConnection(uv_server_stream_t *server, int status);
 
-        void onClientRead(uv_stream_s *stream, ssize_t n_read, const uv_buf_t *buf);
+        void onClientRead(uv_stream_s *stream, ssize_t n_read, const uv_buf_t *buf) const;
     };
 
     class BlockingIOSocket {

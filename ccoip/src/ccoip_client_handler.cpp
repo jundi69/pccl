@@ -5,43 +5,6 @@
 #include "ccoip_inet_utils.hpp"
 #include "ccoip_packets.hpp"
 
-struct internal_inet_address_t {
-    ccoip_inet_protocol_t protocol;
-
-    union {
-        ccoip_ipv4_address_t ipv4;
-        ccoip_ipv6_address_t ipv6;
-    } address;
-
-    bool operator==(const internal_inet_address_t &rhs) const {
-        if (protocol != rhs.protocol) {
-            return false;
-        }
-        if (protocol == inetIPv4) {
-            return memcmp(address.ipv4.data, rhs.address.ipv4.data, 4) == 0;
-        }
-        if (protocol == inetIPv6) {
-            return memcmp(address.ipv6.data, rhs.address.ipv6.data, 16) == 0;
-        }
-        return false;
-    }
-};
-
-template<>
-struct std::hash<internal_inet_address_t> {
-    std::size_t operator()(const internal_inet_address_t &inet_addr) const noexcept {
-        std::size_t hash_value = 0;
-        hash_value = hash_value * 31 + inet_addr.protocol;
-        for (const auto &byte: inet_addr.address.ipv4.data) {
-            hash_value = hash_value * 31 + byte;
-        }
-        for (const auto &byte: inet_addr.address.ipv6.data) {
-            hash_value = hash_value * 31 + byte;
-        }
-        return hash_value;
-    }
-};
-
 struct CCoIPClientState {
     std::unordered_map<internal_inet_address_t, std::vector<ccoip_uuid_t>> inet_addrs_to_uuids{};
 };
