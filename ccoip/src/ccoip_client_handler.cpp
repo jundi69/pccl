@@ -51,8 +51,7 @@ ccoip::CCoIPClientHandler::CCoIPClientHandler(const ccoip_socket_address_t &addr
 }
 
 bool ccoip::CCoIPClientHandler::connect() {
-    client_socket.connect();
-    return true;
+    return client_socket.establishConnection();
 }
 
 // establishP2PConnection:
@@ -94,9 +93,11 @@ bool ccoip::CCoIPClientHandler::acceptNewPeers() {
 }
 
 bool ccoip::CCoIPClientHandler::interrupt() {
+    return true;
 }
 
 bool ccoip::CCoIPClientHandler::join() {
+    return true;
 }
 
 ccoip::CCoIPClientHandler::~CCoIPClientHandler() {

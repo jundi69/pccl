@@ -133,14 +133,14 @@ PCCL_EXPORT pcclResult_t pcclDestroyCommunicator(struct pcclComm_t *communicator
  * Establishes a connection to a master node.
  * This function must be called on a communicator for the communicator to be usable.
  *
- * @param comm The communicator to connect to the master node.
+ * @param communicator The communicator to connect to the master node.
  * @param socket_address The address of the master node to connect to.
  *
  * @return @code pcclSuccess@endcode if the connection was established successfully.
  * @return @code pcclInvalidArgument@endcode if the communicator is null.
  * @return @code pcclInvalidUsage@endcode if the communicator is already connected to a master node.
  */
-PCCL_EXPORT pcclResult_t pcclConnectMaster(struct pcclComm_t *comm, struct ccoip_socket_address_t socket_address);
+PCCL_EXPORT pcclResult_t pcclConnectMaster(struct pcclComm_t *communicator, struct ccoip_socket_address_t socket_address);
 
 
 /**
@@ -161,7 +161,7 @@ PCCL_EXPORT pcclResult_t pcclAcceptNewPeers(struct pcclComm_t *communicator);
  * @param datatype The data type of the elements in the buffer.
  * @param op The reduction operation to perform.
  * @param tag The tag to identify the operation.
- * @param comm The communicator to perform the operation on.
+ * @param communicator The communicator to perform the operation on.
  * @param reduce_info_out The reduce info to be filled with information about the operation.
  *
  * @return @code pcclSuccess@endcode if the all reduce operation was successful.
@@ -170,7 +170,7 @@ PCCL_EXPORT pcclResult_t pcclAcceptNewPeers(struct pcclComm_t *communicator);
  * @return @code pcclInvalidUsage@endcode if the communicator is not connected to a master node.
  */
 PCCL_EXPORT pcclResult_t pcclAllReduce(const void *sendbuff, void *recvbuff, size_t count, enum pcclDataType_t datatype,
-                                       enum pcclRedOp_t op, uint64_t tag, const struct pcclComm_t *comm,
+                                       enum pcclRedOp_t op, uint64_t tag, const struct pcclComm_t *communicator,
                                        struct pcclReduceInfo_t *reduce_info_out);
 
 /**

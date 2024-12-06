@@ -26,7 +26,7 @@ bool tinysockets::ServerSocket::bind() {
         return false;
     }
     sockaddr_in addr{};
-    if (convert_to_uv_sockaddr(listen_address, addr) != 0) {
+    if (convert_to_sockaddr(listen_address, addr) != 0) {
         return false;
     }
 
@@ -107,6 +107,7 @@ void tinysockets::ServerSocket::onNewConnection(uv_server_stream_t *server, cons
     auto *client = static_cast<uv_stream_t *>(malloc(sizeof(uv_stream_t)));
     UV_ERR_CHECK(uv_tcp_init(loop, reinterpret_cast<uv_tcp_t *>(client)));
     if (uv_accept(reinterpret_cast<uv_stream_t *>(server), client) == 0) {
+        LOG(INFO) << "New connection accepted";
         uv_read_start(client, createBuffer, [](uv_stream_t *stream, const ssize_t n_read, const uv_buf_t *buf) {
             auto *this_ptr = static_cast<ServerSocket *>(stream->data);
             this_ptr->onClientRead(stream, n_read, buf);
@@ -124,7 +125,7 @@ void tinysockets::ServerSocket::onClientRead(uv_stream_t *stream, const ssize_t 
         uv_tcp_getpeername(reinterpret_cast<uv_tcp_t *>(stream), reinterpret_cast<sockaddr *>(&addr), &addr_len)
     );
     ccoip_socket_address_t client_addr{};
-    convert_from_uv_sockaddr(reinterpret_cast<const sockaddr *>(&addr), client_addr);
+    convert_from_sockaddr(reinterpret_cast<const sockaddr *>(&addr), client_addr);
 
     if (n_read < 0) {
         uv_close(reinterpret_cast<uv_handle_t *>(stream), nullptr);

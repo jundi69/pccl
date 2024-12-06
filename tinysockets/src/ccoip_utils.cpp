@@ -1,11 +1,10 @@
 #include "ccoip_utils.hpp"
 
-#include <cstdio>
 #include <cstring>
 #include <arpa/inet.h>
 #include <netinet/in.h>
 
-int convert_to_uv_sockaddr(const ccoip_socket_address_t &ccoip_addr, sockaddr_in &sock_addr_out) {
+int convert_to_sockaddr(const ccoip_socket_address_t &ccoip_addr, sockaddr_in &sock_addr_out) {
     memset(&sock_addr_out, 0, sizeof(sock_addr_out));
 
     if (ccoip_addr.inet_address.protocol == inetIPv4) {
@@ -33,7 +32,7 @@ int convert_to_uv_sockaddr(const ccoip_socket_address_t &ccoip_addr, sockaddr_in
     return 0; // Success
 }
 
-int convert_from_uv_sockaddr(const sockaddr *sock_addr, ccoip_socket_address_t &ccoip_addr) {
+int convert_from_sockaddr(const sockaddr *sock_addr, ccoip_socket_address_t &ccoip_addr) {
     if (sock_addr->sa_family == AF_INET) {
         // IPv4 conversion
         auto *addr_in = reinterpret_cast<const sockaddr_in *>(sock_addr);

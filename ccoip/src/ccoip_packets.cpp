@@ -1,10 +1,11 @@
 #include "ccoip_packets.hpp"
 
-
 size_t ccoip::EmptyPacket::serialized_size = 0;
 
+ccoip::packetId_t ccoip::C2MPacketAcceptNewPeers::packet_id = C2M_PACKET_ACCEPT_NEW_PEERS_ID;
+
 // EmptyPacket
-void ccoip::EmptyPacket::serialize(PacketWriteBuffer &buffer) {
+void ccoip::EmptyPacket::serialize(PacketWriteBuffer &buffer) const {
     // do nothing
 }
 
@@ -13,7 +14,7 @@ void ccoip::EmptyPacket::deserialize(PacketReadBuffer &buffer) {
 }
 
 // M2CPacketNewPeers
-void ccoip::M2CPacketNewPeers::serialize(PacketWriteBuffer &buffer) {
+void ccoip::M2CPacketNewPeers::serialize(PacketWriteBuffer &buffer) const {
     buffer.write<uint64_t>(new_peers.size());
     for (auto &new_peer: new_peers) {
         buffer.write<boolean>(new_peer.inet_address.protocol == inetIPv4);
@@ -56,3 +57,5 @@ void ccoip::M2CPacketNewPeers::deserialize(PacketReadBuffer &buffer) {
         new_peers.push_back(peer_info);
     }
 }
+
+ccoip::packetId_t ccoip::M2CPacketNewPeers::packet_id = C2M_PACKET_NEW_PEERS_ID;

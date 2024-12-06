@@ -1,3 +1,4 @@
+#include <ccoip_utils.hpp>
 #include <pccl_log.hpp>
 #include <unistd.h>
 #include <netinet/in.h>
@@ -51,18 +52,36 @@ static void configure_socket_fd(const int socket_fd) {
 }
 
 
-tinysockets::BlockingIOSocket::BlockingIOSocket(const ccoip_socket_address_t &address) : socket_fd(0) {
+tinysockets::BlockingIOSocket::BlockingIOSocket(const ccoip_socket_address_t &address) : socket_fd(0),
+    connect_sockaddr(address) {
 }
 
-bool tinysockets::BlockingIOSocket::connect() {
+bool tinysockets::BlockingIOSocket::establishConnection() {
     if (socket_fd != 0) {
         return false;
     }
     socket_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (socket_fd < 0) {
         LOG(ERROR) << "Failed to create socket";
-        exit(EXIT_FAILURE);
+        return false;
     }
+    configure_socket_fd(socket_fd);
+
+    // connect to the server
+    sockaddr_in server_address{};
+    if (convert_to_sockaddr(connect_sockaddr, server_address) == -1) {
+        LOG(ERROR) << "Failed to convert socket address";
+        close(socket_fd);
+        return false;
+    }
+
+    // connect to the server
+    if (connect(socket_fd, reinterpret_cast<sockaddr *>(&server_address), sizeof(server_address)) < 0) {
+        LOG(ERROR) << "Failed to connect to server";
+        close(socket_fd);
+        return false;
+    }
+    return true;
 }
 
 bool tinysockets::BlockingIOSocket::sendTlvPacket(const ccoip::packetId_t packet_id,

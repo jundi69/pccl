@@ -60,6 +60,7 @@ namespace tinysockets {
 
     class BlockingIOSocket {
         int socket_fd;
+        ccoip_socket_address_t connect_sockaddr;
 
     public:
         explicit BlockingIOSocket(const ccoip_socket_address_t &address);
@@ -67,13 +68,13 @@ namespace tinysockets {
         BlockingIOSocket(const BlockingIOSocket &other) = delete; /// delete copy constructor
         BlockingIOSocket(BlockingIOSocket &&other) = delete; /// delete move constructor)
 
-        [[nodiscard]] bool connect();
+        [[nodiscard]] bool establishConnection();
 
         template<typename T>
-        [[nodiscard]] bool sendPacket(const T &packet) {
+        [[nodiscard]] bool sendPacket(T &packet) {
             static_assert(std::is_base_of_v<ccoip::Packet, T>, "T must be a subclass of ccoip::Packet");
             const ccoip::packetId_t id = T::packet_id;
-            const PacketWriteBuffer buffer{};
+            PacketWriteBuffer buffer{};
             packet.serialize(buffer);
             return sendTlvPacket(id, buffer);
         }

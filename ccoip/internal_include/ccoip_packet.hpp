@@ -7,24 +7,21 @@ namespace ccoip {
 
     class Packet {
     public:
+        Packet() = default;
+
         virtual ~Packet() = default;
 
-        Packet(const Packet &other) = delete;
-
-        Packet(const Packet &&other) = delete;
-
-        virtual void serialize(PacketWriteBuffer &buffer) = 0;
+        virtual void serialize(PacketWriteBuffer &buffer) const = 0;
 
         virtual void deserialize(PacketReadBuffer &buffer) = 0;
     };
 
     class EmptyPacket : public Packet {
     public:
-        EmptyPacket();
 
         static size_t serialized_size;
 
-        void serialize(PacketWriteBuffer &buffer) override;
+        void serialize(PacketWriteBuffer &buffer) const override;
 
         void deserialize(PacketReadBuffer &buffer) override;
     };

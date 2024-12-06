@@ -20,11 +20,10 @@ namespace ccoip {
 #define C2M_PACKET_NEW_PEERS_ID 1
 
     // C2MPacketAcceptNewPeers
-    class C2MPacketAcceptNewPeers final : EmptyPacket {
+    class C2MPacketAcceptNewPeers final : public EmptyPacket {
+    public:
         static packetId_t packet_id;
     };
-
-    packetId_t C2MPacketAcceptNewPeers::packet_id = C2M_PACKET_ACCEPT_NEW_PEERS_ID;
 
     struct M2CPacketNewPeerInfo {
         ccoip_inet_address_t inet_address;
@@ -33,17 +32,14 @@ namespace ccoip {
 
     // M2CPacketNewPeers
     class M2CPacketNewPeers final : public Packet {
+    public:
         static packetId_t packet_id;
 
     public:
         std::vector<M2CPacketNewPeerInfo> new_peers;
 
-        M2CPacketNewPeers();
-
-        void serialize(PacketWriteBuffer &buffer) override;
+        void serialize(PacketWriteBuffer &buffer) const override;
 
         void deserialize(PacketReadBuffer &buffer) override;
     };
-
-    packetId_t M2CPacketNewPeers::packet_id = C2M_PACKET_NEW_PEERS_ID;
 }

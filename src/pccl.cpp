@@ -72,18 +72,27 @@ pcclResult_t pcclDestroyCommunicator(struct pcclComm_t *communicator) {
 }
 
 pcclResult_t pcclConnectMaster(struct pcclComm_t *communicator, struct ccoip_socket_address_t socket_address) {
+    PCCL_VALIDATE_INITIALIZED();
+    PCCL_VALIDATE(communicator != nullptr, pcclInvalidArgument);
+    PCCL_VALIDATE(communicator->ccoip_handler == nullptr, pcclInvalidUsage);
+    communicator->ccoip_handler = std::make_unique<ccoip::CCoIPClientHandler>(socket_address);
+    if (!communicator->ccoip_handler->connect()) {
+        PCCL_FAIL(pcclInvalidUsage);
+    }
     PCCL_SUCCEED();
 }
 
 pcclResult_t pcclAcceptNewPeers(struct pcclComm_t *communicator) {
     PCCL_VALIDATE_INITIALIZED();
     PCCL_VALIDATE(communicator != nullptr, pcclInvalidArgument);
-    communicator->ccoip_handler->acceptNewPeers();
+    if (!communicator->ccoip_handler->acceptNewPeers()) {
+        PCCL_FAIL(pcclInvalidUsage);
+    }
     PCCL_SUCCEED();
 }
 
 pcclResult_t pcclAllReduce(const void *sendbuff, void *recvbuff, size_t count, enum pcclDataType_t datatype,
-                           enum pcclRedOp_t op, uint64_t tag, const struct pcclComm_t *comm,
+                           enum pcclRedOp_t op, uint64_t tag, const struct pcclComm_t *communicator,
                            struct pcclReduceInfo_t *reduce_info_out) {
     PCCL_SUCCEED();
 }
