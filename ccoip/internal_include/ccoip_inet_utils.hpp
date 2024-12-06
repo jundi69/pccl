@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstring>
 #include <arpa/inet.h>
 
 [[nodiscard]] inline std::string CCOIP_SOCKET_ADDR_TO_STRING(const ccoip_socket_address_t &addr) {

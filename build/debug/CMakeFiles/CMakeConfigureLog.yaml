@@ -1,0 +1,1122 @@
+
+---
+events:
+  -
+    kind: "message-v1"
+    backtrace:
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CMakeDetermineSystem.cmake:205 (message)"
+      - "CMakeLists.txt:2 (project)"
+    message: |
+      The system is: Linux - 6.1.0-28-amd64 - x86_64
+  -
+    kind: "message-v1"
+    backtrace:
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CMakeDetermineCompilerId.cmake:17 (message)"
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CMakeDetermineCompilerId.cmake:64 (__determine_compiler_id_test)"
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CMakeDetermineCCompiler.cmake:123 (CMAKE_DETERMINE_COMPILER_ID)"
+      - "CMakeLists.txt:2 (project)"
+    message: |
+      Compiling the C compiler identification source file "CMakeCCompilerId.c" succeeded.
+      Compiler: /usr/bin/gcc 
+      Build flags: 
+      Id flags:  
+      
+      The output was:
+      0
+      
+      
+      Compilation of the C compiler identification source "CMakeCCompilerId.c" produced "a.out"
+      
+      The C compiler identification is GNU, found in:
+        /home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/3.30.5/CompilerIdC/a.out
+      
+  -
+    kind: "message-v1"
+    backtrace:
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CMakeDetermineCompilerId.cmake:17 (message)"
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CMakeDetermineCompilerId.cmake:64 (__determine_compiler_id_test)"
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CMakeDetermineCXXCompiler.cmake:126 (CMAKE_DETERMINE_COMPILER_ID)"
+      - "CMakeLists.txt:2 (project)"
+    message: |
+      Compiling the CXX compiler identification source file "CMakeCXXCompilerId.cpp" succeeded.
+      Compiler: /usr/bin/g++ 
+      Build flags: 
+      Id flags:  
+      
+      The output was:
+      0
+      
+      
+      Compilation of the CXX compiler identification source "CMakeCXXCompilerId.cpp" produced "a.out"
+      
+      The CXX compiler identification is GNU, found in:
+        /home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/3.30.5/CompilerIdCXX/a.out
+      
+  -
+    kind: "try_compile-v1"
+    backtrace:
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CMakeDetermineCompilerABI.cmake:74 (try_compile)"
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CMakeTestCCompiler.cmake:26 (CMAKE_DETERMINE_COMPILER_ABI)"
+      - "CMakeLists.txt:2 (project)"
+    checks:
+      - "Detecting C compiler ABI info"
+    directories:
+      source: "/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-r49EHl"
+      binary: "/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-r49EHl"
+    cmakeVariables:
+      CMAKE_C_FLAGS: ""
+      CMAKE_C_FLAGS_DEBUG: "-g"
+      CMAKE_EXE_LINKER_FLAGS: ""
+    buildResult:
+      variable: "CMAKE_C_ABI_COMPILED"
+      cached: true
+      stdout: |
+        Change Dir: '/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-r49EHl'
+        
+        Run Build Command(s): /home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/ninja/linux/x64/ninja -v cmTC_bdc03
+        [1/2] /usr/bin/gcc   -fdiagnostics-color=always   -v -o CMakeFiles/cmTC_bdc03.dir/CMakeCCompilerABI.c.o -c /home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CMakeCCompilerABI.c
+        Using built-in specs.
+        COLLECT_GCC=/usr/bin/gcc
+        OFFLOAD_TARGET_NAMES=nvptx-none:amdgcn-amdhsa
+        OFFLOAD_TARGET_DEFAULT=1
+        Target: x86_64-linux-gnu
+        Configured with: ../src/configure -v --with-pkgversion='Debian 12.2.0-14' --with-bugurl=file:///usr/share/doc/gcc-12/README.Bugs --enable-languages=c,ada,c++,go,d,fortran,objc,obj-c++,m2 --prefix=/usr --with-gcc-major-version-only --program-suffix=-12 --program-prefix=x86_64-linux-gnu- --enable-shared --enable-linker-build-id --libexecdir=/usr/lib --without-included-gettext --enable-threads=posix --libdir=/usr/lib --enable-nls --enable-clocale=gnu --enable-libstdcxx-debug --enable-libstdcxx-time=yes --with-default-libstdcxx-abi=new --enable-gnu-unique-object --disable-vtable-verify --enable-plugin --enable-default-pie --with-system-zlib --enable-libphobos-checking=release --with-target-system-zlib=auto --enable-objc-gc=auto --enable-multiarch --disable-werror --enable-cet --with-arch-32=i686 --with-abi=m64 --with-multilib-list=m32,m64,mx32 --enable-multilib --with-tune=generic --enable-offload-targets=nvptx-none=/build/gcc-12-bTRWOB/gcc-12-12.2.0/debian/tmp-nvptx/usr,amdgcn-amdhsa=/build/gcc-12-bTRWOB/gcc-12-12.2.0/debian/tmp-gcn/usr --enable-offload-defaulted --without-cuda-driver --enable-checking=release --build=x86_64-linux-gnu --host=x86_64-linux-gnu --target=x86_64-linux-gnu
+        Thread model: posix
+        Supported LTO compression algorithms: zlib zstd
+        gcc version 12.2.0 (Debian 12.2.0-14) 
+        COLLECT_GCC_OPTIONS='-fdiagnostics-color=always' '-v' '-o' 'CMakeFiles/cmTC_bdc03.dir/CMakeCCompilerABI.c.o' '-c' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_bdc03.dir/'
+         /usr/lib/gcc/x86_64-linux-gnu/12/cc1 -quiet -v -imultiarch x86_64-linux-gnu /home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CMakeCCompilerABI.c -quiet -dumpdir CMakeFiles/cmTC_bdc03.dir/ -dumpbase CMakeCCompilerABI.c.c -dumpbase-ext .c -mtune=generic -march=x86-64 -version -fdiagnostics-color=always -fasynchronous-unwind-tables -o /tmp/ccMRveAx.s
+        GNU C17 (Debian 12.2.0-14) version 12.2.0 (x86_64-linux-gnu)
+        	compiled by GNU C version 12.2.0, GMP version 6.2.1, MPFR version 4.1.1-p1, MPC version 1.3.1, isl version isl-0.25-GMP
+        
+        warning: MPFR header version 4.1.1-p1 differs from library version 4.2.0.
+        GGC heuristics: --param ggc-min-expand=100 --param ggc-min-heapsize=131072
+        ignoring nonexistent directory "/usr/local/include/x86_64-linux-gnu"
+        ignoring nonexistent directory "/usr/lib/gcc/x86_64-linux-gnu/12/include-fixed"
+        ignoring nonexistent directory "/usr/lib/gcc/x86_64-linux-gnu/12/../../../../x86_64-linux-gnu/include"
+        #include "..." search starts here:
+        #include <...> search starts here:
+         /usr/lib/gcc/x86_64-linux-gnu/12/include
+         /usr/local/include
+         /usr/include/x86_64-linux-gnu
+         /usr/include
+        End of search list.
+        GNU C17 (Debian 12.2.0-14) version 12.2.0 (x86_64-linux-gnu)
+        	compiled by GNU C version 12.2.0, GMP version 6.2.1, MPFR version 4.1.1-p1, MPC version 1.3.1, isl version isl-0.25-GMP
+        
+        warning: MPFR header version 4.1.1-p1 differs from library version 4.2.0.
+        GGC heuristics: --param ggc-min-expand=100 --param ggc-min-heapsize=131072
+        Compiler executable checksum: cc72d2b9b5048fedc2be9051c917b40b
+        COLLECT_GCC_OPTIONS='-fdiagnostics-color=always' '-v' '-o' 'CMakeFiles/cmTC_bdc03.dir/CMakeCCompilerABI.c.o' '-c' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_bdc03.dir/'
+         as -v --64 -o CMakeFiles/cmTC_bdc03.dir/CMakeCCompilerABI.c.o /tmp/ccMRveAx.s
+        GNU assembler version 2.40 (x86_64-linux-gnu) using BFD version (GNU Binutils for Debian) 2.40
+        COMPILER_PATH=/usr/lib/gcc/x86_64-linux-gnu/12/:/usr/lib/gcc/x86_64-linux-gnu/12/:/usr/lib/gcc/x86_64-linux-gnu/:/usr/lib/gcc/x86_64-linux-gnu/12/:/usr/lib/gcc/x86_64-linux-gnu/
+        LIBRARY_PATH=/usr/lib/gcc/x86_64-linux-gnu/12/:/usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu/:/usr/lib/gcc/x86_64-linux-gnu/12/../../../../lib/:/lib/x86_64-linux-gnu/:/lib/../lib/:/usr/lib/x86_64-linux-gnu/:/usr/lib/../lib/:/usr/lib/gcc/x86_64-linux-gnu/12/../../../:/lib/:/usr/lib/
+        COLLECT_GCC_OPTIONS='-fdiagnostics-color=always' '-v' '-o' 'CMakeFiles/cmTC_bdc03.dir/CMakeCCompilerABI.c.o' '-c' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_bdc03.dir/CMakeCCompilerABI.c.'
+        [2/2] : && /usr/bin/gcc  -v -Wl,-v CMakeFiles/cmTC_bdc03.dir/CMakeCCompilerABI.c.o -o cmTC_bdc03   && :
+        Using built-in specs.
+        COLLECT_GCC=/usr/bin/gcc
+        COLLECT_LTO_WRAPPER=/usr/lib/gcc/x86_64-linux-gnu/12/lto-wrapper
+        OFFLOAD_TARGET_NAMES=nvptx-none:amdgcn-amdhsa
+        OFFLOAD_TARGET_DEFAULT=1
+        Target: x86_64-linux-gnu
+        Configured with: ../src/configure -v --with-pkgversion='Debian 12.2.0-14' --with-bugurl=file:///usr/share/doc/gcc-12/README.Bugs --enable-languages=c,ada,c++,go,d,fortran,objc,obj-c++,m2 --prefix=/usr --with-gcc-major-version-only --program-suffix=-12 --program-prefix=x86_64-linux-gnu- --enable-shared --enable-linker-build-id --libexecdir=/usr/lib --without-included-gettext --enable-threads=posix --libdir=/usr/lib --enable-nls --enable-clocale=gnu --enable-libstdcxx-debug --enable-libstdcxx-time=yes --with-default-libstdcxx-abi=new --enable-gnu-unique-object --disable-vtable-verify --enable-plugin --enable-default-pie --with-system-zlib --enable-libphobos-checking=release --with-target-system-zlib=auto --enable-objc-gc=auto --enable-multiarch --disable-werror --enable-cet --with-arch-32=i686 --with-abi=m64 --with-multilib-list=m32,m64,mx32 --enable-multilib --with-tune=generic --enable-offload-targets=nvptx-none=/build/gcc-12-bTRWOB/gcc-12-12.2.0/debian/tmp-nvptx/usr,amdgcn-amdhsa=/build/gcc-12-bTRWOB/gcc-12-12.2.0/debian/tmp-gcn/usr --enable-offload-defaulted --without-cuda-driver --enable-checking=release --build=x86_64-linux-gnu --host=x86_64-linux-gnu --target=x86_64-linux-gnu
+        Thread model: posix
+        Supported LTO compression algorithms: zlib zstd
+        gcc version 12.2.0 (Debian 12.2.0-14) 
+        COMPILER_PATH=/usr/lib/gcc/x86_64-linux-gnu/12/:/usr/lib/gcc/x86_64-linux-gnu/12/:/usr/lib/gcc/x86_64-linux-gnu/:/usr/lib/gcc/x86_64-linux-gnu/12/:/usr/lib/gcc/x86_64-linux-gnu/
+        LIBRARY_PATH=/usr/lib/gcc/x86_64-linux-gnu/12/:/usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu/:/usr/lib/gcc/x86_64-linux-gnu/12/../../../../lib/:/lib/x86_64-linux-gnu/:/lib/../lib/:/usr/lib/x86_64-linux-gnu/:/usr/lib/../lib/:/usr/lib/gcc/x86_64-linux-gnu/12/../../../:/lib/:/usr/lib/
+        COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_bdc03' '-mtune=generic' '-march=x86-64' '-dumpdir' 'cmTC_bdc03.'
+         /usr/lib/gcc/x86_64-linux-gnu/12/collect2 -plugin /usr/lib/gcc/x86_64-linux-gnu/12/liblto_plugin.so -plugin-opt=/usr/lib/gcc/x86_64-linux-gnu/12/lto-wrapper -plugin-opt=-fresolution=/tmp/ccR9TzGH.res -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s --build-id --eh-frame-hdr -m elf_x86_64 --hash-style=gnu --as-needed -dynamic-linker /lib64/ld-linux-x86-64.so.2 -pie -o cmTC_bdc03 /usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu/Scrt1.o /usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu/crti.o /usr/lib/gcc/x86_64-linux-gnu/12/crtbeginS.o -L/usr/lib/gcc/x86_64-linux-gnu/12 -L/usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu -L/usr/lib/gcc/x86_64-linux-gnu/12/../../../../lib -L/lib/x86_64-linux-gnu -L/lib/../lib -L/usr/lib/x86_64-linux-gnu -L/usr/lib/../lib -L/usr/lib/gcc/x86_64-linux-gnu/12/../../.. -v CMakeFiles/cmTC_bdc03.dir/CMakeCCompilerABI.c.o -lgcc --push-state --as-needed -lgcc_s --pop-state -lc -lgcc --push-state --as-needed -lgcc_s --pop-state /usr/lib/gcc/x86_64-linux-gnu/12/crtendS.o /usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu/crtn.o
+        collect2 version 12.2.0
+        /usr/bin/ld -plugin /usr/lib/gcc/x86_64-linux-gnu/12/liblto_plugin.so -plugin-opt=/usr/lib/gcc/x86_64-linux-gnu/12/lto-wrapper -plugin-opt=-fresolution=/tmp/ccR9TzGH.res -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s --build-id --eh-frame-hdr -m elf_x86_64 --hash-style=gnu --as-needed -dynamic-linker /lib64/ld-linux-x86-64.so.2 -pie -o cmTC_bdc03 /usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu/Scrt1.o /usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu/crti.o /usr/lib/gcc/x86_64-linux-gnu/12/crtbeginS.o -L/usr/lib/gcc/x86_64-linux-gnu/12 -L/usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu -L/usr/lib/gcc/x86_64-linux-gnu/12/../../../../lib -L/lib/x86_64-linux-gnu -L/lib/../lib -L/usr/lib/x86_64-linux-gnu -L/usr/lib/../lib -L/usr/lib/gcc/x86_64-linux-gnu/12/../../.. -v CMakeFiles/cmTC_bdc03.dir/CMakeCCompilerABI.c.o -lgcc --push-state --as-needed -lgcc_s --pop-state -lc -lgcc --push-state --as-needed -lgcc_s --pop-state /usr/lib/gcc/x86_64-linux-gnu/12/crtendS.o /usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu/crtn.o
+        GNU ld (GNU Binutils for Debian) 2.40
+        COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_bdc03' '-mtune=generic' '-march=x86-64' '-dumpdir' 'cmTC_bdc03.'
+        
+      exitCode: 0
+  -
+    kind: "message-v1"
+    backtrace:
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CMakeDetermineCompilerABI.cmake:182 (message)"
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CMakeTestCCompiler.cmake:26 (CMAKE_DETERMINE_COMPILER_ABI)"
+      - "CMakeLists.txt:2 (project)"
+    message: |
+      Parsed C implicit include dir info: rv=done
+        found start of include info
+        found start of implicit include info
+          add: [/usr/lib/gcc/x86_64-linux-gnu/12/include]
+          add: [/usr/local/include]
+          add: [/usr/include/x86_64-linux-gnu]
+          add: [/usr/include]
+        end of search list found
+        collapse include dir [/usr/lib/gcc/x86_64-linux-gnu/12/include] ==> [/usr/lib/gcc/x86_64-linux-gnu/12/include]
+        collapse include dir [/usr/local/include] ==> [/usr/local/include]
+        collapse include dir [/usr/include/x86_64-linux-gnu] ==> [/usr/include/x86_64-linux-gnu]
+        collapse include dir [/usr/include] ==> [/usr/include]
+        implicit include dirs: [/usr/lib/gcc/x86_64-linux-gnu/12/include;/usr/local/include;/usr/include/x86_64-linux-gnu;/usr/include]
+      
+      
+  -
+    kind: "message-v1"
+    backtrace:
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CMakeDetermineCompilerABI.cmake:218 (message)"
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CMakeTestCCompiler.cmake:26 (CMAKE_DETERMINE_COMPILER_ABI)"
+      - "CMakeLists.txt:2 (project)"
+    message: |
+      Parsed C implicit link information:
+        link line regex: [^( *|.*[/\\])(ld[0-9]*(\\.[a-z]+)?|CMAKE_LINK_STARTFILE-NOTFOUND|([^/\\]+-)?ld|collect2)[^/\\]*( |$)]
+        linker tool regex: [^[ 	]*(->|")?[ 	]*(([^"]*[/\\])?(ld[0-9]*(\\.[a-z]+)?))("|,| |$)]
+        ignore line: [Change Dir: '/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-r49EHl']
+        ignore line: []
+        ignore line: [Run Build Command(s): /home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/ninja/linux/x64/ninja -v cmTC_bdc03]
+        ignore line: [[1/2] /usr/bin/gcc   -fdiagnostics-color=always   -v -o CMakeFiles/cmTC_bdc03.dir/CMakeCCompilerABI.c.o -c /home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CMakeCCompilerABI.c]
+        ignore line: [Using built-in specs.]
+        ignore line: [COLLECT_GCC=/usr/bin/gcc]
+        ignore line: [OFFLOAD_TARGET_NAMES=nvptx-none:amdgcn-amdhsa]
+        ignore line: [OFFLOAD_TARGET_DEFAULT=1]
+        ignore line: [Target: x86_64-linux-gnu]
+        ignore line: [Configured with: ../src/configure -v --with-pkgversion='Debian 12.2.0-14' --with-bugurl=file:///usr/share/doc/gcc-12/README.Bugs --enable-languages=c ada c++ go d fortran objc obj-c++ m2 --prefix=/usr --with-gcc-major-version-only --program-suffix=-12 --program-prefix=x86_64-linux-gnu- --enable-shared --enable-linker-build-id --libexecdir=/usr/lib --without-included-gettext --enable-threads=posix --libdir=/usr/lib --enable-nls --enable-clocale=gnu --enable-libstdcxx-debug --enable-libstdcxx-time=yes --with-default-libstdcxx-abi=new --enable-gnu-unique-object --disable-vtable-verify --enable-plugin --enable-default-pie --with-system-zlib --enable-libphobos-checking=release --with-target-system-zlib=auto --enable-objc-gc=auto --enable-multiarch --disable-werror --enable-cet --with-arch-32=i686 --with-abi=m64 --with-multilib-list=m32 m64 mx32 --enable-multilib --with-tune=generic --enable-offload-targets=nvptx-none=/build/gcc-12-bTRWOB/gcc-12-12.2.0/debian/tmp-nvptx/usr amdgcn-amdhsa=/build/gcc-12-bTRWOB/gcc-12-12.2.0/debian/tmp-gcn/usr --enable-offload-defaulted --without-cuda-driver --enable-checking=release --build=x86_64-linux-gnu --host=x86_64-linux-gnu --target=x86_64-linux-gnu]
+        ignore line: [Thread model: posix]
+        ignore line: [Supported LTO compression algorithms: zlib zstd]
+        ignore line: [gcc version 12.2.0 (Debian 12.2.0-14) ]
+        ignore line: [COLLECT_GCC_OPTIONS='-fdiagnostics-color=always' '-v' '-o' 'CMakeFiles/cmTC_bdc03.dir/CMakeCCompilerABI.c.o' '-c' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_bdc03.dir/']
+        ignore line: [ /usr/lib/gcc/x86_64-linux-gnu/12/cc1 -quiet -v -imultiarch x86_64-linux-gnu /home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CMakeCCompilerABI.c -quiet -dumpdir CMakeFiles/cmTC_bdc03.dir/ -dumpbase CMakeCCompilerABI.c.c -dumpbase-ext .c -mtune=generic -march=x86-64 -version -fdiagnostics-color=always -fasynchronous-unwind-tables -o /tmp/ccMRveAx.s]
+        ignore line: [GNU C17 (Debian 12.2.0-14) version 12.2.0 (x86_64-linux-gnu)]
+        ignore line: [	compiled by GNU C version 12.2.0  GMP version 6.2.1  MPFR version 4.1.1-p1  MPC version 1.3.1  isl version isl-0.25-GMP]
+        ignore line: []
+        ignore line: [warning: MPFR header version 4.1.1-p1 differs from library version 4.2.0.]
+        ignore line: [GGC heuristics: --param ggc-min-expand=100 --param ggc-min-heapsize=131072]
+        ignore line: [ignoring nonexistent directory "/usr/local/include/x86_64-linux-gnu"]
+        ignore line: [ignoring nonexistent directory "/usr/lib/gcc/x86_64-linux-gnu/12/include-fixed"]
+        ignore line: [ignoring nonexistent directory "/usr/lib/gcc/x86_64-linux-gnu/12/../../../../x86_64-linux-gnu/include"]
+        ignore line: [#include "..." search starts here:]
+        ignore line: [#include <...> search starts here:]
+        ignore line: [ /usr/lib/gcc/x86_64-linux-gnu/12/include]
+        ignore line: [ /usr/local/include]
+        ignore line: [ /usr/include/x86_64-linux-gnu]
+        ignore line: [ /usr/include]
+        ignore line: [End of search list.]
+        ignore line: [GNU C17 (Debian 12.2.0-14) version 12.2.0 (x86_64-linux-gnu)]
+        ignore line: [	compiled by GNU C version 12.2.0  GMP version 6.2.1  MPFR version 4.1.1-p1  MPC version 1.3.1  isl version isl-0.25-GMP]
+        ignore line: []
+        ignore line: [warning: MPFR header version 4.1.1-p1 differs from library version 4.2.0.]
+        ignore line: [GGC heuristics: --param ggc-min-expand=100 --param ggc-min-heapsize=131072]
+        ignore line: [Compiler executable checksum: cc72d2b9b5048fedc2be9051c917b40b]
+        ignore line: [COLLECT_GCC_OPTIONS='-fdiagnostics-color=always' '-v' '-o' 'CMakeFiles/cmTC_bdc03.dir/CMakeCCompilerABI.c.o' '-c' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_bdc03.dir/']
+        ignore line: [ as -v --64 -o CMakeFiles/cmTC_bdc03.dir/CMakeCCompilerABI.c.o /tmp/ccMRveAx.s]
+        ignore line: [GNU assembler version 2.40 (x86_64-linux-gnu) using BFD version (GNU Binutils for Debian) 2.40]
+        ignore line: [COMPILER_PATH=/usr/lib/gcc/x86_64-linux-gnu/12/:/usr/lib/gcc/x86_64-linux-gnu/12/:/usr/lib/gcc/x86_64-linux-gnu/:/usr/lib/gcc/x86_64-linux-gnu/12/:/usr/lib/gcc/x86_64-linux-gnu/]
+        ignore line: [LIBRARY_PATH=/usr/lib/gcc/x86_64-linux-gnu/12/:/usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu/:/usr/lib/gcc/x86_64-linux-gnu/12/../../../../lib/:/lib/x86_64-linux-gnu/:/lib/../lib/:/usr/lib/x86_64-linux-gnu/:/usr/lib/../lib/:/usr/lib/gcc/x86_64-linux-gnu/12/../../../:/lib/:/usr/lib/]
+        ignore line: [COLLECT_GCC_OPTIONS='-fdiagnostics-color=always' '-v' '-o' 'CMakeFiles/cmTC_bdc03.dir/CMakeCCompilerABI.c.o' '-c' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_bdc03.dir/CMakeCCompilerABI.c.']
+        ignore line: [[2/2] : && /usr/bin/gcc  -v -Wl -v CMakeFiles/cmTC_bdc03.dir/CMakeCCompilerABI.c.o -o cmTC_bdc03   && :]
+        ignore line: [Using built-in specs.]
+        ignore line: [COLLECT_GCC=/usr/bin/gcc]
+        ignore line: [COLLECT_LTO_WRAPPER=/usr/lib/gcc/x86_64-linux-gnu/12/lto-wrapper]
+        ignore line: [OFFLOAD_TARGET_NAMES=nvptx-none:amdgcn-amdhsa]
+        ignore line: [OFFLOAD_TARGET_DEFAULT=1]
+        ignore line: [Target: x86_64-linux-gnu]
+        ignore line: [Configured with: ../src/configure -v --with-pkgversion='Debian 12.2.0-14' --with-bugurl=file:///usr/share/doc/gcc-12/README.Bugs --enable-languages=c ada c++ go d fortran objc obj-c++ m2 --prefix=/usr --with-gcc-major-version-only --program-suffix=-12 --program-prefix=x86_64-linux-gnu- --enable-shared --enable-linker-build-id --libexecdir=/usr/lib --without-included-gettext --enable-threads=posix --libdir=/usr/lib --enable-nls --enable-clocale=gnu --enable-libstdcxx-debug --enable-libstdcxx-time=yes --with-default-libstdcxx-abi=new --enable-gnu-unique-object --disable-vtable-verify --enable-plugin --enable-default-pie --with-system-zlib --enable-libphobos-checking=release --with-target-system-zlib=auto --enable-objc-gc=auto --enable-multiarch --disable-werror --enable-cet --with-arch-32=i686 --with-abi=m64 --with-multilib-list=m32 m64 mx32 --enable-multilib --with-tune=generic --enable-offload-targets=nvptx-none=/build/gcc-12-bTRWOB/gcc-12-12.2.0/debian/tmp-nvptx/usr amdgcn-amdhsa=/build/gcc-12-bTRWOB/gcc-12-12.2.0/debian/tmp-gcn/usr --enable-offload-defaulted --without-cuda-driver --enable-checking=release --build=x86_64-linux-gnu --host=x86_64-linux-gnu --target=x86_64-linux-gnu]
+        ignore line: [Thread model: posix]
+        ignore line: [Supported LTO compression algorithms: zlib zstd]
+        ignore line: [gcc version 12.2.0 (Debian 12.2.0-14) ]
+        ignore line: [COMPILER_PATH=/usr/lib/gcc/x86_64-linux-gnu/12/:/usr/lib/gcc/x86_64-linux-gnu/12/:/usr/lib/gcc/x86_64-linux-gnu/:/usr/lib/gcc/x86_64-linux-gnu/12/:/usr/lib/gcc/x86_64-linux-gnu/]
+        ignore line: [LIBRARY_PATH=/usr/lib/gcc/x86_64-linux-gnu/12/:/usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu/:/usr/lib/gcc/x86_64-linux-gnu/12/../../../../lib/:/lib/x86_64-linux-gnu/:/lib/../lib/:/usr/lib/x86_64-linux-gnu/:/usr/lib/../lib/:/usr/lib/gcc/x86_64-linux-gnu/12/../../../:/lib/:/usr/lib/]
+        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_bdc03' '-mtune=generic' '-march=x86-64' '-dumpdir' 'cmTC_bdc03.']
+        link line: [ /usr/lib/gcc/x86_64-linux-gnu/12/collect2 -plugin /usr/lib/gcc/x86_64-linux-gnu/12/liblto_plugin.so -plugin-opt=/usr/lib/gcc/x86_64-linux-gnu/12/lto-wrapper -plugin-opt=-fresolution=/tmp/ccR9TzGH.res -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s --build-id --eh-frame-hdr -m elf_x86_64 --hash-style=gnu --as-needed -dynamic-linker /lib64/ld-linux-x86-64.so.2 -pie -o cmTC_bdc03 /usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu/Scrt1.o /usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu/crti.o /usr/lib/gcc/x86_64-linux-gnu/12/crtbeginS.o -L/usr/lib/gcc/x86_64-linux-gnu/12 -L/usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu -L/usr/lib/gcc/x86_64-linux-gnu/12/../../../../lib -L/lib/x86_64-linux-gnu -L/lib/../lib -L/usr/lib/x86_64-linux-gnu -L/usr/lib/../lib -L/usr/lib/gcc/x86_64-linux-gnu/12/../../.. -v CMakeFiles/cmTC_bdc03.dir/CMakeCCompilerABI.c.o -lgcc --push-state --as-needed -lgcc_s --pop-state -lc -lgcc --push-state --as-needed -lgcc_s --pop-state /usr/lib/gcc/x86_64-linux-gnu/12/crtendS.o /usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu/crtn.o]
+          arg [/usr/lib/gcc/x86_64-linux-gnu/12/collect2] ==> ignore
+          arg [-plugin] ==> ignore
+          arg [/usr/lib/gcc/x86_64-linux-gnu/12/liblto_plugin.so] ==> ignore
+          arg [-plugin-opt=/usr/lib/gcc/x86_64-linux-gnu/12/lto-wrapper] ==> ignore
+          arg [-plugin-opt=-fresolution=/tmp/ccR9TzGH.res] ==> ignore
+          arg [-plugin-opt=-pass-through=-lgcc] ==> ignore
+          arg [-plugin-opt=-pass-through=-lgcc_s] ==> ignore
+          arg [-plugin-opt=-pass-through=-lc] ==> ignore
+          arg [-plugin-opt=-pass-through=-lgcc] ==> ignore
+          arg [-plugin-opt=-pass-through=-lgcc_s] ==> ignore
+          arg [--build-id] ==> ignore
+          arg [--eh-frame-hdr] ==> ignore
+          arg [-m] ==> ignore
+          arg [elf_x86_64] ==> ignore
+          arg [--hash-style=gnu] ==> ignore
+          arg [--as-needed] ==> ignore
+          arg [-dynamic-linker] ==> ignore
+          arg [/lib64/ld-linux-x86-64.so.2] ==> ignore
+          arg [-pie] ==> ignore
+          arg [-o] ==> ignore
+          arg [cmTC_bdc03] ==> ignore
+          arg [/usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu/Scrt1.o] ==> obj [/usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu/Scrt1.o]
+          arg [/usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu/crti.o] ==> obj [/usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu/crti.o]
+          arg [/usr/lib/gcc/x86_64-linux-gnu/12/crtbeginS.o] ==> obj [/usr/lib/gcc/x86_64-linux-gnu/12/crtbeginS.o]
+          arg [-L/usr/lib/gcc/x86_64-linux-gnu/12] ==> dir [/usr/lib/gcc/x86_64-linux-gnu/12]
+          arg [-L/usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu] ==> dir [/usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu]
+          arg [-L/usr/lib/gcc/x86_64-linux-gnu/12/../../../../lib] ==> dir [/usr/lib/gcc/x86_64-linux-gnu/12/../../../../lib]
+          arg [-L/lib/x86_64-linux-gnu] ==> dir [/lib/x86_64-linux-gnu]
+          arg [-L/lib/../lib] ==> dir [/lib/../lib]
+          arg [-L/usr/lib/x86_64-linux-gnu] ==> dir [/usr/lib/x86_64-linux-gnu]
+          arg [-L/usr/lib/../lib] ==> dir [/usr/lib/../lib]
+          arg [-L/usr/lib/gcc/x86_64-linux-gnu/12/../../..] ==> dir [/usr/lib/gcc/x86_64-linux-gnu/12/../../..]
+          arg [-v] ==> ignore
+          arg [CMakeFiles/cmTC_bdc03.dir/CMakeCCompilerABI.c.o] ==> ignore
+          arg [-lgcc] ==> lib [gcc]
+          arg [--push-state] ==> ignore
+          arg [--as-needed] ==> ignore
+          arg [-lgcc_s] ==> lib [gcc_s]
+          arg [--pop-state] ==> ignore
+          arg [-lc] ==> lib [c]
+          arg [-lgcc] ==> lib [gcc]
+          arg [--push-state] ==> ignore
+          arg [--as-needed] ==> ignore
+          arg [-lgcc_s] ==> lib [gcc_s]
+          arg [--pop-state] ==> ignore
+          arg [/usr/lib/gcc/x86_64-linux-gnu/12/crtendS.o] ==> obj [/usr/lib/gcc/x86_64-linux-gnu/12/crtendS.o]
+          arg [/usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu/crtn.o] ==> obj [/usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu/crtn.o]
+        ignore line: [collect2 version 12.2.0]
+        ignore line: [/usr/bin/ld -plugin /usr/lib/gcc/x86_64-linux-gnu/12/liblto_plugin.so -plugin-opt=/usr/lib/gcc/x86_64-linux-gnu/12/lto-wrapper -plugin-opt=-fresolution=/tmp/ccR9TzGH.res -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s --build-id --eh-frame-hdr -m elf_x86_64 --hash-style=gnu --as-needed -dynamic-linker /lib64/ld-linux-x86-64.so.2 -pie -o cmTC_bdc03 /usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu/Scrt1.o /usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu/crti.o /usr/lib/gcc/x86_64-linux-gnu/12/crtbeginS.o -L/usr/lib/gcc/x86_64-linux-gnu/12 -L/usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu -L/usr/lib/gcc/x86_64-linux-gnu/12/../../../../lib -L/lib/x86_64-linux-gnu -L/lib/../lib -L/usr/lib/x86_64-linux-gnu -L/usr/lib/../lib -L/usr/lib/gcc/x86_64-linux-gnu/12/../../.. -v CMakeFiles/cmTC_bdc03.dir/CMakeCCompilerABI.c.o -lgcc --push-state --as-needed -lgcc_s --pop-state -lc -lgcc --push-state --as-needed -lgcc_s --pop-state /usr/lib/gcc/x86_64-linux-gnu/12/crtendS.o /usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu/crtn.o]
+        linker tool for 'C': /usr/bin/ld
+        collapse obj [/usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu/Scrt1.o] ==> [/usr/lib/x86_64-linux-gnu/Scrt1.o]
+        collapse obj [/usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu/crti.o] ==> [/usr/lib/x86_64-linux-gnu/crti.o]
+        collapse obj [/usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu/crtn.o] ==> [/usr/lib/x86_64-linux-gnu/crtn.o]
+        collapse library dir [/usr/lib/gcc/x86_64-linux-gnu/12] ==> [/usr/lib/gcc/x86_64-linux-gnu/12]
+        collapse library dir [/usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu] ==> [/usr/lib/x86_64-linux-gnu]
+        collapse library dir [/usr/lib/gcc/x86_64-linux-gnu/12/../../../../lib] ==> [/usr/lib]
+        collapse library dir [/lib/x86_64-linux-gnu] ==> [/lib/x86_64-linux-gnu]
+        collapse library dir [/lib/../lib] ==> [/lib]
+        collapse library dir [/usr/lib/x86_64-linux-gnu] ==> [/usr/lib/x86_64-linux-gnu]
+        collapse library dir [/usr/lib/../lib] ==> [/usr/lib]
+        collapse library dir [/usr/lib/gcc/x86_64-linux-gnu/12/../../..] ==> [/usr/lib]
+        implicit libs: [gcc;gcc_s;c;gcc;gcc_s]
+        implicit objs: [/usr/lib/x86_64-linux-gnu/Scrt1.o;/usr/lib/x86_64-linux-gnu/crti.o;/usr/lib/gcc/x86_64-linux-gnu/12/crtbeginS.o;/usr/lib/gcc/x86_64-linux-gnu/12/crtendS.o;/usr/lib/x86_64-linux-gnu/crtn.o]
+        implicit dirs: [/usr/lib/gcc/x86_64-linux-gnu/12;/usr/lib/x86_64-linux-gnu;/usr/lib;/lib/x86_64-linux-gnu;/lib]
+        implicit fwks: []
+      
+      
+  -
+    kind: "message-v1"
+    backtrace:
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/Internal/CMakeDetermineLinkerId.cmake:40 (message)"
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CMakeDetermineCompilerABI.cmake:255 (cmake_determine_linker_id)"
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CMakeTestCCompiler.cmake:26 (CMAKE_DETERMINE_COMPILER_ABI)"
+      - "CMakeLists.txt:2 (project)"
+    message: |
+      Running the C compiler's linker: "/usr/bin/ld" "-v"
+      GNU ld (GNU Binutils for Debian) 2.40
+  -
+    kind: "try_compile-v1"
+    backtrace:
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CMakeDetermineCompilerABI.cmake:74 (try_compile)"
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CMakeTestCXXCompiler.cmake:26 (CMAKE_DETERMINE_COMPILER_ABI)"
+      - "CMakeLists.txt:2 (project)"
+    checks:
+      - "Detecting CXX compiler ABI info"
+    directories:
+      source: "/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-0avlV6"
+      binary: "/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-0avlV6"
+    cmakeVariables:
+      CMAKE_CXX_FLAGS: ""
+      CMAKE_CXX_FLAGS_DEBUG: "-g"
+      CMAKE_CXX_SCAN_FOR_MODULES: "OFF"
+      CMAKE_EXE_LINKER_FLAGS: ""
+    buildResult:
+      variable: "CMAKE_CXX_ABI_COMPILED"
+      cached: true
+      stdout: |
+        Change Dir: '/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-0avlV6'
+        
+        Run Build Command(s): /home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/ninja/linux/x64/ninja -v cmTC_e58e8
+        [1/2] /usr/bin/g++   -fdiagnostics-color=always   -v -o CMakeFiles/cmTC_e58e8.dir/CMakeCXXCompilerABI.cpp.o -c /home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CMakeCXXCompilerABI.cpp
+        Using built-in specs.
+        COLLECT_GCC=/usr/bin/g++
+        OFFLOAD_TARGET_NAMES=nvptx-none:amdgcn-amdhsa
+        OFFLOAD_TARGET_DEFAULT=1
+        Target: x86_64-linux-gnu
+        Configured with: ../src/configure -v --with-pkgversion='Debian 12.2.0-14' --with-bugurl=file:///usr/share/doc/gcc-12/README.Bugs --enable-languages=c,ada,c++,go,d,fortran,objc,obj-c++,m2 --prefix=/usr --with-gcc-major-version-only --program-suffix=-12 --program-prefix=x86_64-linux-gnu- --enable-shared --enable-linker-build-id --libexecdir=/usr/lib --without-included-gettext --enable-threads=posix --libdir=/usr/lib --enable-nls --enable-clocale=gnu --enable-libstdcxx-debug --enable-libstdcxx-time=yes --with-default-libstdcxx-abi=new --enable-gnu-unique-object --disable-vtable-verify --enable-plugin --enable-default-pie --with-system-zlib --enable-libphobos-checking=release --with-target-system-zlib=auto --enable-objc-gc=auto --enable-multiarch --disable-werror --enable-cet --with-arch-32=i686 --with-abi=m64 --with-multilib-list=m32,m64,mx32 --enable-multilib --with-tune=generic --enable-offload-targets=nvptx-none=/build/gcc-12-bTRWOB/gcc-12-12.2.0/debian/tmp-nvptx/usr,amdgcn-amdhsa=/build/gcc-12-bTRWOB/gcc-12-12.2.0/debian/tmp-gcn/usr --enable-offload-defaulted --without-cuda-driver --enable-checking=release --build=x86_64-linux-gnu --host=x86_64-linux-gnu --target=x86_64-linux-gnu
+        Thread model: posix
+        Supported LTO compression algorithms: zlib zstd
+        gcc version 12.2.0 (Debian 12.2.0-14) 
+        COLLECT_GCC_OPTIONS='-fdiagnostics-color=always' '-v' '-o' 'CMakeFiles/cmTC_e58e8.dir/CMakeCXXCompilerABI.cpp.o' '-c' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_e58e8.dir/'
+         /usr/lib/gcc/x86_64-linux-gnu/12/cc1plus -quiet -v -imultiarch x86_64-linux-gnu -D_GNU_SOURCE /home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CMakeCXXCompilerABI.cpp -quiet -dumpdir CMakeFiles/cmTC_e58e8.dir/ -dumpbase CMakeCXXCompilerABI.cpp.cpp -dumpbase-ext .cpp -mtune=generic -march=x86-64 -version -fdiagnostics-color=always -fasynchronous-unwind-tables -o /tmp/ccHSAO5I.s
+        GNU C++17 (Debian 12.2.0-14) version 12.2.0 (x86_64-linux-gnu)
+        	compiled by GNU C version 12.2.0, GMP version 6.2.1, MPFR version 4.1.1-p1, MPC version 1.3.1, isl version isl-0.25-GMP
+        
+        warning: MPFR header version 4.1.1-p1 differs from library version 4.2.0.
+        GGC heuristics: --param ggc-min-expand=100 --param ggc-min-heapsize=131072
+        ignoring duplicate directory "/usr/include/x86_64-linux-gnu/c++/12"
+        ignoring nonexistent directory "/usr/local/include/x86_64-linux-gnu"
+        ignoring nonexistent directory "/usr/lib/gcc/x86_64-linux-gnu/12/include-fixed"
+        ignoring nonexistent directory "/usr/lib/gcc/x86_64-linux-gnu/12/../../../../x86_64-linux-gnu/include"
+        #include "..." search starts here:
+        #include <...> search starts here:
+         /usr/include/c++/12
+         /usr/include/x86_64-linux-gnu/c++/12
+         /usr/include/c++/12/backward
+         /usr/lib/gcc/x86_64-linux-gnu/12/include
+         /usr/local/include
+         /usr/include/x86_64-linux-gnu
+         /usr/include
+        End of search list.
+        GNU C++17 (Debian 12.2.0-14) version 12.2.0 (x86_64-linux-gnu)
+        	compiled by GNU C version 12.2.0, GMP version 6.2.1, MPFR version 4.1.1-p1, MPC version 1.3.1, isl version isl-0.25-GMP
+        
+        warning: MPFR header version 4.1.1-p1 differs from library version 4.2.0.
+        GGC heuristics: --param ggc-min-expand=100 --param ggc-min-heapsize=131072
+        Compiler executable checksum: 62b090dbbefa50644117a3c13d47369a
+        COLLECT_GCC_OPTIONS='-fdiagnostics-color=always' '-v' '-o' 'CMakeFiles/cmTC_e58e8.dir/CMakeCXXCompilerABI.cpp.o' '-c' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_e58e8.dir/'
+         as -v --64 -o CMakeFiles/cmTC_e58e8.dir/CMakeCXXCompilerABI.cpp.o /tmp/ccHSAO5I.s
+        GNU assembler version 2.40 (x86_64-linux-gnu) using BFD version (GNU Binutils for Debian) 2.40
+        COMPILER_PATH=/usr/lib/gcc/x86_64-linux-gnu/12/:/usr/lib/gcc/x86_64-linux-gnu/12/:/usr/lib/gcc/x86_64-linux-gnu/:/usr/lib/gcc/x86_64-linux-gnu/12/:/usr/lib/gcc/x86_64-linux-gnu/
+        LIBRARY_PATH=/usr/lib/gcc/x86_64-linux-gnu/12/:/usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu/:/usr/lib/gcc/x86_64-linux-gnu/12/../../../../lib/:/lib/x86_64-linux-gnu/:/lib/../lib/:/usr/lib/x86_64-linux-gnu/:/usr/lib/../lib/:/usr/lib/gcc/x86_64-linux-gnu/12/../../../:/lib/:/usr/lib/
+        COLLECT_GCC_OPTIONS='-fdiagnostics-color=always' '-v' '-o' 'CMakeFiles/cmTC_e58e8.dir/CMakeCXXCompilerABI.cpp.o' '-c' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_e58e8.dir/CMakeCXXCompilerABI.cpp.'
+        [2/2] : && /usr/bin/g++  -v -Wl,-v CMakeFiles/cmTC_e58e8.dir/CMakeCXXCompilerABI.cpp.o -o cmTC_e58e8   && :
+        Using built-in specs.
+        COLLECT_GCC=/usr/bin/g++
+        COLLECT_LTO_WRAPPER=/usr/lib/gcc/x86_64-linux-gnu/12/lto-wrapper
+        OFFLOAD_TARGET_NAMES=nvptx-none:amdgcn-amdhsa
+        OFFLOAD_TARGET_DEFAULT=1
+        Target: x86_64-linux-gnu
+        Configured with: ../src/configure -v --with-pkgversion='Debian 12.2.0-14' --with-bugurl=file:///usr/share/doc/gcc-12/README.Bugs --enable-languages=c,ada,c++,go,d,fortran,objc,obj-c++,m2 --prefix=/usr --with-gcc-major-version-only --program-suffix=-12 --program-prefix=x86_64-linux-gnu- --enable-shared --enable-linker-build-id --libexecdir=/usr/lib --without-included-gettext --enable-threads=posix --libdir=/usr/lib --enable-nls --enable-clocale=gnu --enable-libstdcxx-debug --enable-libstdcxx-time=yes --with-default-libstdcxx-abi=new --enable-gnu-unique-object --disable-vtable-verify --enable-plugin --enable-default-pie --with-system-zlib --enable-libphobos-checking=release --with-target-system-zlib=auto --enable-objc-gc=auto --enable-multiarch --disable-werror --enable-cet --with-arch-32=i686 --with-abi=m64 --with-multilib-list=m32,m64,mx32 --enable-multilib --with-tune=generic --enable-offload-targets=nvptx-none=/build/gcc-12-bTRWOB/gcc-12-12.2.0/debian/tmp-nvptx/usr,amdgcn-amdhsa=/build/gcc-12-bTRWOB/gcc-12-12.2.0/debian/tmp-gcn/usr --enable-offload-defaulted --without-cuda-driver --enable-checking=release --build=x86_64-linux-gnu --host=x86_64-linux-gnu --target=x86_64-linux-gnu
+        Thread model: posix
+        Supported LTO compression algorithms: zlib zstd
+        gcc version 12.2.0 (Debian 12.2.0-14) 
+        COMPILER_PATH=/usr/lib/gcc/x86_64-linux-gnu/12/:/usr/lib/gcc/x86_64-linux-gnu/12/:/usr/lib/gcc/x86_64-linux-gnu/:/usr/lib/gcc/x86_64-linux-gnu/12/:/usr/lib/gcc/x86_64-linux-gnu/
+        LIBRARY_PATH=/usr/lib/gcc/x86_64-linux-gnu/12/:/usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu/:/usr/lib/gcc/x86_64-linux-gnu/12/../../../../lib/:/lib/x86_64-linux-gnu/:/lib/../lib/:/usr/lib/x86_64-linux-gnu/:/usr/lib/../lib/:/usr/lib/gcc/x86_64-linux-gnu/12/../../../:/lib/:/usr/lib/
+        COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_e58e8' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'cmTC_e58e8.'
+         /usr/lib/gcc/x86_64-linux-gnu/12/collect2 -plugin /usr/lib/gcc/x86_64-linux-gnu/12/liblto_plugin.so -plugin-opt=/usr/lib/gcc/x86_64-linux-gnu/12/lto-wrapper -plugin-opt=-fresolution=/tmp/ccodJqbo.res -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc --build-id --eh-frame-hdr -m elf_x86_64 --hash-style=gnu --as-needed -dynamic-linker /lib64/ld-linux-x86-64.so.2 -pie -o cmTC_e58e8 /usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu/Scrt1.o /usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu/crti.o /usr/lib/gcc/x86_64-linux-gnu/12/crtbeginS.o -L/usr/lib/gcc/x86_64-linux-gnu/12 -L/usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu -L/usr/lib/gcc/x86_64-linux-gnu/12/../../../../lib -L/lib/x86_64-linux-gnu -L/lib/../lib -L/usr/lib/x86_64-linux-gnu -L/usr/lib/../lib -L/usr/lib/gcc/x86_64-linux-gnu/12/../../.. -v CMakeFiles/cmTC_e58e8.dir/CMakeCXXCompilerABI.cpp.o -lstdc++ -lm -lgcc_s -lgcc -lc -lgcc_s -lgcc /usr/lib/gcc/x86_64-linux-gnu/12/crtendS.o /usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu/crtn.o
+        collect2 version 12.2.0
+        /usr/bin/ld -plugin /usr/lib/gcc/x86_64-linux-gnu/12/liblto_plugin.so -plugin-opt=/usr/lib/gcc/x86_64-linux-gnu/12/lto-wrapper -plugin-opt=-fresolution=/tmp/ccodJqbo.res -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc --build-id --eh-frame-hdr -m elf_x86_64 --hash-style=gnu --as-needed -dynamic-linker /lib64/ld-linux-x86-64.so.2 -pie -o cmTC_e58e8 /usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu/Scrt1.o /usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu/crti.o /usr/lib/gcc/x86_64-linux-gnu/12/crtbeginS.o -L/usr/lib/gcc/x86_64-linux-gnu/12 -L/usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu -L/usr/lib/gcc/x86_64-linux-gnu/12/../../../../lib -L/lib/x86_64-linux-gnu -L/lib/../lib -L/usr/lib/x86_64-linux-gnu -L/usr/lib/../lib -L/usr/lib/gcc/x86_64-linux-gnu/12/../../.. -v CMakeFiles/cmTC_e58e8.dir/CMakeCXXCompilerABI.cpp.o -lstdc++ -lm -lgcc_s -lgcc -lc -lgcc_s -lgcc /usr/lib/gcc/x86_64-linux-gnu/12/crtendS.o /usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu/crtn.o
+        GNU ld (GNU Binutils for Debian) 2.40
+        COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_e58e8' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'cmTC_e58e8.'
+        
+      exitCode: 0
+  -
+    kind: "message-v1"
+    backtrace:
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CMakeDetermineCompilerABI.cmake:182 (message)"
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CMakeTestCXXCompiler.cmake:26 (CMAKE_DETERMINE_COMPILER_ABI)"
+      - "CMakeLists.txt:2 (project)"
+    message: |
+      Parsed CXX implicit include dir info: rv=done
+        found start of include info
+        found start of implicit include info
+          add: [/usr/include/c++/12]
+          add: [/usr/include/x86_64-linux-gnu/c++/12]
+          add: [/usr/include/c++/12/backward]
+          add: [/usr/lib/gcc/x86_64-linux-gnu/12/include]
+          add: [/usr/local/include]
+          add: [/usr/include/x86_64-linux-gnu]
+          add: [/usr/include]
+        end of search list found
+        collapse include dir [/usr/include/c++/12] ==> [/usr/include/c++/12]
+        collapse include dir [/usr/include/x86_64-linux-gnu/c++/12] ==> [/usr/include/x86_64-linux-gnu/c++/12]
+        collapse include dir [/usr/include/c++/12/backward] ==> [/usr/include/c++/12/backward]
+        collapse include dir [/usr/lib/gcc/x86_64-linux-gnu/12/include] ==> [/usr/lib/gcc/x86_64-linux-gnu/12/include]
+        collapse include dir [/usr/local/include] ==> [/usr/local/include]
+        collapse include dir [/usr/include/x86_64-linux-gnu] ==> [/usr/include/x86_64-linux-gnu]
+        collapse include dir [/usr/include] ==> [/usr/include]
+        implicit include dirs: [/usr/include/c++/12;/usr/include/x86_64-linux-gnu/c++/12;/usr/include/c++/12/backward;/usr/lib/gcc/x86_64-linux-gnu/12/include;/usr/local/include;/usr/include/x86_64-linux-gnu;/usr/include]
+      
+      
+  -
+    kind: "message-v1"
+    backtrace:
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CMakeDetermineCompilerABI.cmake:218 (message)"
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CMakeTestCXXCompiler.cmake:26 (CMAKE_DETERMINE_COMPILER_ABI)"
+      - "CMakeLists.txt:2 (project)"
+    message: |
+      Parsed CXX implicit link information:
+        link line regex: [^( *|.*[/\\])(ld[0-9]*(\\.[a-z]+)?|CMAKE_LINK_STARTFILE-NOTFOUND|([^/\\]+-)?ld|collect2)[^/\\]*( |$)]
+        linker tool regex: [^[ 	]*(->|")?[ 	]*(([^"]*[/\\])?(ld[0-9]*(\\.[a-z]+)?))("|,| |$)]
+        ignore line: [Change Dir: '/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-0avlV6']
+        ignore line: []
+        ignore line: [Run Build Command(s): /home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/ninja/linux/x64/ninja -v cmTC_e58e8]
+        ignore line: [[1/2] /usr/bin/g++   -fdiagnostics-color=always   -v -o CMakeFiles/cmTC_e58e8.dir/CMakeCXXCompilerABI.cpp.o -c /home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CMakeCXXCompilerABI.cpp]
+        ignore line: [Using built-in specs.]
+        ignore line: [COLLECT_GCC=/usr/bin/g++]
+        ignore line: [OFFLOAD_TARGET_NAMES=nvptx-none:amdgcn-amdhsa]
+        ignore line: [OFFLOAD_TARGET_DEFAULT=1]
+        ignore line: [Target: x86_64-linux-gnu]
+        ignore line: [Configured with: ../src/configure -v --with-pkgversion='Debian 12.2.0-14' --with-bugurl=file:///usr/share/doc/gcc-12/README.Bugs --enable-languages=c ada c++ go d fortran objc obj-c++ m2 --prefix=/usr --with-gcc-major-version-only --program-suffix=-12 --program-prefix=x86_64-linux-gnu- --enable-shared --enable-linker-build-id --libexecdir=/usr/lib --without-included-gettext --enable-threads=posix --libdir=/usr/lib --enable-nls --enable-clocale=gnu --enable-libstdcxx-debug --enable-libstdcxx-time=yes --with-default-libstdcxx-abi=new --enable-gnu-unique-object --disable-vtable-verify --enable-plugin --enable-default-pie --with-system-zlib --enable-libphobos-checking=release --with-target-system-zlib=auto --enable-objc-gc=auto --enable-multiarch --disable-werror --enable-cet --with-arch-32=i686 --with-abi=m64 --with-multilib-list=m32 m64 mx32 --enable-multilib --with-tune=generic --enable-offload-targets=nvptx-none=/build/gcc-12-bTRWOB/gcc-12-12.2.0/debian/tmp-nvptx/usr amdgcn-amdhsa=/build/gcc-12-bTRWOB/gcc-12-12.2.0/debian/tmp-gcn/usr --enable-offload-defaulted --without-cuda-driver --enable-checking=release --build=x86_64-linux-gnu --host=x86_64-linux-gnu --target=x86_64-linux-gnu]
+        ignore line: [Thread model: posix]
+        ignore line: [Supported LTO compression algorithms: zlib zstd]
+        ignore line: [gcc version 12.2.0 (Debian 12.2.0-14) ]
+        ignore line: [COLLECT_GCC_OPTIONS='-fdiagnostics-color=always' '-v' '-o' 'CMakeFiles/cmTC_e58e8.dir/CMakeCXXCompilerABI.cpp.o' '-c' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_e58e8.dir/']
+        ignore line: [ /usr/lib/gcc/x86_64-linux-gnu/12/cc1plus -quiet -v -imultiarch x86_64-linux-gnu -D_GNU_SOURCE /home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CMakeCXXCompilerABI.cpp -quiet -dumpdir CMakeFiles/cmTC_e58e8.dir/ -dumpbase CMakeCXXCompilerABI.cpp.cpp -dumpbase-ext .cpp -mtune=generic -march=x86-64 -version -fdiagnostics-color=always -fasynchronous-unwind-tables -o /tmp/ccHSAO5I.s]
+        ignore line: [GNU C++17 (Debian 12.2.0-14) version 12.2.0 (x86_64-linux-gnu)]
+        ignore line: [	compiled by GNU C version 12.2.0  GMP version 6.2.1  MPFR version 4.1.1-p1  MPC version 1.3.1  isl version isl-0.25-GMP]
+        ignore line: []
+        ignore line: [warning: MPFR header version 4.1.1-p1 differs from library version 4.2.0.]
+        ignore line: [GGC heuristics: --param ggc-min-expand=100 --param ggc-min-heapsize=131072]
+        ignore line: [ignoring duplicate directory "/usr/include/x86_64-linux-gnu/c++/12"]
+        ignore line: [ignoring nonexistent directory "/usr/local/include/x86_64-linux-gnu"]
+        ignore line: [ignoring nonexistent directory "/usr/lib/gcc/x86_64-linux-gnu/12/include-fixed"]
+        ignore line: [ignoring nonexistent directory "/usr/lib/gcc/x86_64-linux-gnu/12/../../../../x86_64-linux-gnu/include"]
+        ignore line: [#include "..." search starts here:]
+        ignore line: [#include <...> search starts here:]
+        ignore line: [ /usr/include/c++/12]
+        ignore line: [ /usr/include/x86_64-linux-gnu/c++/12]
+        ignore line: [ /usr/include/c++/12/backward]
+        ignore line: [ /usr/lib/gcc/x86_64-linux-gnu/12/include]
+        ignore line: [ /usr/local/include]
+        ignore line: [ /usr/include/x86_64-linux-gnu]
+        ignore line: [ /usr/include]
+        ignore line: [End of search list.]
+        ignore line: [GNU C++17 (Debian 12.2.0-14) version 12.2.0 (x86_64-linux-gnu)]
+        ignore line: [	compiled by GNU C version 12.2.0  GMP version 6.2.1  MPFR version 4.1.1-p1  MPC version 1.3.1  isl version isl-0.25-GMP]
+        ignore line: []
+        ignore line: [warning: MPFR header version 4.1.1-p1 differs from library version 4.2.0.]
+        ignore line: [GGC heuristics: --param ggc-min-expand=100 --param ggc-min-heapsize=131072]
+        ignore line: [Compiler executable checksum: 62b090dbbefa50644117a3c13d47369a]
+        ignore line: [COLLECT_GCC_OPTIONS='-fdiagnostics-color=always' '-v' '-o' 'CMakeFiles/cmTC_e58e8.dir/CMakeCXXCompilerABI.cpp.o' '-c' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_e58e8.dir/']
+        ignore line: [ as -v --64 -o CMakeFiles/cmTC_e58e8.dir/CMakeCXXCompilerABI.cpp.o /tmp/ccHSAO5I.s]
+        ignore line: [GNU assembler version 2.40 (x86_64-linux-gnu) using BFD version (GNU Binutils for Debian) 2.40]
+        ignore line: [COMPILER_PATH=/usr/lib/gcc/x86_64-linux-gnu/12/:/usr/lib/gcc/x86_64-linux-gnu/12/:/usr/lib/gcc/x86_64-linux-gnu/:/usr/lib/gcc/x86_64-linux-gnu/12/:/usr/lib/gcc/x86_64-linux-gnu/]
+        ignore line: [LIBRARY_PATH=/usr/lib/gcc/x86_64-linux-gnu/12/:/usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu/:/usr/lib/gcc/x86_64-linux-gnu/12/../../../../lib/:/lib/x86_64-linux-gnu/:/lib/../lib/:/usr/lib/x86_64-linux-gnu/:/usr/lib/../lib/:/usr/lib/gcc/x86_64-linux-gnu/12/../../../:/lib/:/usr/lib/]
+        ignore line: [COLLECT_GCC_OPTIONS='-fdiagnostics-color=always' '-v' '-o' 'CMakeFiles/cmTC_e58e8.dir/CMakeCXXCompilerABI.cpp.o' '-c' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_e58e8.dir/CMakeCXXCompilerABI.cpp.']
+        ignore line: [[2/2] : && /usr/bin/g++  -v -Wl -v CMakeFiles/cmTC_e58e8.dir/CMakeCXXCompilerABI.cpp.o -o cmTC_e58e8   && :]
+        ignore line: [Using built-in specs.]
+        ignore line: [COLLECT_GCC=/usr/bin/g++]
+        ignore line: [COLLECT_LTO_WRAPPER=/usr/lib/gcc/x86_64-linux-gnu/12/lto-wrapper]
+        ignore line: [OFFLOAD_TARGET_NAMES=nvptx-none:amdgcn-amdhsa]
+        ignore line: [OFFLOAD_TARGET_DEFAULT=1]
+        ignore line: [Target: x86_64-linux-gnu]
+        ignore line: [Configured with: ../src/configure -v --with-pkgversion='Debian 12.2.0-14' --with-bugurl=file:///usr/share/doc/gcc-12/README.Bugs --enable-languages=c ada c++ go d fortran objc obj-c++ m2 --prefix=/usr --with-gcc-major-version-only --program-suffix=-12 --program-prefix=x86_64-linux-gnu- --enable-shared --enable-linker-build-id --libexecdir=/usr/lib --without-included-gettext --enable-threads=posix --libdir=/usr/lib --enable-nls --enable-clocale=gnu --enable-libstdcxx-debug --enable-libstdcxx-time=yes --with-default-libstdcxx-abi=new --enable-gnu-unique-object --disable-vtable-verify --enable-plugin --enable-default-pie --with-system-zlib --enable-libphobos-checking=release --with-target-system-zlib=auto --enable-objc-gc=auto --enable-multiarch --disable-werror --enable-cet --with-arch-32=i686 --with-abi=m64 --with-multilib-list=m32 m64 mx32 --enable-multilib --with-tune=generic --enable-offload-targets=nvptx-none=/build/gcc-12-bTRWOB/gcc-12-12.2.0/debian/tmp-nvptx/usr amdgcn-amdhsa=/build/gcc-12-bTRWOB/gcc-12-12.2.0/debian/tmp-gcn/usr --enable-offload-defaulted --without-cuda-driver --enable-checking=release --build=x86_64-linux-gnu --host=x86_64-linux-gnu --target=x86_64-linux-gnu]
+        ignore line: [Thread model: posix]
+        ignore line: [Supported LTO compression algorithms: zlib zstd]
+        ignore line: [gcc version 12.2.0 (Debian 12.2.0-14) ]
+        ignore line: [COMPILER_PATH=/usr/lib/gcc/x86_64-linux-gnu/12/:/usr/lib/gcc/x86_64-linux-gnu/12/:/usr/lib/gcc/x86_64-linux-gnu/:/usr/lib/gcc/x86_64-linux-gnu/12/:/usr/lib/gcc/x86_64-linux-gnu/]
+        ignore line: [LIBRARY_PATH=/usr/lib/gcc/x86_64-linux-gnu/12/:/usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu/:/usr/lib/gcc/x86_64-linux-gnu/12/../../../../lib/:/lib/x86_64-linux-gnu/:/lib/../lib/:/usr/lib/x86_64-linux-gnu/:/usr/lib/../lib/:/usr/lib/gcc/x86_64-linux-gnu/12/../../../:/lib/:/usr/lib/]
+        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_e58e8' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'cmTC_e58e8.']
+        link line: [ /usr/lib/gcc/x86_64-linux-gnu/12/collect2 -plugin /usr/lib/gcc/x86_64-linux-gnu/12/liblto_plugin.so -plugin-opt=/usr/lib/gcc/x86_64-linux-gnu/12/lto-wrapper -plugin-opt=-fresolution=/tmp/ccodJqbo.res -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc --build-id --eh-frame-hdr -m elf_x86_64 --hash-style=gnu --as-needed -dynamic-linker /lib64/ld-linux-x86-64.so.2 -pie -o cmTC_e58e8 /usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu/Scrt1.o /usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu/crti.o /usr/lib/gcc/x86_64-linux-gnu/12/crtbeginS.o -L/usr/lib/gcc/x86_64-linux-gnu/12 -L/usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu -L/usr/lib/gcc/x86_64-linux-gnu/12/../../../../lib -L/lib/x86_64-linux-gnu -L/lib/../lib -L/usr/lib/x86_64-linux-gnu -L/usr/lib/../lib -L/usr/lib/gcc/x86_64-linux-gnu/12/../../.. -v CMakeFiles/cmTC_e58e8.dir/CMakeCXXCompilerABI.cpp.o -lstdc++ -lm -lgcc_s -lgcc -lc -lgcc_s -lgcc /usr/lib/gcc/x86_64-linux-gnu/12/crtendS.o /usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu/crtn.o]
+          arg [/usr/lib/gcc/x86_64-linux-gnu/12/collect2] ==> ignore
+          arg [-plugin] ==> ignore
+          arg [/usr/lib/gcc/x86_64-linux-gnu/12/liblto_plugin.so] ==> ignore
+          arg [-plugin-opt=/usr/lib/gcc/x86_64-linux-gnu/12/lto-wrapper] ==> ignore
+          arg [-plugin-opt=-fresolution=/tmp/ccodJqbo.res] ==> ignore
+          arg [-plugin-opt=-pass-through=-lgcc_s] ==> ignore
+          arg [-plugin-opt=-pass-through=-lgcc] ==> ignore
+          arg [-plugin-opt=-pass-through=-lc] ==> ignore
+          arg [-plugin-opt=-pass-through=-lgcc_s] ==> ignore
+          arg [-plugin-opt=-pass-through=-lgcc] ==> ignore
+          arg [--build-id] ==> ignore
+          arg [--eh-frame-hdr] ==> ignore
+          arg [-m] ==> ignore
+          arg [elf_x86_64] ==> ignore
+          arg [--hash-style=gnu] ==> ignore
+          arg [--as-needed] ==> ignore
+          arg [-dynamic-linker] ==> ignore
+          arg [/lib64/ld-linux-x86-64.so.2] ==> ignore
+          arg [-pie] ==> ignore
+          arg [-o] ==> ignore
+          arg [cmTC_e58e8] ==> ignore
+          arg [/usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu/Scrt1.o] ==> obj [/usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu/Scrt1.o]
+          arg [/usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu/crti.o] ==> obj [/usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu/crti.o]
+          arg [/usr/lib/gcc/x86_64-linux-gnu/12/crtbeginS.o] ==> obj [/usr/lib/gcc/x86_64-linux-gnu/12/crtbeginS.o]
+          arg [-L/usr/lib/gcc/x86_64-linux-gnu/12] ==> dir [/usr/lib/gcc/x86_64-linux-gnu/12]
+          arg [-L/usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu] ==> dir [/usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu]
+          arg [-L/usr/lib/gcc/x86_64-linux-gnu/12/../../../../lib] ==> dir [/usr/lib/gcc/x86_64-linux-gnu/12/../../../../lib]
+          arg [-L/lib/x86_64-linux-gnu] ==> dir [/lib/x86_64-linux-gnu]
+          arg [-L/lib/../lib] ==> dir [/lib/../lib]
+          arg [-L/usr/lib/x86_64-linux-gnu] ==> dir [/usr/lib/x86_64-linux-gnu]
+          arg [-L/usr/lib/../lib] ==> dir [/usr/lib/../lib]
+          arg [-L/usr/lib/gcc/x86_64-linux-gnu/12/../../..] ==> dir [/usr/lib/gcc/x86_64-linux-gnu/12/../../..]
+          arg [-v] ==> ignore
+          arg [CMakeFiles/cmTC_e58e8.dir/CMakeCXXCompilerABI.cpp.o] ==> ignore
+          arg [-lstdc++] ==> lib [stdc++]
+          arg [-lm] ==> lib [m]
+          arg [-lgcc_s] ==> lib [gcc_s]
+          arg [-lgcc] ==> lib [gcc]
+          arg [-lc] ==> lib [c]
+          arg [-lgcc_s] ==> lib [gcc_s]
+          arg [-lgcc] ==> lib [gcc]
+          arg [/usr/lib/gcc/x86_64-linux-gnu/12/crtendS.o] ==> obj [/usr/lib/gcc/x86_64-linux-gnu/12/crtendS.o]
+          arg [/usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu/crtn.o] ==> obj [/usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu/crtn.o]
+        ignore line: [collect2 version 12.2.0]
+        ignore line: [/usr/bin/ld -plugin /usr/lib/gcc/x86_64-linux-gnu/12/liblto_plugin.so -plugin-opt=/usr/lib/gcc/x86_64-linux-gnu/12/lto-wrapper -plugin-opt=-fresolution=/tmp/ccodJqbo.res -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc --build-id --eh-frame-hdr -m elf_x86_64 --hash-style=gnu --as-needed -dynamic-linker /lib64/ld-linux-x86-64.so.2 -pie -o cmTC_e58e8 /usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu/Scrt1.o /usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu/crti.o /usr/lib/gcc/x86_64-linux-gnu/12/crtbeginS.o -L/usr/lib/gcc/x86_64-linux-gnu/12 -L/usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu -L/usr/lib/gcc/x86_64-linux-gnu/12/../../../../lib -L/lib/x86_64-linux-gnu -L/lib/../lib -L/usr/lib/x86_64-linux-gnu -L/usr/lib/../lib -L/usr/lib/gcc/x86_64-linux-gnu/12/../../.. -v CMakeFiles/cmTC_e58e8.dir/CMakeCXXCompilerABI.cpp.o -lstdc++ -lm -lgcc_s -lgcc -lc -lgcc_s -lgcc /usr/lib/gcc/x86_64-linux-gnu/12/crtendS.o /usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu/crtn.o]
+        linker tool for 'CXX': /usr/bin/ld
+        collapse obj [/usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu/Scrt1.o] ==> [/usr/lib/x86_64-linux-gnu/Scrt1.o]
+        collapse obj [/usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu/crti.o] ==> [/usr/lib/x86_64-linux-gnu/crti.o]
+        collapse obj [/usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu/crtn.o] ==> [/usr/lib/x86_64-linux-gnu/crtn.o]
+        collapse library dir [/usr/lib/gcc/x86_64-linux-gnu/12] ==> [/usr/lib/gcc/x86_64-linux-gnu/12]
+        collapse library dir [/usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu] ==> [/usr/lib/x86_64-linux-gnu]
+        collapse library dir [/usr/lib/gcc/x86_64-linux-gnu/12/../../../../lib] ==> [/usr/lib]
+        collapse library dir [/lib/x86_64-linux-gnu] ==> [/lib/x86_64-linux-gnu]
+        collapse library dir [/lib/../lib] ==> [/lib]
+        collapse library dir [/usr/lib/x86_64-linux-gnu] ==> [/usr/lib/x86_64-linux-gnu]
+        collapse library dir [/usr/lib/../lib] ==> [/usr/lib]
+        collapse library dir [/usr/lib/gcc/x86_64-linux-gnu/12/../../..] ==> [/usr/lib]
+        implicit libs: [stdc++;m;gcc_s;gcc;c;gcc_s;gcc]
+        implicit objs: [/usr/lib/x86_64-linux-gnu/Scrt1.o;/usr/lib/x86_64-linux-gnu/crti.o;/usr/lib/gcc/x86_64-linux-gnu/12/crtbeginS.o;/usr/lib/gcc/x86_64-linux-gnu/12/crtendS.o;/usr/lib/x86_64-linux-gnu/crtn.o]
+        implicit dirs: [/usr/lib/gcc/x86_64-linux-gnu/12;/usr/lib/x86_64-linux-gnu;/usr/lib;/lib/x86_64-linux-gnu;/lib]
+        implicit fwks: []
+      
+      
+  -
+    kind: "message-v1"
+    backtrace:
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/Internal/CMakeDetermineLinkerId.cmake:40 (message)"
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CMakeDetermineCompilerABI.cmake:255 (cmake_determine_linker_id)"
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CMakeTestCXXCompiler.cmake:26 (CMAKE_DETERMINE_COMPILER_ABI)"
+      - "CMakeLists.txt:2 (project)"
+    message: |
+      Running the CXX compiler's linker: "/usr/bin/ld" "-v"
+      GNU ld (GNU Binutils for Debian) 2.40
+...
+
+---
+events:
+  -
+    kind: "try_compile-v1"
+    backtrace:
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/Internal/CheckSourceCompiles.cmake:101 (try_compile)"
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/Internal/CheckCompilerFlag.cmake:18 (cmake_check_source_compiles)"
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CheckCCompilerFlag.cmake:51 (cmake_check_compiler_flag)"
+      - "third_party/libuv/CMakeLists.txt:107 (check_c_compiler_flag)"
+    checks:
+      - "Performing Test UV_LINT_W4"
+    directories:
+      source: "/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-R3T1mf"
+      binary: "/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-R3T1mf"
+    cmakeVariables:
+      CMAKE_C_FLAGS: ""
+      CMAKE_C_FLAGS_DEBUG: "-g"
+      CMAKE_EXE_LINKER_FLAGS: ""
+      CMAKE_MODULE_PATH: "/home/mario/Documents/remote_projects/pccl-refactor/third_party/libuv/cmake"
+    buildResult:
+      variable: "UV_LINT_W4"
+      cached: true
+      stdout: |
+        Change Dir: '/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-R3T1mf'
+        
+        Run Build Command(s): /home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/ninja/linux/x64/ninja -v cmTC_2ebd8
+        [1/2] /usr/bin/gcc -DUV_LINT_W4  -std=gnu90 -fdiagnostics-color=always   /W4 -o CMakeFiles/cmTC_2ebd8.dir/src.c.o -c /home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-R3T1mf/src.c
+        FAILED: CMakeFiles/cmTC_2ebd8.dir/src.c.o 
+        /usr/bin/gcc -DUV_LINT_W4  -std=gnu90 -fdiagnostics-color=always   /W4 -o CMakeFiles/cmTC_2ebd8.dir/src.c.o -c /home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-R3T1mf/src.c
+        gcc: warning: /W4: linker input file unused because linking not done
+        gcc: error: /W4: linker input file not found: No such file or directory
+        ninja: build stopped: subcommand failed.
+        
+      exitCode: 1
+  -
+    kind: "try_compile-v1"
+    backtrace:
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/Internal/CheckSourceCompiles.cmake:101 (try_compile)"
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/Internal/CheckCompilerFlag.cmake:18 (cmake_check_source_compiles)"
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CheckCCompilerFlag.cmake:51 (cmake_check_compiler_flag)"
+      - "third_party/libuv/CMakeLists.txt:108 (check_c_compiler_flag)"
+    checks:
+      - "Performing Test UV_LINT_NO_UNUSED_PARAMETER_MSVC"
+    directories:
+      source: "/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-v42N6s"
+      binary: "/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-v42N6s"
+    cmakeVariables:
+      CMAKE_C_FLAGS: ""
+      CMAKE_C_FLAGS_DEBUG: "-g"
+      CMAKE_EXE_LINKER_FLAGS: ""
+      CMAKE_MODULE_PATH: "/home/mario/Documents/remote_projects/pccl-refactor/third_party/libuv/cmake"
+    buildResult:
+      variable: "UV_LINT_NO_UNUSED_PARAMETER_MSVC"
+      cached: true
+      stdout: |
+        Change Dir: '/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-v42N6s'
+        
+        Run Build Command(s): /home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/ninja/linux/x64/ninja -v cmTC_bfe84
+        [1/2] /usr/bin/gcc -DUV_LINT_NO_UNUSED_PARAMETER_MSVC  -std=gnu90 -fdiagnostics-color=always   /wd4100 -o CMakeFiles/cmTC_bfe84.dir/src.c.o -c /home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-v42N6s/src.c
+        FAILED: CMakeFiles/cmTC_bfe84.dir/src.c.o 
+        /usr/bin/gcc -DUV_LINT_NO_UNUSED_PARAMETER_MSVC  -std=gnu90 -fdiagnostics-color=always   /wd4100 -o CMakeFiles/cmTC_bfe84.dir/src.c.o -c /home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-v42N6s/src.c
+        gcc: warning: /wd4100: linker input file unused because linking not done
+        gcc: error: /wd4100: linker input file not found: No such file or directory
+        ninja: build stopped: subcommand failed.
+        
+      exitCode: 1
+  -
+    kind: "try_compile-v1"
+    backtrace:
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/Internal/CheckSourceCompiles.cmake:101 (try_compile)"
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/Internal/CheckCompilerFlag.cmake:18 (cmake_check_source_compiles)"
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CheckCCompilerFlag.cmake:51 (cmake_check_compiler_flag)"
+      - "third_party/libuv/CMakeLists.txt:109 (check_c_compiler_flag)"
+    checks:
+      - "Performing Test UV_LINT_NO_CONDITIONAL_CONSTANT_MSVC"
+    directories:
+      source: "/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-TPML5O"
+      binary: "/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-TPML5O"
+    cmakeVariables:
+      CMAKE_C_FLAGS: ""
+      CMAKE_C_FLAGS_DEBUG: "-g"
+      CMAKE_EXE_LINKER_FLAGS: ""
+      CMAKE_MODULE_PATH: "/home/mario/Documents/remote_projects/pccl-refactor/third_party/libuv/cmake"
+    buildResult:
+      variable: "UV_LINT_NO_CONDITIONAL_CONSTANT_MSVC"
+      cached: true
+      stdout: |
+        Change Dir: '/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-TPML5O'
+        
+        Run Build Command(s): /home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/ninja/linux/x64/ninja -v cmTC_e2709
+        [1/2] /usr/bin/gcc -DUV_LINT_NO_CONDITIONAL_CONSTANT_MSVC  -std=gnu90 -fdiagnostics-color=always   /wd4127 -o CMakeFiles/cmTC_e2709.dir/src.c.o -c /home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-TPML5O/src.c
+        FAILED: CMakeFiles/cmTC_e2709.dir/src.c.o 
+        /usr/bin/gcc -DUV_LINT_NO_CONDITIONAL_CONSTANT_MSVC  -std=gnu90 -fdiagnostics-color=always   /wd4127 -o CMakeFiles/cmTC_e2709.dir/src.c.o -c /home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-TPML5O/src.c
+        gcc: warning: /wd4127: linker input file unused because linking not done
+        gcc: error: /wd4127: linker input file not found: No such file or directory
+        ninja: build stopped: subcommand failed.
+        
+      exitCode: 1
+  -
+    kind: "try_compile-v1"
+    backtrace:
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/Internal/CheckSourceCompiles.cmake:101 (try_compile)"
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/Internal/CheckCompilerFlag.cmake:18 (cmake_check_source_compiles)"
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CheckCCompilerFlag.cmake:51 (cmake_check_compiler_flag)"
+      - "third_party/libuv/CMakeLists.txt:110 (check_c_compiler_flag)"
+    checks:
+      - "Performing Test UV_LINT_NO_NONSTANDARD_MSVC"
+    directories:
+      source: "/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-VXnSB4"
+      binary: "/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-VXnSB4"
+    cmakeVariables:
+      CMAKE_C_FLAGS: ""
+      CMAKE_C_FLAGS_DEBUG: "-g"
+      CMAKE_EXE_LINKER_FLAGS: ""
+      CMAKE_MODULE_PATH: "/home/mario/Documents/remote_projects/pccl-refactor/third_party/libuv/cmake"
+    buildResult:
+      variable: "UV_LINT_NO_NONSTANDARD_MSVC"
+      cached: true
+      stdout: |
+        Change Dir: '/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-VXnSB4'
+        
+        Run Build Command(s): /home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/ninja/linux/x64/ninja -v cmTC_9ba93
+        [1/2] /usr/bin/gcc -DUV_LINT_NO_NONSTANDARD_MSVC  -std=gnu90 -fdiagnostics-color=always   /wd4201 -o CMakeFiles/cmTC_9ba93.dir/src.c.o -c /home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-VXnSB4/src.c
+        FAILED: CMakeFiles/cmTC_9ba93.dir/src.c.o 
+        /usr/bin/gcc -DUV_LINT_NO_NONSTANDARD_MSVC  -std=gnu90 -fdiagnostics-color=always   /wd4201 -o CMakeFiles/cmTC_9ba93.dir/src.c.o -c /home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-VXnSB4/src.c
+        gcc: warning: /wd4201: linker input file unused because linking not done
+        gcc: error: /wd4201: linker input file not found: No such file or directory
+        ninja: build stopped: subcommand failed.
+        
+      exitCode: 1
+  -
+    kind: "try_compile-v1"
+    backtrace:
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/Internal/CheckSourceCompiles.cmake:101 (try_compile)"
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/Internal/CheckCompilerFlag.cmake:18 (cmake_check_source_compiles)"
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CheckCCompilerFlag.cmake:51 (cmake_check_compiler_flag)"
+      - "third_party/libuv/CMakeLists.txt:111 (check_c_compiler_flag)"
+    checks:
+      - "Performing Test UV_LINT_NO_NONSTANDARD_EMPTY_TU_MSVC"
+    directories:
+      source: "/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-Z3vHnw"
+      binary: "/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-Z3vHnw"
+    cmakeVariables:
+      CMAKE_C_FLAGS: ""
+      CMAKE_C_FLAGS_DEBUG: "-g"
+      CMAKE_EXE_LINKER_FLAGS: ""
+      CMAKE_MODULE_PATH: "/home/mario/Documents/remote_projects/pccl-refactor/third_party/libuv/cmake"
+    buildResult:
+      variable: "UV_LINT_NO_NONSTANDARD_EMPTY_TU_MSVC"
+      cached: true
+      stdout: |
+        Change Dir: '/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-Z3vHnw'
+        
+        Run Build Command(s): /home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/ninja/linux/x64/ninja -v cmTC_03a19
+        [1/2] /usr/bin/gcc -DUV_LINT_NO_NONSTANDARD_EMPTY_TU_MSVC  -std=gnu90 -fdiagnostics-color=always   /wd4206 -o CMakeFiles/cmTC_03a19.dir/src.c.o -c /home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-Z3vHnw/src.c
+        FAILED: CMakeFiles/cmTC_03a19.dir/src.c.o 
+        /usr/bin/gcc -DUV_LINT_NO_NONSTANDARD_EMPTY_TU_MSVC  -std=gnu90 -fdiagnostics-color=always   /wd4206 -o CMakeFiles/cmTC_03a19.dir/src.c.o -c /home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-Z3vHnw/src.c
+        gcc: warning: /wd4206: linker input file unused because linking not done
+        gcc: error: /wd4206: linker input file not found: No such file or directory
+        ninja: build stopped: subcommand failed.
+        
+      exitCode: 1
+  -
+    kind: "try_compile-v1"
+    backtrace:
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/Internal/CheckSourceCompiles.cmake:101 (try_compile)"
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/Internal/CheckCompilerFlag.cmake:18 (cmake_check_source_compiles)"
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CheckCCompilerFlag.cmake:51 (cmake_check_compiler_flag)"
+      - "third_party/libuv/CMakeLists.txt:112 (check_c_compiler_flag)"
+    checks:
+      - "Performing Test UV_LINT_NO_NONSTANDARD_FILE_SCOPE_MSVC"
+    directories:
+      source: "/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-l55iWt"
+      binary: "/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-l55iWt"
+    cmakeVariables:
+      CMAKE_C_FLAGS: ""
+      CMAKE_C_FLAGS_DEBUG: "-g"
+      CMAKE_EXE_LINKER_FLAGS: ""
+      CMAKE_MODULE_PATH: "/home/mario/Documents/remote_projects/pccl-refactor/third_party/libuv/cmake"
+    buildResult:
+      variable: "UV_LINT_NO_NONSTANDARD_FILE_SCOPE_MSVC"
+      cached: true
+      stdout: |
+        Change Dir: '/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-l55iWt'
+        
+        Run Build Command(s): /home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/ninja/linux/x64/ninja -v cmTC_4f7ab
+        [1/2] /usr/bin/gcc -DUV_LINT_NO_NONSTANDARD_FILE_SCOPE_MSVC  -std=gnu90 -fdiagnostics-color=always   /wd4210 -o CMakeFiles/cmTC_4f7ab.dir/src.c.o -c /home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-l55iWt/src.c
+        FAILED: CMakeFiles/cmTC_4f7ab.dir/src.c.o 
+        /usr/bin/gcc -DUV_LINT_NO_NONSTANDARD_FILE_SCOPE_MSVC  -std=gnu90 -fdiagnostics-color=always   /wd4210 -o CMakeFiles/cmTC_4f7ab.dir/src.c.o -c /home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-l55iWt/src.c
+        gcc: warning: /wd4210: linker input file unused because linking not done
+        gcc: error: /wd4210: linker input file not found: No such file or directory
+        ninja: build stopped: subcommand failed.
+        
+      exitCode: 1
+  -
+    kind: "try_compile-v1"
+    backtrace:
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/Internal/CheckSourceCompiles.cmake:101 (try_compile)"
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/Internal/CheckCompilerFlag.cmake:18 (cmake_check_source_compiles)"
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CheckCCompilerFlag.cmake:51 (cmake_check_compiler_flag)"
+      - "third_party/libuv/CMakeLists.txt:113 (check_c_compiler_flag)"
+    checks:
+      - "Performing Test UV_LINT_NO_NONSTANDARD_NONSTATIC_DLIMPORT_MSVC"
+    directories:
+      source: "/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-CwynwF"
+      binary: "/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-CwynwF"
+    cmakeVariables:
+      CMAKE_C_FLAGS: ""
+      CMAKE_C_FLAGS_DEBUG: "-g"
+      CMAKE_EXE_LINKER_FLAGS: ""
+      CMAKE_MODULE_PATH: "/home/mario/Documents/remote_projects/pccl-refactor/third_party/libuv/cmake"
+    buildResult:
+      variable: "UV_LINT_NO_NONSTANDARD_NONSTATIC_DLIMPORT_MSVC"
+      cached: true
+      stdout: |
+        Change Dir: '/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-CwynwF'
+        
+        Run Build Command(s): /home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/ninja/linux/x64/ninja -v cmTC_2b4b4
+        [1/2] /usr/bin/gcc -DUV_LINT_NO_NONSTANDARD_NONSTATIC_DLIMPORT_MSVC  -std=gnu90 -fdiagnostics-color=always   /wd4232 -o CMakeFiles/cmTC_2b4b4.dir/src.c.o -c /home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-CwynwF/src.c
+        FAILED: CMakeFiles/cmTC_2b4b4.dir/src.c.o 
+        /usr/bin/gcc -DUV_LINT_NO_NONSTANDARD_NONSTATIC_DLIMPORT_MSVC  -std=gnu90 -fdiagnostics-color=always   /wd4232 -o CMakeFiles/cmTC_2b4b4.dir/src.c.o -c /home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-CwynwF/src.c
+        gcc: warning: /wd4232: linker input file unused because linking not done
+        gcc: error: /wd4232: linker input file not found: No such file or directory
+        ninja: build stopped: subcommand failed.
+        
+      exitCode: 1
+  -
+    kind: "try_compile-v1"
+    backtrace:
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/Internal/CheckSourceCompiles.cmake:101 (try_compile)"
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/Internal/CheckCompilerFlag.cmake:18 (cmake_check_source_compiles)"
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CheckCCompilerFlag.cmake:51 (cmake_check_compiler_flag)"
+      - "third_party/libuv/CMakeLists.txt:114 (check_c_compiler_flag)"
+    checks:
+      - "Performing Test UV_LINT_NO_HIDES_LOCAL"
+    directories:
+      source: "/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-6EXWLt"
+      binary: "/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-6EXWLt"
+    cmakeVariables:
+      CMAKE_C_FLAGS: ""
+      CMAKE_C_FLAGS_DEBUG: "-g"
+      CMAKE_EXE_LINKER_FLAGS: ""
+      CMAKE_MODULE_PATH: "/home/mario/Documents/remote_projects/pccl-refactor/third_party/libuv/cmake"
+    buildResult:
+      variable: "UV_LINT_NO_HIDES_LOCAL"
+      cached: true
+      stdout: |
+        Change Dir: '/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-6EXWLt'
+        
+        Run Build Command(s): /home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/ninja/linux/x64/ninja -v cmTC_2a578
+        [1/2] /usr/bin/gcc -DUV_LINT_NO_HIDES_LOCAL  -std=gnu90 -fdiagnostics-color=always   /wd4456 -o CMakeFiles/cmTC_2a578.dir/src.c.o -c /home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-6EXWLt/src.c
+        FAILED: CMakeFiles/cmTC_2a578.dir/src.c.o 
+        /usr/bin/gcc -DUV_LINT_NO_HIDES_LOCAL  -std=gnu90 -fdiagnostics-color=always   /wd4456 -o CMakeFiles/cmTC_2a578.dir/src.c.o -c /home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-6EXWLt/src.c
+        gcc: warning: /wd4456: linker input file unused because linking not done
+        gcc: error: /wd4456: linker input file not found: No such file or directory
+        ninja: build stopped: subcommand failed.
+        
+      exitCode: 1
+  -
+    kind: "try_compile-v1"
+    backtrace:
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/Internal/CheckSourceCompiles.cmake:101 (try_compile)"
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/Internal/CheckCompilerFlag.cmake:18 (cmake_check_source_compiles)"
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CheckCCompilerFlag.cmake:51 (cmake_check_compiler_flag)"
+      - "third_party/libuv/CMakeLists.txt:115 (check_c_compiler_flag)"
+    checks:
+      - "Performing Test UV_LINT_NO_HIDES_PARAM"
+    directories:
+      source: "/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-TT4t3m"
+      binary: "/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-TT4t3m"
+    cmakeVariables:
+      CMAKE_C_FLAGS: ""
+      CMAKE_C_FLAGS_DEBUG: "-g"
+      CMAKE_EXE_LINKER_FLAGS: ""
+      CMAKE_MODULE_PATH: "/home/mario/Documents/remote_projects/pccl-refactor/third_party/libuv/cmake"
+    buildResult:
+      variable: "UV_LINT_NO_HIDES_PARAM"
+      cached: true
+      stdout: |
+        Change Dir: '/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-TT4t3m'
+        
+        Run Build Command(s): /home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/ninja/linux/x64/ninja -v cmTC_33278
+        [1/2] /usr/bin/gcc -DUV_LINT_NO_HIDES_PARAM  -std=gnu90 -fdiagnostics-color=always   /wd4457 -o CMakeFiles/cmTC_33278.dir/src.c.o -c /home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-TT4t3m/src.c
+        FAILED: CMakeFiles/cmTC_33278.dir/src.c.o 
+        /usr/bin/gcc -DUV_LINT_NO_HIDES_PARAM  -std=gnu90 -fdiagnostics-color=always   /wd4457 -o CMakeFiles/cmTC_33278.dir/src.c.o -c /home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-TT4t3m/src.c
+        gcc: warning: /wd4457: linker input file unused because linking not done
+        gcc: error: /wd4457: linker input file not found: No such file or directory
+        ninja: build stopped: subcommand failed.
+        
+      exitCode: 1
+  -
+    kind: "try_compile-v1"
+    backtrace:
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/Internal/CheckSourceCompiles.cmake:101 (try_compile)"
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/Internal/CheckCompilerFlag.cmake:18 (cmake_check_source_compiles)"
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CheckCCompilerFlag.cmake:51 (cmake_check_compiler_flag)"
+      - "third_party/libuv/CMakeLists.txt:116 (check_c_compiler_flag)"
+    checks:
+      - "Performing Test UV_LINT_NO_HIDES_GLOBAL"
+    directories:
+      source: "/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-CV7vy1"
+      binary: "/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-CV7vy1"
+    cmakeVariables:
+      CMAKE_C_FLAGS: ""
+      CMAKE_C_FLAGS_DEBUG: "-g"
+      CMAKE_EXE_LINKER_FLAGS: ""
+      CMAKE_MODULE_PATH: "/home/mario/Documents/remote_projects/pccl-refactor/third_party/libuv/cmake"
+    buildResult:
+      variable: "UV_LINT_NO_HIDES_GLOBAL"
+      cached: true
+      stdout: |
+        Change Dir: '/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-CV7vy1'
+        
+        Run Build Command(s): /home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/ninja/linux/x64/ninja -v cmTC_8bd87
+        [1/2] /usr/bin/gcc -DUV_LINT_NO_HIDES_GLOBAL  -std=gnu90 -fdiagnostics-color=always   /wd4459 -o CMakeFiles/cmTC_8bd87.dir/src.c.o -c /home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-CV7vy1/src.c
+        FAILED: CMakeFiles/cmTC_8bd87.dir/src.c.o 
+        /usr/bin/gcc -DUV_LINT_NO_HIDES_GLOBAL  -std=gnu90 -fdiagnostics-color=always   /wd4459 -o CMakeFiles/cmTC_8bd87.dir/src.c.o -c /home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-CV7vy1/src.c
+        gcc: warning: /wd4459: linker input file unused because linking not done
+        gcc: error: /wd4459: linker input file not found: No such file or directory
+        ninja: build stopped: subcommand failed.
+        
+      exitCode: 1
+  -
+    kind: "try_compile-v1"
+    backtrace:
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/Internal/CheckSourceCompiles.cmake:101 (try_compile)"
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/Internal/CheckCompilerFlag.cmake:18 (cmake_check_source_compiles)"
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CheckCCompilerFlag.cmake:51 (cmake_check_compiler_flag)"
+      - "third_party/libuv/CMakeLists.txt:117 (check_c_compiler_flag)"
+    checks:
+      - "Performing Test UV_LINT_NO_CONDITIONAL_ASSIGNMENT_MSVC"
+    directories:
+      source: "/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-f2e7bM"
+      binary: "/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-f2e7bM"
+    cmakeVariables:
+      CMAKE_C_FLAGS: ""
+      CMAKE_C_FLAGS_DEBUG: "-g"
+      CMAKE_EXE_LINKER_FLAGS: ""
+      CMAKE_MODULE_PATH: "/home/mario/Documents/remote_projects/pccl-refactor/third_party/libuv/cmake"
+    buildResult:
+      variable: "UV_LINT_NO_CONDITIONAL_ASSIGNMENT_MSVC"
+      cached: true
+      stdout: |
+        Change Dir: '/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-f2e7bM'
+        
+        Run Build Command(s): /home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/ninja/linux/x64/ninja -v cmTC_ff807
+        [1/2] /usr/bin/gcc -DUV_LINT_NO_CONDITIONAL_ASSIGNMENT_MSVC  -std=gnu90 -fdiagnostics-color=always   /wd4706 -o CMakeFiles/cmTC_ff807.dir/src.c.o -c /home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-f2e7bM/src.c
+        FAILED: CMakeFiles/cmTC_ff807.dir/src.c.o 
+        /usr/bin/gcc -DUV_LINT_NO_CONDITIONAL_ASSIGNMENT_MSVC  -std=gnu90 -fdiagnostics-color=always   /wd4706 -o CMakeFiles/cmTC_ff807.dir/src.c.o -c /home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-f2e7bM/src.c
+        gcc: warning: /wd4706: linker input file unused because linking not done
+        gcc: error: /wd4706: linker input file not found: No such file or directory
+        ninja: build stopped: subcommand failed.
+        
+      exitCode: 1
+  -
+    kind: "try_compile-v1"
+    backtrace:
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/Internal/CheckSourceCompiles.cmake:101 (try_compile)"
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/Internal/CheckCompilerFlag.cmake:18 (cmake_check_source_compiles)"
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CheckCCompilerFlag.cmake:51 (cmake_check_compiler_flag)"
+      - "third_party/libuv/CMakeLists.txt:118 (check_c_compiler_flag)"
+    checks:
+      - "Performing Test UV_LINT_NO_UNSAFE_MSVC"
+    directories:
+      source: "/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-7VKElD"
+      binary: "/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-7VKElD"
+    cmakeVariables:
+      CMAKE_C_FLAGS: ""
+      CMAKE_C_FLAGS_DEBUG: "-g"
+      CMAKE_EXE_LINKER_FLAGS: ""
+      CMAKE_MODULE_PATH: "/home/mario/Documents/remote_projects/pccl-refactor/third_party/libuv/cmake"
+    buildResult:
+      variable: "UV_LINT_NO_UNSAFE_MSVC"
+      cached: true
+      stdout: |
+        Change Dir: '/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-7VKElD'
+        
+        Run Build Command(s): /home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/ninja/linux/x64/ninja -v cmTC_8e323
+        [1/2] /usr/bin/gcc -DUV_LINT_NO_UNSAFE_MSVC  -std=gnu90 -fdiagnostics-color=always   /wd4996 -o CMakeFiles/cmTC_8e323.dir/src.c.o -c /home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-7VKElD/src.c
+        FAILED: CMakeFiles/cmTC_8e323.dir/src.c.o 
+        /usr/bin/gcc -DUV_LINT_NO_UNSAFE_MSVC  -std=gnu90 -fdiagnostics-color=always   /wd4996 -o CMakeFiles/cmTC_8e323.dir/src.c.o -c /home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-7VKElD/src.c
+        gcc: warning: /wd4996: linker input file unused because linking not done
+        gcc: error: /wd4996: linker input file not found: No such file or directory
+        ninja: build stopped: subcommand failed.
+        
+      exitCode: 1
+  -
+    kind: "try_compile-v1"
+    backtrace:
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/Internal/CheckSourceCompiles.cmake:101 (try_compile)"
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/Internal/CheckCompilerFlag.cmake:18 (cmake_check_source_compiles)"
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CheckCCompilerFlag.cmake:51 (cmake_check_compiler_flag)"
+      - "third_party/libuv/CMakeLists.txt:120 (check_c_compiler_flag)"
+    checks:
+      - "Performing Test UV_LINT_WALL"
+    directories:
+      source: "/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-4ySI1G"
+      binary: "/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-4ySI1G"
+    cmakeVariables:
+      CMAKE_C_FLAGS: ""
+      CMAKE_C_FLAGS_DEBUG: "-g"
+      CMAKE_EXE_LINKER_FLAGS: ""
+      CMAKE_MODULE_PATH: "/home/mario/Documents/remote_projects/pccl-refactor/third_party/libuv/cmake"
+    buildResult:
+      variable: "UV_LINT_WALL"
+      cached: true
+      stdout: |
+        Change Dir: '/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-4ySI1G'
+        
+        Run Build Command(s): /home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/ninja/linux/x64/ninja -v cmTC_eac7b
+        [1/2] /usr/bin/gcc -DUV_LINT_WALL  -std=gnu90 -fdiagnostics-color=always   -Wall -o CMakeFiles/cmTC_eac7b.dir/src.c.o -c /home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-4ySI1G/src.c
+        [2/2] : && /usr/bin/gcc   CMakeFiles/cmTC_eac7b.dir/src.c.o -o cmTC_eac7b   && :
+        
+      exitCode: 0
+  -
+    kind: "try_compile-v1"
+    backtrace:
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/Internal/CheckSourceCompiles.cmake:101 (try_compile)"
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/Internal/CheckCompilerFlag.cmake:18 (cmake_check_source_compiles)"
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CheckCCompilerFlag.cmake:51 (cmake_check_compiler_flag)"
+      - "third_party/libuv/CMakeLists.txt:123 (check_c_compiler_flag)"
+    checks:
+      - "Performing Test UV_LINT_NO_UNUSED_PARAMETER"
+    directories:
+      source: "/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-SIVm1G"
+      binary: "/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-SIVm1G"
+    cmakeVariables:
+      CMAKE_C_FLAGS: ""
+      CMAKE_C_FLAGS_DEBUG: "-g"
+      CMAKE_EXE_LINKER_FLAGS: ""
+      CMAKE_MODULE_PATH: "/home/mario/Documents/remote_projects/pccl-refactor/third_party/libuv/cmake"
+    buildResult:
+      variable: "UV_LINT_NO_UNUSED_PARAMETER"
+      cached: true
+      stdout: |
+        Change Dir: '/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-SIVm1G'
+        
+        Run Build Command(s): /home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/ninja/linux/x64/ninja -v cmTC_f5bec
+        [1/2] /usr/bin/gcc -DUV_LINT_NO_UNUSED_PARAMETER  -std=gnu90 -fdiagnostics-color=always   -Wno-unused-parameter -o CMakeFiles/cmTC_f5bec.dir/src.c.o -c /home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-SIVm1G/src.c
+        [2/2] : && /usr/bin/gcc   CMakeFiles/cmTC_f5bec.dir/src.c.o -o cmTC_f5bec   && :
+        
+      exitCode: 0
+  -
+    kind: "try_compile-v1"
+    backtrace:
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/Internal/CheckSourceCompiles.cmake:101 (try_compile)"
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/Internal/CheckCompilerFlag.cmake:18 (cmake_check_source_compiles)"
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CheckCCompilerFlag.cmake:51 (cmake_check_compiler_flag)"
+      - "third_party/libuv/CMakeLists.txt:124 (check_c_compiler_flag)"
+    checks:
+      - "Performing Test UV_LINT_STRICT_PROTOTYPES"
+    directories:
+      source: "/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-Q5VPNg"
+      binary: "/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-Q5VPNg"
+    cmakeVariables:
+      CMAKE_C_FLAGS: ""
+      CMAKE_C_FLAGS_DEBUG: "-g"
+      CMAKE_EXE_LINKER_FLAGS: ""
+      CMAKE_MODULE_PATH: "/home/mario/Documents/remote_projects/pccl-refactor/third_party/libuv/cmake"
+    buildResult:
+      variable: "UV_LINT_STRICT_PROTOTYPES"
+      cached: true
+      stdout: |
+        Change Dir: '/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-Q5VPNg'
+        
+        Run Build Command(s): /home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/ninja/linux/x64/ninja -v cmTC_76580
+        [1/2] /usr/bin/gcc -DUV_LINT_STRICT_PROTOTYPES  -std=gnu90 -fdiagnostics-color=always   -Wstrict-prototypes -o CMakeFiles/cmTC_76580.dir/src.c.o -c /home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-Q5VPNg/src.c
+        [2/2] : && /usr/bin/gcc   CMakeFiles/cmTC_76580.dir/src.c.o -o cmTC_76580   && :
+        
+      exitCode: 0
+  -
+    kind: "try_compile-v1"
+    backtrace:
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/Internal/CheckSourceCompiles.cmake:101 (try_compile)"
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/Internal/CheckCompilerFlag.cmake:18 (cmake_check_source_compiles)"
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CheckCCompilerFlag.cmake:51 (cmake_check_compiler_flag)"
+      - "third_party/libuv/CMakeLists.txt:125 (check_c_compiler_flag)"
+    checks:
+      - "Performing Test UV_LINT_EXTRA"
+    directories:
+      source: "/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-IXd75U"
+      binary: "/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-IXd75U"
+    cmakeVariables:
+      CMAKE_C_FLAGS: ""
+      CMAKE_C_FLAGS_DEBUG: "-g"
+      CMAKE_EXE_LINKER_FLAGS: ""
+      CMAKE_MODULE_PATH: "/home/mario/Documents/remote_projects/pccl-refactor/third_party/libuv/cmake"
+    buildResult:
+      variable: "UV_LINT_EXTRA"
+      cached: true
+      stdout: |
+        Change Dir: '/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-IXd75U'
+        
+        Run Build Command(s): /home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/ninja/linux/x64/ninja -v cmTC_bfb13
+        [1/2] /usr/bin/gcc -DUV_LINT_EXTRA  -std=gnu90 -fdiagnostics-color=always   -Wextra -o CMakeFiles/cmTC_bfb13.dir/src.c.o -c /home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-IXd75U/src.c
+        [2/2] : && /usr/bin/gcc   CMakeFiles/cmTC_bfb13.dir/src.c.o -o cmTC_bfb13   && :
+        
+      exitCode: 0
+  -
+    kind: "try_compile-v1"
+    backtrace:
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/Internal/CheckSourceCompiles.cmake:101 (try_compile)"
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/Internal/CheckCompilerFlag.cmake:18 (cmake_check_source_compiles)"
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CheckCCompilerFlag.cmake:51 (cmake_check_compiler_flag)"
+      - "third_party/libuv/CMakeLists.txt:127 (check_c_compiler_flag)"
+    checks:
+      - "Performing Test UV_LINT_UTF8_MSVC"
+    directories:
+      source: "/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-bB7Uxy"
+      binary: "/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-bB7Uxy"
+    cmakeVariables:
+      CMAKE_C_FLAGS: ""
+      CMAKE_C_FLAGS_DEBUG: "-g"
+      CMAKE_EXE_LINKER_FLAGS: ""
+      CMAKE_MODULE_PATH: "/home/mario/Documents/remote_projects/pccl-refactor/third_party/libuv/cmake"
+    buildResult:
+      variable: "UV_LINT_UTF8_MSVC"
+      cached: true
+      stdout: |
+        Change Dir: '/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-bB7Uxy'
+        
+        Run Build Command(s): /home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/ninja/linux/x64/ninja -v cmTC_2c73b
+        [1/2] /usr/bin/gcc -DUV_LINT_UTF8_MSVC  -std=gnu90 -fdiagnostics-color=always   /utf-8 -o CMakeFiles/cmTC_2c73b.dir/src.c.o -c /home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-bB7Uxy/src.c
+        FAILED: CMakeFiles/cmTC_2c73b.dir/src.c.o 
+        /usr/bin/gcc -DUV_LINT_UTF8_MSVC  -std=gnu90 -fdiagnostics-color=always   /utf-8 -o CMakeFiles/cmTC_2c73b.dir/src.c.o -c /home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-bB7Uxy/src.c
+        gcc: warning: /utf-8: linker input file unused because linking not done
+        gcc: error: /utf-8: linker input file not found: No such file or directory
+        ninja: build stopped: subcommand failed.
+        
+      exitCode: 1
+  -
+    kind: "try_compile-v1"
+    backtrace:
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/Internal/CheckSourceCompiles.cmake:101 (try_compile)"
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/Internal/CheckCompilerFlag.cmake:18 (cmake_check_source_compiles)"
+      - "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CheckCCompilerFlag.cmake:51 (cmake_check_compiler_flag)"
+      - "third_party/libuv/CMakeLists.txt:166 (check_c_compiler_flag)"
+    checks:
+      - "Performing Test UV_F_STRICT_ALIASING"
+    directories:
+      source: "/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-YcizF5"
+      binary: "/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-YcizF5"
+    cmakeVariables:
+      CMAKE_C_FLAGS: ""
+      CMAKE_C_FLAGS_DEBUG: "-g"
+      CMAKE_EXE_LINKER_FLAGS: ""
+      CMAKE_MODULE_PATH: "/home/mario/Documents/remote_projects/pccl-refactor/third_party/libuv/cmake"
+    buildResult:
+      variable: "UV_F_STRICT_ALIASING"
+      cached: true
+      stdout: |
+        Change Dir: '/home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-YcizF5'
+        
+        Run Build Command(s): /home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/ninja/linux/x64/ninja -v cmTC_a12f2
+        [1/2] /usr/bin/gcc -DUV_F_STRICT_ALIASING  -std=gnu90 -fdiagnostics-color=always   -fno-strict-aliasing -o CMakeFiles/cmTC_a12f2.dir/src.c.o -c /home/mario/Documents/remote_projects/pccl-refactor/build/debug/CMakeFiles/CMakeScratch/TryCompile-YcizF5/src.c
+        [2/2] : && /usr/bin/gcc   CMakeFiles/cmTC_a12f2.dir/src.c.o -o cmTC_a12f2   && :
+        
+      exitCode: 0
+...

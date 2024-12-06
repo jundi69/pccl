@@ -1,0 +1,165 @@
+{
+	"archive" : {},
+	"artifacts" : 
+	[
+		{
+			"path" : "tinysockets/libtinysockets.a"
+		}
+	],
+	"backtrace" : 1,
+	"backtraceGraph" : 
+	{
+		"commands" : 
+		[
+			"add_library",
+			"target_link_libraries",
+			"target_include_directories"
+		],
+		"files" : 
+		[
+			"tinysockets/CMakeLists.txt"
+		],
+		"nodes" : 
+		[
+			{
+				"file" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 1,
+				"parent" : 0
+			},
+			{
+				"command" : 1,
+				"file" : 0,
+				"line" : 8,
+				"parent" : 0
+			},
+			{
+				"command" : 1,
+				"file" : 0,
+				"line" : 5,
+				"parent" : 0
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 3,
+				"parent" : 0
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 4,
+				"parent" : 0
+			}
+		]
+	},
+	"compileGroups" : 
+	[
+		{
+			"compileCommandFragments" : 
+			[
+				{
+					"fragment" : "-g -std=gnu++20 -fdiagnostics-color=always"
+				}
+			],
+			"includes" : 
+			[
+				{
+					"backtrace" : 4,
+					"path" : "/home/mario/Documents/remote_projects/pccl-refactor/tinysockets/include"
+				},
+				{
+					"backtrace" : 5,
+					"path" : "/home/mario/Documents/remote_projects/pccl-refactor/tinysockets/internal"
+				},
+				{
+					"backtrace" : 3,
+					"path" : "/home/mario/Documents/remote_projects/pccl-refactor/ccoip/internal_include"
+				},
+				{
+					"backtrace" : 3,
+					"path" : "/home/mario/Documents/remote_projects/pccl-refactor/ccoip/public_include"
+				},
+				{
+					"backtrace" : 3,
+					"path" : "/home/mario/Documents/remote_projects/pccl-refactor/log/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/home/mario/Documents/remote_projects/pccl-refactor/third_party/libuv/include"
+				}
+			],
+			"language" : "CXX",
+			"languageStandard" : 
+			{
+				"backtraces" : 
+				[
+					1
+				],
+				"standard" : "20"
+			},
+			"sourceIndexes" : 
+			[
+				0,
+				1,
+				2
+			]
+		}
+	],
+	"dependencies" : 
+	[
+		{
+			"backtrace" : 2,
+			"id" : "uv_a::@1ecdf77a6fe0f835c35f"
+		},
+		{
+			"backtrace" : 3,
+			"id" : "pccl_log::@e2c7cea07f24a8229370"
+		}
+	],
+	"id" : "tinysockets::@6019066671eee5944260",
+	"name" : "tinysockets",
+	"nameOnDisk" : "libtinysockets.a",
+	"paths" : 
+	{
+		"build" : "tinysockets",
+		"source" : "tinysockets"
+	},
+	"sourceGroups" : 
+	[
+		{
+			"name" : "Source Files",
+			"sourceIndexes" : 
+			[
+				0,
+				1,
+				2
+			]
+		}
+	],
+	"sources" : 
+	[
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "tinysockets/src/server_socket.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "tinysockets/src/client_socket.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "tinysockets/src/ccoip_utils.cpp",
+			"sourceGroupIndex" : 0
+		}
+	],
+	"type" : "STATIC_LIBRARY"
+}
