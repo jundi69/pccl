@@ -40,7 +40,4 @@ typedef enum {
     }                                        \
 }
 
-#define PCCL_SUCCEED() { return pcclSuccess; }
-#define PCCL_FAIL(status) { return status; }
-
-#define PCCL_ERR_PROPAGATE(status) { pcclResult_t status_val = status; if (status_val != pcclSuccess) { PCCL_FAIL(status_val); } }
+#define PCCL_ERR_PROPAGATE(status) { pcclResult_t status_val = status; if (status_val != pcclSuccess) { return (status_val); } }
