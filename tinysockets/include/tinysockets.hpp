@@ -3,6 +3,9 @@
 #include <ccoip_inet.h>
 #include <ccoip_packet.hpp>
 #include <pccl_log.hpp>
+
+#include <optional>
+#include <functional>
 #include <thread>
 #include <span>
 

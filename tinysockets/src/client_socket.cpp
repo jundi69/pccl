@@ -8,6 +8,8 @@
 
 #include <sys/socket.h>
 
+#include <cstring>
+
 static void configure_socket_fd(const int socket_fd) {
     constexpr int opt = 1;
 

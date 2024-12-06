@@ -1,0 +1,249 @@
+{
+	"inputs" : 
+	[
+		{
+			"path" : "CMakeLists.txt"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/release/CMakeFiles/3.30.5/CMakeSystem.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CMakeSystemSpecificInitialize.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/Platform/Linux-Initialize.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/release/CMakeFiles/3.30.5/CMakeCCompiler.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/release/CMakeFiles/3.30.5/CMakeCXXCompiler.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CMakeSystemSpecificInformation.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CMakeGenericSystem.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CMakeInitializeConfigs.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/Platform/Linux.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/Platform/UnixPaths.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CMakeCInformation.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CMakeLanguageInformation.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/Compiler/GNU-C.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/Compiler/GNU.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/Compiler/CMakeCommonCompilerMacros.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/Platform/Linux-GNU-C.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/Platform/Linux-GNU.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CMakeCommonLanguageInclude.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CMakeCXXInformation.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CMakeLanguageInformation.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/Compiler/GNU-CXX.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/Compiler/GNU.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/Platform/Linux-GNU-CXX.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/Platform/Linux-GNU.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CMakeCommonLanguageInclude.cmake"
+		},
+		{
+			"path" : "third_party/CMakeLists.txt"
+		},
+		{
+			"path" : "third_party/libuv/CMakeLists.txt"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CMakePackageConfigHelpers.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/WriteBasicConfigVersionFile.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CMakeDependentOption.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CheckCCompilerFlag.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/Internal/CheckCompilerFlag.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/Internal/CheckFlagCommonConfig.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/Internal/CheckSourceCompiles.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CMakeCheckCompilerFlagCommonPatterns.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CheckCSourceCompiles.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/Internal/CheckSourceCompiles.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/GNUInstallDirs.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CTest.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CTestUseLaunchers.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/CTestTargets.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "/home/mario/.cache/JetBrains/RemoteDev/dist/3a01c5f64a04e_CLion-2024.3/bin/cmake/linux/x64/share/cmake-3.30/Modules/DartConfiguration.tcl.in"
+		},
+		{
+			"path" : "third_party/libuv/libuv-static.pc.in"
+		},
+		{
+			"path" : "third_party/libuv/libuv.pc.in"
+		},
+		{
+			"path" : "log/CMakeLists.txt"
+		},
+		{
+			"path" : "ccoip/CMakeLists.txt"
+		},
+		{
+			"path" : "ccoip_master/CMakeLists.txt"
+		},
+		{
+			"path" : "tinysockets/CMakeLists.txt"
+		},
+		{
+			"path" : "tests/CMakeLists.txt"
+		},
+		{
+			"path" : "tests/basic_reduce_test/CMakeLists.txt"
+		},
+		{
+			"path" : "tests/c99_compat/CMakeLists.txt"
+		}
+	],
+	"kind" : "cmakeFiles",
+	"paths" : 
+	{
+		"build" : "/home/mario/Documents/remote_projects/pccl-refactor/build/release",
+		"source" : "/home/mario/Documents/remote_projects/pccl-refactor"
+	},
+	"version" : 
+	{
+		"major" : 1,
+		"minor" : 1
+	}
+}
