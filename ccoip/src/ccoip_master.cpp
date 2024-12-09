@@ -52,7 +52,7 @@ void ccoip::CCoIPMaster::onClientRead(const ccoip_socket_address_t &client_addre
     const auto packet_type = buffer.read<uint16_t>();
     const auto packet_length = buffer.read<uint64_t>();
     if (packet_length != buffer.remaining()) {
-        LOG(ERROR) << "Packet length mismatch: expected " << packet_length << " bytes, but got " << buffer.remaining();
+        LOG(ERR) << "Packet length mismatch: expected " << packet_length << " bytes, but got " << buffer.remaining();
         kickClient(client_address);
         return;
     }

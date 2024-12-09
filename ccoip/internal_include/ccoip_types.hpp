@@ -6,18 +6,18 @@
 #include <string>
 
 enum CCoIPDataType : uint8_t {
-    FLOAT16 = 0x01,
-    BFLOAT16 = 0x02,
-    FLOAT32 = 0x03,
-    FLOAT64 = 0x04,
-    INT8 = 0x05,
-    INT16 = 0x06,
-    INT32 = 0x07,
-    INT64 = 0x08,
-    UINT8 = 0x09,
-    UINT16 = 0x0A,
-    UINT32 = 0x0B,
-    UINT64 = 0x0C
+    CCOIP_DTYPE_FLOAT16 = 0x01,
+    CCOIP_DTYPE_BFLOAT16 = 0x02,
+    CCOIP_DTYPE_FLOAT32 = 0x03,
+    CCOIP_DTYPE_FLOAT64 = 0x04,
+    CCOIP_DTYPE_INT8 = 0x05,
+    CCOIP_DTYPE_INT16 = 0x06,
+    CCOIP_DTYPE_INT32 = 0x07,
+    CCOIP_DTYPE_INT64 = 0x08,
+    CCOIP_DTYPE_UINT8 = 0x09,
+    CCOIP_DTYPE_UINT16 = 0x0A,
+    CCOIP_DTYPE_UINT32 = 0x0B,
+    CCOIP_DTYPE_UINT64 = 0x0C
 };
 
 constexpr std::size_t CCOIP_UUID_N_BYTES = 16;

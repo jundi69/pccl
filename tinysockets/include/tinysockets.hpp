@@ -9,6 +9,12 @@
 #include <thread>
 #include <span>
 
+#ifdef WIN32
+typedef long long int ssize_t;
+#else
+#include <sys/types.h>
+#endif
+
 struct uv_server_stream_t;
 struct uv_stream_s;
 struct uv_buf_t;
@@ -108,13 +114,13 @@ namespace tinysockets {
         template <typename T> requires std::is_base_of_v<ccoip::Packet, T>
         [[nodiscard]] std::optional<T> receiveTlvPacket(const ccoip::packetId_t packet_id) {
             if (const ccoip::packetId_t actual_packet_id = receivePacketType(); actual_packet_id != packet_id) {
-                LOG(ERROR) << "Expected packet ID " << packet_id << " but received " << actual_packet_id;
+                LOG(ERR) << "Expected packet ID " << packet_id << " but received " << actual_packet_id;
                 return std::nullopt;
             }
             std::vector<std::uint8_t> data{};
             data.resize(receivePacketLength());
             if (!receivePacketData(data)) {
-                LOG(ERROR) << "Failed to receive packet data for packet ID " << packet_id << " with length " << data.size();
+                LOG(ERR) << "Failed to receive packet data for packet ID " << packet_id << " with length " << data.size();
                 return std::nullopt;
             }
             PacketReadBuffer buffer{data.data(), data.size()};
