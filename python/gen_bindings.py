@@ -4,9 +4,8 @@ import re
 OUTPUT_FILE: str = 'pccl/_cdecls.py'
 
 HEADERS = [
+    '../ccoip/public_include/ccoip_inet.h',
     '../include/pccl.h',
-    '../include/pccl_status.h',
-    '../ccoip/public_include/ccoip_inet.h'
 ]
 
 def comment_replacer(match):
@@ -16,25 +15,14 @@ def comment_replacer(match):
     else:
         return s
 
-
-enums_names: list[str] = []
-struct_names: list[str] = []
-
-
 def keep_line(line: str) -> bool:
     if line == '' or line.startswith('#'):
         return False
-    if line.startswith('PCCL_EXPORT') and not line.startswith('extern "C"'):
-        return True
-    if line.startswith('typedef enum'):
-        enums_names.append(line.split()[2])
+    if line.startswith('inline'):
         return False
-    if line.startswith('typedef struct'):
-        struct_names.append(line.split()[2])
+    if line.startswith('extern "C"'):
         return False
-    if line.startswith('typedef'):
-        return True
-    return False
+    return True
 
 pattern = re.compile(
     r'//.*?$|/\*.*?\*/|\'(?:\\.|[^\\\'])*\'|"(?:\\.|[^\\"])*"',
@@ -48,16 +36,15 @@ for file in HEADERS:
     full_src = re.sub(pattern, comment_replacer, full_src)  # remove comments
     data = [line.strip() for line in full_src.splitlines()]  # remove empty lines
     data = [line for line in data if keep_line(line)]  # remove empty lines
+    data = [line.replace('PCCL_EXPORT', '') for line in data]
+    for line in reversed(data):
+        if line == '}':
+            data.remove(line)
+            break
     c_input += data
 
 out = f'# Autogenered by {__file__} {datetime.datetime.now()}, do NOT edit!\n\n'
 out += "__PCCL_CDECLS: str = '''\n\n"
-for struct in struct_names:
-    out += f'typedef struct {struct} {struct};\n'
-out += '\n'
-for enum in enums_names:
-    out += f'typedef int {enum};\n'
-out += '\n'
 for line in c_input:
     out += f'{line}\n'
 out += "'''\n\n"

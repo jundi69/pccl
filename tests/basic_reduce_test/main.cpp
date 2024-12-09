@@ -1,5 +1,6 @@
 #include <pccl.h>
 #include <random>
+#include <iostream>
 
 #define PCCL_CHECK(status) { pcclResult_t status_val = status; if (status_val != pcclSuccess) { std::cerr << "Error: " << status_val << std::endl; exit(1); } }
 

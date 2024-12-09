@@ -9,8 +9,6 @@
 #include <stdbool.h>
 #endif
 
-#include "pccl_status.h"
-
 #ifdef _MSC_VER
 #define PCCL_EXPORT __declspec(dllexport)
 #else
@@ -20,6 +18,22 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+typedef enum pcclResult_t {
+    pcclSuccess = 0,
+    pcclNotInitialized = 1,
+    pcclSystemError = 2,
+    pcclInternalError = 3,
+    pcclInvalidArgument = 4,
+    pcclInvalidUsage = 5,
+    pcclRemoteError = 6,
+    pcclInProgress = 7,
+    pcclNumResults = 8,
+    pcclMasterConnectionFailed = 9,
+    pcclRankConnectionFailed = 10,
+    pcclRankConnectionLost = 11,
+    pcclNoSharedStateAvailable = 12,
+} pcclResult_t;
 
 typedef enum pcclDataType_t {
     pcclUint8 = 0,
@@ -55,7 +69,7 @@ typedef struct pcclReduceInfo_t {
     uint64_t rx_bytes;
 } pcclReduceInfo_t;
 
-typedef struct {
+typedef struct pcclAsyncReduceOp_t{
     pcclComm_t *comm;
     uint64_t tag;
 } pcclAsyncReduceOp_t;

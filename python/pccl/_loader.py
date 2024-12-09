@@ -14,7 +14,8 @@ def load_native_module():
     assert lib_name, f'Unsupported platform: {platform}'
 
     # Locate the library in the package directory
-    pkg_path = Path(__file__).parent
+    #pkg_path = Path(__file__).parent
+    pkg_path = Path('../../bin/debug')
     lib_path = pkg_path / lib_name
     assert lib_path.exists(), f'PCCL shared library not found: {lib_path}'
 
