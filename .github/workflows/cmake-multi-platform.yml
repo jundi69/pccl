@@ -41,7 +41,6 @@ jobs:
           echo "build-output-dir=${{ github.workspace }}/build" >> "$GITHUB_OUTPUT"
 
       - name: Configure CMake
-        shell: ${{ matrix.os == 'windows-latest' && 'cmd' || 'bash' }}
         run: >
           cmake -B ${{ steps.strings.outputs.build-output-dir }}
           -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }}
@@ -50,10 +49,8 @@ jobs:
           -S ${{ github.workspace }}
 
       - name: Build
-        shell: ${{ matrix.os == 'windows-latest' && 'cmd' || 'bash' }}
         run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }}
 
       - name: Test
         working-directory: ${{ steps.strings.outputs.build-output-dir }}
-        shell: ${{ matrix.os == 'windows-latest' && 'cmd' || 'bash' }}
         run: ctest --build-config ${{ matrix.build_type }}
