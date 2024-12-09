@@ -114,7 +114,7 @@ bool tinysockets::BlockingIOSocket::sendTlvPacket(const ccoip::packetId_t packet
 #ifndef WIN32
     flags |= MSG_NOSIGNAL;
 #endif
-    if (const ssize_t i = send(socket_fd, tlv_buffer.data(), tlv_buffer.size(), flags);
+    if (const ssize_t i = sendvp(socket_fd, tlv_buffer.data(), tlv_buffer.size(), flags);
         i == -1) [[unlikely]] {
         const std::string error_message = std::strerror(errno);
         LOG(INFO) << "Failed to send packet with error: " << error_message;
