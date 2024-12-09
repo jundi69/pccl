@@ -43,8 +43,16 @@ bool ccoip::CCoIPMaster::join() {
     return true;
 }
 
-void ccoip::CCoIPMaster::onClientRead(const ccoip_socket_address_t &client_address, std::span<uint8_t> data) {
+void ccoip::CCoIPMaster::onClientRead(const ccoip_socket_address_t &client_address, const std::span<uint8_t> data) {
     LOG(INFO) << "Received " << data.size() << " bytes from " << CCOIP_SOCKET_ADDR_TO_STRING(client_address);
+    PacketReadBuffer buffer = PacketReadBuffer::wrap(data);
+    const auto packet_type = buffer.read<uint16_t>();
+    const auto packet_length = buffer.read<uint64_t>();
+    if (packet_length != buffer.remaining()) {
+        LOG(ERROR) << "Packet length mismatch: expected " << packet_length << " bytes, but got " << buffer.remaining();
+        kickClient(client_address);
+        return;
+    }
 }
 
 ccoip::CCoIPMaster::~CCoIPMaster() = default;

@@ -82,12 +82,20 @@ pcclResult_t pcclConnectMaster(pcclComm_t *communicator, ccoip_socket_address_t 
     return pcclSuccess;
 }
 
-pcclResult_t pcclAcceptNewPeers(pcclComm_t *communicator) {
+pcclResult_t pcclUpdateTopology(pcclComm_t *communicator) {
     PCCL_VALIDATE_INITIALIZED();
     PCCL_VALIDATE(communicator != nullptr, pcclInvalidArgument);
+
+    // accept new peers; this will block until we have a valid connection to each peer
     if (!communicator->ccoip_handler->acceptNewPeers()) [[unlikely]] {
         return pcclInvalidUsage;
     }
+
+    // update the topology
+    if (!communicator->ccoip_handler->updateTopology()) [[unlikely]] {
+        return pcclInvalidUsage;
+    }
+
     return pcclSuccess;
 }
 
@@ -100,8 +108,9 @@ pcclResult_t pcclAllReduce(const void *sendbuff, void *recvbuff, size_t count, p
 }
 
 pcclResult_t pcclAllReduceAsync(const void *sendbuff, void *recvbuff, size_t count, pcclDataType_t datatype,
-    pcclRedOp_t op, uint64_t tag, const pcclComm_t *communicator, pcclReduceInfo_t *reduce_info_out,
-    pcclAsyncReduceOp_t *reduce_handle_out) {
+                                pcclRedOp_t op, uint64_t tag, const pcclComm_t *communicator,
+                                pcclReduceInfo_t *reduce_info_out,
+                                pcclAsyncReduceOp_t *reduce_handle_out) {
     PCCL_VALIDATE_INITIALIZED();
     PCCL_VALIDATE(communicator != nullptr, pcclInvalidArgument);
     PCCL_VALIDATE(reduce_handle_out != nullptr, pcclInvalidArgument);

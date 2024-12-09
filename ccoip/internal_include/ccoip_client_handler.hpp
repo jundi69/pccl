@@ -25,11 +25,13 @@ namespace ccoip {
 
         [[nodiscard]] bool interrupt();
 
+        [[nodiscard]] bool updateTopology();
+
         [[nodiscard]] bool join();
 
         ~CCoIPClientHandler();
 
     private:
-        void registerPeer(const ccoip_inet_address_t &address, ccoip_uuid_t uuid);
+        void registerPeer(const ccoip_inet_address_t &address, ccoip_uuid_t uuid) const;
     };
 }

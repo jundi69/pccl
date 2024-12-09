@@ -48,7 +48,7 @@ int main() {
     const auto gradients = new float[n_peers];
 
     while (true) {
-        PCCL_CHECK(pcclAcceptNewPeers(communicator));
+        PCCL_CHECK(pcclUpdateTopology(communicator));
         PCCL_CHECK(pcclSynchronizeSharedState(communicator, &shared_state));
 
         if (shared_state.revision >= MAX_STEPS) {

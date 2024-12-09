@@ -19,8 +19,11 @@ namespace ccoip {
 
         [[nodiscard]] bool join();
 
-        void onClientRead(const ccoip_socket_address_t &client_address, std::span<uint8_t> data);
-
         ~CCoIPMaster();
+
+    private:
+        void kickClient();
+
+        void onClientRead(const ccoip_socket_address_t &client_address, std::span<uint8_t> data);
     };
 }

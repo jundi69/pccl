@@ -86,6 +86,15 @@ bool tinysockets::BlockingIOSocket::establishConnection() {
     return true;
 }
 
+bool tinysockets::BlockingIOSocket::closeConnection() {
+    if (socket_fd == 0) [[unlikely]] {
+        return false;
+    }
+    close(socket_fd);
+    socket_fd = 0;
+    return true;
+}
+
 bool tinysockets::BlockingIOSocket::sendTlvPacket(const ccoip::packetId_t packet_id,
                                                   const PacketWriteBuffer &buffer) const {
     PacketWriteBuffer tlv_buffer{};

@@ -153,16 +153,22 @@ PCCL_EXPORT pcclResult_t pcclConnectMaster(pcclComm_t *communicator, ccoip_socke
 
 
 /**
- * Will block if new peers are joining the session and will handle connection establishment with them.
+ * Update the topology of a communicator if required.
+ * Topology updates are required when new peers join, in which case @code pcclUpdateTopology@endcode will
+ * automatically handle connection establishment with the new peer(s).
+ * Topology updates can also be triggered by the master node in response to bandwidth changes or other events.
+ * This function will block until the topology update is complete.
  *
- * @param communicator the communicator to accept new peers on.
+ * @param communicator The communicator to update the topology of.
  *
- * @return @code pcclSuccess@endcode if the new peers were accepted successfully.
+ * @return @code pcclSuccess@endcode if the topology was updated successfully.
+ * @return @code pcclInternalError@endcode if an internal error occurred during the topology update.
+ * @return @code pcclNotInitialized@endcode if @code pcclInit@endcode has not been called yet.
  */
-PCCL_EXPORT pcclResult_t pcclAcceptNewPeers(pcclComm_t *communicator);
+PCCL_EXPORT pcclResult_t pcclUpdateTopology(pcclComm_t *communicator);
 
 /**
- * Performs an all reduce operation on a communicator. Blocks untill the all reduce is complete.
+ * Performs an all reduce operation on a communicator. Blocks until the all reduce is complete.
  *
  * @param sendbuff The buffer to send data from.
  * @param recvbuff The buffer to receive data into.
@@ -174,6 +180,7 @@ PCCL_EXPORT pcclResult_t pcclAcceptNewPeers(pcclComm_t *communicator);
  * @param reduce_info_out The reduce info to be filled with information about the operation.
  *
  * @return @code pcclSuccess@endcode if the all reduce operation was successful.
+ * @return @code pcclRankConnectionLost@endcode if the connection to a peer was lost during the operation either gracefully or due to a network error.
  * @return @code pcclInvalidArgument@endcode if the communicator, sendbuff, recvbuff, count is less or equal to zero, or tag is less than zero.
  * @return @code pcclNotInitialized@endcode if @code pcclInit@endcode has not been called yet.
  * @return @code pcclInvalidUsage@endcode if the communicator is not connected to a master node.
