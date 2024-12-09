@@ -1,40 +1,37 @@
-from cffi import FFI
+import faulthandler
 from enum import Enum
 
-from __capi import __C_DECLS
+from pccl._loader import load_native_module
 
-ffi = FFI()
-ffi.cdef(__C_DECLS)  # Define the C declarations
-lib_path: str = '../../build/release/libpccl.dylib' # Replaced by python wheel and some platform check code
-C = ffi.dlopen(str(lib_path))  # Load the shared library
+# To debug Python to C FFI calls:
+# $ cp examples/any.py tmp.py && gdb -ex r --args python3 tmp.py
+# See also https://wiki.python.org/moin/DebuggingWithGdb
 
-def pccl_check(r):
-    if r != C.pcclSuccess:
-        raise RuntimeError(f'Error: {r}')
+# Enable faulthandler for debugging
+faulthandler.enable()
+ffi, C = load_native_module()  # Load native module
 
+class PCCLResult(Enum): # Keep in sync with pccl_status.h. TODO: auto-generate this enum
+    """PCCL result codes."""
+    SUCCESS = 0,
+    NOT_INITIALIZED = 1,
+    SYSTEM_ERROR = 2,
+    INTERNAL_ERROR = 3,
+    INVALID_ARGUMENT = 4,
+    INVALID_USAGE = 5,
+    REMOTE_ERROR = 6,
+    IN_PROGRESS = 7,
+    NUM_RESULTS = 8,
+    MASTER_CONNECTION_FAILED = 9,
+    RANK_CONNECTION_FAILED = 10,
+    RANK_CONNECTION_LOST = 11,
+    NO_SHARED_STATE_AVAILABLE = 12,
 
-pccl_check(C.pcclInit())
+class PCCLError(Exception):
+    """PCCL specific exception."""
+    def __init__(self, result: PCCLResult):
+        super().__init__(f'PCCL error: {result}')
+        self.result = result
 
-class Attribute(Enum):
-    WORLD_SIZE = C.PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE
-
-# create python oop wrapper
-class Communicator:
-    def __init__(self):
-        self.comm = ffi.new('pcclComm_t**')
-        pccl_check(C.pcclCreateCommunicator(self.comm))
-
-    def get_attribute(self, attribute: Attribute) -> int:
-        attr = ffi.new('int*')
-        pccl_check(C.pcclGetAttribute(self.comm[0], attribute.value, attr))
-        return attr[0]
-
-    def __del__(self):
-        pccl_check(C.pcclDestroyCommunicator(self.comm[0]))
-
-
-
-## user uses api
-comm = Communicator()
-print(comm.get_attribute(Attribute.WORLD_SIZE))
-assert  128 == comm.get_attribute(Attribute.WORLD_SIZE)
+# Init PCCL
+assert C.pcclInit() == PCCLResult.SUCCESS.value, 'Failed to initialize PCCL'
