@@ -14,11 +14,18 @@
 
 #include <cstring>
 
+#ifndef WIN32
+inline void closesocket(const int socket_fd) {
+    close(socket_fd);
+}
+#endif
+
 static void configure_socket_fd(const int socket_fd) {
     constexpr int opt = 1;
 
     // enable TCP_NODELAY
-    if (setsockopt(socket_fd, IPPROTO_TCP, TCP_NODELAY, reinterpret_cast<const char *>(&opt), sizeof(opt)) < 0) [[unlikely]] {
+    if (setsockopt(socket_fd, IPPROTO_TCP, TCP_NODELAY, reinterpret_cast<const char *>(&opt), sizeof(opt)) < 0) [[
+        unlikely]] {
         LOG(ERR) << "Failed to set TCP_NODELAY option on server socket";
         closesocket(socket_fd);
         exit(EXIT_FAILURE);
@@ -26,12 +33,14 @@ static void configure_socket_fd(const int socket_fd) {
 
     // set send and recv buf
     constexpr int buffer_size = 1 << 20; // 1 MiB
-    if (setsockopt(socket_fd, SOL_SOCKET, SO_SNDBUF, reinterpret_cast<const char *>(&buffer_size), sizeof(buffer_size)) < 0) [[unlikely]] {
+    if (setsockopt(socket_fd, SOL_SOCKET, SO_SNDBUF, reinterpret_cast<const char *>(&buffer_size),
+                   sizeof(buffer_size)) < 0) [[unlikely]] {
         LOG(ERR) << "Failed to set SO_SNDBUF option on server socket";
         closesocket(socket_fd);
         exit(EXIT_FAILURE);
     }
-    if (setsockopt(socket_fd, SOL_SOCKET, SO_RCVBUF, reinterpret_cast<const char *>(&buffer_size), sizeof(buffer_size)) < 0) [[unlikely]] {
+    if (setsockopt(socket_fd, SOL_SOCKET, SO_RCVBUF, reinterpret_cast<const char *>(&buffer_size),
+                   sizeof(buffer_size)) < 0) [[unlikely]] {
         LOG(ERR) << "Failed to set SO_RCVBUF option on server socket";
         closesocket(socket_fd);
         exit(EXIT_FAILURE);
@@ -39,7 +48,8 @@ static void configure_socket_fd(const int socket_fd) {
 
     // enable SO_REUSEADDR if available
 #ifdef SO_REUSEADDR
-    if (setsockopt(socket_fd, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char *>(&opt), sizeof(opt)) < 0) [[unlikely]] {
+    if (setsockopt(socket_fd, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char *>(&opt), sizeof(opt)) < 0) [[
+        unlikely]] {
         LOG(ERR) << "Failed to set SO_REUSEADDR option on server socket";
         closesocket(socket_fd);
         exit(EXIT_FAILURE);
@@ -110,7 +120,8 @@ bool tinysockets::BlockingIOSocket::sendTlvPacket(const ccoip::packetId_t packet
 #ifndef WIN32
     flags |= MSG_NOSIGNAL;
 #endif
-    if (const ssize_t i = send(socket_fd, reinterpret_cast<const char *>(tlv_buffer.data()), tlv_buffer.size(), flags); i == -1) [[unlikely]] {
+    if (const ssize_t i = send(socket_fd, reinterpret_cast<const char *>(tlv_buffer.data()), tlv_buffer.size(), flags);
+        i == -1) [[unlikely]] {
         const std::string error_message = std::strerror(errno);
         LOG(INFO) << "Failed to send packet with error: " << error_message;
         return false;
@@ -120,7 +131,8 @@ bool tinysockets::BlockingIOSocket::sendTlvPacket(const ccoip::packetId_t packet
 
 ccoip::packetId_t tinysockets::BlockingIOSocket::receivePacketType() const {
     ccoip::packetId_t packet_id;
-    if (const ssize_t i = recv(socket_fd, reinterpret_cast<char *>(&packet_id), sizeof(packet_id), 0); i == -1) [[unlikely]] {
+    if (const ssize_t i = recv(socket_fd, reinterpret_cast<char *>(&packet_id), sizeof(packet_id), 0); i == -1) [[
+        unlikely]] {
         const std::string error_message = std::strerror(errno);
         LOG(INFO) << "Failed to receive packet type with error: " << error_message;
         return 0;
@@ -139,7 +151,8 @@ size_t tinysockets::BlockingIOSocket::receivePacketLength() const {
 }
 
 bool tinysockets::BlockingIOSocket::receivePacketData(std::span<std::uint8_t> dst) const {
-    if (const ssize_t i = recv(socket_fd, reinterpret_cast<char *>(dst.data()), dst.size_bytes(), 0); i == -1) [[unlikely]] {
+    if (const ssize_t i = recv(socket_fd, reinterpret_cast<char *>(dst.data()), dst.size_bytes(), 0); i == -1) [[
+        unlikely]] {
         const std::string error_message = std::strerror(errno);
         LOG(INFO) << "Failed to receive packet data with error: " << error_message;
         return false;
