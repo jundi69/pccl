@@ -43,6 +43,9 @@ bool ccoip::CCoIPMaster::join() {
     return true;
 }
 
+void ccoip::CCoIPMaster::kickClient(const ccoip_socket_address_t &client_address) {
+}
+
 void ccoip::CCoIPMaster::onClientRead(const ccoip_socket_address_t &client_address, const std::span<uint8_t> data) {
     LOG(INFO) << "Received " << data.size() << " bytes from " << CCOIP_SOCKET_ADDR_TO_STRING(client_address);
     PacketReadBuffer buffer = PacketReadBuffer::wrap(data);

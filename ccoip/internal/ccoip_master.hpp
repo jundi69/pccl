@@ -22,7 +22,7 @@ namespace ccoip {
         ~CCoIPMaster();
 
     private:
-        void kickClient();
+        void kickClient(const ccoip_socket_address_t &client_address);
 
         void onClientRead(const ccoip_socket_address_t &client_address, std::span<uint8_t> data);
     };
