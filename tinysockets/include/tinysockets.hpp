@@ -9,6 +9,12 @@
 #include <thread>
 #include <span>
 
+#ifdef WIN32
+typedef long long int ssize_t;
+#else
+#include <sys/types.h>
+#endif
+
 struct uv_server_stream_t;
 struct uv_stream_s;
 struct uv_buf_t;
