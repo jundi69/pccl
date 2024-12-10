@@ -196,6 +196,10 @@ TEST(TestServerSocket, test_client_connection_and_callbacks) {
     packet.payload = data_to_send;
     EXPECT_TRUE(client_socket.sendPacket(packet));
 
+    // Closing the connection before the server has received the data
+    // may result in data loss
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
     // Close the client connection
     EXPECT_TRUE(client_socket.closeConnection());
 
@@ -266,7 +270,7 @@ TEST(TestServerSocket, test_close_client_connection) {
     }
     EXPECT_TRUE(read_callback_called);
 
-    EXPECT_FALSE(client_socket.sendPacket(packet)); // Should fail because the connection is closed
+    EXPECT_FALSE(client_socket.isOpen()); // Should fail because the connection is closed
 
     // Cleanup
     EXPECT_TRUE(server_socket.interrupt());

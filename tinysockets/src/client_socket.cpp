@@ -132,6 +132,29 @@ bool tinysockets::BlockingIOSocket::closeConnection() {
     return true;
 }
 
+bool tinysockets::BlockingIOSocket::isOpen() const {
+    if (socket_fd == 0) [[unlikely]] {
+        return false;
+    }
+    char buf;
+
+    // Using MSG_PEEK with a small read: if it returns 0, the connection is closed.
+    const ssize_t n = recv(socket_fd, &buf, 1, MSG_PEEK | MSG_DONTWAIT);
+    if (n == 0) {
+        return false;
+    }
+    if (n < 0) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            // No data available, but socket may still be connected
+            return true;
+        }
+        // An error occurred; some errors like ECONNRESET mean the socket is effectively closed
+        return false;
+    }
+    // If we got here, there's data available to read, so the socket is still connected
+    return true;
+}
+
 bool tinysockets::BlockingIOSocket::sendLtvPacket(const ccoip::packetId_t packet_id,
                                                   const PacketWriteBuffer &buffer) const {
     PacketWriteBuffer tlv_buffer{};

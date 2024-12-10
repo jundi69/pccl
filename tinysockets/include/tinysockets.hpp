@@ -124,6 +124,8 @@ namespace tinysockets {
 
         [[nodiscard]] bool closeConnection();
 
+        bool isOpen() const;
+
         template<typename T> requires std::is_base_of_v<ccoip::Packet, T>
         [[nodiscard]] bool sendPacket(T &packet) {
             const ccoip::packetId_t id = T::packet_id;
