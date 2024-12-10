@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <vector>
 #include <span>
+#include <algorithm>
 
 #include <type_utils.hpp>
 
