@@ -1,4 +1,4 @@
-# Autogenered by /home/mario/Documents/projects/pccl-refactor/python/gen_bindings.py 2024-12-09 12:14:05.508582, do NOT edit!
+# Autogenered by /Users/mariosieg/Documents/projects/pccl-refactor/python/gen_bindings.py 2024-12-10 21:59:25.423159, do NOT edit!
 
 __PCCL_CDECLS: str = '''
 
@@ -14,7 +14,7 @@ uint8_t data[16];
 } ccoip_ipv6_address_t;
 typedef struct ccoip_inet_address_t {
 ccoip_inet_protocol_t protocol;
-union {
+struct {
 ccoip_ipv4_address_t ipv4;
 ccoip_ipv6_address_t ipv6;
 } address;
@@ -104,15 +104,12 @@ pcclAsyncReduceOp_t *reduce_handle_out);
  pcclResult_t pcclAwaitAsyncReduce(const pcclAsyncReduceOp_t *reduce_handle);
  pcclResult_t pcclSynchronizeSharedState(const pcclComm_t *comm,
 pcclSharedState_t *shared_state);
-typedef struct pcclMasterInstanceState_t pcclMasterInstanceState_t;
-typedef struct pcclMasterInstance_t {
-pcclMasterInstanceState_t *state;
-} pcclMasterInstance_t;
+typedef struct pcclMasterInstanceState_t pcclMasterInstance_t;
  pcclResult_t pcclCreateMaster(ccoip_socket_address_t listen_address,
-pcclMasterInstance_t *p_master_handle_out);
- pcclResult_t pcclRunMaster(pcclMasterInstance_t master_instance);
- pcclResult_t pcclInterruptMaster(pcclMasterInstance_t master_instance);
- pcclResult_t pcclMasterAwaitTermination(pcclMasterInstance_t master_instance);
- pcclResult_t pcclDestroyMaster(pcclMasterInstance_t master_instance);
+pcclMasterInstance_t **p_master_handle_out);
+ pcclResult_t pcclRunMaster(pcclMasterInstance_t *master_instance);
+ pcclResult_t pcclInterruptMaster(pcclMasterInstance_t *master_instance);
+ pcclResult_t pcclMasterAwaitTermination(pcclMasterInstance_t *master_instance);
+ pcclResult_t pcclDestroyMaster(pcclMasterInstance_t *master_instance);
 '''
 

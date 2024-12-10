@@ -15,7 +15,7 @@ def load_native_module():
 
     # Locate the library in the package directory
     #pkg_path = Path(__file__).parent
-    pkg_path = Path('../../bin/debug')
+    pkg_path = Path('../../build/debug')  #override while developing the api
     lib_path = pkg_path / lib_name
     assert lib_path.exists(), f'PCCL shared library not found: {lib_path}'
 

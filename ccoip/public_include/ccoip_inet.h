@@ -21,7 +21,7 @@ typedef struct ccoip_ipv6_address_t {
 
 typedef struct ccoip_inet_address_t {
     ccoip_inet_protocol_t protocol;
-    union {
+    struct { /* No union because CFFI doesn't support them. */
         ccoip_ipv4_address_t ipv4;
         ccoip_ipv6_address_t ipv6;
     } address;
