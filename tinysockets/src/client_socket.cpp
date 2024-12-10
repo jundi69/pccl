@@ -153,6 +153,7 @@ bool tinysockets::BlockingIOSocket::isOpen() const {
         return false;
     }
     // If we got here, there's data available to read, so the socket is still connected
+    return true;
 #else
     // set socket into non-blocking mode
     u_long mode = 1;

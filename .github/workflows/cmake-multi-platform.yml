@@ -14,8 +14,8 @@ jobs:
       fail-fast: false
       
       matrix:
-        os: [ubuntu-latest, windows-latest]
-        build_type: [RelWithDebInfo]
+        os: [ ubuntu-latest, windows-latest ]
+        build_type: [ RelWithDebInfo ]
         include:
           # Linux configurations
           - os: ubuntu-latest
@@ -28,6 +28,8 @@ jobs:
           - os: windows-latest
             c_compiler: cl
             cpp_compiler: cl
+          - env:
+              IS_CI: 1
 
     steps:
       - uses: actions/checkout@v4
