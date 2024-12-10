@@ -96,6 +96,7 @@ namespace tinysockets {
             return packet;
         }
 
+
     private:
         void onAsyncSignal() const;
 
@@ -106,6 +107,9 @@ namespace tinysockets {
         void onClientClose(uv_handle_s *handle) const;
 
         std::optional<ccoip_socket_address_t> getUvStreamAddressCached(uv_stream_s *stream) const;
+
+        void performLoopShutdown() const;
+
     };
 
     class BlockingIOSocket final {

@@ -139,21 +139,7 @@ bool tinysockets::ServerSocket::runAsync() {
     }
     server_thread = std::thread([this] {
         UV_ERR_CHECK(uv_run(server_socket_state->loop.get(), UV_RUN_DEFAULT));
-        uv_close(reinterpret_cast<uv_handle_t *>(server_socket_state->tcp_server.get()), nullptr);
-        uv_close(reinterpret_cast<uv_handle_t *>(server_socket_state->async_handle.get()), nullptr);
-        UV_ERR_CHECK(uv_run(server_socket_state->loop.get(), UV_RUN_NOWAIT));
-        int status = 0;
-        do {
-            if (status != 0)
-            {
-                if (!closeAllClientConnections()) [[unlikely]] {
-                    LOG(ERR) << "Failed to close all clients connections";
-                }
-            }
-            status = uv_loop_close(server_socket_state->loop.get());
-            UV_ERR_CHECK(uv_run(server_socket_state->loop.get(), UV_RUN_NOWAIT));
-        } while (status == UV_EBUSY);
-        server_socket_state->loop = nullptr;
+        performLoopShutdown();
     });
     running = true;
     return true;
@@ -234,6 +220,25 @@ std::optional<ccoip_socket_address_t> tinysockets::ServerSocket::getUvStreamAddr
         return std::nullopt;
     }
     return internal_to_ccoip_sockaddr(inet_internal->second);
+}
+
+void tinysockets::ServerSocket::performLoopShutdown() const
+{
+    uv_close(reinterpret_cast<uv_handle_t *>(server_socket_state->tcp_server.get()), nullptr);
+    uv_close(reinterpret_cast<uv_handle_t *>(server_socket_state->async_handle.get()), nullptr);
+    UV_ERR_CHECK(uv_run(server_socket_state->loop.get(), UV_RUN_NOWAIT));
+    int status = 0;
+    do {
+        if (status != 0)
+        {
+            if (!closeAllClientConnections()) [[unlikely]] {
+                LOG(ERR) << "Failed to close all clients connections";
+            }
+        }
+        status = uv_loop_close(server_socket_state->loop.get());
+        UV_ERR_CHECK(uv_run(server_socket_state->loop.get(), UV_RUN_NOWAIT));
+    } while (status == UV_EBUSY);
+    server_socket_state->loop = nullptr;
 }
 
 static std::optional<ccoip_socket_address_t> getUvStreamAddress(uv_stream_t *stream) {
@@ -376,8 +381,7 @@ void tinysockets::ServerSocket::onClientClose(uv_handle_t *handle) const {
 
 tinysockets::ServerSocket::~ServerSocket() {
     if (!running && server_socket_state->loop != nullptr) {
-        uv_loop_close(server_socket_state->loop.get());
-        server_socket_state->loop = nullptr;
+        performLoopShutdown();
     }
     delete server_socket_state;
 }
