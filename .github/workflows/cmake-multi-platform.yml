@@ -55,4 +55,4 @@ jobs:
 
       - name: Test
         working-directory: ${{ steps.strings.outputs.build-output-dir }}
-        run: LSAN_OPTIONS=suppressions=lsan.supp ctest --build-config ${{ matrix.build_type }} --output-on-failure
+        run: LSAN_OPTIONS=suppressions=${{ github.workspace }}/.github/workflows/lsan.supp ctest --build-config ${{ matrix.build_type }} --output-on-failure
