@@ -297,6 +297,7 @@ void tinysockets::ServerSocket::onNewConnection(uv_server_stream_t *server, cons
                       });
     } else {
         uv_close(reinterpret_cast<uv_handle_t *>(client), nullptr);
+        delete client;
     }
 }
 
