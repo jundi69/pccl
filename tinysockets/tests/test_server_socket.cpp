@@ -16,7 +16,7 @@ inline ccoip_socket_address_t create_ipv4_address(uint8_t a, uint8_t b, uint8_t 
 
 template <typename Func>
 void RunWithTimeout(Func func, const int timeout_ms) {
-    if (auto future = std::async(std::launch::async, func); future.wait_for(std::chrono::milliseconds(timeout_ms)) == std::future_status::timeout) {
+    if (auto future = std::async(std::launch::async, func); future.wait_for(std::chrono::milliseconds(timeout_ms)) != std::future_status::ready) {
         throw std::runtime_error("Test timed out");
     }
 }
@@ -112,7 +112,7 @@ TEST(TestServerSocket, test_listen_without_bind) {
 
 // Test running the server asynchronously
 TEST(TestServerSocket, test_run_async) {
-    ASSERT_NO_THROW(RunWithTimeout([]() {
+    ASSERT_NO_THROW(RunWithTimeout([]{
         const auto listen_address = create_ipv4_address(0, 0, 0, 0, 48152);
         tinysockets::ServerSocket server_socket(listen_address);
         EXPECT_TRUE(server_socket.bind());
@@ -144,7 +144,7 @@ TEST(TestServerSocket, test_run_async_already_running) {
 
 // Test interrupting and joining the server
 TEST(TestServerSocket, test_interrupt_and_join) {
-    ASSERT_NO_THROW(RunWithTimeout([]() {
+    ASSERT_NO_THROW(RunWithTimeout([]{
         const auto listen_address = create_ipv4_address(0, 0, 0, 0, 48154);
         tinysockets::ServerSocket server_socket(listen_address);
         EXPECT_TRUE(server_socket.bind());
@@ -175,7 +175,7 @@ struct DummyPacket final : ccoip::Packet {
 
 // Test handling client connections and callbacks
 TEST(TestServerSocket, test_client_connection_and_callbacks) {
-    ASSERT_NO_THROW(RunWithTimeout([]() {
+    ASSERT_NO_THROW(RunWithTimeout([]{
         const auto listen_address = create_ipv4_address(127, 0, 0, 1, 48155);
         tinysockets::ServerSocket server_socket(listen_address);
 
@@ -249,7 +249,7 @@ TEST(TestServerSocket, test_client_connection_and_callbacks) {
 
 // Test closing a client connection
 TEST(TestServerSocket, test_close_client_connection) {
-    ASSERT_NO_THROW(RunWithTimeout([]() {
+    ASSERT_NO_THROW(RunWithTimeout([]{
         const auto listen_address = create_ipv4_address(127, 0, 0, 1, 48156);
         tinysockets::ServerSocket server_socket(listen_address);
 
@@ -317,7 +317,7 @@ TEST(TestServerSocket, test_run_async_without_listen) {
 
 // Test binding the same socket twice
 TEST(TestServerSocket, test_bind_twice) {
-    ASSERT_NO_THROW(RunWithTimeout([]() {
+    ASSERT_NO_THROW(RunWithTimeout([]{
         const auto listen_address = create_ipv4_address(0, 0, 0, 0, 48158);
         tinysockets::ServerSocket server_socket(listen_address);
         EXPECT_TRUE(server_socket.bind());
@@ -355,7 +355,7 @@ TEST(TestServerSocket, test_run_async_after_interrupt) {
 
 // Test multiple clients connecting simultaneously
 TEST(TestServerSocket, test_multiple_clients) {
-    ASSERT_NO_THROW(RunWithTimeout([]() {
+    ASSERT_NO_THROW(RunWithTimeout([]{
         const auto listen_address = create_ipv4_address(127, 0, 0, 1, 48161);
         tinysockets::ServerSocket server_socket(listen_address);
 
@@ -400,7 +400,7 @@ TEST(TestServerSocket, test_multiple_clients) {
 
 // Test sending a large packet
 TEST(TestServerSocket, test_large_packet) {
-    ASSERT_NO_THROW(RunWithTimeout([]() {
+    ASSERT_NO_THROW(RunWithTimeout([]{
         const auto listen_address = create_ipv4_address(127, 0, 0, 1, 48162);
         tinysockets::ServerSocket server_socket(listen_address);
 
@@ -441,7 +441,7 @@ TEST(TestServerSocket, test_large_packet) {
 
 // Test closing a non-existent client connection
 TEST(TestServerSocket, test_close_non_existent_client) {
-    ASSERT_NO_THROW(RunWithTimeout([]() {
+    ASSERT_NO_THROW(RunWithTimeout([]{
         const auto listen_address = create_ipv4_address(127, 0, 0, 1, 48163);
         tinysockets::ServerSocket server_socket(listen_address);
         EXPECT_TRUE(server_socket.bind());
@@ -459,7 +459,7 @@ TEST(TestServerSocket, test_close_non_existent_client) {
 
 // Test adding multiple callbacks
 TEST(TestServerSocket, test_multiple_callbacks) {
-    ASSERT_NO_THROW(RunWithTimeout([]() {
+    ASSERT_NO_THROW(RunWithTimeout([]{
         const auto listen_address = create_ipv4_address(127, 0, 0, 1, 48164);
         tinysockets::ServerSocket server_socket(listen_address);
 
@@ -506,7 +506,7 @@ TEST(TestServerSocket, test_multiple_callbacks) {
 
 // Test connecting a client when the server is not listening
 TEST(TestServerSocket, test_client_connect_when_not_listening) {
-    ASSERT_NO_THROW(RunWithTimeout([]() {
+    ASSERT_NO_THROW(RunWithTimeout([]{
         const auto listen_address = create_ipv4_address(127, 0, 0, 1, 49100);
         tinysockets::ServerSocket server_socket(listen_address);
 
@@ -519,7 +519,7 @@ TEST(TestServerSocket, test_client_connect_when_not_listening) {
 
 // Test multiple interrupts
 TEST(TestServerSocket, test_multiple_interrupts) {
-    ASSERT_NO_THROW(RunWithTimeout([]() {
+    ASSERT_NO_THROW(RunWithTimeout([]{
         const auto listen_address = create_ipv4_address(127, 0, 0, 1, 49102);
         tinysockets::ServerSocket server_socket(listen_address);
 
@@ -537,7 +537,7 @@ TEST(TestServerSocket, test_multiple_interrupts) {
 
 // Test attempting to re-run the server after it has been joined
 TEST(TestServerSocket, test_rerun_after_join) {
-    ASSERT_NO_THROW(RunWithTimeout([]() {
+    ASSERT_NO_THROW(RunWithTimeout([]{
         const auto listen_address = create_ipv4_address(127, 0, 0, 1, 49103);
         tinysockets::ServerSocket server_socket(listen_address);
 
@@ -557,7 +557,7 @@ TEST(TestServerSocket, test_rerun_after_join) {
 
 // Test sending zero-length payload
 TEST(TestServerSocket, test_zero_length_packet) {
-    ASSERT_NO_THROW(RunWithTimeout([]() {
+    ASSERT_NO_THROW(RunWithTimeout([]{
         const auto listen_address = create_ipv4_address(127, 0, 0, 1, 49105);
         tinysockets::ServerSocket server_socket(listen_address);
 
@@ -609,7 +609,7 @@ struct UnknownPacket final : ccoip::Packet {
 };
 
 TEST(TestServerSocket, test_unknown_packet_id) {
-    ASSERT_NO_THROW(RunWithTimeout([]() {
+    ASSERT_NO_THROW(RunWithTimeout([]{
         const auto listen_address = create_ipv4_address(127, 0, 0, 1, 49106);
         tinysockets::ServerSocket server_socket(listen_address);
 
@@ -648,7 +648,7 @@ TEST(TestServerSocket, test_unknown_packet_id) {
 
 // Test concurrent client connections (attempting to connect multiple clients in parallel)
 TEST(TestServerSocket, test_concurrent_client_connections) {
-    ASSERT_NO_THROW(RunWithTimeout([]() {
+    ASSERT_NO_THROW(RunWithTimeout([]{
         const auto listen_address = create_ipv4_address(127, 0, 0, 1, 49107);
         tinysockets::ServerSocket server_socket(listen_address);
 
@@ -683,7 +683,7 @@ TEST(TestServerSocket, test_concurrent_client_connections) {
 
 // Test sending data from the client after the server has been stopped
 TEST(TestServerSocket, test_client_send_after_server_stop) {
-    ASSERT_NO_THROW(RunWithTimeout([]() {
+    ASSERT_NO_THROW(RunWithTimeout([] {
         const auto listen_address = create_ipv4_address(127, 0, 0, 1, 49108);
         tinysockets::ServerSocket server_socket(listen_address);
 
@@ -720,7 +720,7 @@ TEST(TestServerSocket, test_client_send_after_server_stop) {
 
 // Test attempting to close client connections after the server has stopped
 TEST(TestServerSocket, test_close_client_after_server_stopped) {
-    ASSERT_NO_THROW(RunWithTimeout([]() {
+    ASSERT_NO_THROW(RunWithTimeout([]{
         const auto listen_address = create_ipv4_address(127, 0, 0, 1, 49109);
         tinysockets::ServerSocket server_socket(listen_address);
         EXPECT_TRUE(server_socket.bind());

@@ -141,8 +141,14 @@ bool tinysockets::ServerSocket::runAsync() {
         uv_close(reinterpret_cast<uv_handle_t *>(server_socket_state->tcp_server.get()), nullptr);
         uv_close(reinterpret_cast<uv_handle_t *>(server_socket_state->async_handle.get()), nullptr);
         UV_ERR_CHECK(uv_run(server_socket_state->loop.get(), UV_RUN_NOWAIT));
-        int status;
+        int status = 0;
         do {
+            if (status != 0)
+            {
+                if (!closeAllClientConnections()) [[unlikely]] {
+                    LOG(ERR) << "Failed to close all clients connections";
+                }
+            }
             status = uv_loop_close(server_socket_state->loop.get());
             UV_ERR_CHECK(uv_run(server_socket_state->loop.get(), UV_RUN_NOWAIT));
         } while (status == UV_EBUSY);
