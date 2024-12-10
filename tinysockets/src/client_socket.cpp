@@ -154,25 +154,35 @@ bool tinysockets::BlockingIOSocket::isOpen() const {
     }
     // If we got here, there's data available to read, so the socket is still connected
 #else
-    // On Windows, we can still use MSG_PEEK. If recv returns 0, the connection is closed.
-    // If it returns SOCKET_ERROR, we check WSAGetLastError().
-    char buf;
-    int n = recv(socket_fd, &buf, 1, MSG_PEEK);
-
-    if (n == 0) {
-        // The connection was closed gracefully by the peer.
+    // set socket into non-blocking mode
+    u_long mode = 1;
+    if (ioctlsocket(socket_fd, FIONBIO, &mode) != NO_ERROR) {
+        LOG(ERR) << "Failed to set socket into non-blocking mode";
         return false;
     }
-    if (n == SOCKET_ERROR) {
+
+    bool is_open = false;
+    char buf;
+    if (int n = recv(socket_fd, &buf, 1, MSG_PEEK); n == 0) {
+        // The connection was closed gracefully by the peer.
+        is_open = false;
+    } else if (n == SOCKET_ERROR) {
         if (const int err = WSAGetLastError(); err == WSAEWOULDBLOCK) {
             // No data available now, but the socket is still considered open.
-            return true;
+            is_open = true;
+        } else {
+            // Other errors (like WSAECONNRESET) mean the socket is effectively closed.
+            is_open = false;
         }
-        // Other errors (like WSAECONNRESET) mean the socket is effectively closed.
+    }
+    // set socket back to blocking mode
+    mode = 0;
+    if (ioctlsocket(socket_fd, FIONBIO, &mode) != NO_ERROR) {
+        LOG(ERR) << "Failed to set socket back to blocking mode";
         return false;
     }
+    return is_open;
 #endif
-    return true;
 }
 
 bool tinysockets::BlockingIOSocket::sendLtvPacket(const ccoip::packetId_t packet_id,
