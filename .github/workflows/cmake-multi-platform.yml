@@ -9,6 +9,9 @@ on:
 jobs:
   build:
     runs-on: ${{ matrix.os }}
+    env:
+      IS_CI: 1
+      LSAN_OPTIONS: suppressions=${{ github.workspace }}/.github/workflows/lsan.supp
 
     strategy:
       fail-fast: false
@@ -28,9 +31,6 @@ jobs:
           - os: windows-latest
             c_compiler: cl
             cpp_compiler: cl
-          - env:
-              IS_CI: 1
-              LSAN_OPTIONS: suppressions=${{ github.workspace }}/.github/workflows/lsan.supp
 
     steps:
       - uses: actions/checkout@v4
