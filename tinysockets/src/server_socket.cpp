@@ -153,7 +153,7 @@ bool tinysockets::ServerSocket::runAsync() {
             status = uv_loop_close(server_socket_state->loop.get());
             UV_ERR_CHECK(uv_run(server_socket_state->loop.get(), UV_RUN_NOWAIT));
         } while (status == UV_EBUSY);
-
+        server_socket_state->loop = nullptr;
     });
     running = true;
     return true;
@@ -375,5 +375,9 @@ void tinysockets::ServerSocket::onClientClose(uv_handle_t *handle) const {
 }
 
 tinysockets::ServerSocket::~ServerSocket() {
+    if (!running && server_socket_state->loop != nullptr) {
+        uv_loop_close(server_socket_state->loop.get());
+        server_socket_state->loop = nullptr;
+    }
     delete server_socket_state;
 }
