@@ -23,7 +23,7 @@ int main() {
 
     ccoip_socket_address_t connect_address{};
     connect_address.inet.protocol = inetIPv4;
-    connect_address.inet.address.ipv4 = {127, 0, 0, 1};
+    connect_address.inet.ipv4 = {127, 0, 0, 1};
     connect_address.port = 48148;
 
     PCCL_CHECK(pcclConnectMaster(communicator, connect_address));

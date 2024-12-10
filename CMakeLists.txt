@@ -8,6 +8,9 @@ add_subdirectory(third_party)
 
 enable_testing()
 
+# include testing functions
+include(cmake/testing.cmake)
+
 # add internal libraries
 add_subdirectory(log)
 add_subdirectory(ccoip)

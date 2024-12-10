@@ -1,20 +1,2 @@
-add_executable(test_server_socket test_server_socket.cpp)
-target_link_libraries(test_server_socket GTest::gtest_main)
-add_test(NAME test_server_socket COMMAND test_server_socket)
+add_sanitized_gtest(test_server_socket test_server_socket.cpp)
 target_link_libraries(test_server_socket tinysockets)
-
-option(USE_SANITIZER "Use sanitizer" OFF)
-
-# sanitizer
-if (USE_SANITIZER)
-    if (WIN32)
-        target_link_options(test_server_socket PRIVATE /fsanitize=address /fsanitize=leak /fsanitize=undefined)
-        target_compile_options(test_server_socket PRIVATE /fsanitize=address /fsanitize=leak /fsanitize=undefined)
-    elseif (APPLE)
-        target_link_options(test_server_socket PRIVATE -fsanitize=address -fsanitize=undefined)
-        target_compile_options(test_server_socket PRIVATE -fsanitize=address -fsanitize=undefined)
-    else ()
-        target_link_options(test_server_socket PRIVATE -fsanitize=address -fsanitize=leak -fsanitize=undefined)
-        target_compile_options(test_server_socket PRIVATE -fsanitize=address -fsanitize=leak -fsanitize=undefined)
-    endif ()
-endif ()

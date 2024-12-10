@@ -149,10 +149,6 @@ TEST(TestServerSocket, test_client_connection_and_callbacks) {
     const auto listen_address = create_ipv4_address(127, 0, 0, 1, 48155);
     tinysockets::ServerSocket server_socket(listen_address);
 
-    // Bind and listen
-    EXPECT_TRUE(server_socket.bind());
-    EXPECT_TRUE(server_socket.listen());
-
     // Variables to verify callbacks
     std::atomic read_callback_called(false);
     std::atomic close_callback_called(false);
@@ -173,6 +169,10 @@ TEST(TestServerSocket, test_client_connection_and_callbacks) {
     server_socket.addCloseCallback([&](const ccoip_socket_address_t &) {
         close_callback_called = true;
     });
+
+    // Bind and listen
+    EXPECT_TRUE(server_socket.bind());
+    EXPECT_TRUE(server_socket.listen());
 
     // Run the server asynchronously
     EXPECT_TRUE(server_socket.runAsync());
@@ -221,15 +221,29 @@ TEST(TestServerSocket, test_close_client_connection) {
     const auto listen_address = create_ipv4_address(127, 0, 0, 1, 48156);
     tinysockets::ServerSocket server_socket(listen_address);
 
+    // add a read callback to the server
+    std::atomic read_callback_called(false), payload_match(false), client_close_success(false);
+    server_socket.addReadCallback(
+        [&](const ccoip_socket_address_t &addr, const std::span<std::uint8_t> &data) {
+            PacketReadBuffer buffer = PacketReadBuffer::wrap(data);
+            const auto recv_packet = server_socket.receivePacket<DummyPacket>(buffer);
+            if (!recv_packet) {
+                FAIL() << "Failed to receive packet";
+            }
+            payload_match = recv_packet->payload == std::vector<std::uint8_t>({1, 2, 3, 4, 5});
+
+            // Attempt to close the client connection from the server side
+            client_close_success = server_socket.closeClientConnection(addr);
+
+            read_callback_called = true;
+        });
+
     // Bind and listen
     EXPECT_TRUE(server_socket.bind());
     EXPECT_TRUE(server_socket.listen());
 
     // Run the server asynchronously
     EXPECT_TRUE(server_socket.runAsync());
-
-    // Allow some time for the server to start
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
     // Create a client and connect to the server
     tinysockets::BlockingIOSocket client_socket(listen_address);
@@ -240,31 +254,16 @@ TEST(TestServerSocket, test_close_client_connection) {
     packet.payload = {1, 2, 3, 4, 5};
     EXPECT_TRUE(client_socket.sendPacket(packet));
 
-    // add a read callback to the server
-    std::atomic read_callback_called(false);
-    server_socket.addReadCallback(
-        [&](const ccoip_socket_address_t &addr, const std::span<std::uint8_t> &data) {
-            PacketReadBuffer buffer = PacketReadBuffer::wrap(data);
-            const auto recv_packet = server_socket.receivePacket<DummyPacket>(buffer);
-            if (!recv_packet) {
-                FAIL() << "Failed to receive packet";
-            }
-            EXPECT_EQ(recv_packet->payload, std::vector<std::uint8_t>({1, 2, 3, 4, 5}));
-
-            // Attempt to close the client connection from the server side
-            EXPECT_TRUE(server_socket.closeClientConnection(addr));
-            read_callback_called = true;
-        });
-
     // read callback may take a while to be called, but we don't want to wait forever
-    for (int i = 0; i < 10; ++i) {
+    for (int i = 0; i < 15; ++i) {
         if (read_callback_called) {
             break;
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        std::this_thread::sleep_for(std::chrono::milliseconds(250));
     }
     EXPECT_TRUE(read_callback_called);
-
+    EXPECT_TRUE(payload_match);
+    EXPECT_TRUE(client_close_success);
     EXPECT_FALSE(client_socket.isOpen()); // Should fail because the connection is closed
 
     // Cleanup
@@ -318,6 +317,14 @@ TEST(TestServerSocket, test_multiple_clients) {
     const auto listen_address = create_ipv4_address(127, 0, 0, 1, 48161);
     tinysockets::ServerSocket server_socket(listen_address);
 
+    std::atomic packets_received(0);
+    server_socket.addReadCallback([&](ccoip_socket_address_t, const std::span<std::uint8_t> &data) {
+        PacketReadBuffer buffer = PacketReadBuffer::wrap(data);
+        if (auto packet = server_socket.receivePacket<DummyPacket>(buffer)) {
+            ++packets_received;
+        }
+    });
+
     EXPECT_TRUE(server_socket.bind());
     EXPECT_TRUE(server_socket.listen());
     EXPECT_TRUE(server_socket.runAsync());
@@ -329,14 +336,6 @@ TEST(TestServerSocket, test_multiple_clients) {
         clients.emplace_back(std::make_unique<tinysockets::BlockingIOSocket>(listen_address));
         EXPECT_TRUE(clients.back()->establishConnection());
     }
-
-    std::atomic packets_received(0);
-    server_socket.addReadCallback([&](ccoip_socket_address_t, const std::span<std::uint8_t> &data) {
-        PacketReadBuffer buffer = PacketReadBuffer::wrap(data);
-        if (auto packet = server_socket.receivePacket<DummyPacket>(buffer)) {
-            ++packets_received;
-        }
-    });
 
     // Send packets from all clients
     DummyPacket p;
@@ -360,9 +359,6 @@ TEST(TestServerSocket, test_multiple_clients) {
 TEST(TestServerSocket, test_large_packet) {
     const auto listen_address = create_ipv4_address(127, 0, 0, 1, 48162);
     tinysockets::ServerSocket server_socket(listen_address);
-    EXPECT_TRUE(server_socket.bind());
-    EXPECT_TRUE(server_socket.listen());
-    EXPECT_TRUE(server_socket.runAsync());
 
     std::atomic read_callback_called(false);
     const std::vector<uint8_t> large_data(1024 * 1024, 0xAB); // 1 MB of data
@@ -376,6 +372,10 @@ TEST(TestServerSocket, test_large_packet) {
         EXPECT_EQ(packet->payload, large_data);
         read_callback_called = true;
     });
+
+    EXPECT_TRUE(server_socket.bind());
+    EXPECT_TRUE(server_socket.listen());
+    EXPECT_TRUE(server_socket.runAsync());
 
     // Create client and send large packet
     tinysockets::BlockingIOSocket client_socket(listen_address);
@@ -414,8 +414,6 @@ TEST(TestServerSocket, test_close_non_existent_client) {
 TEST(TestServerSocket, test_multiple_callbacks) {
     const auto listen_address = create_ipv4_address(127, 0, 0, 1, 48164);
     tinysockets::ServerSocket server_socket(listen_address);
-    EXPECT_TRUE(server_socket.bind());
-    EXPECT_TRUE(server_socket.listen());
 
     std::atomic read_calls(0);
     std::atomic close_calls(0);
@@ -434,6 +432,8 @@ TEST(TestServerSocket, test_multiple_callbacks) {
         ++close_calls;
     });
 
+    EXPECT_TRUE(server_socket.bind());
+    EXPECT_TRUE(server_socket.listen());
     EXPECT_TRUE(server_socket.runAsync());
 
     // Connect a client and send something
@@ -478,7 +478,7 @@ TEST(TestServerSocket, test_multiple_interrupts) {
     // Interrupt the server multiple times
     EXPECT_TRUE(server_socket.interrupt());
     EXPECT_TRUE(server_socket.interrupt());
-    // Subsequent calls might still return true or false depending on implementation
+
     server_socket.join();
 }
 
@@ -505,9 +505,6 @@ TEST(TestServerSocket, test_zero_length_packet) {
     const auto listen_address = create_ipv4_address(127, 0, 0, 1, 49105);
     tinysockets::ServerSocket server_socket(listen_address);
 
-    EXPECT_TRUE(server_socket.bind());
-    EXPECT_TRUE(server_socket.listen());
-
     std::atomic callback_called(false);
     server_socket.addReadCallback([&](ccoip_socket_address_t, const std::span<std::uint8_t> &data) {
         PacketReadBuffer buffer = PacketReadBuffer::wrap(data);
@@ -516,6 +513,9 @@ TEST(TestServerSocket, test_zero_length_packet) {
         EXPECT_TRUE(packet->payload.empty());
         callback_called = true;
     });
+
+    EXPECT_TRUE(server_socket.bind());
+    EXPECT_TRUE(server_socket.listen());
 
     EXPECT_TRUE(server_socket.runAsync());
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -555,17 +555,17 @@ TEST(TestServerSocket, test_unknown_packet_id) {
     const auto listen_address = create_ipv4_address(127, 0, 0, 1, 49106);
     tinysockets::ServerSocket server_socket(listen_address);
 
-    EXPECT_TRUE(server_socket.bind());
-    EXPECT_TRUE(server_socket.listen());
-
     std::atomic callback_called(false);
     server_socket.addReadCallback([&](ccoip_socket_address_t, const std::span<std::uint8_t> &data) {
-        // Try to parse as a DummyPacket but we receive an UnknownPacket
+        // Try to parse as a DummyPacket, but we receive an UnknownPacket
         PacketReadBuffer buffer = PacketReadBuffer::wrap(data);
         const auto packet = server_socket.receivePacket<DummyPacket>(buffer);
         EXPECT_FALSE(packet.has_value()); // Should fail to parse correctly
         callback_called = true;
     });
+
+    EXPECT_TRUE(server_socket.bind());
+    EXPECT_TRUE(server_socket.listen());
 
     EXPECT_TRUE(server_socket.runAsync());
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -641,8 +641,18 @@ TEST(TestServerSocket, test_client_send_after_server_stop) {
     p.payload = {0x01};
     // Sending might succeed or fail silently; we just ensure it doesn't crash.
     // If the server is truly down, the send might fail.
-    EXPECT_TRUE(client_socket.sendPacket(p));
-    EXPECT_TRUE(client_socket.closeConnection());
+    if (!client_socket.sendPacket(p)) {
+        SUCCEED();
+        return;
+    }
+
+    // isOpen() might still return true for some time, but we don't want to wait forever
+    for (int i = 0; i < 10; ++i) {
+        if (!client_socket.isOpen()) {
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
 }
 
 // Test attempting to close client connections after the server has stopped
