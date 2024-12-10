@@ -73,6 +73,9 @@ namespace tinysockets {
         /// Returns false if the client connection does not exist or if the server is not running
         [[nodiscard]] bool closeClientConnection(const ccoip_socket_address_t &client_address) const;
 
+        /// Closes all client connections
+        [[nodiscard]] bool closeAllClientConnections() const;
+
         ~ServerSocket();
 
         // Packet decoding / encoding functions
@@ -125,7 +128,7 @@ namespace tinysockets {
 
         [[nodiscard]] bool closeConnection();
 
-        bool isOpen() const;
+        [[nodiscard]] bool isOpen() const;
 
         template<typename T> requires std::is_base_of_v<ccoip::Packet, T>
         [[nodiscard]] bool sendPacket(T &packet) {

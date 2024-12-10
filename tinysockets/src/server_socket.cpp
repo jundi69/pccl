@@ -141,6 +141,11 @@ bool tinysockets::ServerSocket::runAsync() {
         uv_close(reinterpret_cast<uv_handle_t *>(server_socket_state->tcp_server.get()), nullptr);
         uv_close(reinterpret_cast<uv_handle_t *>(server_socket_state->async_handle.get()), nullptr);
         UV_ERR_CHECK(uv_run(server_socket_state->loop.get(), UV_RUN_NOWAIT));
+        int status;
+        do {
+            status = uv_loop_close(server_socket_state->loop.get());
+            UV_ERR_CHECK(uv_run(server_socket_state->loop.get(), UV_RUN_NOWAIT));
+        } while (status == UV_EBUSY);
     });
     running = true;
     return true;
@@ -188,8 +193,26 @@ bool tinysockets::ServerSocket::closeClientConnection(const ccoip_socket_address
     return false;
 }
 
+bool tinysockets::ServerSocket::closeAllClientConnections() const {
+    if (!running) {
+        return false;
+    }
+    for (const auto &[_, stream]: server_socket_state->sockaddr_to_uvstream) {
+        if (!uv_is_closing(reinterpret_cast<uv_handle_t *>(stream))) {
+            uv_close(reinterpret_cast<uv_handle_t *>(stream), [](uv_handle_t *handle) {
+                const auto *this_ptr = static_cast<ServerSocket *>(handle->data);
+                this_ptr->onClientClose(handle);
+            });
+        }
+    }
+    return true;
+}
+
 void tinysockets::ServerSocket::onAsyncSignal() const {
     uv_stop(server_socket_state->async_handle->loop);
+    if (!closeAllClientConnections()) [[unlikely]] {
+        LOG(ERR) << "Failed to close all client connections";
+    }
 }
 
 static void createBuffer(uv_handle_t *, const size_t suggested_size, uv_buf_t *buf) {

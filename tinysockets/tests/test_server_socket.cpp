@@ -600,7 +600,7 @@ TEST(TestServerSocket, test_concurrent_client_connections) {
     std::vector<std::future<bool> > futures;
     futures.reserve(num_clients);
     for (int i = 0; i < num_clients; i++) {
-        futures.emplace_back(std::async(std::launch::async, [&, i]() {
+        futures.emplace_back(std::async(std::launch::async, [&] {
             tinysockets::BlockingIOSocket client(listen_address);
             return client.establishConnection();
         }));
