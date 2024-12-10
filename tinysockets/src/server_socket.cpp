@@ -1,3 +1,4 @@
+#include <ccoip_inet_utils.hpp>
 #include <ccoip_types.hpp>
 
 #include "tinysockets.hpp"
@@ -18,13 +19,36 @@ void uv_err_check(const int status) {
 #define UV_ERR_CHECK(status) uv_err_check(status)
 
 namespace tinysockets {
+    struct RecvBuffer {
+        /// The expected length of the packet
+        uint64_t expected_length = -1;
+
+        /// The current buffer
+        std::vector<uint8_t> buffer{};
+    };
+
     struct ServerSocketState {
         std::unique_ptr<uv_loop_s> loop;
         std::unique_ptr<uv_tcp_s> tcp_server;
         std::unique_ptr<uv_async_s> async_handle;
 
+        /// Maps the client socket addresses to the respective uv stream
+        std::unordered_map<internal_inet_socket_address_t, uv_stream_s *> sockaddr_to_uvstream{};
+        /// Maps the uv stream to the respective client socket addresses
+        std::unordered_map<uv_handle_t *, internal_inet_socket_address_t> uvstream_to_sockaddr{};
+
         /// List of callbacks invoked on client read
         std::vector<ServerSocketReadCallback> read_callbacks{};
+
+        /// List of callbacks invoked on client close
+        std::vector<ServerSocketCloseCallback> close_callbacks{};
+
+        /// Maps client socket addresses to the respective packet buffers.
+        /// The ServerSocket asserts that the packet starts with a 64-bit length field
+        /// and will concatenate the received data until the expected length is reached.
+        /// This server is not fully LTV (length type value) aware, but it does assert
+        /// that the first 8 bytes are a length field.
+        std::unordered_map<internal_inet_socket_address_t, RecvBuffer> current_recv_buffers{};
     };
 }
 
@@ -36,8 +60,22 @@ bool tinysockets::ServerSocket::bind() {
     if (bound) {
         return false;
     }
-    sockaddr_in addr{};
-    if (convert_to_sockaddr(listen_address, addr) != 0) {
+    if (listen_address.port == 0) {
+        return false;
+    }
+
+    // convert listen ccoip socket addr to sockaddr_in/sockaddr_in6 based on protocol
+    sockaddr_in addr_ipv4{};
+    sockaddr_in6 addr_ipv6{};
+    if (listen_address.inet.protocol == inetIPv4) {
+        if (convert_to_sockaddr_ipv4(listen_address, &addr_ipv4) != 0) {
+            return false;
+        }
+    } else if (listen_address.inet.protocol == inetIPv6) {
+        if (convert_to_sockaddr_ipv6(listen_address, &addr_ipv6) != 0) {
+            return false;
+        }
+    } else [[unlikely]] {
         return false;
     }
 
@@ -48,7 +86,18 @@ bool tinysockets::ServerSocket::bind() {
     server_socket_state->tcp_server->data = this;
     UV_ERR_CHECK(uv_tcp_init(server_socket_state->loop.get(), server_socket_state->tcp_server.get()));
 
-    UV_ERR_CHECK(uv_tcp_bind(server_socket_state->tcp_server.get(), reinterpret_cast<const sockaddr *>(&addr), 0));
+    // bind to socket addr based on protocol
+    {
+        const sockaddr *sock_addr = nullptr;
+        if (listen_address.inet.protocol == inetIPv4) {
+            sock_addr = reinterpret_cast<const sockaddr *>(&addr_ipv4);
+        } else if (listen_address.inet.protocol == inetIPv6) {
+            sock_addr = reinterpret_cast<const sockaddr *>(&addr_ipv6);
+        } else [[unlikely]] {
+            return false;
+        }
+        UV_ERR_CHECK(uv_tcp_bind(server_socket_state->tcp_server.get(), sock_addr, 0));
+    }
 
     server_socket_state->async_handle = std::make_unique<uv_async_t>();
     server_socket_state->async_handle->data = this;
@@ -56,21 +105,27 @@ bool tinysockets::ServerSocket::bind() {
         uv_async_init(server_socket_state->loop.get(), server_socket_state->async_handle.get(), [](uv_async_t *handle) {
             const auto *this_ptr = static_cast<ServerSocket *>(handle->data);
             this_ptr->onAsyncSignal();
-            }));
+        }
+    ));
 
     bound = true;
     return true;
 }
 
 bool tinysockets::ServerSocket::listen() {
+    if (!bound) {
+        return false;
+    }
     if (listening) {
         return false;
     }
-    UV_ERR_CHECK(uv_listen(reinterpret_cast<uv_stream_t *>(server_socket_state->tcp_server.get()), 128,
-        [](uv_stream_t *server, const int status) {
-        auto *this_ptr = static_cast<ServerSocket *>(server->data);
-        this_ptr->onNewConnection(reinterpret_cast<uv_server_stream_t *>(server), status);
-        }));
+    if (uv_listen(reinterpret_cast<uv_stream_t *>(server_socket_state->tcp_server.get()), 128,
+                  [](uv_stream_t *server, const int status) {
+                      auto *this_ptr = static_cast<ServerSocket *>(server->data);
+                      this_ptr->onNewConnection(reinterpret_cast<uv_server_stream_t *>(server), status);
+                  }) != 0) {
+        return false;
+    }
     listening = true;
     return true;
 }
@@ -79,21 +134,26 @@ bool tinysockets::ServerSocket::runAsync() {
     if (running) {
         return false;
     }
+    if (!listening) {
+        return false;
+    }
     server_thread = std::thread([this] {
         UV_ERR_CHECK(uv_run(server_socket_state->loop.get(), UV_RUN_DEFAULT));
-        uv_close(reinterpret_cast<uv_handle_t *>(server_socket_state->tcp_server.get()), nullptr);
-        uv_close(reinterpret_cast<uv_handle_t *>(server_socket_state->async_handle.get()), nullptr);
-        UV_ERR_CHECK(uv_run(server_socket_state->loop.get(), UV_RUN_NOWAIT));
+        performLoopShutdown();
     });
     running = true;
     return true;
 }
 
-bool tinysockets::ServerSocket::interrupt() const {
+bool tinysockets::ServerSocket::interrupt() {
     if (!running) {
         return false;
     }
+    if (interrupted) {
+        return true;
+    }
     uv_async_send(server_socket_state->async_handle.get());
+    interrupted = true;
     return true;
 }
 
@@ -105,54 +165,223 @@ void tinysockets::ServerSocket::addReadCallback(const ServerSocketReadCallback &
     server_socket_state->read_callbacks.push_back(callback);
 }
 
-void tinysockets::ServerSocket::onAsyncSignal() const {
-    uv_stop(server_socket_state->async_handle->loop);
+void tinysockets::ServerSocket::addCloseCallback(const ServerSocketCloseCallback &callback) const {
+    server_socket_state->close_callbacks.push_back(callback);
 }
 
-void createBuffer(uv_handle_t *, const size_t suggested_size, uv_buf_t *buf) {
+bool tinysockets::ServerSocket::closeClientConnection(const ccoip_socket_address_t &client_address) const {
+    if (!running) {
+        return false;
+    }
+    const auto inet_internal = ccoip_socket_to_internal(client_address);
+    if (const auto it = server_socket_state->sockaddr_to_uvstream.find(inet_internal);
+        it != server_socket_state->sockaddr_to_uvstream.end()) {
+        if (!uv_is_closing(reinterpret_cast<uv_handle_t *>(it->second))) {
+            uv_close(reinterpret_cast<uv_handle_t *>(it->second), [](uv_handle_t *handle) {
+                const auto *this_ptr = static_cast<ServerSocket *>(handle->data);
+                this_ptr->onClientClose(handle);
+            });
+        }
+        return true;
+    }
+    return false;
+}
+
+bool tinysockets::ServerSocket::closeAllClientConnections() const {
+    if (!running) {
+        return false;
+    }
+    for (const auto &[_, stream]: server_socket_state->sockaddr_to_uvstream) {
+        if (!uv_is_closing(reinterpret_cast<uv_handle_t *>(stream))) {
+            uv_close(reinterpret_cast<uv_handle_t *>(stream), [](uv_handle_t *handle) {
+                const auto *this_ptr = static_cast<ServerSocket *>(handle->data);
+                this_ptr->onClientClose(handle);
+            });
+        }
+    }
+    return true;
+}
+
+void tinysockets::ServerSocket::onAsyncSignal() const {
+    uv_stop(server_socket_state->async_handle->loop);
+    if (!closeAllClientConnections()) [[unlikely]] {
+        LOG(ERR) << "Failed to close all client connections";
+    }
+}
+
+static void createBuffer(uv_handle_t *, const size_t suggested_size, uv_buf_t *buf) {
     buf->base = new char[suggested_size];
     buf->len = suggested_size;
+}
+
+std::optional<ccoip_socket_address_t> tinysockets::ServerSocket::getUvStreamAddressCached(uv_stream_t *stream) const {
+    const auto inet_internal = server_socket_state->uvstream_to_sockaddr.find(reinterpret_cast<uv_handle_t *>(stream));
+    if (inet_internal == server_socket_state->uvstream_to_sockaddr.end()) {
+        return std::nullopt;
+    }
+    return internal_to_ccoip_sockaddr(inet_internal->second);
+}
+
+void tinysockets::ServerSocket::performLoopShutdown() const
+{
+    uv_close(reinterpret_cast<uv_handle_t *>(server_socket_state->tcp_server.get()), nullptr);
+    uv_close(reinterpret_cast<uv_handle_t *>(server_socket_state->async_handle.get()), nullptr);
+    UV_ERR_CHECK(uv_run(server_socket_state->loop.get(), UV_RUN_NOWAIT));
+    int status = 0;
+    do {
+        if (status != 0)
+        {
+            if (!closeAllClientConnections()) [[unlikely]] {
+                LOG(ERR) << "Failed to close all clients connections";
+            }
+        }
+        status = uv_loop_close(server_socket_state->loop.get());
+        UV_ERR_CHECK(uv_run(server_socket_state->loop.get(), UV_RUN_NOWAIT));
+    } while (status == UV_EBUSY);
+    server_socket_state->loop = nullptr;
+}
+
+static std::optional<ccoip_socket_address_t> getUvStreamAddress(uv_stream_t *stream) {
+    // get client address
+    sockaddr_storage addr{};
+    int addr_len = sizeof(addr);
+    if (uv_tcp_getpeername(reinterpret_cast<uv_tcp_t *>(stream), reinterpret_cast<sockaddr *>(&addr), &addr_len) != 0) [
+        [unlikely]] {
+        return std::nullopt;
+    }
+    ccoip_socket_address_t client_addr{};
+    convert_from_sockaddr(reinterpret_cast<const sockaddr *>(&addr), &client_addr);
+    return client_addr;
 }
 
 void tinysockets::ServerSocket::onNewConnection(uv_server_stream_t *server, const int status) {
     if (status < 0) {
         return;
     }
-    auto *client = static_cast<uv_stream_t *>(malloc(sizeof(uv_stream_t)));
-    UV_ERR_CHECK(uv_tcp_init(server_socket_state->loop.get(), reinterpret_cast<uv_tcp_t *>(client)));
+    if (interrupted)
+    {
+        // don't accept more connections when the server has been interrupted
+        return;
+    }
+    auto *client = new uv_tcp_t{};
+    UV_ERR_CHECK(uv_tcp_init(server_socket_state->loop.get(), client));
     client->data = this;
-    if (uv_accept(reinterpret_cast<uv_stream_t *>(server), client) == 0) {
+    if (uv_accept(reinterpret_cast<uv_stream_t *>(server), reinterpret_cast<uv_stream_t *>(client)) == 0) {
         LOG(INFO) << "New connection accepted";
-        uv_read_start(client, createBuffer, [](uv_stream_t *stream, const ssize_t n_read, const uv_buf_t *buf) {
-            const auto *this_ptr = static_cast<ServerSocket *>(stream->data);
-            this_ptr->onClientRead(stream, n_read, buf);
-        });
+
+        const auto client_addr = getUvStreamAddress(reinterpret_cast<uv_stream_t *>(client));
+        const auto inet_internal = ccoip_socket_to_internal(*client_addr);
+        server_socket_state->sockaddr_to_uvstream[inet_internal] = reinterpret_cast<uv_stream_t *>(client);
+        server_socket_state->uvstream_to_sockaddr[reinterpret_cast<uv_handle_t *>(client)] = inet_internal;
+
+        if (!client_addr) [[unlikely]] {
+            LOG(ERR) << "Failed to get client address";
+            uv_close(reinterpret_cast<uv_handle_t *>(client), nullptr);
+            return;
+        }
+        uv_read_start(reinterpret_cast<uv_stream_t *>(client), createBuffer,
+                      [](uv_stream_t *stream, const ssize_t n_read, const uv_buf_t *buf) {
+                          // Handle EOF or errors
+                          if (n_read < 0) {
+                              // Free the buffer
+                              delete[] buf->base;
+
+                              // Close the connection properly
+                              uv_close(reinterpret_cast<uv_handle_t *>(stream), [](uv_handle_t *handle) {
+                                  const auto *this_ptr = static_cast<ServerSocket *>(handle->data);
+                                  this_ptr->onClientClose(handle);
+                              });
+                              return;
+                          }
+
+                          // invoke onClientRead
+                          {
+                              const auto *this_ptr = static_cast<ServerSocket *>(stream->data);
+                              this_ptr->onClientRead(stream, n_read, buf);
+                          }
+                      });
     } else {
         uv_close(reinterpret_cast<uv_handle_t *>(client), nullptr);
+        delete client;
     }
 }
 
 void tinysockets::ServerSocket::onClientRead(uv_stream_t *stream, const ssize_t n_read, const uv_buf_t *buf) const {
-    // get client address
-    sockaddr_storage addr{};
-    int addr_len = sizeof(addr);
-    UV_ERR_CHECK(
-        uv_tcp_getpeername(reinterpret_cast<uv_tcp_t *>(stream), reinterpret_cast<sockaddr *>(&addr), &addr_len)
-    );
-    ccoip_socket_address_t client_addr{};
-    convert_from_sockaddr(reinterpret_cast<const sockaddr *>(&addr), client_addr);
-
-    if (n_read < 0) {
+    const auto client_addr = getUvStreamAddressCached(stream);
+    if (!client_addr) [[unlikely]] {
+        LOG(ERR) << "Failed to get client address";
         uv_close(reinterpret_cast<uv_handle_t *>(stream), nullptr);
-    } else {
-        // handle read
-        for (const auto &callback: server_socket_state->read_callbacks) {
-            callback(client_addr, std::span(reinterpret_cast<uint8_t *>(buf->base), n_read));
+        return;
+    }
+
+    // manage current recv buffer
+    {
+        const std::span data(reinterpret_cast<uint8_t *>(buf->base), n_read);
+        PacketReadBuffer buffer = PacketReadBuffer::wrap(data);
+
+        auto &current_recv_buffer = server_socket_state->current_recv_buffers[
+            ccoip_socket_to_internal(*client_addr)];
+
+        if (current_recv_buffer.expected_length == -1) {
+            // if the expected length is not set, read the length field
+            if (data.size() < sizeof(uint64_t)) {
+                LOG(ERR) << "Expected 8-byte length field but got " << data.size() << " bytes";
+                if (!closeClientConnection(*client_addr)) [[unlikely]] {
+                    LOG(ERR) << "Failed to close client connection";
+                }
+                return;
+            }
+            current_recv_buffer.expected_length = buffer.read<uint64_t>();
+            current_recv_buffer.buffer.insert(current_recv_buffer.buffer.end(), data.begin() + sizeof(uint64_t),
+                                              data.end());
+        } else {
+            if (current_recv_buffer.buffer.size() + data.size() > current_recv_buffer.expected_length) {
+                LOG(ERR) << "Received more data than expected";
+                if (!closeClientConnection(*client_addr)) [[unlikely]] {
+                    LOG(ERR) << "Failed to close client connection";
+                }
+                return;
+            }
+            // if the expected length is set, append the data to the buffer
+            current_recv_buffer.buffer.insert(current_recv_buffer.buffer.end(), data.begin(), data.end());
+        }
+
+        if (current_recv_buffer.buffer.size() == current_recv_buffer.expected_length) {
+            // if the buffer is full, invoke read callbacks
+            for (const auto &callback: server_socket_state->read_callbacks) {
+                callback(*client_addr, current_recv_buffer.buffer);
+            }
+            current_recv_buffer.expected_length = -1;
+            current_recv_buffer.buffer.clear();
         }
     }
     delete[] buf->base;
 }
 
+void tinysockets::ServerSocket::onClientClose(uv_handle_t *handle) const {
+    auto *client = reinterpret_cast<uv_tcp_t *>(handle);
+    const auto *this_ptr = static_cast<ServerSocket *>(client->data);
+    const auto client_addr = getUvStreamAddressCached(reinterpret_cast<uv_stream_t *>(client));
+
+    if (!client_addr) [[unlikely]] {
+        LOG(ERR) << "Failed to get client address";
+        return;
+    }
+
+    // Remove from connections map
+    const auto inet_internal = ccoip_socket_to_internal(*client_addr);
+    this_ptr->server_socket_state->sockaddr_to_uvstream.erase(inet_internal);
+    this_ptr->server_socket_state->uvstream_to_sockaddr.erase(handle);
+
+    for (const auto &callback: this_ptr->server_socket_state->close_callbacks) {
+        callback(*client_addr);
+    }
+    delete client;
+}
+
 tinysockets::ServerSocket::~ServerSocket() {
+    if (!running && server_socket_state->loop != nullptr) {
+        performLoopShutdown();
+    }
     delete server_socket_state;
 }

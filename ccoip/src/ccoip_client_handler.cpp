@@ -6,7 +6,7 @@
 #include "ccoip_packets.hpp"
 
 struct CCoIPClientState {
-    std::unordered_map<internal_inet_address_t, std::vector<ccoip_uuid_t>> inet_addrs_to_uuids{};
+    std::unordered_map<internal_inet_address_t, std::vector<ccoip_uuid_t> > inet_addrs_to_uuids{};
 };
 
 ccoip::CCoIPClientHandler::CCoIPClientHandler(const ccoip_socket_address_t &address) : client_socket(address),
@@ -27,14 +27,13 @@ bool ccoip::CCoIPClientHandler::connect() {
 // the uuid it is transmitted in the hello, we verify the ip against what the master told
 // us the ip of the peer is, and then we mark the connection as rx side open (rx side = their connection to us listening)
 
-
 bool ccoip::CCoIPClientHandler::acceptNewPeers() {
     const C2MPacketAcceptNewPeers new_peers_packet{};
     if (!client_socket.sendPacket(new_peers_packet)) {
         return false;
     }
 
-    auto response = client_socket.recvPacket<M2CPacketNewPeers>();
+    const auto response = client_socket.receivePacket<M2CPacketNewPeers>();
     if (!response) {
         return false;
     }
@@ -55,11 +54,20 @@ bool ccoip::CCoIPClientHandler::acceptNewPeers() {
     return true;
 }
 
+bool ccoip::CCoIPClientHandler::updateTopology() {
+    return true;
+}
+
 bool ccoip::CCoIPClientHandler::interrupt() {
+    if (!client_socket.closeConnection()) [[unlikely]] {
+        return false;
+    }
     return true;
 }
 
 bool ccoip::CCoIPClientHandler::join() {
+    // api for future proofing if we need to ever wait for async operations to finish
+    // to clean up the client handler
     return true;
 }
 
@@ -68,16 +76,16 @@ ccoip::CCoIPClientHandler::~CCoIPClientHandler() {
 }
 
 
-void ccoip::CCoIPClientHandler::registerPeer(const ccoip_inet_address_t &address, const ccoip_uuid_t uuid) {
+void ccoip::CCoIPClientHandler::registerPeer(const ccoip_inet_address_t &address, const ccoip_uuid_t uuid) const {
     internal_inet_address_t internal_address{
         .protocol = address.protocol
     };
     if (address.protocol == inetIPv4) {
-        internal_address.address.ipv4 = address.address.ipv4;
+        internal_address.ipv4 = address.ipv4;
     } else if (address.protocol == inetIPv6) {
-        internal_address.address.ipv6 = address.address.ipv6;
+        internal_address.ipv6 = address.ipv6;
     }
-    auto uuids_per_ip = client_state->inet_addrs_to_uuids[internal_address];
+    auto &uuids_per_ip = client_state->inet_addrs_to_uuids[internal_address];
     uuids_per_ip.push_back(uuid);
     if (uuids_per_ip.size() > 1) {
         LOG(WARN) << "Registered more than one peer per IP address " << CCOIP_INET_ADDR_TO_STRING(address);

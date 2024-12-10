@@ -83,12 +83,20 @@ pcclResult_t pcclConnectMaster(pcclComm_t *communicator, ccoip_socket_address_t 
     return pcclSuccess;
 }
 
-pcclResult_t pcclAcceptNewPeers(pcclComm_t *communicator) {
+pcclResult_t pcclUpdateTopology(pcclComm_t *communicator) {
     PCCL_VALIDATE_INITIALIZED();
     PCCL_VALIDATE(communicator != nullptr, pcclInvalidArgument);
+
+    // accept new peers; this will block until we have a valid connection to each peer
     if (!communicator->ccoip_handler->acceptNewPeers()) [[unlikely]] {
         return pcclInvalidUsage;
     }
+
+    // update the topology
+    if (!communicator->ccoip_handler->updateTopology()) [[unlikely]] {
+        return pcclInvalidUsage;
+    }
+
     return pcclSuccess;
 }
 

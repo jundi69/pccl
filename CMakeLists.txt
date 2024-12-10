@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.29)
+cmake_minimum_required(VERSION 3.28)
 project(pccl)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -6,6 +6,11 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 # add third party libraries
 add_subdirectory(third_party)
+
+enable_testing()
+
+# include testing functions
+include(cmake/testing.cmake)
 
 # add internal libraries
 add_subdirectory(log)

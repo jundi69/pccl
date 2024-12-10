@@ -12,8 +12,8 @@ const char *ToString(const LogLevel level) {
             return "INFO";
         case WARN:
             return "WARN";
-        case ERROR:
-            return "ERROR";
+        case ERR:
+            return "ERR";
         case FATAL:
             return "FATAL";
         default:
@@ -35,8 +35,8 @@ static LogLevel readReportingLevel() {
     if (strcmp(logLevel, "WARN") == 0) {
         return WARN;
     }
-    if (strcmp(logLevel, "ERROR") == 0) {
-        return ERROR;
+    if (strcmp(logLevel, "ERR") == 0) {
+        return ERR;
     }
     if (strcmp(logLevel, "FATAL") == 0) {
         return FATAL;

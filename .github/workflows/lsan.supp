@@ -1,0 +1,2 @@
+leak:uv__signal_loop_once_init
+leak:uv__process_init

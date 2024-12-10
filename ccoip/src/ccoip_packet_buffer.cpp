@@ -3,8 +3,8 @@
 #include <cstring>
 #include <string>
 
-PacketReadBuffer::PacketReadBuffer(const uint8_t *data, const size_t length):
-    data_(data), length_(length), read_index_(0) {
+PacketReadBuffer::PacketReadBuffer(const uint8_t *data, const size_t length): data_(data), length_(length),
+                                                                              read_index_(0) {
 }
 
 std::string PacketReadBuffer::readString() {
@@ -37,6 +37,10 @@ PacketReadBuffer PacketReadBuffer::copy(const PacketReadBuffer &packet_buffer) {
 
 PacketReadBuffer PacketReadBuffer::wrap(uint8_t *data, const size_t length) {
     return {data, length};
+}
+
+PacketReadBuffer PacketReadBuffer::wrap(const std::span<uint8_t> &data) {
+    return {data.data(), data.size()};
 }
 
 // PacketWriteBuffer

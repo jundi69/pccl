@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <stdexcept>
 #include <vector>
+#include <span>
 #include <algorithm>
 
 #include <type_utils.hpp>
@@ -131,6 +132,14 @@ public:
      * @return A PacketBuffer instance wrapping the provided data.
      */
     [[nodiscard]] static PacketReadBuffer wrap(uint8_t *data, size_t length);
+
+    /**
+      * @brief Static factory method to wrap an existing byte array in a PacketBuffer.
+      *
+      * @param data Pointer to the raw byte buffer.
+      * @return A PacketBuffer instance wrapping the provided data.
+      */
+    [[nodiscard]] static PacketReadBuffer wrap(const std::span<uint8_t> &data);
 
 private:
     const uint8_t *data_;

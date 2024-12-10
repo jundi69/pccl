@@ -1,0 +1,2 @@
+add_sanitized_gtest(test_server_socket test_server_socket.cpp)
+target_link_libraries(test_server_socket tinysockets)

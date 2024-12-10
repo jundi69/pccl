@@ -1,6 +1,6 @@
 #include <pccl.h>
 #include <random>
-#include <iostream>
+#include <thread>
 
 #define PCCL_CHECK(status) { pcclResult_t status_val = status; if (status_val != pcclSuccess) { std::cerr << "Error: " << status_val << std::endl; exit(1); } }
 
@@ -23,7 +23,7 @@ int main() {
 
     ccoip_socket_address_t connect_address{};
     connect_address.inet.protocol = inetIPv4;
-    connect_address.inet.address.ipv4 = {127, 0, 0, 1};
+    connect_address.inet.ipv4 = {127, 0, 0, 1};
     connect_address.port = 48148;
 
     PCCL_CHECK(pcclConnectMaster(communicator, connect_address));
@@ -49,20 +49,25 @@ int main() {
     const auto gradients = new float[n_peers];
 
     while (true) {
-        PCCL_CHECK(pcclAcceptNewPeers(communicator));
+        PCCL_CHECK(pcclUpdateTopology(communicator));
         PCCL_CHECK(pcclSynchronizeSharedState(communicator, &shared_state));
+
+        pcclGetAttribute(communicator, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size);
+
+        if (world_size < 2) {
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+            continue;
+        }
 
         if (shared_state.revision >= MAX_STEPS) {
             break;
         }
 
         fill_uniform(gradients, n_peers);
-
         pcclAsyncReduceOp_t async_op{};
-        PCCL_CHECK(
-            pcclAllReduceAsync(gradients, weights, n_peers, pcclFloat, pcclSum, 0, communicator, nullptr, &async_op)
-        );
-        PCCL_CHECK(pcclAwaitAsyncReduce(&async_op));
+        do {
+            pcclAllReduceAsync(gradients, weights, n_peers, pcclFloat, pcclSum, 0, communicator, nullptr, &async_op);
+        } while (pcclAwaitAsyncReduce(&async_op) != pcclSuccess);
 
         shared_state.revision++;
     }
