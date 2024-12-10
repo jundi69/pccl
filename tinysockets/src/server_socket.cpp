@@ -105,7 +105,8 @@ bool tinysockets::ServerSocket::bind() {
         uv_async_init(server_socket_state->loop.get(), server_socket_state->async_handle.get(), [](uv_async_t *handle) {
             const auto *this_ptr = static_cast<ServerSocket *>(handle->data);
             this_ptr->onAsyncSignal();
-            }));
+        }
+    ));
 
     bound = true;
     return true;
@@ -152,6 +153,7 @@ bool tinysockets::ServerSocket::runAsync() {
             status = uv_loop_close(server_socket_state->loop.get());
             UV_ERR_CHECK(uv_run(server_socket_state->loop.get(), UV_RUN_NOWAIT));
         } while (status == UV_EBUSY);
+
     });
     running = true;
     return true;
@@ -249,6 +251,11 @@ static std::optional<ccoip_socket_address_t> getUvStreamAddress(uv_stream_t *str
 
 void tinysockets::ServerSocket::onNewConnection(uv_server_stream_t *server, const int status) {
     if (status < 0) {
+        return;
+    }
+    if (interrupted)
+    {
+        // don't accept more connections when the server has been interrupted
         return;
     }
     auto *client = new uv_tcp_t{};
