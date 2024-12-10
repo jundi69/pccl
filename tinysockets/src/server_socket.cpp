@@ -231,18 +231,21 @@ void tinysockets::ServerSocket::onNewConnection(uv_server_stream_t *server, cons
             uv_close(reinterpret_cast<uv_handle_t *>(client), nullptr);
             return;
         }
-        uv_read_start(reinterpret_cast<uv_stream_t *>(client), createBuffer, [](uv_stream_t *stream, const ssize_t n_read, const uv_buf_t *buf) {
-            // invoke onClientRead
-            {
-                const auto *this_ptr = static_cast<ServerSocket *>(stream->data);
-                this_ptr->onClientRead(stream, n_read, buf);
-            }
-            // check if closed
-            if (n_read == UV_EOF) {
-                const auto *this_ptr = static_cast<ServerSocket *>(stream->data);
-                this_ptr->onClientClose(reinterpret_cast<uv_handle_t *>(stream));
-            }
-        });
+        uv_read_start(reinterpret_cast<uv_stream_t *>(client), createBuffer,
+                      [](uv_stream_t *stream, const ssize_t n_read, const uv_buf_t *buf) {
+                          // invoke onClientRead
+                          {
+                              const auto *this_ptr = static_cast<ServerSocket *>(stream->data);
+                              this_ptr->onClientRead(stream, n_read, buf);
+                          }
+                          // check if closed
+                          if (n_read == UV_EOF) {
+                              uv_close(reinterpret_cast<uv_handle_t *>(stream), [](uv_handle_t *handle) {
+                                  auto *this_ptr = static_cast<ServerSocket *>(handle->data);
+                                  this_ptr->onClientClose(handle);
+                              });
+                          }
+                      });
     } else {
         uv_close(reinterpret_cast<uv_handle_t *>(client), nullptr);
     }

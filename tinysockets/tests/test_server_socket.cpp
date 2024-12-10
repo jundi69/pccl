@@ -203,6 +203,14 @@ TEST(TestServerSocket, test_client_connection_and_callbacks) {
     EXPECT_TRUE(server_socket.interrupt());
     server_socket.join();
 
+    // close_callback_called can take a while to be set, but we don't want to wait forever
+    for (int i = 0; i < 10; ++i) {
+        if (close_callback_called) {
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+
     // Verify that callbacks were called
     EXPECT_TRUE(read_callback_called);
     EXPECT_TRUE(close_callback_called);
