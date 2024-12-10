@@ -108,9 +108,8 @@ pcclResult_t pcclAllReduce(const void *sendbuff, void *recvbuff, size_t count, p
 }
 
 pcclResult_t pcclAllReduceAsync(const void *sendbuff, void *recvbuff, size_t count, pcclDataType_t datatype,
-                                pcclRedOp_t op, uint64_t tag, const pcclComm_t *communicator,
-                                pcclReduceInfo_t *reduce_info_out,
-                                pcclAsyncReduceOp_t *reduce_handle_out) {
+    pcclRedOp_t op, uint64_t tag, const pcclComm_t *communicator, pcclReduceInfo_t *reduce_info_out,
+    pcclAsyncReduceOp_t *reduce_handle_out) {
     PCCL_VALIDATE_INITIALIZED();
     PCCL_VALIDATE(communicator != nullptr, pcclInvalidArgument);
     PCCL_VALIDATE(reduce_handle_out != nullptr, pcclInvalidArgument);

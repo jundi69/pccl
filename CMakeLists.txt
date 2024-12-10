@@ -6,6 +6,8 @@ set(CMAKE_CXX_STANDARD 20)
 # add third party libraries
 add_subdirectory(third_party)
 
+enable_testing()
+
 # add internal libraries
 add_subdirectory(log)
 add_subdirectory(ccoip)

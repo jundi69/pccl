@@ -8,6 +8,7 @@
 #include <netinet/in.h>
 #endif
 
-int convert_to_sockaddr(const ccoip_socket_address_t &ccoip_addr, sockaddr_in &sock_addr_out);
+int convert_to_sockaddr_ipv4(const ccoip_socket_address_t &ccoip_addr, sockaddr_in *sock_addr_out);
+int convert_to_sockaddr_ipv6(const ccoip_socket_address_t &ccoip_addr, sockaddr_in6 *sock_addr_out);
 
-int convert_from_sockaddr(const sockaddr *sock_addr, ccoip_socket_address_t &ccoip_addr);
+int convert_from_sockaddr(const sockaddr *sock_addr, ccoip_socket_address_t *ccoip_addr);

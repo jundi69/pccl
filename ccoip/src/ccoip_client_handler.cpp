@@ -34,7 +34,7 @@ bool ccoip::CCoIPClientHandler::acceptNewPeers() {
         return false;
     }
 
-    auto response = client_socket.recvPacket<M2CPacketNewPeers>();
+    auto response = client_socket.receivePacket<M2CPacketNewPeers>();
     if (!response) {
         return false;
     }

@@ -28,13 +28,13 @@ static void configure_socket_fd(const int socket_fd) {
     // set send and recvvp buf
     constexpr int buffer_size = 1 << 20; // 1 MiB
     if (setsockoptvp(socket_fd, SOL_SOCKET, SO_SNDBUF, &buffer_size,
-                   sizeof(buffer_size)) < 0) [[unlikely]] {
+                     sizeof(buffer_size)) < 0) [[unlikely]] {
         LOG(ERR) << "Failed to set SO_SNDBUF option on server socket";
         closesocket(socket_fd);
         exit(EXIT_FAILURE);
     }
     if (setsockoptvp(socket_fd, SOL_SOCKET, SO_RCVBUF, &buffer_size,
-                   sizeof(buffer_size)) < 0) [[unlikely]] {
+                     sizeof(buffer_size)) < 0) [[unlikely]] {
         LOG(ERR) << "Failed to set SO_RCVBUF option on server socket";
         closesocket(socket_fd);
         exit(EXIT_FAILURE);
@@ -78,16 +78,45 @@ bool tinysockets::BlockingIOSocket::establishConnection() {
     configure_socket_fd(socket_fd);
 
     // connect to the server
-    sockaddr_in server_address{};
-    if (convert_to_sockaddr(connect_sockaddr, server_address) == -1) [[unlikely]] {
-        LOG(ERR) << "Failed to convert socket address";
+    sockaddr_in server_address_ipv4{};
+    sockaddr_in6 server_address_ipv6{};
+
+    if (connect_sockaddr.inet.protocol == inetIPv4) {
+        if (convert_to_sockaddr_ipv4(connect_sockaddr, &server_address_ipv4) == -1) [[unlikely]] {
+            LOG(ERR) << "Failed to convert socket address";
+            closesocket(socket_fd);
+            return false;
+        }
+    } else if (connect_sockaddr.inet.protocol == inetIPv6) {
+        if (convert_to_sockaddr_ipv6(connect_sockaddr, &server_address_ipv6) == -1) [[unlikely]] {
+            LOG(ERR) << "Failed to convert socket address";
+            closesocket(socket_fd);
+            return false;
+        }
+    } else [[unlikely]] {
+        LOG(ERR) << "Unsupported protocol";
         closesocket(socket_fd);
         return false;
     }
 
-    // connect to the server
-    if (connect(socket_fd, reinterpret_cast<sockaddr *>(&server_address), sizeof(server_address)) < 0) [[unlikely]] {
-        LOG(ERR) << "Failed to connect to server";
+    // connect to the server based on protocol
+    if (connect_sockaddr.inet.protocol == inetIPv4) {
+        if (connect(socket_fd, reinterpret_cast<sockaddr *>(&server_address_ipv4), sizeof(server_address_ipv4)) < 0) [[
+            unlikely]]
+        {
+            LOG(ERR) << "Failed to connect to server";
+            closesocket(socket_fd);
+            return false;
+        }
+    } else if (connect_sockaddr.inet.protocol == inetIPv6) {
+        if (connect(socket_fd, reinterpret_cast<const sockaddr *>(&server_address_ipv6),
+                    sizeof(server_address_ipv6)) < 0) [[unlikely]] {
+            LOG(ERR) << "Failed to connect to server";
+            closesocket(socket_fd);
+            return false;
+        }
+    } else [[unlikely]] {
+        LOG(ERR) << "Unsupported protocol";
         closesocket(socket_fd);
         return false;
     }
@@ -103,12 +132,12 @@ bool tinysockets::BlockingIOSocket::closeConnection() {
     return true;
 }
 
-bool tinysockets::BlockingIOSocket::sendTlvPacket(const ccoip::packetId_t packet_id,
+bool tinysockets::BlockingIOSocket::sendLtvPacket(const ccoip::packetId_t packet_id,
                                                   const PacketWriteBuffer &buffer) const {
     PacketWriteBuffer tlv_buffer{};
     tlv_buffer.reserve(buffer.size() + sizeof(packet_id) + sizeof(uint64_t));
+    tlv_buffer.write<uint64_t>(buffer.size() + sizeof(ccoip::packetId_t));
     tlv_buffer.write(packet_id);
-    tlv_buffer.write<uint64_t>(buffer.size());
     tlv_buffer.writeContents(buffer.data(), buffer.size());
     int flags = 0;
 #ifndef WIN32
@@ -144,7 +173,7 @@ size_t tinysockets::BlockingIOSocket::receivePacketLength() const {
     return length;
 }
 
-bool tinysockets::BlockingIOSocket::receivePacketData(std::span<std::uint8_t> dst) const {
+bool tinysockets::BlockingIOSocket::receivePacketData(std::span<std::uint8_t> &dst) const {
     if (const ssize_t i = recvvp(socket_fd, dst.data(), dst.size_bytes(), 0); i == -1) [[
         unlikely]] {
         const std::string error_message = std::strerror(errno);

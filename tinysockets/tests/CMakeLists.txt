@@ -1,0 +1,7 @@
+add_compile_options(-fsanitize=address)
+add_link_options(-fsanitize=address)
+
+add_executable(test_server_socket test_server_socket.cpp)
+target_link_libraries(test_server_socket GTest::gtest_main)
+add_test(NAME test_server_socket COMMAND server_socket)
+target_link_libraries(test_server_socket tinysockets)

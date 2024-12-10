@@ -1,6 +1,10 @@
 #pragma once
 
+#include <ccoip_inet.h>
 #include <cstring>
+#include <string>
+#include <sstream>
+
 #ifdef WIN32
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -8,14 +12,15 @@
 #include <arpa/inet.h>
 #endif
 
+
 [[nodiscard]] inline std::string CCOIP_SOCKET_ADDR_TO_STRING(const ccoip_socket_address_t &addr) {
     std::ostringstream oss;
     if (addr.inet.protocol == inetIPv4) {
         oss << static_cast<int>(addr.inet.address.ipv4.data[0]) << "."
-            << static_cast<int>(addr.inet.address.ipv4.data[1]) << "."
-            << static_cast<int>(addr.inet.address.ipv4.data[2]) << "."
-            << static_cast<int>(addr.inet.address.ipv4.data[3]) << ":"
-            << ntohs((addr).port);
+                << static_cast<int>(addr.inet.address.ipv4.data[1]) << "."
+                << static_cast<int>(addr.inet.address.ipv4.data[2]) << "."
+                << static_cast<int>(addr.inet.address.ipv4.data[3]) << ":"
+                << ntohs((addr).port);
     } else if (addr.inet.protocol == inetIPv6) {
         char ip_str[INET6_ADDRSTRLEN];
         inet_ntop(AF_INET6, &addr.inet.address.ipv6, ip_str, sizeof(ip_str));
@@ -30,9 +35,9 @@
     if (addr.protocol == inetIPv4) {
         std::ostringstream oss;
         oss << static_cast<int>(addr.address.ipv4.data[0]) << "."
-            << static_cast<int>(addr.address.ipv4.data[1]) << "."
-            << static_cast<int>(addr.address.ipv4.data[2]) << "."
-            << static_cast<int>(addr.address.ipv4.data[3]);
+                << static_cast<int>(addr.address.ipv4.data[1]) << "."
+                << static_cast<int>(addr.address.ipv4.data[2]) << "."
+                << static_cast<int>(addr.address.ipv4.data[3]);
         return oss.str();
     }
     if (addr.protocol == inetIPv6) {
@@ -42,7 +47,6 @@
     }
     return "Unknown Protocol";
 }
-
 
 
 struct internal_inet_address_t {
@@ -100,3 +104,33 @@ struct std::hash<internal_inet_socket_address_t> {
         return hash_value;
     }
 };
+
+inline internal_inet_address_t ccoip_inet_to_internal(const ccoip_inet_address_t &inet_addr) {
+    internal_inet_address_t internal_addr{};
+    internal_addr.protocol = inet_addr.protocol;
+    internal_addr.address.ipv4 = inet_addr.address.ipv4;
+    internal_addr.address.ipv6 = inet_addr.address.ipv6;
+    return internal_addr;
+}
+
+inline internal_inet_socket_address_t ccoip_socket_to_internal(const ccoip_socket_address_t &socket_addr) {
+    internal_inet_socket_address_t internal_socket{};
+    internal_socket.inet_address = ccoip_inet_to_internal(socket_addr.inet);
+    internal_socket.port = socket_addr.port;
+    return internal_socket;
+}
+
+inline ccoip_inet_address_t internal_to_ccoip_inet(const internal_inet_address_t &internal_addr) {
+    ccoip_inet_address_t inet_addr{};
+    inet_addr.protocol = internal_addr.protocol;
+    inet_addr.address.ipv4 = internal_addr.address.ipv4;
+    inet_addr.address.ipv6 = internal_addr.address.ipv6;
+    return inet_addr;
+}
+
+inline ccoip_socket_address_t internal_to_ccoip_sockaddr(const internal_inet_socket_address_t &internal_socket) {
+    ccoip_socket_address_t socket_addr{};
+    socket_addr.inet = internal_to_ccoip_inet(internal_socket.inet_address);
+    socket_addr.port = internal_socket.port;
+    return socket_addr;
+}

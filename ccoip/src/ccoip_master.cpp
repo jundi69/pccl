@@ -5,7 +5,7 @@
 
 
 ccoip::CCoIPMaster::CCoIPMaster(const ccoip_socket_address_t &listen_address) : server_socket(listen_address) {
-    server_socket.addReadCallback([this](const ccoip_socket_address_t &client_address, const std::span<uint8_t> data) {
+    server_socket.addReadCallback([this](const ccoip_socket_address_t &client_address, const std::span<uint8_t> &data) {
         onClientRead(client_address, data);
     });
 }
@@ -43,7 +43,12 @@ bool ccoip::CCoIPMaster::join() {
     return true;
 }
 
-void ccoip::CCoIPMaster::kickClient(const ccoip_socket_address_t &client_address) {
+bool ccoip::CCoIPMaster::kickClient(const ccoip_socket_address_t &client_address) const {
+    LOG(DEBUG) << "Kicking client " << CCOIP_SOCKET_ADDR_TO_STRING(client_address);
+    if (!server_socket.closeClientConnection(client_address)) [[unlikely]] {
+        return false;
+    }
+    return true;
 }
 
 void ccoip::CCoIPMaster::onClientRead(const ccoip_socket_address_t &client_address, const std::span<uint8_t> data) {
@@ -53,7 +58,9 @@ void ccoip::CCoIPMaster::onClientRead(const ccoip_socket_address_t &client_addre
     const auto packet_length = buffer.read<uint64_t>();
     if (packet_length != buffer.remaining()) {
         LOG(ERR) << "Packet length mismatch: expected " << packet_length << " bytes, but got " << buffer.remaining();
-        kickClient(client_address);
+        if (!kickClient(client_address)) [[unlikely]] {
+            LOG(ERR) << "Failed to kick client " << CCOIP_SOCKET_ADDR_TO_STRING(client_address);
+        }
         return;
     }
 }
