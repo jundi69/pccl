@@ -35,6 +35,7 @@ namespace tinysockets {
         bool bound = false;
         bool listening = false;
         bool running = false;
+        bool interrupted = false;
 
     public:
         explicit ServerSocket(const ccoip_socket_address_t &listen_address);
@@ -57,7 +58,7 @@ namespace tinysockets {
         [[nodiscard]] bool runAsync();
 
         /// Returns false if not running
-        [[nodiscard]] bool interrupt() const;
+        [[nodiscard]] bool interrupt();
 
         /// Wait for the server thread to exit
         void join();

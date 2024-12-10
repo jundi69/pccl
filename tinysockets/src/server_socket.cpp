@@ -133,6 +133,9 @@ bool tinysockets::ServerSocket::runAsync() {
     if (running) {
         return false;
     }
+    if (!listening) {
+        return false;
+    }
     server_thread = std::thread([this] {
         UV_ERR_CHECK(uv_run(server_socket_state->loop.get(), UV_RUN_DEFAULT));
         uv_close(reinterpret_cast<uv_handle_t *>(server_socket_state->tcp_server.get()), nullptr);
@@ -143,11 +146,15 @@ bool tinysockets::ServerSocket::runAsync() {
     return true;
 }
 
-bool tinysockets::ServerSocket::interrupt() const {
+bool tinysockets::ServerSocket::interrupt() {
     if (!running) {
         return false;
     }
+    if (interrupted) {
+        return true;
+    }
     uv_async_send(server_socket_state->async_handle.get());
+    interrupted = true;
     return true;
 }
 
