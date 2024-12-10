@@ -234,6 +234,7 @@ TEST(TestServerSocket, test_close_client_connection) {
 
     // Create a client and connect to the server
     tinysockets::BlockingIOSocket client_socket(listen_address);
+
     EXPECT_TRUE(client_socket.establishConnection());
 
     DummyPacket packet{};
@@ -256,14 +257,20 @@ TEST(TestServerSocket, test_close_client_connection) {
             read_callback_called = true;
         });
 
-    // Close the client side as well
-    EXPECT_TRUE(client_socket.closeConnection());
+    // read callback may take a while to be called, but we don't want to wait forever
+    for (int i = 0; i < 10; ++i) {
+        if (read_callback_called) {
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    EXPECT_TRUE(read_callback_called);
+
+    EXPECT_FALSE(client_socket.sendPacket(packet)); // Should fail because the connection is closed
 
     // Cleanup
     EXPECT_TRUE(server_socket.interrupt());
     server_socket.join();
-
-    EXPECT_TRUE(read_callback_called);
 }
 
 int main(int argc, char **argv) {
