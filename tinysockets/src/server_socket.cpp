@@ -215,15 +215,15 @@ void tinysockets::ServerSocket::onNewConnection(uv_server_stream_t *server, cons
     if (status < 0) {
         return;
     }
-    auto *client = static_cast<uv_stream_t *>(malloc(sizeof(uv_stream_t)));
-    UV_ERR_CHECK(uv_tcp_init(server_socket_state->loop.get(), reinterpret_cast<uv_tcp_t *>(client)));
+    auto *client = new uv_tcp_t{};
+    UV_ERR_CHECK(uv_tcp_init(server_socket_state->loop.get(), client));
     client->data = this;
-    if (uv_accept(reinterpret_cast<uv_stream_t *>(server), client) == 0) {
+    if (uv_accept(reinterpret_cast<uv_stream_t *>(server), reinterpret_cast<uv_stream_t *>(client)) == 0) {
         LOG(INFO) << "New connection accepted";
 
-        const auto client_addr = getUvStreamAddress(client);
+        const auto client_addr = getUvStreamAddress(reinterpret_cast<uv_stream_t *>(client));
         const auto inet_internal = ccoip_socket_to_internal(*client_addr);
-        server_socket_state->sockaddr_to_uvstream[inet_internal] = client;
+        server_socket_state->sockaddr_to_uvstream[inet_internal] = reinterpret_cast<uv_stream_t *>(client);
         server_socket_state->uvstream_to_sockaddr[reinterpret_cast<uv_handle_t *>(client)] = inet_internal;
 
         if (!client_addr) [[unlikely]] {
@@ -231,7 +231,7 @@ void tinysockets::ServerSocket::onNewConnection(uv_server_stream_t *server, cons
             uv_close(reinterpret_cast<uv_handle_t *>(client), nullptr);
             return;
         }
-        uv_read_start(client, createBuffer, [](uv_stream_t *stream, const ssize_t n_read, const uv_buf_t *buf) {
+        uv_read_start(reinterpret_cast<uv_stream_t *>(client), createBuffer, [](uv_stream_t *stream, const ssize_t n_read, const uv_buf_t *buf) {
             // invoke onClientRead
             {
                 const auto *this_ptr = static_cast<ServerSocket *>(stream->data);
@@ -318,7 +318,7 @@ void tinysockets::ServerSocket::onClientClose(uv_handle_t *handle) const {
     for (const auto &callback: this_ptr->server_socket_state->close_callbacks) {
         callback(*client_addr);
     }
-    free(handle);
+    delete client;
 }
 
 tinysockets::ServerSocket::~ServerSocket() {
