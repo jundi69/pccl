@@ -21,13 +21,13 @@ void ccoip::M2CPacketNewPeers::serialize(PacketWriteBuffer &buffer) const {
         if (new_peer.inet_address.protocol == inetIPv4) {
             std::array<uint8_t, 4> ipv4_data{};
             for (size_t i = 0; i < 4; i++) {
-                ipv4_data[i] = new_peer.inet_address.address.ipv4.data[i];
+                ipv4_data[i] = new_peer.inet_address.ipv4.data[i];
             }
             buffer.writeFixedArray(ipv4_data);
         } else if (new_peer.inet_address.protocol == inetIPv6) {
             std::array<uint8_t, 16> ipv6_data{};
             for (size_t i = 0; i < 16; i++) {
-                ipv6_data[i] = new_peer.inet_address.address.ipv6.data[i];
+                ipv6_data[i] = new_peer.inet_address.ipv6.data[i];
             }
             buffer.writeFixedArray(ipv6_data);
         }
@@ -42,12 +42,12 @@ void ccoip::M2CPacketNewPeers::deserialize(PacketReadBuffer &buffer) {
         M2CPacketNewPeerInfo peer_info{};
         if (buffer.read<bool>()) {
             peer_info.inet_address.protocol = inetIPv4;
-            for (unsigned char &octet: peer_info.inet_address.address.ipv4.data) {
+            for (unsigned char &octet: peer_info.inet_address.ipv4.data) {
                 octet = buffer.read<uint8_t>();
             }
         } else {
             peer_info.inet_address.protocol = inetIPv6;
-            for (unsigned char &octet: peer_info.inet_address.address.ipv6.data) {
+            for (unsigned char &octet: peer_info.inet_address.ipv6.data) {
                 octet = buffer.read<uint8_t>();
             }
         }

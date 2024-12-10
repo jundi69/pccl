@@ -27,14 +27,13 @@ bool ccoip::CCoIPClientHandler::connect() {
 // the uuid it is transmitted in the hello, we verify the ip against what the master told
 // us the ip of the peer is, and then we mark the connection as rx side open (rx side = their connection to us listening)
 
-
 bool ccoip::CCoIPClientHandler::acceptNewPeers() {
     const C2MPacketAcceptNewPeers new_peers_packet{};
     if (!client_socket.sendPacket(new_peers_packet)) {
         return false;
     }
 
-    auto response = client_socket.receivePacket<M2CPacketNewPeers>();
+    const auto response = client_socket.receivePacket<M2CPacketNewPeers>();
     if (!response) {
         return false;
     }
@@ -82,9 +81,9 @@ void ccoip::CCoIPClientHandler::registerPeer(const ccoip_inet_address_t &address
         .protocol = address.protocol
     };
     if (address.protocol == inetIPv4) {
-        internal_address.address.ipv4 = address.address.ipv4;
+        internal_address.ipv4 = address.ipv4;
     } else if (address.protocol == inetIPv6) {
-        internal_address.address.ipv6 = address.address.ipv6;
+        internal_address.ipv6 = address.ipv6;
     }
     auto &uuids_per_ip = client_state->inet_addrs_to_uuids[internal_address];
     uuids_per_ip.push_back(uuid);

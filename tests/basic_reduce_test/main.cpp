@@ -1,5 +1,6 @@
 #include <pccl.h>
 #include <random>
+#include <thread>
 
 #define PCCL_CHECK(status) { pcclResult_t status_val = status; if (status_val != pcclSuccess) { std::cerr << "Error: " << status_val << std::endl; exit(1); } }
 
@@ -51,17 +52,22 @@ int main() {
         PCCL_CHECK(pcclUpdateTopology(communicator));
         PCCL_CHECK(pcclSynchronizeSharedState(communicator, &shared_state));
 
+        pcclGetAttribute(communicator, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size);
+
+        if (world_size < 2) {
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+            continue;
+        }
+
         if (shared_state.revision >= MAX_STEPS) {
             break;
         }
 
         fill_uniform(gradients, n_peers);
-
         pcclAsyncReduceOp_t async_op{};
-        PCCL_CHECK(
-            pcclAllReduceAsync(gradients, weights, n_peers, pcclFloat, pcclSum, 0, communicator, nullptr, &async_op)
-        );
-        PCCL_CHECK(pcclAwaitAsyncReduce(&async_op));
+        do {
+            pcclAllReduceAsync(gradients, weights, n_peers, pcclFloat, pcclSum, 0, communicator, nullptr, &async_op);
+        } while (pcclAwaitAsyncReduce(&async_op) != pcclSuccess);
 
         shared_state.revision++;
     }

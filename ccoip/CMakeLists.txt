@@ -10,3 +10,5 @@ target_link_libraries(ccoip_private PUBLIC ccoip_public)
 target_include_directories(ccoip_private PRIVATE internal)
 
 target_link_libraries(ccoip_private PRIVATE pccl_log)
+
+add_subdirectory(tests)

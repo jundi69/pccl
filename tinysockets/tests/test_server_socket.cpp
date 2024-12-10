@@ -6,10 +6,8 @@ inline ccoip_socket_address_t create_ipv4_address(uint8_t a, uint8_t b, uint8_t 
     return ccoip_socket_address_t{
         .inet = {
             .protocol = inetIPv4,
-            .address = {
-                .ipv4 = {
-                    .data = {a, b, c, d}
-                }
+            .ipv4 = {
+                .data = {a, b, c, d}
             }
         },
         .port = port
@@ -38,10 +36,8 @@ TEST(TestServerSocket, test_bind_valid_ipv6) {
     const ccoip_socket_address_t listen_address = {
         .inet = {
             .protocol = inetIPv6,
-            .address = {
-                .ipv6 = {
-                    .data = {},
-                },
+            .ipv6 = {
+                .data = {},
             },
         },
         .port = 48148,
@@ -54,10 +50,8 @@ TEST(TestServerSocket, test_bind_invalid_ipv6) {
     constexpr ccoip_socket_address_t listen_address = {
         .inet = {
             .protocol = inetIPv6,
-            .address = {
-                .ipv6 = {
-                    .data = {},
-                },
+            .ipv6 = {
+                .data = {},
             },
         },
         .port = 0,
