@@ -3,5 +3,5 @@
 	url = https://github.com/libuv/libuv
 
 [submodule "third_party/googletest"]
-    path = third_party/googletest
-    url = https://github.com/google/googletest
+	path = third_party/googletest
+	url = https://github.com/google/googletest.git
