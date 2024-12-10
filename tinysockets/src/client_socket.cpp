@@ -136,9 +136,10 @@ bool tinysockets::BlockingIOSocket::isOpen() const {
     if (socket_fd == 0) [[unlikely]] {
         return false;
     }
-    char buf;
 
+#ifndef WIN32
     // Using MSG_PEEK with a small read: if it returns 0, the connection is closed.
+    char buf;
     const ssize_t n = recv(socket_fd, &buf, 1, MSG_PEEK | MSG_DONTWAIT);
     if (n == 0) {
         return false;
@@ -152,6 +153,25 @@ bool tinysockets::BlockingIOSocket::isOpen() const {
         return false;
     }
     // If we got here, there's data available to read, so the socket is still connected
+#else
+    // On Windows, we can still use MSG_PEEK. If recv returns 0, the connection is closed.
+    // If it returns SOCKET_ERROR, we check WSAGetLastError().
+    char buf;
+    int n = recv(socket_fd, &buf, 1, MSG_PEEK);
+
+    if (n == 0) {
+        // The connection was closed gracefully by the peer.
+        return false;
+    }
+    if (n == SOCKET_ERROR) {
+        if (const int err = WSAGetLastError(); err == WSAEWOULDBLOCK) {
+            // No data available now, but the socket is still considered open.
+            return true;
+        }
+        // Other errors (like WSAECONNRESET) mean the socket is effectively closed.
+        return false;
+    }
+#endif
     return true;
 }
 
