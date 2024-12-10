@@ -1,12 +1,11 @@
 function(add_sanitized_gtest target_name test_file)
     add_executable(${target_name} ${test_file})
-    target_link_libraries(${target_name} GTest::gtest_main)
+    target_link_libraries(${target_name} gtest_main)
     add_test(NAME ${target_name} COMMAND ${target_name})
 
     # sanitized test
     if (WIN32)
-        target_link_options(${target_name} PRIVATE /fsanitize=address /fsanitize=leak /fsanitize=undefined)
-        target_compile_options(${target_name} PRIVATE /fsanitize=address /fsanitize=leak /fsanitize=undefined)
+        message(STATUS "Sanitizer is not supported on Windows")
     elseif (APPLE)
         target_link_options(${target_name} PRIVATE -fsanitize=address -fsanitize=undefined)
         target_compile_options(${target_name} PRIVATE -fsanitize=address -fsanitize=undefined)
