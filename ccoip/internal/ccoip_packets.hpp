@@ -6,7 +6,6 @@
 #include <ccoip_types.hpp>
 
 namespace ccoip {
-
     // Definitions:
     // C2M: Client to Master
     // M2C: Master to Client
@@ -14,10 +13,17 @@ namespace ccoip {
     // P2M: Peer to Master
 
     // C2M packets:
-#define C2M_PACKET_ACCEPT_NEW_PEERS_ID 1
+#define C2M_PACKET_REQUEST_SESSION_JOIN 1
+#define C2M_PACKET_ACCEPT_NEW_PEERS_ID 2
 
     // M2C packets:
 #define C2M_PACKET_NEW_PEERS_ID 1
+
+    // C2MPacketRequestSessionJoin
+    class C2MPacketRequestSessionJoin final : public EmptyPacket {
+    public:
+        static packetId_t packet_id;
+    };
 
     // C2MPacketAcceptNewPeers
     class C2MPacketAcceptNewPeers final : public EmptyPacket {

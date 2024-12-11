@@ -14,7 +14,16 @@ ccoip::CCoIPClientHandler::CCoIPClientHandler(const ccoip_socket_address_t &addr
 }
 
 bool ccoip::CCoIPClientHandler::connect() {
-    return client_socket.establishConnection();
+    if (!client_socket.establishConnection()) [[unlikely]] {
+        return false;
+    }
+
+    // send join request packet to master
+    if (!client_socket.sendPacket<C2MPacketRequestSessionJoin>(C2MPacketRequestSessionJoin{})) [[unlikely]] {
+        return false;
+    }
+
+    return true;
 }
 
 // establishP2PConnection:

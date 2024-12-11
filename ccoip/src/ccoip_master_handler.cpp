@@ -1,32 +1,84 @@
 #include "ccoip_master_handler.hpp"
 
-#include "ccoip_master.hpp"
+#include <ccoip_inet_utils.hpp>
+#include <ccoip_packets.hpp>
+#include <tinysockets.hpp>
 
-ccoip::CCoIPMasterHandler::CCoIPMasterHandler(const ccoip_socket_address_t &listen_address): listen_address(listen_address), master(nullptr) {
+
+ccoip::CCoIPMasterHandler::CCoIPMasterHandler(const ccoip_socket_address_t &listen_address) : server_socket(listen_address) {
+    server_socket.addReadCallback([this](const ccoip_socket_address_t &client_address, const std::span<uint8_t> &data) {
+        onClientRead(client_address, data);
+    });
 }
 
-bool ccoip::CCoIPMasterHandler::launch() {
-    if (master != nullptr) {
+bool ccoip::CCoIPMasterHandler::run() {
+    if (!server_socket.bind()) {
         return false;
     }
-    master = new CCoIPMaster(listen_address);
-    return master->run();
-}
-
-bool ccoip::CCoIPMasterHandler::interrupt() const {
-    if (master == nullptr) {
+    if (!server_socket.listen()) {
         return false;
     }
-    return master->interrupt();
-}
-
-bool ccoip::CCoIPMasterHandler::join() const {
-    if (master == nullptr) {
+    if (!server_socket.runAsync()) {
         return false;
     }
-    return master->join();
+    running = true;
+    return true;
 }
 
-ccoip::CCoIPMasterHandler::~CCoIPMasterHandler() {
-    delete master;
+bool ccoip::CCoIPMasterHandler::interrupt() {
+    if (interrupted) {
+        return false;
+    }
+    if (!server_socket.interrupt()) {
+        return false;
+    }
+    interrupted = true;
+    return true;
 }
+
+bool ccoip::CCoIPMasterHandler::join() {
+    if (!running) {
+        return false;
+    }
+    server_socket.join();
+    return true;
+}
+
+bool ccoip::CCoIPMasterHandler::kickClient(const ccoip_socket_address_t &client_address) const {
+    LOG(DEBUG) << "Kicking client " << CCOIP_SOCKET_ADDR_TO_STRING(client_address);
+    if (!server_socket.closeClientConnection(client_address)) [[unlikely]] {
+        return false;
+    }
+    return true;
+}
+
+void ccoip::CCoIPMasterHandler::onClientRead(const ccoip_socket_address_t &client_address, const std::span<uint8_t> data) {
+    LOG(INFO) << "Received " << data.size() << " bytes from " << CCOIP_SOCKET_ADDR_TO_STRING(client_address);
+    PacketReadBuffer buffer = PacketReadBuffer::wrap(data);
+    if (const auto packet_type = buffer.read<uint16_t>();
+        packet_type == C2MPacketRequestSessionJoin::packet_id) {
+        C2MPacketRequestSessionJoin packet{};
+        packet.deserialize(buffer);
+        handleRequestSessionJoin(client_address, packet);
+    } else if (packet_type == C2MPacketAcceptNewPeers::packet_id) {
+        C2MPacketAcceptNewPeers packet{};
+        packet.deserialize(buffer);
+        handleAcceptNewPeers(client_address, packet);
+    } else if (packet_type == M2CPacketNewPeers::packet_id) {
+        M2CPacketNewPeers packet{};
+        packet.deserialize(buffer);
+        LOG(DEBUG) << "Received M2CPacketNewPeers from " << CCOIP_SOCKET_ADDR_TO_STRING(client_address);
+    }
+}
+
+void ccoip::CCoIPMasterHandler::handleRequestSessionJoin(const ccoip_socket_address_t &client_address,
+                                                  const C2MPacketRequestSessionJoin &packet) {
+    LOG(DEBUG) << "Received C2MPacketRequestSessionJoin from " << CCOIP_SOCKET_ADDR_TO_STRING(client_address);
+}
+
+void ccoip::CCoIPMasterHandler::handleAcceptNewPeers(const ccoip_socket_address_t &client_address,
+                                              const C2MPacketAcceptNewPeers &packet) {
+    LOG(DEBUG) << "Received C2MPacketAcceptNewPeers from " << CCOIP_SOCKET_ADDR_TO_STRING(client_address);
+}
+
+ccoip::CCoIPMasterHandler::~CCoIPMasterHandler() = default;

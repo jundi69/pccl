@@ -2,6 +2,10 @@
 
 size_t ccoip::EmptyPacket::serialized_size = 0;
 
+// C2MPacketRequestSessionJoin
+ccoip::packetId_t ccoip::C2MPacketRequestSessionJoin::packet_id = C2M_PACKET_REQUEST_SESSION_JOIN;
+
+// C2MPacketAcceptNewPeers
 ccoip::packetId_t ccoip::C2MPacketAcceptNewPeers::packet_id = C2M_PACKET_ACCEPT_NEW_PEERS_ID;
 
 // EmptyPacket

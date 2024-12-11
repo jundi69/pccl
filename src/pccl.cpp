@@ -1,7 +1,7 @@
 #include "pccl.h"
 #include "pccl_internal.h"
 
-#include <ccoip_master_handler.hpp>
+#include <ccoip_master.hpp>
 
 static constinit bool pccl_initialized = false;
 
@@ -61,10 +61,10 @@ pcclResult_t pcclSaveReducePlan(const pcclComm_t *communicator, const char *file
 pcclResult_t pcclDestroyCommunicator(pcclComm_t *communicator) {
     PCCL_VALIDATE_INITIALIZED();
     PCCL_VALIDATE(communicator != nullptr, pcclInvalidArgument);
-    if (!communicator->ccoip_handler->interrupt()) [[unlikely]] {
+    if (!communicator->ccoip_client->interrupt()) [[unlikely]] {
         return pcclInvalidUsage;
     }
-    if (!communicator->ccoip_handler->join()) [[unlikely]] {
+    if (!communicator->ccoip_client->join()) [[unlikely]] {
         return pcclInvalidUsage;
     }
     delete communicator;
@@ -74,9 +74,9 @@ pcclResult_t pcclDestroyCommunicator(pcclComm_t *communicator) {
 pcclResult_t pcclConnectMaster(pcclComm_t *communicator, ccoip_socket_address_t socket_address) {
     PCCL_VALIDATE_INITIALIZED();
     PCCL_VALIDATE(communicator != nullptr, pcclInvalidArgument);
-    PCCL_VALIDATE(communicator->ccoip_handler == nullptr, pcclInvalidUsage);
-    communicator->ccoip_handler = std::make_unique<ccoip::CCoIPClientHandler>(socket_address);
-    if (!communicator->ccoip_handler->connect()) [[unlikely]] {
+    PCCL_VALIDATE(communicator->ccoip_client == nullptr, pcclInvalidUsage);
+    communicator->ccoip_client = std::make_unique<ccoip::CCoIPClient>(socket_address);
+    if (!communicator->ccoip_client->connect()) [[unlikely]] {
         return pcclInvalidUsage;
     }
     return pcclSuccess;
@@ -87,12 +87,12 @@ pcclResult_t pcclUpdateTopology(pcclComm_t *communicator) {
     PCCL_VALIDATE(communicator != nullptr, pcclInvalidArgument);
 
     // accept new peers; this will block until we have a valid connection to each peer
-    if (!communicator->ccoip_handler->acceptNewPeers()) [[unlikely]] {
+    if (!communicator->ccoip_client->acceptNewPeers()) [[unlikely]] {
         return pcclInvalidUsage;
     }
 
     // update the topology
-    if (!communicator->ccoip_handler->updateTopology()) [[unlikely]] {
+    if (!communicator->ccoip_client->updateTopology()) [[unlikely]] {
         return pcclInvalidUsage;
     }
 
@@ -130,14 +130,14 @@ pcclResult_t pcclPollSharedState(const pcclComm_t *comm, pcclSharedState_t *shar
 }
 
 struct pcclMasterInstanceState_t {
-    std::unique_ptr<ccoip::CCoIPMasterHandler> master_handler;
+    std::unique_ptr<ccoip::CCoIPMaster> master_handler;
 };
 
 pcclResult_t pcclCreateMaster(ccoip_socket_address_t listen_address, pcclMasterInstance_t *p_master_handle_out) {
     PCCL_VALIDATE(p_master_handle_out != nullptr, pcclInvalidArgument);
     *p_master_handle_out = {
         .state = new pcclMasterInstanceState_t{
-            .master_handler = std::make_unique<ccoip::CCoIPMasterHandler>(listen_address),
+            .master_handler = std::make_unique<ccoip::CCoIPMaster>(listen_address),
         }
     };
     return pcclSuccess;

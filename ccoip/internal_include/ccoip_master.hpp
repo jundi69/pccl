@@ -3,19 +3,19 @@
 #include <ccoip_inet.h>
 
 namespace ccoip {
-    struct CCoIPMaster;
+    class CCoIPMasterHandler;
 
-    class CCoIPMasterHandler {
+    class CCoIPMaster {
     private:
         ccoip_socket_address_t listen_address;
-        CCoIPMaster *master;
+        CCoIPMasterHandler *master;
 
     public:
-        explicit CCoIPMasterHandler(const ccoip_socket_address_t &listen_address);
-        CCoIPMasterHandler(const CCoIPMasterHandler &other) = delete;
-        CCoIPMasterHandler(CCoIPMasterHandler &&other) = delete;
-        CCoIPMasterHandler &operator=(const CCoIPMasterHandler &other) = delete;
-        CCoIPMasterHandler &operator=(CCoIPMasterHandler &&other) = delete;
+        explicit CCoIPMaster(const ccoip_socket_address_t &listen_address);
+        CCoIPMaster(const CCoIPMaster &other) = delete;
+        CCoIPMaster(CCoIPMaster &&other) = delete;
+        CCoIPMaster &operator=(const CCoIPMaster &other) = delete;
+        CCoIPMaster &operator=(CCoIPMaster &&other) = delete;
 
         /// returns false if the handler is already running or has been interrupted
         [[nodiscard]] bool launch();
@@ -27,6 +27,6 @@ namespace ccoip {
         /// blocks until the handler has terminated
         [[nodiscard]] bool join() const;
 
-        ~CCoIPMasterHandler();
+        ~CCoIPMaster();
     };
 };
