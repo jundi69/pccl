@@ -108,8 +108,9 @@ pcclResult_t pcclAllReduce(const void *sendbuff, void *recvbuff, size_t count, p
 }
 
 pcclResult_t pcclAllReduceAsync(const void *sendbuff, void *recvbuff, size_t count, pcclDataType_t datatype,
-    pcclRedOp_t op, uint64_t tag, const pcclComm_t *communicator, pcclReduceInfo_t *reduce_info_out,
-    pcclAsyncReduceOp_t *reduce_handle_out) {
+                                pcclRedOp_t op, uint64_t tag, const pcclComm_t *communicator,
+                                pcclReduceInfo_t *reduce_info_out,
+                                pcclAsyncReduceOp_t *reduce_handle_out) {
     PCCL_VALIDATE_INITIALIZED();
     PCCL_VALIDATE(communicator != nullptr, pcclInvalidArgument);
     PCCL_VALIDATE(reduce_handle_out != nullptr, pcclInvalidArgument);
@@ -133,43 +134,43 @@ struct pcclMasterInstanceState_t {
     std::unique_ptr<ccoip::CCoIPMaster> master_handler;
 };
 
-pcclResult_t pcclCreateMaster(ccoip_socket_address_t listen_address, pcclMasterInstance_t *p_master_handle_out) {
+pcclResult_t pcclCreateMaster(ccoip_socket_address_t listen_address, pcclMasterInstance_t **p_master_handle_out) {
     PCCL_VALIDATE(p_master_handle_out != nullptr, pcclInvalidArgument);
-    *p_master_handle_out = {
-        .state = new pcclMasterInstanceState_t{
-            .master_handler = std::make_unique<ccoip::CCoIPMaster>(listen_address),
-        }
+    *p_master_handle_out = new pcclMasterInstance_t{
+        .master_handler = std::make_unique<ccoip::CCoIPMaster>(listen_address),
     };
     return pcclSuccess;
 }
 
-pcclResult_t pcclRunMaster(const pcclMasterInstance_t master_instance) {
-    PCCL_VALIDATE(master_instance.state != nullptr, pcclInvalidArgument);
-    if (!master_instance.state->master_handler->launch()) [[unlikely]] {
+// ReSharper disable once CppParameterMayBeConstPtrOrRef
+pcclResult_t pcclRunMaster(pcclMasterInstance_t *master_instance) {
+    PCCL_VALIDATE(master_instance->master_handler != nullptr, pcclInvalidArgument);
+    if (!master_instance->master_handler->launch()) [[unlikely]] {
         return pcclInvalidUsage;
     }
     return pcclSuccess;
 }
 
-pcclResult_t pcclInterruptMaster(const pcclMasterInstance_t master_instance) {
-    PCCL_VALIDATE(master_instance.state != nullptr, pcclInvalidArgument);
-    if (!master_instance.state->master_handler->interrupt()) [[unlikely]] {
+// ReSharper disable once CppParameterMayBeConstPtrOrRef
+pcclResult_t pcclInterruptMaster(pcclMasterInstance_t *master_instance) {
+    PCCL_VALIDATE(master_instance->master_handler != nullptr, pcclInvalidArgument);
+    if (!master_instance->master_handler->interrupt()) [[unlikely]] {
         return pcclInvalidUsage;
     }
     return pcclSuccess;
 }
 
-pcclResult_t pcclMasterAwaitTermination(pcclMasterInstance_t master_handle) {
-    PCCL_VALIDATE(master_handle.state != nullptr, pcclInvalidArgument);
-    if (!master_handle.state->master_handler->join()) [[unlikely]] {
+// ReSharper disable once CppParameterMayBeConstPtrOrRef
+pcclResult_t pcclMasterAwaitTermination(pcclMasterInstance_t *master_instance) {
+    PCCL_VALIDATE(master_instance->master_handler != nullptr, pcclInvalidArgument);
+    if (!master_instance->master_handler->join()) [[unlikely]] {
         return pcclInvalidUsage;
     }
     return pcclSuccess;
 }
 
-pcclResult_t pcclDestroyMaster(pcclMasterInstance_t master_instance) {
-    PCCL_VALIDATE(master_instance.state != nullptr, pcclInvalidArgument);
-    delete master_instance.state;
-    master_instance.state = nullptr;
+pcclResult_t pcclDestroyMaster(pcclMasterInstance_t *master_instance) {
+    PCCL_VALIDATE(master_instance->master_handler != nullptr, pcclInvalidArgument);
+    master_instance->master_handler = nullptr;
     return pcclSuccess;
 }
