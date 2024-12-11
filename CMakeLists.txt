@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.28)
 project(pccl)
 
 set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 # add third party libraries
 add_subdirectory(third_party)
@@ -17,7 +18,7 @@ add_subdirectory(ccoip)
 add_subdirectory(ccoip_master)
 add_subdirectory(tinysockets)
 
-add_library(pccl STATIC src/pccl.cpp)
+add_library(pccl SHARED src/pccl.cpp)
 if (NOT WIN32)
     target_compile_options(pccl PRIVATE -Wall -Wextra -Werror -Wpedantic -Wno-unused-parameter)
 endif()

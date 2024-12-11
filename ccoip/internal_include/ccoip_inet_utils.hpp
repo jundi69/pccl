@@ -12,6 +12,15 @@
 #include <arpa/inet.h>
 #endif
 
+inline ccoip_ipv4_address_t from_octets(const uint8_t octet1, const uint8_t octet2, const uint8_t octet3,
+                                        const uint8_t octet4) {
+    ccoip_ipv4_address_t address;
+    address.data[0] = octet1;
+    address.data[1] = octet2;
+    address.data[2] = octet3;
+    address.data[3] = octet4;
+    return address;
+}
 
 [[nodiscard]] inline std::string CCOIP_SOCKET_ADDR_TO_STRING(const ccoip_socket_address_t &addr) {
     std::ostringstream oss;
