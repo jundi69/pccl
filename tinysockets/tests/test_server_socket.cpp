@@ -1331,18 +1331,7 @@ TEST(TestServerSocket, test_client_send_exact_max_packet_size) {
 }
 
 
-int main(int argc, char** argv) {
+int main(int argc, char **argv) {
     testing::InitGoogleTest(&argc, argv);
-    int run_count = 0;
-    while (true) {
-        ++run_count;
-        std::cout << "Running test iteration: " << run_count << std::endl;
-
-        // Run all tests
-        if (RUN_ALL_TESTS() != 0) {
-            std::cerr << "Test failed on iteration: " << run_count << std::endl;
-            break;
-        }
-    }
-    return 0;
+    return RUN_ALL_TESTS();
 }
