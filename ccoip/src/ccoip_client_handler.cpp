@@ -23,6 +23,15 @@ bool ccoip::CCoIPClientHandler::connect() {
         return false;
     }
 
+    // receive join response packet from master
+    const auto response = client_socket.receivePacket<M2CPacketJoinResponse>();
+    if (!response) {
+        return false;
+    }
+    if (!response->accepted) {
+        LOG(ERR) << "Master rejected join request";
+        return false;
+    }
     return true;
 }
 

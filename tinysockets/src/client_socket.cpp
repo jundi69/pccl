@@ -207,33 +207,26 @@ bool tinysockets::BlockingIOSocket::sendLtvPacket(const ccoip::packetId_t packet
     return true;
 }
 
-ccoip::packetId_t tinysockets::BlockingIOSocket::receivePacketType() const {
-    ccoip::packetId_t packet_id;
-    if (const ssize_t i = recvvp(socket_fd, &packet_id, sizeof(packet_id), 0); i == -1) [[
-        unlikely]] {
-        const std::string error_message = std::strerror(errno);
-        LOG(INFO) << "Failed to receive packet type with error: " << error_message;
-        return 0;
-    }
-    return packet_id;
-}
-
 size_t tinysockets::BlockingIOSocket::receivePacketLength() const {
-    size_t length;
-    if (const ssize_t i = recvvp(socket_fd, &length, sizeof(length), 0); i == -1) [[unlikely]] {
+    uint64_t length;
+    if (const ssize_t i = recvvp(socket_fd, &length, sizeof(length), 0); i == -1) {
         const std::string error_message = std::strerror(errno);
         LOG(INFO) << "Failed to receive packet length with error: " << error_message;
         return 0;
     }
-    return length;
+    return ntohll(length);
 }
 
 bool tinysockets::BlockingIOSocket::receivePacketData(std::span<std::uint8_t> &dst) const {
-    if (const ssize_t i = recvvp(socket_fd, dst.data(), dst.size_bytes(), 0); i == -1) [[
-        unlikely]] {
-        const std::string error_message = std::strerror(errno);
-        LOG(INFO) << "Failed to receive packet data with error: " << error_message;
-        return false;
-    }
+    size_t n_received = 0;
+    do {
+        const ssize_t i = recvvp(socket_fd, dst.data() + n_received, dst.size_bytes() - n_received, 0);
+        if (i == -1) {
+            const std::string error_message = std::strerror(errno);
+            LOG(INFO) << "Failed to receive packet data with error: " << error_message;
+            return false;
+        }
+        n_received += i;
+    } while (n_received < dst.size_bytes());
     return true;
 }

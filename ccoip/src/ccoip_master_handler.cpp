@@ -3,9 +3,11 @@
 #include <ccoip_inet_utils.hpp>
 #include <ccoip_packets.hpp>
 #include <tinysockets.hpp>
+#include <uuid_utils.hpp>
 
 
-ccoip::CCoIPMasterHandler::CCoIPMasterHandler(const ccoip_socket_address_t &listen_address) : server_socket(listen_address) {
+ccoip::CCoIPMasterHandler::CCoIPMasterHandler(const ccoip_socket_address_t &listen_address) : server_socket(
+    listen_address) {
     server_socket.addReadCallback([this](const ccoip_socket_address_t &client_address, const std::span<uint8_t> &data) {
         onClientRead(client_address, data);
     });
@@ -52,7 +54,8 @@ bool ccoip::CCoIPMasterHandler::kickClient(const ccoip_socket_address_t &client_
     return true;
 }
 
-void ccoip::CCoIPMasterHandler::onClientRead(const ccoip_socket_address_t &client_address, const std::span<uint8_t> data) {
+void ccoip::CCoIPMasterHandler::onClientRead(const ccoip_socket_address_t &client_address,
+                                             const std::span<uint8_t> data) {
     LOG(INFO) << "Received " << data.size() << " bytes from " << CCOIP_SOCKET_ADDR_TO_STRING(client_address);
     PacketReadBuffer buffer = PacketReadBuffer::wrap(data);
     if (const auto packet_type = buffer.read<uint16_t>();
@@ -72,16 +75,25 @@ void ccoip::CCoIPMasterHandler::onClientRead(const ccoip_socket_address_t &clien
 }
 
 void ccoip::CCoIPMasterHandler::handleRequestSessionJoin(const ccoip_socket_address_t &client_address,
-                                                  const C2MPacketRequestSessionJoin &) {
+                                                         const C2MPacketRequestSessionJoin &) {
     LOG(DEBUG) << "Received C2MPacketRequestSessionJoin from " << CCOIP_SOCKET_ADDR_TO_STRING(client_address);
 
     // generate uuid for new peer
+    ccoip_uuid new_uuid{};
+    uuid_utils::generate_uuid(new_uuid);
 
+    // send response to new peer
+    M2CPacketJoinResponse response{};
+    response.accepted = true;
+    response.assigned_uuid.data = new_uuid;
 
+    if (!server_socket.sendPacket(client_address, response)) [[unlikely]] {
+        LOG(ERR) << "Failed to send M2CPacketJoinResponse to " << CCOIP_SOCKET_ADDR_TO_STRING(client_address);
+    }
 }
 
 void ccoip::CCoIPMasterHandler::handleAcceptNewPeers(const ccoip_socket_address_t &client_address,
-                                              const C2MPacketAcceptNewPeers &) {
+                                                     const C2MPacketAcceptNewPeers &) {
     LOG(DEBUG) << "Received C2MPacketAcceptNewPeers from " << CCOIP_SOCKET_ADDR_TO_STRING(client_address);
 }
 
