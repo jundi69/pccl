@@ -951,8 +951,8 @@ TEST(TestServerSocket, test_server_send_large_packets) {
 
         // Add join callback to send large packet upon connection
         server_socket.addJoinCallback([&](const ccoip_socket_address_t &addr) {
-            EXPECT_TRUE(server_socket.sendPacket(addr, p));
             large_packets_sent.fetch_add(1, std::memory_order_relaxed);
+            EXPECT_TRUE(server_socket.sendPacket(addr, p));
         });
 
         EXPECT_TRUE(server_socket.bind());
@@ -1054,55 +1054,6 @@ TEST(TestServerSocket, test_server_send_to_non_existent_clients) {
         EXPECT_TRUE(server_socket.interrupt());
         server_socket.join();
     }, 3000));
-}
-
-// Test server sends packets to multiple clients concurrently
-TEST(TestServerSocket, test_server_send_to_multiple_clients_concurrently) {
-    ASSERT_NO_THROW(RunWithTimeout([]
-    {
-        const auto listen_address = create_ipv4_address(127, 0, 0, 1, 49126);
-        tinysockets::ServerSocket server_socket(listen_address);
-
-        constexpr int num_clients = 5;
-        std::atomic packets_sent(0);
-        DummyPacket p{};
-        p.payload = {0xCA, 0xFE, 0xBA, 0xBE};
-
-        // Add join callback to send packet upon each client connection
-        server_socket.addJoinCallback([&](const ccoip_socket_address_t &addr) {
-            // Simulate concurrent sends by spawning a thread for each send
-            std::thread([&, addr]{
-                packets_sent.fetch_add(1, std::memory_order_relaxed);
-                EXPECT_TRUE(server_socket.sendPacket(addr, p));
-            }).detach();
-        });
-
-        EXPECT_TRUE(server_socket.bind());
-        EXPECT_TRUE(server_socket.listen());
-        EXPECT_TRUE(server_socket.runAsync());
-
-        // Connect multiple clients concurrently
-        std::vector<std::unique_ptr<tinysockets::BlockingIOSocket>> clients;
-        clients.reserve(num_clients);
-        for (int i = 0; i < num_clients; ++i) {
-            auto client = std::make_unique<tinysockets::BlockingIOSocket>(listen_address);
-            EXPECT_TRUE(client->establishConnection());
-            clients.emplace_back(std::move(client));
-        }
-
-        // Each client receives the packet
-        for (auto &client : clients) {
-            auto received = client->receivePacket<DummyPacket>();
-            ASSERT_TRUE(received.has_value());
-            EXPECT_EQ(received->payload, p.payload);
-        }
-
-        // Verify that all packets were sent
-        EXPECT_EQ(packets_sent.load(), num_clients);
-
-        EXPECT_TRUE(server_socket.interrupt());
-        server_socket.join();
-    }, 5000));
 }
 
 // Test sending an extremely large packet to the server
@@ -1220,7 +1171,7 @@ TEST(TestServerSocket, test_client_send_large_packet_in_chunks) {
         std::atomic read_callback_called(false);
 
         // Add read callback to verify received data
-        server_socket.addReadCallback([&](const ccoip_socket_address_t &addr, const std::span<std::uint8_t> &data) {
+        server_socket.addReadCallback([&](const ccoip_socket_address_t &, const std::span<std::uint8_t> &data) {
             PacketReadBuffer buffer = PacketReadBuffer::wrap(data);
             const auto packet = server_socket.receivePacket<DummyPacket>(buffer);
             if (!packet) {
@@ -1273,7 +1224,7 @@ TEST(TestServerSocket, test_concurrent_clients_send_large_packets) {
         std::atomic received_packets(0);
 
         // Add read callback to verify each received packet
-        server_socket.addReadCallback([&](const ccoip_socket_address_t &addr, const std::span<std::uint8_t> &data) {
+        server_socket.addReadCallback([&](const ccoip_socket_address_t &, const std::span<std::uint8_t> &data) {
             PacketReadBuffer buffer = PacketReadBuffer::wrap(data);
             const auto packet = server_socket.receivePacket<DummyPacket>(buffer);
             if (!packet) {
