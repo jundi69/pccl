@@ -75,6 +75,14 @@ class ReduceInfo:
         self.tx_bytes = tx_bytes
         self.rx_bytes = rx_bytes
 
+class AsyncReduceHandle:
+    def __init__(self, handle: ffi.CData):
+        self._handle = handle
+
+    def await_reduce(self):
+        """Awaits the completion of an async reduce operation. Blocks until the operation is complete."""
+        PCCLError.check(C.pcclAwaitAsyncReduce(self._handle))
+
 class PCCLError(Exception):
     """PCCL specific exception."""
     def __init__(self, result: Result):
@@ -164,6 +172,24 @@ class Communicator:
         PCCLError.check(C.pcclAllReduce(sendbuff, recvbuff, numel, dtype.value, op.value, tag, self._comm[0], info))
         return ReduceInfo(info.world_size, info.tx_bytes, info.rx_bytes)
 
+
+    def all_reduce_async(self, send: Tensor, recv: Tensor, dtype: DataType, op: ReduceOp, tag: int) -> (ReduceInfo, AsyncReduceHandle):
+        """Performs an all reduce operation on a communicator. Async version of all_reduce."""
+        assert send.is_contiguous(), 'Input tensor must be contiguous'
+        assert recv.is_contiguous(), 'Output tensor must be contiguous'
+        assert send.device == recv.device, 'Input and output tensors must be on the same device'
+        assert send.dtype == recv.dtype, 'Input and output tensors must have the same dtype'
+        assert send.dtype == dtype.to_torch_dtype(), 'Input and output tensors must have the same dtype'
+        assert send.numel() == recv.numel(), 'Input and output tensors must have the same number of elements'
+        assert send.device.type == 'cpu', 'Only CPU tensors are supported'
+        sendbuff: ffi.CData = ffi.cast('void*', send.data_ptr())
+        recvbuff: ffi.CData = ffi.cast('void*', recv.data_ptr())
+        numel: int = send.numel()
+        info: ffi.CData = ffi.new('pcclReduceInfo_t*')
+        handle: ffi.CData = ffi.new('pcclAsyncReduceOp_t*')
+        PCCLError.check(C.pcclAllReduceAsync(sendbuff, recvbuff, numel, dtype.value, op.value, tag, self._comm[0], info, handle))
+        return ReduceInfo(info.world_size, info.tx_bytes, info.rx_bytes), AsyncReduceHandle(handle)
+
     def update_topology(self):
         """
         Update the topology of a communicator if required.
@@ -205,9 +231,11 @@ class MasterNode:
         PCCLError.check(C.pcclDestroyMaster(self._master[0]))
 
 if __name__ == '__main__':
-    c = Communicator()
-    print(c.get_attribute(Attribute.CURRENT_WORLD_SIZE))
     m = MasterNode(listen_address='127.0.0.1:8080')
     m.run()
+
+    c = Communicator()
+    c.connect_master('127.0.0.1:8080')
+
     m.interrupt()
     m.await_termination()
