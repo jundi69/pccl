@@ -1,14 +1,5 @@
 #include <ccoip_utils.hpp>
 #include <pccl_log.hpp>
-#ifdef WIN32
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#else
-#include <unistd.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <sys/socket.h>
-#endif
 
 #include "tinysockets.hpp"
 #include "win_sock_bridge.h"
@@ -213,7 +204,7 @@ bool tinysockets::BlockingIOSocket::sendLtvPacket(const ccoip::packetId_t packet
     while (bytes_sent < tlv_buffer.size()) {
         const size_t bytes_remaining = tlv_buffer.size() - bytes_sent;
         const size_t to_send = std::min(bytes_remaining, static_cast<size_t>(max_buffer_size));
-        const size_t bytes_sent_now = send(socket_fd, tlv_buffer.data() + bytes_sent,
+        const size_t bytes_sent_now = sendvp(socket_fd, tlv_buffer.data() + bytes_sent,
                                            to_send, MSG_NOSIGNAL);
         if (bytes_sent_now == -1) {
             const std::string error_message = std::strerror(errno);
@@ -224,11 +215,6 @@ bool tinysockets::BlockingIOSocket::sendLtvPacket(const ccoip::packetId_t packet
     }
     return true;
 }
-
-#ifndef ntohll
-#include <endian.h>    // __BYTE_ORDER __LITTLE_ENDIAN
-#include <byteswap.h>  // bswap_64()
-#endif
 
 size_t tinysockets::BlockingIOSocket::receivePacketLength() const {
     uint64_t length;

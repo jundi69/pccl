@@ -2,10 +2,35 @@
 #define SOCKET_UTILS_H
 
 #ifdef WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#undef min
+#else
+#include <unistd.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <sys/socket.h>
+#endif
+
+#ifdef WIN32
+
+#define MSG_NOSIGNAL 0
+
+inline uint64_t net_u64_to_host(const uint64_t net_long)
+{
+    return ntohll(net_long);
+}
+
 inline int setsockoptvp(const int socket_fd, const int level, const int optname, const void *optval,
                         const socklen_t optlen) {
     return setsockopt(socket_fd, level, optname, static_cast<const char *>(optval), optlen);
 }
+
+inline int getsockoptvp(const int socket_fd, const int level, const int optname, void *optval, socklen_t *optlen)
+{
+    return getsockopt(socket_fd, level, optname, static_cast<char *>(optval), optlen);
+}
+
 inline ssize_t recvvp(const int socket_fd, void *buffer, const size_t length, const int flags) {
     return recv(socket_fd, static_cast<char *>(buffer), static_cast<int>(length), flags);
 }

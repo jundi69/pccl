@@ -1,10 +1,10 @@
 #include <ccoip_inet_utils.hpp>
 #include <ccoip_types.hpp>
 
+#include <uv.h>
 #include "tinysockets.hpp"
 
 #include <iostream>
-#include <uv.h>
 
 #include "ccoip_utils.hpp"
 
