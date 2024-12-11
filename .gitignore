@@ -1,4 +1,7 @@
 build/
 .idea/
 bin/
-python/pccl/__pycache__/
+python/framework/pccl/__pycache__/
+python/framework/build/
+python/framework/dist/
+python/framework/pccl.egg-info/

@@ -225,13 +225,3 @@ class MasterNode:
     def __del__(self):
         PCCLError.check(C.pcclMasterAwaitTermination(self._master[0]))
         PCCLError.check(C.pcclDestroyMaster(self._master[0]))
-
-if __name__ == '__main__':
-    m = MasterNode(listen_address='127.0.0.1:8080')
-    m.run()
-
-    c = Communicator()
-    c.connect_master('127.0.0.1:8080')
-
-    m.interrupt()
-    PCCLError.check(C.pcclMasterAwaitTermination(m._master[0]))
