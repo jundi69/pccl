@@ -15,6 +15,24 @@ inline ssize_t sendvp(const int socket_fd, const void *buffer, const size_t leng
 #else
 #include <unistd.h>
 
+#ifndef ntohll
+#include <endian.h>    // __BYTE_ORDER __LITTLE_ENDIAN
+#include <byteswap.h>  // bswap_64()
+#endif
+
+inline uint64_t net_u64_to_host(uint64_t net_long)
+{
+#ifdef ntohll
+    return ntohll(net_long);
+#else
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+    return bswap_64(net_long);  // Compiler builtin GCC/Clang
+#else
+    return net_long;
+#endif
+#endif
+}
+
 inline void closesocket(const int socket_fd) {
     close(socket_fd);
 }
@@ -24,6 +42,11 @@ inline int setsockoptvp(const int socket_fd, const int level, const int optname,
     return setsockopt(socket_fd, level, optname, optval, optlen);
 }
 
+inline int getsockoptvp(const int socket_fd, const int level, const int optname, void *optval, socklen_t *optlen)
+{
+    return getsockopt(socket_fd, level, optname, optval, optlen);
+}
+
 inline ssize_t recvvp(const int socket_fd, void *buffer, const size_t length, const int flags) {
     return recv(socket_fd, buffer, length, flags);
 }
@@ -31,5 +54,7 @@ inline ssize_t recvvp(const int socket_fd, void *buffer, const size_t length, co
 inline ssize_t sendvp(const int socket_fd, const void *buffer, const size_t length, const int flags) {
     return send(socket_fd, buffer, length, flags);
 }
+
+
 #endif
 #endif //SOCKET_UTILS_H

@@ -16,7 +16,7 @@
 
 #include <cstring>
 
-static void configure_socket_fd(const int socket_fd) {
+static bool configure_socket_fd(const int socket_fd) {
     constexpr int opt = 1;
 
     // enable TCP_NODELAY
@@ -24,7 +24,7 @@ static void configure_socket_fd(const int socket_fd) {
         unlikely]] {
         LOG(ERR) << "Failed to set TCP_NODELAY option on server socket";
         closesocket(socket_fd);
-        exit(EXIT_FAILURE);
+        return false;
     }
 
     // set send and recvvp buf
@@ -33,13 +33,13 @@ static void configure_socket_fd(const int socket_fd) {
                      sizeof(buffer_size)) < 0) [[unlikely]] {
         LOG(ERR) << "Failed to set SO_SNDBUF option on server socket";
         closesocket(socket_fd);
-        exit(EXIT_FAILURE);
+        return false;
     }
     if (setsockoptvp(socket_fd, SOL_SOCKET, SO_RCVBUF, &buffer_size,
                      sizeof(buffer_size)) < 0) [[unlikely]] {
         LOG(ERR) << "Failed to set SO_RCVBUF option on server socket";
         closesocket(socket_fd);
-        exit(EXIT_FAILURE);
+        return false;
     }
 
     // enable SO_REUSEADDR if available
@@ -48,7 +48,7 @@ static void configure_socket_fd(const int socket_fd) {
         unlikely]] {
         LOG(ERR) << "Failed to set SO_REUSEADDR option on server socket";
         closesocket(socket_fd);
-        exit(EXIT_FAILURE);
+        return false;
     }
 #endif
 
@@ -61,6 +61,7 @@ static void configure_socket_fd(const int socket_fd) {
 #ifdef TCP_QUICKACK
     setsockoptvp(socket_fd, IPPROTO_TCP, TCP_QUICKACK, &opt, sizeof(opt));
 #endif
+    return true;
 }
 
 
@@ -77,7 +78,9 @@ bool tinysockets::BlockingIOSocket::establishConnection() {
         LOG(ERR) << "Failed to create socket";
         return false;
     }
-    configure_socket_fd(socket_fd);
+    if (!configure_socket_fd(socket_fd)) [[unlikely]] {
+        return false;
+    }
 
     // connect to the server
     sockaddr_in server_address_ipv4{};
@@ -199,26 +202,39 @@ bool tinysockets::BlockingIOSocket::sendLtvPacket(const ccoip::packetId_t packet
 #ifndef WIN32
     flags |= MSG_NOSIGNAL;
 #endif
-    if (const ssize_t i = sendvp(socket_fd, tlv_buffer.data(), tlv_buffer.size(), flags); i == -1) [[unlikely]] {
-        const std::string error_message = std::strerror(errno);
-        LOG(INFO) << "Failed to send packet with error: " << error_message;
+
+    int max_buffer_size{};
+    socklen_t optlen = sizeof(max_buffer_size);
+    if (getsockoptvp(socket_fd, SOL_SOCKET, SO_SNDBUF, &max_buffer_size, &optlen) == -1) [[unlikely]] {
         return false;
+    }
+
+    size_t bytes_sent = 0;
+    while (bytes_sent < tlv_buffer.size()) {
+        const size_t bytes_remaining = tlv_buffer.size() - bytes_sent;
+        const size_t to_send = std::min(bytes_remaining, static_cast<size_t>(max_buffer_size));
+        const size_t bytes_sent_now = send(socket_fd, tlv_buffer.data() + bytes_sent,
+                                           to_send, MSG_NOSIGNAL);
+        if (bytes_sent_now == -1) {
+            const std::string error_message = std::strerror(errno);
+            LOG(INFO) << "Failed to send packet with error: " << error_message;
+            return false;
+        }
+        bytes_sent += bytes_sent_now;
     }
     return true;
 }
 
+#ifndef ntohll
+#include <endian.h>    // __BYTE_ORDER __LITTLE_ENDIAN
+#include <byteswap.h>  // bswap_64()
+#endif
+
 size_t tinysockets::BlockingIOSocket::receivePacketLength() const {
     uint64_t length;
-    if (const ssize_t i = recvvp(socket_fd, &length, sizeof(length), 0); i == -1) {
-        const std::string error_message = std::strerror(errno);
-        LOG(INFO) << "Failed to receive packet length with error: " << error_message;
-        return 0;
+    while (recvvp(socket_fd, &length, sizeof(length), 0) != sizeof(length)) {
     }
-#ifdef ntohll
-    return ntohll(length);
-#else
-    return ntohl(length);
-#endif
+    return net_u64_to_host(length);
 }
 
 bool tinysockets::BlockingIOSocket::receivePacketData(std::span<std::uint8_t> &dst) const {
