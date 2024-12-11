@@ -106,6 +106,6 @@ void ccoip::CCoIPClientHandler::registerPeer(const ccoip_inet_address_t &address
     auto &uuids_per_ip = client_state->inet_addrs_to_uuids[internal_address];
     uuids_per_ip.push_back(uuid);
     if (uuids_per_ip.size() > 1) {
-        LOG(WARN) << "Registered more than one peer per IP address " << CCOIP_INET_ADDR_TO_STRING(address);
+        LOG(WARN) << "Registered more than one peer per IP address " << ccoip_inetaddr_to_str(address);
     }
 }

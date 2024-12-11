@@ -23,7 +23,7 @@ inline ccoip_ipv4_address_t from_octets(const uint8_t octet1, const uint8_t octe
     return address;
 }
 
-[[nodiscard]] inline std::string CCOIP_SOCKET_ADDR_TO_STRING(const ccoip_socket_address_t &addr) {
+[[nodiscard]] inline std::string ccoip_sockaddr_to_str(const ccoip_socket_address_t &addr) {
     std::ostringstream oss;
     if (addr.inet.protocol == inetIPv4) {
         oss << static_cast<int>(addr.inet.ipv4.data[0]) << "."
@@ -41,7 +41,7 @@ inline ccoip_ipv4_address_t from_octets(const uint8_t octet1, const uint8_t octe
     return oss.str();
 }
 
-[[nodiscard]] inline std::string CCOIP_INET_ADDR_TO_STRING(const ccoip_inet_address_t &addr) {
+[[nodiscard]] inline std::string ccoip_inetaddr_to_str(const ccoip_inet_address_t &addr) {
     if (addr.protocol == inetIPv4) {
         std::ostringstream oss;
         oss << static_cast<int>(addr.ipv4.data[0]) << "."
