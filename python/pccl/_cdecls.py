@@ -1,4 +1,4 @@
-# Autogenered by /Users/mariosieg/Documents/projects/pccl-refactor/python/gen_bindings.py 2024-12-10 21:59:25.423159, do NOT edit!
+# Autogenered by /home/mario/Documents/projects/pccl-refactor/python/gen_bindings.py 2024-12-11 01:10:38.829175, do NOT edit!
 
 __PCCL_CDECLS: str = '''
 
@@ -14,10 +14,8 @@ uint8_t data[16];
 } ccoip_ipv6_address_t;
 typedef struct ccoip_inet_address_t {
 ccoip_inet_protocol_t protocol;
-struct {
 ccoip_ipv4_address_t ipv4;
 ccoip_ipv6_address_t ipv6;
-} address;
 } ccoip_inet_address_t;
 typedef struct ccoip_socket_address_t {
 ccoip_inet_address_t inet;
@@ -93,7 +91,7 @@ int *p_attribute_out);
  pcclResult_t pcclSaveReducePlan(const pcclComm_t *communicator, const char *filename);
  pcclResult_t pcclDestroyCommunicator(pcclComm_t *communicator);
  pcclResult_t pcclConnectMaster(pcclComm_t *communicator, ccoip_socket_address_t socket_address);
- pcclResult_t pcclAcceptNewPeers(pcclComm_t *communicator);
+ pcclResult_t pcclUpdateTopology(pcclComm_t *communicator);
  pcclResult_t pcclAllReduce(const void *sendbuff, void *recvbuff, size_t count, pcclDataType_t datatype,
 pcclRedOp_t op, uint64_t tag, const pcclComm_t *communicator,
 pcclReduceInfo_t *reduce_info_out);

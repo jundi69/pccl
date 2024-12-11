@@ -2,10 +2,11 @@
 
 #include <thread>
 #include <csignal>
+#include <iostream>
 
 #define PCCL_CHECK(status) { pcclResult_t status_val = status; if (status_val != pcclSuccess) { std::cerr << "Error: " << status_val << std::endl; exit(1); } }
 
-static pcclMasterInstance_t master_instance{};
+static pcclMasterInstance_t* master_instance{};
 
 void signal_handler(const int signal) {
     if (signal == SIGINT || signal == SIGTERM) {

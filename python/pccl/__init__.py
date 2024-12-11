@@ -102,12 +102,12 @@ def _create_ccoip_socket_address(address: IPv4Address | IPv6Address, port: int) 
         socket_addr.inet.protocol = ffi.cast("ccoip_inet_protocol_t", C.inetIPv4)
         packed_ipv4 = address.packed
         for i, byte in enumerate(packed_ipv4):
-            socket_addr.inet.address.ipv4.data[i] = byte & 255
+            socket_addr.inet.ipv4.data[i] = byte & 255
     elif isinstance(address, IPv6Address):
         socket_addr.inet6.protocol = ffi.cast("ccoip_inet_protocol_t", C.inetIPv6)
         packed_ipv6 = address.packed
         for i, byte in enumerate(packed_ipv6):
-            socket_addr.inet6.address.ipv6.data[i] = byte & 255
+            socket_addr.inet6.ipv6.data[i] = byte & 255
     else:
         raise ValueError(f'Unsupported IP address: {address}')
     socket_addr.port = port & 0xffff
