@@ -98,8 +98,7 @@ void ccoip::CCoIPMasterHandler::handleRequestSessionJoin(const ccoip_socket_addr
     LOG(DEBUG) << "Received C2MPacketRequestSessionJoin from " << ccoip_sockaddr_to_str(client_address);
 
     // check if peer has already joined
-    if (const auto internal_address = ccoip_socket_to_internal(client_address);
-        server_state.client_uuids.contains(internal_address)) {
+    if (server_state.isClientRegistered(client_address)) {
         LOG(WARN) << "Peer " << ccoip_sockaddr_to_str(client_address) << " has already joined";
         return;
     }
@@ -114,7 +113,7 @@ void ccoip::CCoIPMasterHandler::handleRequestSessionJoin(const ccoip_socket_addr
     response.assigned_uuid.data = new_uuid;
 
     // register client uuid
-    registerClient(client_address, ccoip_uuid_t{new_uuid});
+    server_state.registerClient(client_address, ccoip_uuid_t{new_uuid});
 
     // send response to new peer
     if (!server_socket.sendPacket(client_address, response)) [[unlikely]] {
@@ -126,44 +125,13 @@ void ccoip::CCoIPMasterHandler::onClientDisconnect(const ccoip_socket_address_t 
     THREAD_GUARD(server_thread_id);
 
     LOG(DEBUG) << "Client " << ccoip_sockaddr_to_str(client_address) << " disconnected";
-    unregisterClient(client_address);
+    server_state.unregisterClient(client_address);
 }
 
 void ccoip::CCoIPMasterHandler::handleAcceptNewPeers(const ccoip_socket_address_t &client_address,
                                                      const C2MPacketAcceptNewPeers &) {
     THREAD_GUARD(server_thread_id);
-
     LOG(DEBUG) << "Received C2MPacketAcceptNewPeers from " << ccoip_sockaddr_to_str(client_address);
-}
-
-void ccoip::CCoIPMasterHandler::registerClient(const ccoip_socket_address_t &client_address, ccoip_uuid_t uuid) {
-    THREAD_GUARD(server_thread_id);
-
-    const auto internal_address = ccoip_socket_to_internal(client_address);
-    server_state.client_uuids[internal_address] = uuid;
-    server_state.uuid_clients[uuid] = internal_address;
-    server_state.client_info[uuid] = ClientInfo{
-        .connection_state = PEER_REGISTERED
-    };
-}
-
-void ccoip::CCoIPMasterHandler::unregisterClient(const ccoip_socket_address_t &client_address) {
-    THREAD_GUARD(server_thread_id);
-
-    const auto internal_address = ccoip_socket_to_internal(client_address);
-    if (const auto it = server_state.client_uuids.find(internal_address); it != server_state.client_uuids.end()) {
-        if (!server_state.uuid_clients.erase(it->second)) {
-            LOG(WARN) << "Client with UUID " << uuid_to_string(it->second) <<
-                    " not found in uuid->sockaddr mapping. This means bi-directional mapping for client UUIDs is inconsistent";
-        }
-        if (!server_state.client_info.erase(it->second)) {
-            LOG(WARN) << "ClientInfo of client with UUID " << uuid_to_string(it->second) <<
-                    " not found in uuid->ClientInfo mapping. This means client info mapping is inconsistent";
-        }
-        server_state.client_uuids.erase(it);
-    } else {
-        LOG(WARN) << "Client " << ccoip_sockaddr_to_str(client_address) << " not found";
-    }
 }
 
 ccoip::CCoIPMasterHandler::~CCoIPMasterHandler() = default;
