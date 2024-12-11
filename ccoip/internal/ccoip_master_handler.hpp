@@ -6,23 +6,24 @@
 #include <tinysockets.hpp>
 
 namespace ccoip {
+
     enum ConnectionState {
         /// The client is registered with the master;
         /// Initially, the client is in this state.
         /// It does not yet participate in collective communications operations
         /// or shared state distribution.
         /// In this tate, the client is not allowed to request to participate in any of the above.
-        REGISTERED,
+        PEER_REGISTERED,
 
         /// Peers have accepted the client.
         /// Peers periodically accept new clients to join the running session.
         /// This is a phase unanimously agreed upon by all peers.
         /// In this phase, clients will establish p2p connections with new peers.
-        ACCEPTED
+        PEER_ACCEPTED
     };
 
     struct ClientInfo {
-        ConnectionState connection_state = REGISTERED;
+        ConnectionState connection_state = PEER_REGISTERED;
     };
 
     class CCoIPMasterHandler {

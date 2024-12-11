@@ -5,9 +5,15 @@
 #include <tinysockets.hpp>
 #include <uuid_utils.hpp>
 
+#ifdef _MSC_VER
+#define FUNC_SIGNATURE() __FUNCSIG__
+#else
+#define FUNC_SIGNATURE() __PRETTY_FUNCTION__
+#endif
+
 #define THREAD_GUARD(thread_id) \
     if (std::this_thread::get_id() != thread_id) { \
-        LOG(FATAL) << "Function " << __PRETTY_FUNCTION__ << " must be called from the server thread! This is a fatal bug!"; \
+        LOG(FATAL) << "Function " << FUNC_SIGNATURE() << " must be called from the server thread! This is a fatal bug!"; \
         std::terminate(); \
     }
 
@@ -137,7 +143,7 @@ void ccoip::CCoIPMasterHandler::registerClient(const ccoip_socket_address_t &cli
     server_state.client_uuids[internal_address] = uuid;
     server_state.uuid_clients[uuid] = internal_address;
     server_state.client_info[uuid] = ClientInfo{
-        .connection_state = REGISTERED
+        .connection_state = PEER_REGISTERED
     };
 }
 
