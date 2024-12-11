@@ -242,7 +242,7 @@ PCCL_EXPORT pcclResult_t pcclAwaitAsyncReduce(const pcclAsyncReduceOp_t *reduce_
  * If the shared state revision of this peer is outdated, the shared state will be updated.
  * The function will not unblock until it is confirmed all peers have the same shared state revision.
  */
-PCCL_EXPORT pcclResult_t pcclSynchronizeSharedState(const pcclComm_t *comm,
+PCCL_EXPORT pcclResult_t pcclSynchronizeSharedState(const pcclComm_t *communicator,
                                                     pcclSharedState_t *shared_state);
 
 typedef struct pcclMasterInstanceState_t pcclMasterInstance_t;

@@ -72,12 +72,16 @@ void ccoip::CCoIPMasterHandler::onClientRead(const ccoip_socket_address_t &clien
 }
 
 void ccoip::CCoIPMasterHandler::handleRequestSessionJoin(const ccoip_socket_address_t &client_address,
-                                                  const C2MPacketRequestSessionJoin &packet) {
+                                                  const C2MPacketRequestSessionJoin &) {
     LOG(DEBUG) << "Received C2MPacketRequestSessionJoin from " << CCOIP_SOCKET_ADDR_TO_STRING(client_address);
+
+    // generate uuid for new peer
+
+
 }
 
 void ccoip::CCoIPMasterHandler::handleAcceptNewPeers(const ccoip_socket_address_t &client_address,
-                                              const C2MPacketAcceptNewPeers &packet) {
+                                              const C2MPacketAcceptNewPeers &) {
     LOG(DEBUG) << "Received C2MPacketAcceptNewPeers from " << CCOIP_SOCKET_ADDR_TO_STRING(client_address);
 }
 

@@ -58,14 +58,17 @@ pcclResult_t pcclSaveReducePlan(const pcclComm_t *communicator, const char *file
     return pcclSuccess;
 }
 
+// ReSharper disable once CppParameterMayBeConstPtrOrRef
 pcclResult_t pcclDestroyCommunicator(pcclComm_t *communicator) {
     PCCL_VALIDATE_INITIALIZED();
     PCCL_VALIDATE(communicator != nullptr, pcclInvalidArgument);
-    if (!communicator->ccoip_client->interrupt()) [[unlikely]] {
-        return pcclInvalidUsage;
-    }
-    if (!communicator->ccoip_client->join()) [[unlikely]] {
-        return pcclInvalidUsage;
+    if (communicator->ccoip_client != nullptr) {
+        if (!communicator->ccoip_client->interrupt()) [[unlikely]] {
+            return pcclInvalidUsage;
+        }
+        if (!communicator->ccoip_client->join()) [[unlikely]] {
+            return pcclInvalidUsage;
+        }
     }
     delete communicator;
     return pcclSuccess;
@@ -82,9 +85,11 @@ pcclResult_t pcclConnectMaster(pcclComm_t *communicator, ccoip_socket_address_t 
     return pcclSuccess;
 }
 
+// ReSharper disable once CppParameterMayBeConstPtrOrRef
 pcclResult_t pcclUpdateTopology(pcclComm_t *communicator) {
     PCCL_VALIDATE_INITIALIZED();
     PCCL_VALIDATE(communicator != nullptr, pcclInvalidArgument);
+    PCCL_VALIDATE(communicator->ccoip_client != nullptr, pcclInvalidUsage);
 
     // accept new peers; this will block until we have a valid connection to each peer
     if (!communicator->ccoip_client->acceptNewPeers()) [[unlikely]] {
@@ -104,6 +109,7 @@ pcclResult_t pcclAllReduce(const void *sendbuff, void *recvbuff, size_t count, p
                            pcclReduceInfo_t *reduce_info_out) {
     PCCL_VALIDATE_INITIALIZED();
     PCCL_VALIDATE(communicator != nullptr, pcclInvalidArgument);
+    PCCL_VALIDATE(communicator->ccoip_client != nullptr, pcclInvalidUsage);
     return pcclSuccess;
 }
 
@@ -113,6 +119,7 @@ pcclResult_t pcclAllReduceAsync(const void *sendbuff, void *recvbuff, size_t cou
                                 pcclAsyncReduceOp_t *reduce_handle_out) {
     PCCL_VALIDATE_INITIALIZED();
     PCCL_VALIDATE(communicator != nullptr, pcclInvalidArgument);
+    PCCL_VALIDATE(communicator->ccoip_client != nullptr, pcclInvalidUsage);
     PCCL_VALIDATE(reduce_handle_out != nullptr, pcclInvalidArgument);
     return pcclSuccess;
 }
@@ -122,7 +129,10 @@ pcclResult_t pcclAwaitAsyncReduce(const pcclAsyncReduceOp_t *reduce_handle) {
     return pcclSuccess;
 }
 
-pcclResult_t pcclSynchronizeSharedState(const pcclComm_t *comm, pcclSharedState_t *shared_state) {
+pcclResult_t pcclSynchronizeSharedState(const pcclComm_t *communicator, pcclSharedState_t *shared_state) {
+    PCCL_VALIDATE_INITIALIZED();
+    PCCL_VALIDATE(communicator != nullptr, pcclInvalidArgument);
+    PCCL_VALIDATE(communicator->ccoip_client != nullptr, pcclInvalidUsage);
     return pcclSuccess;
 }
 

@@ -9,10 +9,10 @@
 #define __PCCL_STRINGIFY(x) #x
 #define __PCCL_TOSTRING(x) __PCCL_STRINGIFY(x)
 
-#define PCCL_VALIDATE(condition, err) { \
+#define PCCL_VALIDATE(condition, err) {  \
 if (!(condition)) {                      \
 PCCL_DEBUG(__FILE__ ":" __PCCL_TOSTRING(__LINE__) ": " #condition);         \
-return err;                          \
+return err;                              \
 }                                        \
 }
 

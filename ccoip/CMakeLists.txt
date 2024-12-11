@@ -1,4 +1,4 @@
-add_library(ccoip_private STATIC src/ccoip_master.cpp src/ccoip_client_handler.cpp src/ccoip_master_handler.cpp src/ccoip_packets.cpp src/ccoip_packet_buffer.cpp src/ccoip_client.cpp)
+add_library(ccoip_private STATIC src/ccoip_master.cpp src/ccoip_client_handler.cpp src/ccoip_master_handler.cpp src/ccoip_packets.cpp src/ccoip_packet_buffer.cpp src/ccoip_client.cpp src/uuid_utils.cpp)
 
 add_library(ccoip_public INTERFACE)
 target_include_directories(ccoip_public INTERFACE public_include)
