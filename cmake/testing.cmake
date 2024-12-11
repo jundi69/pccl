@@ -1,7 +1,7 @@
 option(SANITIZE_TESTS "Enable address sanitizer for tests" OFF)
 
-if (ENV{IS_CI})
-    message(STATUS "Running in CI, enabling sanitizer")
+if (DEFINED $ENV{IS_CI})
+    message(STATUS "Running in CI, enabling sanitizers in tests")
     set(SANITIZE_TESTS ON)
 endif ()
 
