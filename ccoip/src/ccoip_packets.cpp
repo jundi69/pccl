@@ -2,6 +2,10 @@
 
 size_t ccoip::EmptyPacket::serialized_size = 0;
 
+// C2MPacketRequestSessionJoin
+ccoip::packetId_t ccoip::C2MPacketRequestSessionJoin::packet_id = C2M_PACKET_REQUEST_SESSION_JOIN_ID;
+
+// C2MPacketAcceptNewPeers
 ccoip::packetId_t ccoip::C2MPacketAcceptNewPeers::packet_id = C2M_PACKET_ACCEPT_NEW_PEERS_ID;
 
 // EmptyPacket
@@ -11,6 +15,19 @@ void ccoip::EmptyPacket::serialize(PacketWriteBuffer &buffer) const {
 
 void ccoip::EmptyPacket::deserialize(PacketReadBuffer &buffer) {
     // do nothing
+}
+
+// M2CPacketJoinResponse
+ccoip::packetId_t ccoip::M2CPacketJoinResponse::packet_id = C2M_PACKET_JOIN_RESPONSE_ID;
+
+void ccoip::M2CPacketJoinResponse::serialize(PacketWriteBuffer &buffer) const {
+    buffer.write<boolean>(accepted);
+    buffer.writeFixedArray(assigned_uuid.data);
+}
+
+void ccoip::M2CPacketJoinResponse::deserialize(PacketReadBuffer &buffer) {
+    accepted = buffer.read<boolean>();
+    assigned_uuid.data = buffer.readFixedArray<uint8_t, CCOIP_UUID_N_BYTES>();
 }
 
 // M2CPacketNewPeers

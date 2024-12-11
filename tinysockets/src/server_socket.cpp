@@ -1,13 +1,12 @@
 #include <ccoip_inet_utils.hpp>
 #include <ccoip_types.hpp>
 
+#include <uv.h>
 #include "tinysockets.hpp"
 
 #include <iostream>
-#include <uv.h>
 
 #include "ccoip_utils.hpp"
-
 
 void uv_err_check(const int status) {
     if (status < 0) {
@@ -42,6 +41,9 @@ namespace tinysockets {
 
         /// List of callbacks invoked on client close
         std::vector<ServerSocketCloseCallback> close_callbacks{};
+
+        /// List of callbacks invoked on client join
+        std::vector<ServerSocketJoinCallback> join_callbacks{};
 
         /// Maps client socket addresses to the respective packet buffers.
         /// The ServerSocket asserts that the packet starts with a 64-bit length field
@@ -105,8 +107,8 @@ bool tinysockets::ServerSocket::bind() {
         uv_async_init(server_socket_state->loop.get(), server_socket_state->async_handle.get(), [](uv_async_t *handle) {
             const auto *this_ptr = static_cast<ServerSocket *>(handle->data);
             this_ptr->onAsyncSignal();
-        }
-    ));
+            }
+        ));
 
     bound = true;
     return true;
@@ -169,6 +171,10 @@ void tinysockets::ServerSocket::addCloseCallback(const ServerSocketCloseCallback
     server_socket_state->close_callbacks.push_back(callback);
 }
 
+void tinysockets::ServerSocket::addJoinCallback(const ServerSocketJoinCallback &callback) const {
+    server_socket_state->join_callbacks.push_back(callback);
+}
+
 bool tinysockets::ServerSocket::closeClientConnection(const ccoip_socket_address_t &client_address) const {
     if (!running) {
         return false;
@@ -185,6 +191,47 @@ bool tinysockets::ServerSocket::closeClientConnection(const ccoip_socket_address
         return true;
     }
     return false;
+}
+
+struct write_req_t {
+    uv_write_t req;
+    uv_buf_t buf;
+};
+
+bool tinysockets::ServerSocket::sendRawPacket(const ccoip_socket_address_t &client_address,
+                                              const PacketWriteBuffer &buffer) {
+    if (!running) {
+        return false;
+    }
+    if (interrupted) {
+        return false;
+    }
+
+    const auto inet_internal = ccoip_socket_to_internal(client_address);
+    const auto it = server_socket_state->sockaddr_to_uvstream.find(inet_internal);
+    if (it == server_socket_state->sockaddr_to_uvstream.end()) {
+        return false;
+    }
+
+    auto *wr = new write_req_t;
+    wr->buf = uv_buf_init(static_cast<char *>(std::malloc(buffer.size())), static_cast<unsigned int>(buffer.size()));
+    memcpy(wr->buf.base, buffer.data(), buffer.size());
+    wr->req.data = this;
+
+    // free memory and delete write_req_t on write completion
+    const int write_status = uv_write(&wr->req, it->second, &wr->buf, 1, [](uv_write_t *req, int) {
+        const auto *write_req = reinterpret_cast<write_req_t *>(req);
+        std::free(write_req->buf.base);
+        delete write_req;
+    });
+
+    if (write_status != 0) {
+        std::free(wr->buf.base);
+        delete wr;
+        return false;
+    }
+
+    return true;
 }
 
 bool tinysockets::ServerSocket::closeAllClientConnections() const {
@@ -222,15 +269,13 @@ std::optional<ccoip_socket_address_t> tinysockets::ServerSocket::getUvStreamAddr
     return internal_to_ccoip_sockaddr(inet_internal->second);
 }
 
-void tinysockets::ServerSocket::performLoopShutdown() const
-{
+void tinysockets::ServerSocket::performLoopShutdown() const {
     uv_close(reinterpret_cast<uv_handle_t *>(server_socket_state->tcp_server.get()), nullptr);
     uv_close(reinterpret_cast<uv_handle_t *>(server_socket_state->async_handle.get()), nullptr);
     UV_ERR_CHECK(uv_run(server_socket_state->loop.get(), UV_RUN_NOWAIT));
     int status = 0;
     do {
-        if (status != 0)
-        {
+        if (status != 0) {
             if (!closeAllClientConnections()) [[unlikely]] {
                 LOG(ERR) << "Failed to close all clients connections";
             }
@@ -258,8 +303,7 @@ void tinysockets::ServerSocket::onNewConnection(uv_server_stream_t *server, cons
     if (status < 0) {
         return;
     }
-    if (interrupted)
-    {
+    if (interrupted) {
         // don't accept more connections when the server has been interrupted
         return;
     }
@@ -300,6 +344,11 @@ void tinysockets::ServerSocket::onNewConnection(uv_server_stream_t *server, cons
                               this_ptr->onClientRead(stream, n_read, buf);
                           }
                       });
+
+        // invoke join callbacks
+        for (const auto &callback: server_socket_state->join_callbacks) {
+            callback(*client_addr);
+        }
     } else {
         uv_close(reinterpret_cast<uv_handle_t *>(client), nullptr);
         delete client;
@@ -322,37 +371,35 @@ void tinysockets::ServerSocket::onClientRead(uv_stream_t *stream, const ssize_t 
         auto &current_recv_buffer = server_socket_state->current_recv_buffers[
             ccoip_socket_to_internal(*client_addr)];
 
-        if (current_recv_buffer.expected_length == -1) {
-            // if the expected length is not set, read the length field
-            if (data.size() < sizeof(uint64_t)) {
-                LOG(ERR) << "Expected 8-byte length field but got " << data.size() << " bytes";
-                if (!closeClientConnection(*client_addr)) [[unlikely]] {
-                    LOG(ERR) << "Failed to close client connection";
+        while (buffer.remaining() > 0) {
+            if (current_recv_buffer.expected_length == -1) {
+                // if the expected length is not set, read the length field
+                if (buffer.remaining() < sizeof(uint64_t)) {
+                    LOG(ERR) << "Expected 8-byte length field but got " << data.size_bytes() << " bytes";
+                    if (!closeClientConnection(*client_addr)) [[unlikely]] {
+                        LOG(ERR) << "Failed to close client connection";
+                    }
+                    return;
                 }
-                return;
+                current_recv_buffer.expected_length = buffer.read<uint64_t>();
             }
-            current_recv_buffer.expected_length = buffer.read<uint64_t>();
-            current_recv_buffer.buffer.insert(current_recv_buffer.buffer.end(), data.begin() + sizeof(uint64_t),
-                                              data.end());
-        } else {
-            if (current_recv_buffer.buffer.size() + data.size() > current_recv_buffer.expected_length) {
-                LOG(ERR) << "Received more data than expected";
-                if (!closeClientConnection(*client_addr)) [[unlikely]] {
-                    LOG(ERR) << "Failed to close client connection";
-                }
-                return;
-            }
-            // if the expected length is set, append the data to the buffer
-            current_recv_buffer.buffer.insert(current_recv_buffer.buffer.end(), data.begin(), data.end());
-        }
 
-        if (current_recv_buffer.buffer.size() == current_recv_buffer.expected_length) {
-            // if the buffer is full, invoke read callbacks
-            for (const auto &callback: server_socket_state->read_callbacks) {
-                callback(*client_addr, current_recv_buffer.buffer);
+            const size_t n_to_insert = std::min(buffer.remaining(), static_cast<size_t>(current_recv_buffer.expected_length - current_recv_buffer.buffer.size()));
+            current_recv_buffer.buffer.resize(current_recv_buffer.buffer.size() + n_to_insert);
+
+            buffer.readContents(
+                current_recv_buffer.buffer.data() + current_recv_buffer.buffer.size() - n_to_insert,
+                n_to_insert
+            );
+
+            if (current_recv_buffer.buffer.size() == current_recv_buffer.expected_length) {
+                // if the buffer is full, invoke read callbacks
+                for (const auto &callback: server_socket_state->read_callbacks) {
+                    callback(*client_addr, current_recv_buffer.buffer);
+                }
+                current_recv_buffer.expected_length = -1;
+                current_recv_buffer.buffer.clear();
             }
-            current_recv_buffer.expected_length = -1;
-            current_recv_buffer.buffer.clear();
         }
     }
     delete[] buf->base;
@@ -382,6 +429,14 @@ void tinysockets::ServerSocket::onClientClose(uv_handle_t *handle) const {
 tinysockets::ServerSocket::~ServerSocket() {
     if (!running && server_socket_state->loop != nullptr) {
         performLoopShutdown();
+    }
+    if (running && !interrupted)
+    {
+        // ReSharper disable once CppDFAConstantConditions
+        if (!interrupt()) [[unlikely]] {
+            LOG(ERR) << "Failed to interrupt ServerSocket from destructor";
+        }
+        join();
     }
     delete server_socket_state;
 }

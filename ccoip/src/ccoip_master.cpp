@@ -1,68 +1,32 @@
+#include "ccoip_master_handler.hpp"
+
 #include "ccoip_master.hpp"
 
-#include <ccoip_inet_utils.hpp>
-#include <tinysockets.hpp>
-
-
-ccoip::CCoIPMaster::CCoIPMaster(const ccoip_socket_address_t &listen_address) : server_socket(listen_address) {
-    server_socket.addReadCallback([this](const ccoip_socket_address_t &client_address, const std::span<uint8_t> &data) {
-        onClientRead(client_address, data);
-    });
+ccoip::CCoIPMaster::CCoIPMaster(const ccoip_socket_address_t &listen_address): listen_address(listen_address), master(nullptr) {
 }
 
-bool ccoip::CCoIPMaster::run() {
-    if (!server_socket.bind()) {
+bool ccoip::CCoIPMaster::launch() {
+    if (master != nullptr) {
         return false;
     }
-    if (!server_socket.listen()) {
-        return false;
-    }
-    if (!server_socket.runAsync()) {
-        return false;
-    }
-    running = true;
-    return true;
+    master = new CCoIPMasterHandler(listen_address);
+    return master->run();
 }
 
-bool ccoip::CCoIPMaster::interrupt() {
-    if (interrupted) {
+bool ccoip::CCoIPMaster::interrupt() const {
+    if (master == nullptr) {
         return false;
     }
-    if (!server_socket.interrupt()) {
+    return master->interrupt();
+}
+
+bool ccoip::CCoIPMaster::join() const {
+    if (master == nullptr) {
         return false;
     }
-    interrupted = true;
-    return true;
+    return master->join();
 }
 
-bool ccoip::CCoIPMaster::join() {
-    if (!running) {
-        return false;
-    }
-    server_socket.join();
-    return true;
+ccoip::CCoIPMaster::~CCoIPMaster() {
+    delete master;
 }
-
-bool ccoip::CCoIPMaster::kickClient(const ccoip_socket_address_t &client_address) const {
-    LOG(DEBUG) << "Kicking client " << CCOIP_SOCKET_ADDR_TO_STRING(client_address);
-    if (!server_socket.closeClientConnection(client_address)) [[unlikely]] {
-        return false;
-    }
-    return true;
-}
-
-void ccoip::CCoIPMaster::onClientRead(const ccoip_socket_address_t &client_address, const std::span<uint8_t> data) {
-    LOG(INFO) << "Received " << data.size() << " bytes from " << CCOIP_SOCKET_ADDR_TO_STRING(client_address);
-    PacketReadBuffer buffer = PacketReadBuffer::wrap(data);
-    const auto packet_type = buffer.read<uint16_t>();
-    const auto packet_length = buffer.read<uint64_t>();
-    if (packet_length != buffer.remaining()) {
-        LOG(ERR) << "Packet length mismatch: expected " << packet_length << " bytes, but got " << buffer.remaining();
-        if (!kickClient(client_address)) [[unlikely]] {
-            LOG(ERR) << "Failed to kick client " << CCOIP_SOCKET_ADDR_TO_STRING(client_address);
-        }
-        return;
-    }
-}
-
-ccoip::CCoIPMaster::~CCoIPMaster() = default;

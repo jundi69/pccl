@@ -23,6 +23,8 @@ enum CCoIPDataType : uint8_t {
 constexpr std::size_t CCOIP_UUID_N_BYTES = 16;
 using ccoip_uuid = std::array<uint8_t, CCOIP_UUID_N_BYTES>;
 
+typedef uint8_t boolean;
+
 struct ccoip_uuid_t
 {
     ccoip_uuid data;

@@ -14,7 +14,25 @@ ccoip::CCoIPClientHandler::CCoIPClientHandler(const ccoip_socket_address_t &addr
 }
 
 bool ccoip::CCoIPClientHandler::connect() {
-    return client_socket.establishConnection();
+    if (!client_socket.establishConnection()) [[unlikely]] {
+        return false;
+    }
+
+    // send join request packet to master
+    if (!client_socket.sendPacket<C2MPacketRequestSessionJoin>(C2MPacketRequestSessionJoin{})) [[unlikely]] {
+        return false;
+    }
+
+    // receive join response packet from master
+    const auto response = client_socket.receivePacket<M2CPacketJoinResponse>();
+    if (!response) {
+        return false;
+    }
+    if (!response->accepted) {
+        LOG(ERR) << "Master rejected join request";
+        return false;
+    }
+    return true;
 }
 
 // establishP2PConnection:
@@ -88,6 +106,6 @@ void ccoip::CCoIPClientHandler::registerPeer(const ccoip_inet_address_t &address
     auto &uuids_per_ip = client_state->inet_addrs_to_uuids[internal_address];
     uuids_per_ip.push_back(uuid);
     if (uuids_per_ip.size() > 1) {
-        LOG(WARN) << "Registered more than one peer per IP address " << CCOIP_INET_ADDR_TO_STRING(address);
+        LOG(WARN) << "Registered more than one peer per IP address " << ccoip_inetaddr_to_str(address);
     }
 }
