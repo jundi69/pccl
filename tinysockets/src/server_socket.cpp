@@ -8,7 +8,6 @@
 
 #include "ccoip_utils.hpp"
 
-
 void uv_err_check(const int status) {
     if (status < 0) {
         fprintf(stderr, "UV Error: %s\n", uv_strerror(status));
@@ -385,7 +384,7 @@ void tinysockets::ServerSocket::onClientRead(uv_stream_t *stream, const ssize_t 
                 current_recv_buffer.expected_length = buffer.read<uint64_t>();
             }
 
-            const size_t n_to_insert = std::min(buffer.remaining(), current_recv_buffer.expected_length - current_recv_buffer.buffer.size());
+            const size_t n_to_insert = std::min(buffer.remaining(), static_cast<size_t>(current_recv_buffer.expected_length - current_recv_buffer.buffer.size()));
             current_recv_buffer.buffer.resize(current_recv_buffer.buffer.size() + n_to_insert);
 
             buffer.readContents(
