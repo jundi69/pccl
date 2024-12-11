@@ -222,12 +222,8 @@ class MasterNode:
         """Interrupts a master node."""
         PCCLError.check(C.pcclInterruptMaster(self._master[0]))
 
-    def await_termination(self):
-        """Awaits termination of a master node. This function is blocking."""
-        PCCLError.check(C.pcclMasterAwaitTermination(self._master[0]))
-
     def __del__(self):
-        self.await_termination()
+        PCCLError.check(C.pcclMasterAwaitTermination(self._master[0]))
         PCCLError.check(C.pcclDestroyMaster(self._master[0]))
 
 if __name__ == '__main__':
@@ -238,4 +234,4 @@ if __name__ == '__main__':
     c.connect_master('127.0.0.1:8080')
 
     m.interrupt()
-    m.await_termination()
+    PCCLError.check(C.pcclMasterAwaitTermination(m._master[0]))
