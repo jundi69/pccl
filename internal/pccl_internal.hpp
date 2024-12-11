@@ -1,18 +1,10 @@
 #pragma once
 
 #include <ccoip_client.hpp>
-
-#ifdef __cplusplus
+#include <memory>
 #include <iostream>
-#else
-#include <stdio.h>
-#endif
 
-#ifdef __cplusplus
 #define PCCL_DEBUG(msg) std::cerr << "[PCCL Debug]: " << msg << std::endl
-#else
-#define PCCL_DEBUG(msg) printf("[PCCL Debug]: %s\n", msg)
-#endif
 
 #define __PCCL_STRINGIFY(x) #x
 #define __PCCL_TOSTRING(x) __PCCL_STRINGIFY(x)

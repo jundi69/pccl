@@ -1,5 +1,5 @@
 #include "pccl.h"
-#include "pccl_internal.h"
+#include "pccl_internal.hpp"
 
 #include <ccoip_master.hpp>
 
