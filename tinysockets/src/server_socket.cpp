@@ -18,6 +18,7 @@ void uv_err_check(const int status) {
 #define UV_ERR_CHECK(status) uv_err_check(status)
 
 namespace tinysockets {
+
     struct RecvBuffer {
         /// The expected length of the packet
         uint64_t expected_length = -1;
@@ -160,7 +161,9 @@ bool tinysockets::ServerSocket::interrupt() {
 }
 
 void tinysockets::ServerSocket::join() {
-    server_thread.join();
+    if (server_thread.joinable()) {
+        server_thread.join();
+    }
 }
 
 void tinysockets::ServerSocket::addReadCallback(const ServerSocketReadCallback &callback) const {
@@ -247,6 +250,10 @@ bool tinysockets::ServerSocket::closeAllClientConnections() const {
         }
     }
     return true;
+}
+
+std::thread::id tinysockets::ServerSocket::getServerThreadId() const {
+    return server_thread.get_id();
 }
 
 void tinysockets::ServerSocket::onAsyncSignal() const {
@@ -384,7 +391,10 @@ void tinysockets::ServerSocket::onClientRead(uv_stream_t *stream, const ssize_t 
                 current_recv_buffer.expected_length = buffer.read<uint64_t>();
             }
 
-            const size_t n_to_insert = std::min(buffer.remaining(), static_cast<size_t>(current_recv_buffer.expected_length - current_recv_buffer.buffer.size()));
+            const size_t n_to_insert = std::min(buffer.remaining(),
+                                                static_cast<size_t>(
+                                                    current_recv_buffer.expected_length - current_recv_buffer.buffer.
+                                                    size()));
             current_recv_buffer.buffer.resize(current_recv_buffer.buffer.size() + n_to_insert);
 
             buffer.readContents(
@@ -430,8 +440,7 @@ tinysockets::ServerSocket::~ServerSocket() {
     if (!running && server_socket_state->loop != nullptr) {
         performLoopShutdown();
     }
-    if (running && !interrupted)
-    {
+    if (running && !interrupted) {
         // ReSharper disable once CppDFAConstantConditions
         if (!interrupt()) [[unlikely]] {
             LOG(ERR) << "Failed to interrupt ServerSocket from destructor";

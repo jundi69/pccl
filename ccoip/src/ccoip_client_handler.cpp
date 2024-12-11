@@ -19,12 +19,12 @@ bool ccoip::CCoIPClientHandler::connect() {
     }
 
     // send join request packet to master
-    if (!client_socket.sendPacket<C2MPacketRequestSessionJoin>(C2MPacketRequestSessionJoin{})) [[unlikely]] {
+    if (!client_socket.sendPacket<C2MPacketRequestSessionRegistration>(C2MPacketRequestSessionRegistration{})) [[unlikely]] {
         return false;
     }
 
     // receive join response packet from master
-    const auto response = client_socket.receivePacket<M2CPacketJoinResponse>();
+    const auto response = client_socket.receivePacket<M2CPacketSessionRegistrationResponse>();
     if (!response) {
         return false;
     }

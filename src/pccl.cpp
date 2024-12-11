@@ -35,6 +35,7 @@ pcclResult_t pcclGetAttribute(const pcclComm_t *communicator,
                               int *p_attribute_out) {
     PCCL_VALIDATE_INITIALIZED();
     PCCL_VALIDATE(communicator != nullptr, pcclInvalidArgument);
+    PCCL_VALIDATE(communicator->ccoip_client != nullptr, pcclInvalidUsage);
     PCCL_VALIDATE(p_attribute_out != nullptr, pcclInvalidArgument);
 
     switch (attribute) {
@@ -154,6 +155,7 @@ pcclResult_t pcclCreateMaster(ccoip_socket_address_t listen_address, pcclMasterI
 
 // ReSharper disable once CppParameterMayBeConstPtrOrRef
 pcclResult_t pcclRunMaster(pcclMasterInstance_t *master_instance) {
+    PCCL_VALIDATE(master_instance != nullptr, pcclInvalidArgument);
     PCCL_VALIDATE(master_instance->master_handler != nullptr, pcclInvalidArgument);
     if (!master_instance->master_handler->launch()) [[unlikely]] {
         return pcclInvalidUsage;
@@ -163,6 +165,7 @@ pcclResult_t pcclRunMaster(pcclMasterInstance_t *master_instance) {
 
 // ReSharper disable once CppParameterMayBeConstPtrOrRef
 pcclResult_t pcclInterruptMaster(pcclMasterInstance_t *master_instance) {
+    PCCL_VALIDATE(master_instance != nullptr, pcclInvalidArgument);
     PCCL_VALIDATE(master_instance->master_handler != nullptr, pcclInvalidArgument);
     if (!master_instance->master_handler->interrupt()) [[unlikely]] {
         return pcclInvalidUsage;
@@ -172,6 +175,7 @@ pcclResult_t pcclInterruptMaster(pcclMasterInstance_t *master_instance) {
 
 // ReSharper disable once CppParameterMayBeConstPtrOrRef
 pcclResult_t pcclMasterAwaitTermination(pcclMasterInstance_t *master_instance) {
+    PCCL_VALIDATE(master_instance != nullptr, pcclInvalidArgument);
     PCCL_VALIDATE(master_instance->master_handler != nullptr, pcclInvalidArgument);
     if (!master_instance->master_handler->join()) [[unlikely]] {
         return pcclInvalidUsage;
@@ -180,7 +184,9 @@ pcclResult_t pcclMasterAwaitTermination(pcclMasterInstance_t *master_instance) {
 }
 
 pcclResult_t pcclDestroyMaster(pcclMasterInstance_t *master_instance) {
+    PCCL_VALIDATE(master_instance != nullptr, pcclInvalidArgument);
     PCCL_VALIDATE(master_instance->master_handler != nullptr, pcclInvalidArgument);
     master_instance->master_handler = nullptr;
+    delete master_instance;
     return pcclSuccess;
 }

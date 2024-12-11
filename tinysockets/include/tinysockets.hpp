@@ -80,6 +80,9 @@ namespace tinysockets {
         /// Closes all client connections
         [[nodiscard]] bool closeAllClientConnections() const;
 
+        /// Returns the thread ID of the server thread
+        [[nodiscard]] std::thread::id getServerThreadId() const;
+
         ~ServerSocket();
 
         // Packet decoding / encoding functions

@@ -13,15 +13,15 @@ namespace ccoip {
     // P2M: Peer to Master
 
     // C2M packets:
-#define C2M_PACKET_REQUEST_SESSION_JOIN_ID 1
+#define C2M_PACKET_REQUEST_SESSION_REGISTRATION_ID 1
 #define C2M_PACKET_ACCEPT_NEW_PEERS_ID 2
 
     // M2C packets:
-#define C2M_PACKET_JOIN_RESPONSE_ID 1
+#define C2M_PACKET_SESSION_REGISTRATION_RESPONSE_ID 1
 #define C2M_PACKET_NEW_PEERS_ID 2
 
-    // C2MPacketRequestSessionJoin
-    class C2MPacketRequestSessionJoin final : public EmptyPacket {
+    // C2MPacketRequestSessionRegistration
+    class C2MPacketRequestSessionRegistration final : public EmptyPacket {
     public:
         static packetId_t packet_id;
     };
@@ -32,8 +32,8 @@ namespace ccoip {
         static packetId_t packet_id;
     };
 
-    // M2CPacketJoinResponse
-    class M2CPacketJoinResponse final : public Packet {
+    // M2CPacketSessionRegistrationResponse
+    class M2CPacketSessionRegistrationResponse final : public Packet {
     public:
         static packetId_t packet_id;
 
