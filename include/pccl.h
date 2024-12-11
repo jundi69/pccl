@@ -9,8 +9,6 @@
 #include <stdbool.h>
 #endif
 
-#include "pccl_status.h"
-
 #ifdef _MSC_VER
 #define PCCL_EXPORT __declspec(dllexport)
 #else
@@ -20,6 +18,22 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+typedef enum pcclResult_t {
+    pcclSuccess = 0,
+    pcclNotInitialized = 1,
+    pcclSystemError = 2,
+    pcclInternalError = 3,
+    pcclInvalidArgument = 4,
+    pcclInvalidUsage = 5,
+    pcclRemoteError = 6,
+    pcclInProgress = 7,
+    pcclNumResults = 8,
+    pcclMasterConnectionFailed = 9,
+    pcclRankConnectionFailed = 10,
+    pcclRankConnectionLost = 11,
+    pcclNoSharedStateAvailable = 12,
+} pcclResult_t;
 
 typedef enum pcclDataType_t {
     pcclUint8 = 0,
@@ -55,7 +69,7 @@ typedef struct pcclReduceInfo_t {
     uint64_t rx_bytes;
 } pcclReduceInfo_t;
 
-typedef struct {
+typedef struct pcclAsyncReduceOp_t{
     pcclComm_t *comm;
     uint64_t tag;
 } pcclAsyncReduceOp_t;
@@ -168,7 +182,7 @@ PCCL_EXPORT pcclResult_t pcclConnectMaster(pcclComm_t *communicator, ccoip_socke
 PCCL_EXPORT pcclResult_t pcclUpdateTopology(pcclComm_t *communicator);
 
 /**
- * Performs an all reduce operation on a communicator. Blocks until the all reduce is complete.
+ * Performs an all reduce operation on a communicator. Blocks untill the all reduce is complete.
  *
  * @param sendbuff The buffer to send data from.
  * @param recvbuff The buffer to receive data into.
@@ -231,11 +245,7 @@ PCCL_EXPORT pcclResult_t pcclAwaitAsyncReduce(const pcclAsyncReduceOp_t *reduce_
 PCCL_EXPORT pcclResult_t pcclSynchronizeSharedState(const pcclComm_t *comm,
                                                     pcclSharedState_t *shared_state);
 
-typedef struct pcclMasterInstanceState_t pcclMasterInstanceState_t;
-
-typedef struct pcclMasterInstance_t {
-    pcclMasterInstanceState_t *state;
-} pcclMasterInstance_t;
+typedef struct pcclMasterInstanceState_t pcclMasterInstance_t;
 
 /**
  * Creates a master node handle.
@@ -244,7 +254,7 @@ typedef struct pcclMasterInstance_t {
  * @return @code pcclSuccess@endcode if the master node handle was created successfully.
  */
 PCCL_EXPORT pcclResult_t pcclCreateMaster(ccoip_socket_address_t listen_address,
-                                          pcclMasterInstance_t *p_master_handle_out);
+                                          pcclMasterInstance_t **p_master_handle_out);
 
 /**
  * Runs a master node. This function is non-blocking.
@@ -252,14 +262,14 @@ PCCL_EXPORT pcclResult_t pcclCreateMaster(ccoip_socket_address_t listen_address,
  * @return @code pcclSuccess@endcode if the master node was run successfully.
  * @return @code pcclInvalidArgument@endcode if the master handle is already running.
  */
-PCCL_EXPORT pcclResult_t pcclRunMaster(pcclMasterInstance_t master_instance);
+PCCL_EXPORT pcclResult_t pcclRunMaster(pcclMasterInstance_t *master_instance);
 
 /**
  * Interrupts a master node.
  * @param master_instance The master node handle to interrupt.
  * @return @code pcclSuccess@endcode if the master node was interrupted successfully.
  */
-PCCL_EXPORT pcclResult_t pcclInterruptMaster(pcclMasterInstance_t master_instance);
+PCCL_EXPORT pcclResult_t pcclInterruptMaster(pcclMasterInstance_t *master_instance);
 
 /**
  * Awaits termination of a master node. This function is blocking.
@@ -267,14 +277,14 @@ PCCL_EXPORT pcclResult_t pcclInterruptMaster(pcclMasterInstance_t master_instanc
  * @return @code pcclSuccess@endcode if the master node was terminated successfully.
  * @return @code pcclInvalidArgument@endcode if the master handle is not running / was never interrupted.
  */
-PCCL_EXPORT pcclResult_t pcclMasterAwaitTermination(pcclMasterInstance_t master_instance);
+PCCL_EXPORT pcclResult_t pcclMasterAwaitTermination(pcclMasterInstance_t *master_instance);
 
 /**
  * Destroys a master node. Must only be called after pcclMasterAwaitTermination has been called and returned.
  * @param master_instance The master node handle to destroy.
  * @return @code pcclSuccess@endcode if the master node was destroyed successfully.
  */
-PCCL_EXPORT pcclResult_t pcclDestroyMaster(pcclMasterInstance_t master_instance);
+PCCL_EXPORT pcclResult_t pcclDestroyMaster(pcclMasterInstance_t *master_instance);
 
 #ifdef __cplusplus
 }

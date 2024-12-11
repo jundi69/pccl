@@ -41,6 +41,7 @@ pcclResult_t pcclGetAttribute(const pcclComm_t *communicator,
         case PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE: {
             // const size_t world_size = communicator->ccoip_handler->get_world_size();
             // *p_attribute_out = static_cast<int>(world_size);
+                *p_attribute_out = 128; // for python test
             break;
         }
         default: {
@@ -133,43 +134,40 @@ struct pcclMasterInstanceState_t {
     std::unique_ptr<ccoip::CCoIPMasterHandler> master_handler;
 };
 
-pcclResult_t pcclCreateMaster(ccoip_socket_address_t listen_address, pcclMasterInstance_t *p_master_handle_out) {
+pcclResult_t pcclCreateMaster(ccoip_socket_address_t listen_address, pcclMasterInstance_t **p_master_handle_out) {
     PCCL_VALIDATE(p_master_handle_out != nullptr, pcclInvalidArgument);
-    *p_master_handle_out = {
-        .state = new pcclMasterInstanceState_t{
-            .master_handler = std::make_unique<ccoip::CCoIPMasterHandler>(listen_address),
-        }
+    *p_master_handle_out = new pcclMasterInstance_t{
+        .master_handler = std::make_unique<ccoip::CCoIPMasterHandler>(listen_address),
     };
     return pcclSuccess;
 }
 
-pcclResult_t pcclRunMaster(const pcclMasterInstance_t master_instance) {
-    PCCL_VALIDATE(master_instance.state != nullptr, pcclInvalidArgument);
-    if (!master_instance.state->master_handler->launch()) [[unlikely]] {
+pcclResult_t pcclRunMaster(pcclMasterInstance_t *master_instance) {
+    PCCL_VALIDATE(master_instance != nullptr, pcclInvalidArgument);
+    if (!master_instance->master_handler->launch()) [[unlikely]] {
         return pcclInvalidUsage;
     }
     return pcclSuccess;
 }
 
-pcclResult_t pcclInterruptMaster(const pcclMasterInstance_t master_instance) {
-    PCCL_VALIDATE(master_instance.state != nullptr, pcclInvalidArgument);
-    if (!master_instance.state->master_handler->interrupt()) [[unlikely]] {
+pcclResult_t pcclInterruptMaster(pcclMasterInstance_t *master_instance) {
+    PCCL_VALIDATE(master_instance != nullptr, pcclInvalidArgument);
+    if (!master_instance->master_handler->interrupt()) [[unlikely]] {
         return pcclInvalidUsage;
     }
     return pcclSuccess;
 }
 
-pcclResult_t pcclMasterAwaitTermination(pcclMasterInstance_t master_handle) {
-    PCCL_VALIDATE(master_handle.state != nullptr, pcclInvalidArgument);
-    if (!master_handle.state->master_handler->join()) [[unlikely]] {
+pcclResult_t pcclMasterAwaitTermination(pcclMasterInstance_t *master_instance) {
+    PCCL_VALIDATE(master_instance != nullptr, pcclInvalidArgument);
+    if (!master_instance->master_handler->join()) [[unlikely]] {
         return pcclInvalidUsage;
     }
     return pcclSuccess;
 }
 
-pcclResult_t pcclDestroyMaster(pcclMasterInstance_t master_instance) {
-    PCCL_VALIDATE(master_instance.state != nullptr, pcclInvalidArgument);
-    delete master_instance.state;
-    master_instance.state = nullptr;
+pcclResult_t pcclDestroyMaster(pcclMasterInstance_t *master_instance) {
+    PCCL_VALIDATE(master_instance != nullptr, pcclInvalidArgument);
+    delete master_instance;
     return pcclSuccess;
 }

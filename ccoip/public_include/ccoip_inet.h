@@ -15,16 +15,6 @@ typedef struct ccoip_ipv4_address_t {
     uint8_t data[4];
 } ccoip_ipv4_address_t;
 
-inline ccoip_ipv4_address_t from_octets(const uint8_t octet1, const uint8_t octet2, const uint8_t octet3,
-                                        const uint8_t octet4) {
-    ccoip_ipv4_address_t address;
-    address.data[0] = octet1;
-    address.data[1] = octet2;
-    address.data[2] = octet3;
-    address.data[3] = octet4;
-    return address;
-}
-
 typedef struct ccoip_ipv6_address_t {
     uint8_t data[16];
 } ccoip_ipv6_address_t;
