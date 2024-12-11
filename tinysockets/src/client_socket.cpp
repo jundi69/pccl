@@ -214,7 +214,11 @@ size_t tinysockets::BlockingIOSocket::receivePacketLength() const {
         LOG(INFO) << "Failed to receive packet length with error: " << error_message;
         return 0;
     }
+#ifdef ntoll
     return ntohll(length);
+#else
+    return ntohl(length);
+#endif
 }
 
 bool tinysockets::BlockingIOSocket::receivePacketData(std::span<std::uint8_t> &dst) const {
