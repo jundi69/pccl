@@ -4,6 +4,7 @@
 #include <ccoip_types.hpp>
 #include <unordered_map>
 #include <unordered_set>
+#include <optional>
 
 namespace ccoip {
     enum ConnectionPhase {
