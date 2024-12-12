@@ -14,8 +14,8 @@ bool ccoip::CCoIPMasterState::registerClient(const ccoip_socket_address_t &clien
     client_uuids[internal_address] = uuid;
     uuid_clients[uuid] = internal_address;
     client_info[uuid] = ClientInfo{
-        .connection_phase = PEER_REGISTERED,
         .client_uuid = uuid,
+        .connection_phase = PEER_REGISTERED,
         .socket_address = client_address,
         .p2p_listen_port = p2p_listen_port
     };
