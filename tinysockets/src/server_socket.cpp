@@ -61,7 +61,7 @@ tinysockets::ServerSocket::ServerSocket(const ccoip_socket_address_t &listen_add
 }
 
 tinysockets::ServerSocket::ServerSocket(const ccoip_inet_address_t &inet_address,
-                                        const uint16_t above_port) : listen_address(inet_address, above_port),
+                                        const uint16_t above_port) : listen_address({inet_address, above_port}),
                                                                      bump_port_on_failure(true),
                                                                      server_socket_state(new ServerSocketState{}) {
 }

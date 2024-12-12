@@ -124,7 +124,12 @@ bool ccoip::CCoIPClientHandler::establishP2PConnections() {
 
         // establish p2p connections
         for (auto &peer: new_peers->new_peers) {
-            // NOLINT(*-use-anyofallof)
+
+            // check if connection already exists
+            if (p2p_connections.contains(peer.peer_uuid)) {
+                continue;
+            }
+
             if (!establishP2PConnection(peer)) {
                 LOG(ERR) << "Failed to establish P2P connection with peer " << uuid_to_string(peer.peer_uuid);
                 return false;
