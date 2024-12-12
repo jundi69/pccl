@@ -75,12 +75,18 @@ pcclResult_t pcclDestroyCommunicator(pcclComm_t *communicator) {
     return pcclSuccess;
 }
 
-pcclResult_t pcclConnectMaster(pcclComm_t *communicator, ccoip_socket_address_t socket_address) {
+pcclResult_t pcclConnect(pcclComm_t *communicator, ccoip_socket_address_t socket_address) {
     PCCL_VALIDATE_INITIALIZED();
     PCCL_VALIDATE(communicator != nullptr, pcclInvalidArgument);
     PCCL_VALIDATE(communicator->ccoip_client == nullptr, pcclInvalidUsage);
     communicator->ccoip_client = std::make_unique<ccoip::CCoIPClient>(socket_address);
     if (!communicator->ccoip_client->connect()) [[unlikely]] {
+        if (!communicator->ccoip_client->interrupt()) [[unlikely]] {
+            return pcclInternalError;
+        }
+        if (!communicator->ccoip_client->join()) [[unlikely]] {
+            return pcclInternalError;
+        }
         return pcclInvalidUsage;
     }
     return pcclSuccess;

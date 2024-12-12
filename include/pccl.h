@@ -69,7 +69,7 @@ typedef struct pcclReduceInfo_t {
     uint64_t rx_bytes;
 } pcclReduceInfo_t;
 
-typedef struct pcclAsyncReduceOp_t{
+typedef struct pcclAsyncReduceOp_t {
     pcclComm_t *comm;
     uint64_t tag;
 } pcclAsyncReduceOp_t;
@@ -153,7 +153,8 @@ PCCL_EXPORT pcclResult_t pcclSaveReducePlan(const pcclComm_t *communicator, cons
 PCCL_EXPORT pcclResult_t pcclDestroyCommunicator(pcclComm_t *communicator);
 
 /**
- * Establishes a connection to a master node.
+ * Establishes a connection to a master node & waits until all peers have connected.
+ * This function can block for a long time depending on how frequently the existing peers agree to accept new peers.
  * This function must be called on a communicator for the communicator to be usable.
  *
  * @param communicator The communicator to connect to the master node.
@@ -163,8 +164,7 @@ PCCL_EXPORT pcclResult_t pcclDestroyCommunicator(pcclComm_t *communicator);
  * @return @code pcclInvalidArgument@endcode if the communicator is null.
  * @return @code pcclInvalidUsage@endcode if the communicator is already connected to a master node.
  */
-PCCL_EXPORT pcclResult_t pcclConnectMaster(pcclComm_t *communicator, ccoip_socket_address_t socket_address);
-
+PCCL_EXPORT pcclResult_t pcclConnect(pcclComm_t *communicator, ccoip_socket_address_t socket_address);
 
 /**
  * Update the topology of a communicator if required.

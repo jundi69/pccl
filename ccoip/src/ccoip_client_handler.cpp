@@ -1,25 +1,40 @@
 #include "ccoip_client_handler.hpp"
 #include "ccoip_types.hpp"
 #include <pccl_log.hpp>
+#include <ccoip.h>
 
 #include "ccoip_inet_utils.hpp"
 #include "ccoip_packets.hpp"
-
-struct CCoIPClientState {
-    std::unordered_map<internal_inet_address_t, std::vector<ccoip_uuid_t> > inet_addrs_to_uuids{};
-};
+#include <thread_guard.hpp>
 
 ccoip::CCoIPClientHandler::CCoIPClientHandler(const ccoip_socket_address_t &address) : client_socket(address),
-    client_state(new CCoIPClientState()) {
+    p2p_socket({address.inet.protocol, {}, {}}, CCOIP_PROTOCOL_PORT_P2P) {
 }
 
 bool ccoip::CCoIPClientHandler::connect() {
-    if (!client_socket.establishConnection()) [[unlikely]] {
+    // start listening on p2p socket
+    p2p_socket.addReadCallback(
+        [this](const ccoip_socket_address_t &client_address, const std::span<std::uint8_t> &data) {
+            onP2PClientRead(client_address, data);
+        });
+    if (!p2p_socket.listen()) {
+        LOG(ERR) << "Failed to bind P2P socket " << p2p_socket.getListenPort();
+        return false;
+    }
+    if (!p2p_socket.runAsync()) [[unlikely]] {
+        return false;
+    }
+    p2p_server_thread_id = p2p_socket.getServerThreadId();
+    LOG(INFO) << "P2P socket listening on port " << p2p_socket.getListenPort() << "...";
+
+    if (!client_socket.establishConnection()) {
         return false;
     }
 
     // send join request packet to master
-    if (!client_socket.sendPacket<C2MPacketRequestSessionRegistration>(C2MPacketRequestSessionRegistration{})) [[unlikely]] {
+    C2MPacketRequestSessionRegistration join_request{};
+    join_request.p2p_listen_port = p2p_socket.getListenPort();
+    if (!client_socket.sendPacket<C2MPacketRequestSessionRegistration>(join_request)) {
         return false;
     }
 
@@ -30,6 +45,11 @@ bool ccoip::CCoIPClientHandler::connect() {
     }
     if (!response->accepted) {
         LOG(ERR) << "Master rejected join request";
+        return false;
+    }
+
+    if (!establishP2PConnections()) {
+        LOG(ERR) << "Failed to establish P2P connections";
         return false;
     }
     return true;
@@ -46,29 +66,14 @@ bool ccoip::CCoIPClientHandler::connect() {
 // us the ip of the peer is, and then we mark the connection as rx side open (rx side = their connection to us listening)
 
 bool ccoip::CCoIPClientHandler::acceptNewPeers() {
-    const C2MPacketAcceptNewPeers new_peers_packet{};
-    if (!client_socket.sendPacket(new_peers_packet)) {
+    if (!client_socket.sendPacket<C2MPacketAcceptNewPeers>({})) {
         return false;
     }
 
-    const auto response = client_socket.receivePacket<M2CPacketNewPeers>();
-    if (!response) {
+    if (!establishP2PConnections()) {
+        LOG(ERR) << "Failed to establish P2P connections";
         return false;
     }
-
-    /*// add all uuids received by master
-    for (auto &new_peer: response.new_peers) {
-        addPeer(new_peer.inet_addr, new_peer.uuid);
-    }
-
-    // create p2p connections
-    for (auto &new_peer: response.new_peers) {
-        p2p_connections.push_back(establishP2PConnection(new_peer));
-    }
-
-    // wait on signal until notify, check if all p2p connection have been established tx side and rx side
-    */
-
     return true;
 }
 
@@ -77,35 +82,111 @@ bool ccoip::CCoIPClientHandler::updateTopology() {
 }
 
 bool ccoip::CCoIPClientHandler::interrupt() {
+    if (interrupted) {
+        return false;
+    }
+    if (!p2p_socket.interrupt()) [[unlikely]] {
+        return false;
+    }
     if (!client_socket.closeConnection()) [[unlikely]] {
+        return false;
+    }
+    interrupted = true;
+    return true;
+}
+
+bool ccoip::CCoIPClientHandler::join() {
+    p2p_socket.join();
+    return true;
+}
+
+bool ccoip::CCoIPClientHandler::isInterrupted() const {
+    return interrupted;
+}
+
+ccoip::CCoIPClientHandler::~CCoIPClientHandler() = default;
+
+bool ccoip::CCoIPClientHandler::establishP2PConnections() {
+    // wait for new peers packet
+    const auto new_peers = client_socket.receivePacket<M2CPacketNewPeers>();
+    if (!new_peers) {
+        LOG(ERR) << "Failed to receive new peers packet";
+        return false;
+    }
+    if (!new_peers->unchanged) {
+        // add all new peers to the client state
+        for (auto &peer: new_peers->new_peers) {
+            if (!client_state.registerPeer(peer.p2p_listen_addr, peer.peer_uuid)) [[unlikely]] {
+                LOG(ERR) << "Failed to register peer " << uuid_to_string(peer.peer_uuid);
+                return false;
+            }
+        }
+
+        // establish p2p connections
+        for (auto &peer: new_peers->new_peers) {
+            // NOLINT(*-use-anyofallof)
+            if (!establishP2PConnection(peer)) {
+                LOG(ERR) << "Failed to establish P2P connection with peer " << uuid_to_string(peer.peer_uuid);
+                return false;
+            }
+        }
+    }
+
+    // send packet to this peer has established its p2p connections
+    if (!client_socket.sendPacket<C2MPacketP2PConnectionsEstablished>({})) {
+        LOG(ERR) << "Failed to send P2P connections established packet";
+        return false;
+    }
+
+    // wait for response from master, indicating ALL peers have established their
+    // respective p2p connections
+    if (const auto response = client_socket.receivePacket<M2CPacketP2PConnectionsEstablished>(); !response) {
+        LOG(ERR) << "Failed to receive P2P connections established response";
         return false;
     }
     return true;
 }
 
-bool ccoip::CCoIPClientHandler::join() {
-    // api for future proofing if we need to ever wait for async operations to finish
-    // to clean up the client handler
+bool ccoip::CCoIPClientHandler::establishP2PConnection(const M2CPacketNewPeerInfo &peer) {
+    auto [it, inserted] = p2p_connections.emplace(peer.peer_uuid, peer.p2p_listen_addr);
+    if (!inserted) {
+        LOG(ERR) << "P2P connection with peer " << uuid_to_string(peer.peer_uuid) << " already exists";
+        return false;
+    }
+    auto &connection = it->second;
+    if (!connection.establishConnection()) {
+        LOG(ERR) << "Failed to establish P2P connection with peer " << uuid_to_string(peer.peer_uuid);
+        return false;
+    }
+    if (!connection.sendPacket<P2PPacketHello>({})) {
+        LOG(ERR) << "Failed to send hello packet to peer " << uuid_to_string(peer.peer_uuid);
+    }
+    if (const auto response = connection.receivePacket<P2PPacketHelloAck>(); !response) {
+        LOG(ERR) << "Failed to receive hello ack from peer " << uuid_to_string(peer.peer_uuid);
+        return false;
+    }
+    if (!client_state.registerPeer(peer.p2p_listen_addr, peer.peer_uuid)) {
+        LOG(ERR) << "Failed to register peer " << uuid_to_string(peer.peer_uuid);
+        return false;
+    }
     return true;
 }
 
-ccoip::CCoIPClientHandler::~CCoIPClientHandler() {
-    delete client_state;
+void ccoip::CCoIPClientHandler::handleP2PHello(const ccoip_socket_address_t &client_address,
+                                               const P2PPacketHello &) {
+    if (!p2p_socket.sendPacket(client_address, P2PPacketHelloAck{})) {
+        LOG(ERR) << "Failed to send hello ack to " << ccoip_sockaddr_to_str(client_address);
+    }
 }
 
-
-void ccoip::CCoIPClientHandler::registerPeer(const ccoip_inet_address_t &address, const ccoip_uuid_t uuid) const {
-    internal_inet_address_t internal_address{
-        .protocol = address.protocol
-    };
-    if (address.protocol == inetIPv4) {
-        internal_address.ipv4 = address.ipv4;
-    } else if (address.protocol == inetIPv6) {
-        internal_address.ipv6 = address.ipv6;
-    }
-    auto &uuids_per_ip = client_state->inet_addrs_to_uuids[internal_address];
-    uuids_per_ip.push_back(uuid);
-    if (uuids_per_ip.size() > 1) {
-        LOG(WARN) << "Registered more than one peer per IP address " << ccoip_inetaddr_to_str(address);
+void ccoip::CCoIPClientHandler::onP2PClientRead(const ccoip_socket_address_t &client_address,
+                                                const std::span<std::uint8_t> &data) {
+    THREAD_GUARD(p2p_server_thread_id);
+    PacketReadBuffer buffer = PacketReadBuffer::wrap(data);
+    if (const auto packet_type = buffer.read<uint16_t>();
+        packet_type == P2PPacketHello::packet_id) {
+        P2PPacketHello packet{};
+        packet.deserialize(buffer);
+        handleP2PHello(client_address, packet);
     }
 }

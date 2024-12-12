@@ -30,16 +30,21 @@ namespace tinysockets {
     class ServerSocket final {
     private:
         ccoip_socket_address_t listen_address;
+        bool bump_port_on_failure;
+
         ServerSocketState *server_socket_state;
         std::thread server_thread;
 
         bool bound = false;
-        bool listening = false;
         bool running = false;
         bool interrupted = false;
 
     public:
+        /// binds to the specified socket address
         explicit ServerSocket(const ccoip_socket_address_t &listen_address);
+
+        /// bind to any free port above the given port
+        explicit ServerSocket(const ccoip_inet_address_t &inet_address, uint16_t above_port);
 
         ServerSocket(const ServerSocket &other) = delete;
 
@@ -50,9 +55,6 @@ namespace tinysockets {
         ServerSocket &operator=(ServerSocket &&other) = delete;
 
         /// Returns false if already bound or if listen_address is invalid
-        [[nodiscard]] bool bind();
-
-        /// Returns false if already listening
         [[nodiscard]] bool listen();
 
         /// Returns false if already running
@@ -82,6 +84,9 @@ namespace tinysockets {
 
         /// Returns the thread ID of the server thread
         [[nodiscard]] std::thread::id getServerThreadId() const;
+
+        /// Returns the port the server is listening on; returns 0 if not listening
+        [[nodiscard]] uint16_t getListenPort() const;
 
         ~ServerSocket();
 

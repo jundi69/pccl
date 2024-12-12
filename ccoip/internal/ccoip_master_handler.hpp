@@ -6,7 +6,6 @@
 #include <tinysockets.hpp>
 
 namespace ccoip {
-
     class CCoIPMasterHandler {
         /// Server socket
         tinysockets::ServerSocket server_socket;
@@ -37,6 +36,11 @@ namespace ccoip {
         ~CCoIPMasterHandler();
 
     private:
+        void sendP2PConnectionInformation();
+
+        void checkP2PConnectionsEstablished();
+
+        void checkAcceptNewPeersConsensus();
 
         // packet handling functions
         void handleAcceptNewPeers(const ccoip_socket_address_t &client_address,
@@ -44,6 +48,10 @@ namespace ccoip {
 
         void handleRequestSessionJoin(const ccoip_socket_address_t &client_address,
                                       const C2MPacketRequestSessionRegistration &packet);
+
+
+        void handleP2PConnectionsEstablished(const ccoip_socket_address_t &client_address,
+                                             const C2MPacketP2PConnectionsEstablished &packet);
 
         // server socket callbacks
         void onClientRead(const ccoip_socket_address_t &client_address,

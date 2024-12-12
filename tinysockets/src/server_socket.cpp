@@ -18,7 +18,6 @@ void uv_err_check(const int status) {
 #define UV_ERR_CHECK(status) uv_err_check(status)
 
 namespace tinysockets {
-
     struct RecvBuffer {
         /// The expected length of the packet
         uint64_t expected_length = -1;
@@ -55,11 +54,19 @@ namespace tinysockets {
     };
 }
 
-tinysockets::ServerSocket::ServerSocket(const ccoip_socket_address_t &listen_address) : listen_address(listen_address),
-    server_socket_state(new ServerSocketState{}) {
+tinysockets::ServerSocket::ServerSocket(const ccoip_socket_address_t &listen_address)
+    : listen_address(listen_address),
+      bump_port_on_failure(false),
+      server_socket_state(new ServerSocketState{}) {
 }
 
-bool tinysockets::ServerSocket::bind() {
+tinysockets::ServerSocket::ServerSocket(const ccoip_inet_address_t &inet_address,
+                                        const uint16_t above_port) : listen_address(inet_address, above_port),
+                                                                     bump_port_on_failure(true),
+                                                                     server_socket_state(new ServerSocketState{}) {
+}
+
+bool tinysockets::ServerSocket::listen() {
     if (bound) {
         return false;
     }
@@ -90,17 +97,34 @@ bool tinysockets::ServerSocket::bind() {
     UV_ERR_CHECK(uv_tcp_init(server_socket_state->loop.get(), server_socket_state->tcp_server.get()));
 
     // bind to socket addr based on protocol
-    {
+    bool failure = false;
+    do {
         const sockaddr *sock_addr = nullptr;
+
+        if (failure) {
+            // bump port if bind failed
+            listen_address.port++;
+            LOG(INFO) << "Bind to port failed, bumping port to " << listen_address.port;
+        }
+
         if (listen_address.inet.protocol == inetIPv4) {
+            addr_ipv4.sin_port = htons(listen_address.port);
             sock_addr = reinterpret_cast<const sockaddr *>(&addr_ipv4);
         } else if (listen_address.inet.protocol == inetIPv6) {
+            addr_ipv6.sin6_port = htons(listen_address.port);
             sock_addr = reinterpret_cast<const sockaddr *>(&addr_ipv6);
         } else [[unlikely]] {
             return false;
         }
+
         UV_ERR_CHECK(uv_tcp_bind(server_socket_state->tcp_server.get(), sock_addr, 0));
-    }
+
+        failure = (uv_listen(reinterpret_cast<uv_stream_t *>(server_socket_state->tcp_server.get()), 128,
+                             [](uv_stream_t *server, const int status) {
+                                 auto *this_ptr = static_cast<ServerSocket *>(server->data);
+                                 this_ptr->onNewConnection(reinterpret_cast<uv_server_stream_t *>(server), status);
+                             }) != 0);
+    } while (bump_port_on_failure && failure);
 
     server_socket_state->async_handle = std::make_unique<uv_async_t>();
     server_socket_state->async_handle->data = this;
@@ -115,29 +139,9 @@ bool tinysockets::ServerSocket::bind() {
     return true;
 }
 
-bool tinysockets::ServerSocket::listen() {
-    if (!bound) {
-        return false;
-    }
-    if (listening) {
-        return false;
-    }
-    if (uv_listen(reinterpret_cast<uv_stream_t *>(server_socket_state->tcp_server.get()), 128,
-                  [](uv_stream_t *server, const int status) {
-                      auto *this_ptr = static_cast<ServerSocket *>(server->data);
-                      this_ptr->onNewConnection(reinterpret_cast<uv_server_stream_t *>(server), status);
-                  }) != 0) {
-        return false;
-    }
-    listening = true;
-    return true;
-}
 
 bool tinysockets::ServerSocket::runAsync() {
     if (running) {
-        return false;
-    }
-    if (!listening) {
         return false;
     }
     server_thread = std::thread([this] {
@@ -253,7 +257,17 @@ bool tinysockets::ServerSocket::closeAllClientConnections() const {
 }
 
 std::thread::id tinysockets::ServerSocket::getServerThreadId() const {
+    if (!running) {
+        return std::thread::id{};
+    }
     return server_thread.get_id();
+}
+
+uint16_t tinysockets::ServerSocket::getListenPort() const {
+    if (!bound) {
+        return 0;
+    }
+    return listen_address.port;
 }
 
 void tinysockets::ServerSocket::onAsyncSignal() const {

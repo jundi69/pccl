@@ -27,7 +27,7 @@ int main() {
     connect_address.inet.ipv4 = {127, 0, 0, 1};
     connect_address.port = 48148;
 
-    PCCL_CHECK(pcclConnectMaster(communicator, connect_address));
+    PCCL_CHECK(pcclConnect(communicator, connect_address));
 
     int world_size{};
     pcclGetAttribute(communicator, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size);

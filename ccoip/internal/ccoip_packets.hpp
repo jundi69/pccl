@@ -15,19 +15,36 @@ namespace ccoip {
     // C2M packets:
 #define C2M_PACKET_REQUEST_SESSION_REGISTRATION_ID 1
 #define C2M_PACKET_ACCEPT_NEW_PEERS_ID 2
+#define C2M_PACKET_P2P_CONNECTIONS_ESTABLISHED_ID 3
 
     // M2C packets:
-#define C2M_PACKET_SESSION_REGISTRATION_RESPONSE_ID 1
-#define C2M_PACKET_NEW_PEERS_ID 2
+#define M2C_PACKET_SESSION_REGISTRATION_RESPONSE_ID 1
+#define M2C_PACKET_NEW_PEERS_ID 2
+#define M2C_PACKET_P2P_CONNECTIONS_ESTABLISHED_ID 3
+
+    // P2P packets:
+#define P2P_PACKET_HELLO_ID 1
+#define P2P_PACKET_HELLO_ACK_ID 2
 
     // C2MPacketRequestSessionRegistration
-    class C2MPacketRequestSessionRegistration final : public EmptyPacket {
+    class C2MPacketRequestSessionRegistration final : public Packet {
     public:
         static packetId_t packet_id;
+        uint16_t p2p_listen_port;
+
+        void serialize(PacketWriteBuffer &buffer) const override;
+
+        void deserialize(PacketReadBuffer &buffer) override;
     };
 
     // C2MPacketAcceptNewPeers
     class C2MPacketAcceptNewPeers final : public EmptyPacket {
+    public:
+        static packetId_t packet_id;
+    };
+
+    // C2MPacketP2PConnectionsEstablished
+    class C2MPacketP2PConnectionsEstablished final : public EmptyPacket {
     public:
         static packetId_t packet_id;
     };
@@ -47,7 +64,7 @@ namespace ccoip {
 
     // M2CPacketNewPeers
     struct M2CPacketNewPeerInfo {
-        ccoip_inet_address_t inet_address;
+        ccoip_socket_address_t p2p_listen_addr;
         ccoip_uuid_t peer_uuid;
     };
 
@@ -55,11 +72,30 @@ namespace ccoip {
     public:
         static packetId_t packet_id;
 
-    public:
+        bool unchanged = false;
+
         std::vector<M2CPacketNewPeerInfo> new_peers;
 
         void serialize(PacketWriteBuffer &buffer) const override;
 
         void deserialize(PacketReadBuffer &buffer) override;
+    };
+
+    // M2CPacketP2PConnectionsEstablished
+    class M2CPacketP2PConnectionsEstablished final : public EmptyPacket {
+    public:
+        static packetId_t packet_id;
+    };
+
+    // P2PPacketHello
+    class P2PPacketHello final : public EmptyPacket {
+    public:
+        static packetId_t packet_id;
+    };
+
+    // P2PPacketHelloAck
+    class P2PPacketHelloAck final : public EmptyPacket {
+    public:
+        static packetId_t packet_id;
     };
 }
