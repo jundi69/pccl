@@ -117,13 +117,15 @@ bool tinysockets::ServerSocket::listen() {
             return false;
         }
 
-        UV_ERR_CHECK(uv_tcp_bind(server_socket_state->tcp_server.get(), sock_addr, 0));
+        failure = uv_tcp_bind(server_socket_state->tcp_server.get(), sock_addr, 0) != 0; // on windows, this already fails
+
+        if (failure) continue;
 
         failure = (uv_listen(reinterpret_cast<uv_stream_t *>(server_socket_state->tcp_server.get()), 128,
                              [](uv_stream_t *server, const int status) {
                                  auto *this_ptr = static_cast<ServerSocket *>(server->data);
                                  this_ptr->onNewConnection(reinterpret_cast<uv_server_stream_t *>(server), status);
-                             }) != 0);
+                             }) != 0); // on linux, this is where it fails
     } while (bump_port_on_failure && failure);
 
     server_socket_state->async_handle = std::make_unique<uv_async_t>();

@@ -182,7 +182,7 @@ PCCL_EXPORT pcclResult_t pcclConnect(pcclComm_t *communicator, ccoip_socket_addr
 PCCL_EXPORT pcclResult_t pcclUpdateTopology(pcclComm_t *communicator);
 
 /**
- * Performs an all reduce operation on a communicator. Blocks untill the all reduce is complete.
+ * Performs an all reduce operation on a communicator. Blocks until the all reduce is complete.
  *
  * @param sendbuff The buffer to send data from.
  * @param recvbuff The buffer to receive data into.
