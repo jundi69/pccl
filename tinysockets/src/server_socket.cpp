@@ -54,11 +54,19 @@ namespace tinysockets {
     };
 }
 
-tinysockets::ServerSocket::ServerSocket(const ccoip_socket_address_t &listen_address) : listen_address(listen_address),
-    server_socket_state(new ServerSocketState{}) {
+tinysockets::ServerSocket::ServerSocket(const ccoip_socket_address_t &listen_address)
+    : listen_address(listen_address),
+      bump_port_on_failure(false),
+      server_socket_state(new ServerSocketState{}) {
 }
 
-bool tinysockets::ServerSocket::bind() {
+tinysockets::ServerSocket::ServerSocket(const ccoip_inet_address_t &inet_address,
+                                        const uint16_t above_port) : listen_address({inet_address, above_port}),
+                                                                     bump_port_on_failure(true),
+                                                                     server_socket_state(new ServerSocketState{}) {
+}
+
+bool tinysockets::ServerSocket::listen() {
     if (bound) {
         return false;
     }
@@ -89,17 +97,49 @@ bool tinysockets::ServerSocket::bind() {
     UV_ERR_CHECK(uv_tcp_init(server_socket_state->loop.get(), server_socket_state->tcp_server.get()));
 
     // bind to socket addr based on protocol
-    {
+    bool failure = false;
+    do {
+        // If this isn't the first attempt, destroy the old handle (if any) and create a new one
+        if (failure) {
+            listen_address.port++;
+            LOG(INFO) << "Bind to port failed, bumping port to " << listen_address.port;
+
+            uv_close(reinterpret_cast<uv_handle_t *>(server_socket_state->tcp_server.get()), nullptr);
+            server_socket_state->tcp_server = std::make_unique<uv_tcp_t>();
+            server_socket_state->tcp_server->data = this;
+            if (uv_tcp_init(server_socket_state->loop.get(), server_socket_state->tcp_server.get()) != 0) {
+                LOG(ERR) << "Failed to re-initialize TCP handle.";
+                return false;
+            }
+        }
+
+        // Update sockaddr with the new port
         const sockaddr *sock_addr = nullptr;
         if (listen_address.inet.protocol == inetIPv4) {
-            sock_addr = reinterpret_cast<const sockaddr *>(&addr_ipv4);
-        } else if (listen_address.inet.protocol == inetIPv6) {
-            sock_addr = reinterpret_cast<const sockaddr *>(&addr_ipv6);
-        } else [[unlikely]] {
-            return false;
+            addr_ipv4.sin_port = htons(listen_address.port);
+            sock_addr = reinterpret_cast<const sockaddr*>(&addr_ipv4);
+        } else {
+            addr_ipv6.sin6_port = htons(listen_address.port);
+            sock_addr = reinterpret_cast<const sockaddr*>(&addr_ipv6);
         }
-        UV_ERR_CHECK(uv_tcp_bind(server_socket_state->tcp_server.get(), sock_addr, 0));
-    }
+
+        const int bind_result = uv_tcp_bind(server_socket_state->tcp_server.get(), sock_addr, 0);
+        failure = bind_result != 0;
+        if (failure) {
+            LOG(ERR) << "uv_tcp_bind failed with error: " << uv_strerror(bind_result) << " (" << bind_result << ")";
+            continue;
+        }
+
+        const int listen_result = uv_listen(reinterpret_cast<uv_stream_t*>(server_socket_state->tcp_server.get()), 128,
+            [](uv_stream_t *server, const int status) {
+                auto *this_ptr = static_cast<ServerSocket *>(server->data);
+                this_ptr->onNewConnection(reinterpret_cast<uv_server_stream_t *>(server), status);
+            });
+        failure = (listen_result != 0);
+        if (failure) {
+            LOG(ERR) << "uv_listen failed with error: " << uv_strerror(listen_result) << " (" << listen_result << ")";
+        }
+    } while (bump_port_on_failure && failure);
 
     server_socket_state->async_handle = std::make_unique<uv_async_t>();
     server_socket_state->async_handle->data = this;
@@ -114,29 +154,9 @@ bool tinysockets::ServerSocket::bind() {
     return true;
 }
 
-bool tinysockets::ServerSocket::listen() {
-    if (!bound) {
-        return false;
-    }
-    if (listening) {
-        return false;
-    }
-    if (uv_listen(reinterpret_cast<uv_stream_t *>(server_socket_state->tcp_server.get()), 128,
-                  [](uv_stream_t *server, const int status) {
-                      auto *this_ptr = static_cast<ServerSocket *>(server->data);
-                      this_ptr->onNewConnection(reinterpret_cast<uv_server_stream_t *>(server), status);
-                  }) != 0) {
-        return false;
-    }
-    listening = true;
-    return true;
-}
 
 bool tinysockets::ServerSocket::runAsync() {
     if (running) {
-        return false;
-    }
-    if (!listening) {
         return false;
     }
     server_thread = std::thread([this] {
@@ -160,7 +180,9 @@ bool tinysockets::ServerSocket::interrupt() {
 }
 
 void tinysockets::ServerSocket::join() {
-    server_thread.join();
+    if (server_thread.joinable()) {
+        server_thread.join();
+    }
 }
 
 void tinysockets::ServerSocket::addReadCallback(const ServerSocketReadCallback &callback) const {
@@ -247,6 +269,20 @@ bool tinysockets::ServerSocket::closeAllClientConnections() const {
         }
     }
     return true;
+}
+
+std::thread::id tinysockets::ServerSocket::getServerThreadId() const {
+    if (!running) {
+        return std::thread::id{};
+    }
+    return server_thread.get_id();
+}
+
+uint16_t tinysockets::ServerSocket::getListenPort() const {
+    if (!bound) {
+        return 0;
+    }
+    return listen_address.port;
 }
 
 void tinysockets::ServerSocket::onAsyncSignal() const {
@@ -384,7 +420,10 @@ void tinysockets::ServerSocket::onClientRead(uv_stream_t *stream, const ssize_t 
                 current_recv_buffer.expected_length = buffer.read<uint64_t>();
             }
 
-            const size_t n_to_insert = std::min(buffer.remaining(), static_cast<size_t>(current_recv_buffer.expected_length - current_recv_buffer.buffer.size()));
+            const size_t n_to_insert = std::min(buffer.remaining(),
+                                                static_cast<size_t>(
+                                                    current_recv_buffer.expected_length - current_recv_buffer.buffer.
+                                                    size()));
             current_recv_buffer.buffer.resize(current_recv_buffer.buffer.size() + n_to_insert);
 
             buffer.readContents(
@@ -430,8 +469,7 @@ tinysockets::ServerSocket::~ServerSocket() {
     if (!running && server_socket_state->loop != nullptr) {
         performLoopShutdown();
     }
-    if (running && !interrupted)
-    {
+    if (running && !interrupted) {
         // ReSharper disable once CppDFAConstantConditions
         if (!interrupt()) [[unlikely]] {
             LOG(ERR) << "Failed to interrupt ServerSocket from destructor";

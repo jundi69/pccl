@@ -7,7 +7,7 @@ endif ()
 
 function(add_sanitized_gtest target_name test_file)
     add_executable(${target_name} ${test_file})
-    target_link_libraries(${target_name} gtest_main)
+    target_link_libraries(${target_name} PRIVATE gtest_main)
     add_test(NAME ${target_name} COMMAND ${target_name})
 
     # sanitized test

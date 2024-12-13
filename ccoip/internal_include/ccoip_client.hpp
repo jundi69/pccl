@@ -9,7 +9,7 @@ namespace ccoip {
         CCoIPClientHandler *client;
 
     public:
-        explicit CCoIPClient(const ccoip_socket_address_t &listen_address);
+        explicit CCoIPClient(const ccoip_socket_address_t &master_socket_address);
 
         CCoIPClient(const CCoIPClient &other) = delete;
         CCoIPClient(CCoIPClient &&other) = delete;
@@ -31,6 +31,10 @@ namespace ccoip {
         /// Wait for the client to gracefully terminate after interruption
         [[nodiscard]] bool join() const;
 
+        /// Returns true if the client has been interrupted
+        [[nodiscard]] bool isInterrupted() const;
+
         ~CCoIPClient();
+
     };
 };

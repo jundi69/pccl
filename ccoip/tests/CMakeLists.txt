@@ -1,1 +1,2 @@
-add_sanitized_gtest(test_accept_new_peers.cpp test_accept_new_peers.cpp)
+add_sanitized_gtest(test_accept_new_peers test_accept_new_peers.cpp)
+target_link_libraries(test_accept_new_peers PRIVATE ccoip_private)

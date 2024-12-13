@@ -27,7 +27,7 @@ TEST(TestServerSocket, test_bind_valid) {
     ASSERT_NO_THROW(RunWithTimeout([]{
         const ccoip_socket_address_t listen_address = create_ipv4_address(0, 0, 0, 0, 48148);
         tinysockets::ServerSocket server_socket(listen_address);
-        EXPECT_TRUE(server_socket.bind());
+        EXPECT_TRUE(server_socket.listen());
         }, 1000));
 }
 
@@ -35,7 +35,7 @@ TEST(TestServerSocket, test_bind_loopback) {
     ASSERT_NO_THROW(RunWithTimeout([]{
         const ccoip_socket_address_t listen_address = create_ipv4_address(127, 0, 0, 1, 48148);
         tinysockets::ServerSocket server_socket(listen_address);
-        EXPECT_TRUE(server_socket.bind());
+        EXPECT_TRUE(server_socket.listen());
         }, 1000));
 }
 
@@ -43,7 +43,7 @@ TEST(TestServerSocket, test_bind_invalid) {
     ASSERT_NO_THROW(RunWithTimeout([]{
         const ccoip_socket_address_t listen_address = create_ipv4_address(0, 0, 0, 0, 0);
         tinysockets::ServerSocket server_socket(listen_address);
-        EXPECT_FALSE(server_socket.bind());
+        EXPECT_FALSE(server_socket.listen());
         }, 1000));
 }
 
@@ -59,7 +59,7 @@ TEST(TestServerSocket, test_bind_valid_ipv6) {
         .port = 48148,
         };
         tinysockets::ServerSocket server_socket(listen_address);
-        EXPECT_TRUE(server_socket.bind());
+        EXPECT_TRUE(server_socket.listen());
         }, 1000));
 }
 
@@ -75,7 +75,7 @@ TEST(TestServerSocket, test_bind_invalid_ipv6) {
         .port = 0,
         };
         tinysockets::ServerSocket server_socket(listen_address);
-        EXPECT_FALSE(server_socket.bind());
+        EXPECT_FALSE(server_socket.listen());
         }, 1000));
 }
 
@@ -84,12 +84,10 @@ TEST(TestServerSocket, test_bind_already_bound) {
     ASSERT_NO_THROW(RunWithTimeout([]{
         const auto listen_address = create_ipv4_address(0, 0, 0, 0, 48149);
         tinysockets::ServerSocket server_socket1(listen_address);
-        EXPECT_TRUE(server_socket1.bind());
         EXPECT_TRUE(server_socket1.listen());
 
         tinysockets::ServerSocket server_socket2(listen_address);
-        EXPECT_TRUE(server_socket2.bind());
-        EXPECT_FALSE(server_socket2.listen());
+        EXPECT_TRUE(server_socket2.listen());
         }, 1000));
 }
 
@@ -98,17 +96,7 @@ TEST(TestServerSocket, test_listen_after_bind) {
     ASSERT_NO_THROW(RunWithTimeout([]{
         const auto listen_address = create_ipv4_address(0, 0, 0, 0, 48150);
         tinysockets::ServerSocket server_socket(listen_address);
-        EXPECT_TRUE(server_socket.bind());
         EXPECT_TRUE(server_socket.listen());
-        }, 1000));
-}
-
-// Test listening on an unbound socket
-TEST(TestServerSocket, test_listen_without_bind) {
-    ASSERT_NO_THROW(RunWithTimeout([]{
-        const auto listen_address = create_ipv4_address(0, 0, 0, 0, 48151);
-        tinysockets::ServerSocket server_socket(listen_address);
-        EXPECT_FALSE(server_socket.listen()); // Should fail because socket is not bound
         }, 1000));
 }
 
@@ -117,7 +105,6 @@ TEST(TestServerSocket, test_run_async) {
     ASSERT_NO_THROW(RunWithTimeout([]{
         const auto listen_address = create_ipv4_address(0, 0, 0, 0, 48152);
         tinysockets::ServerSocket server_socket(listen_address);
-        EXPECT_TRUE(server_socket.bind());
         EXPECT_TRUE(server_socket.listen());
         EXPECT_TRUE(server_socket.runAsync());
 
@@ -134,7 +121,6 @@ TEST(TestServerSocket, test_run_async_already_running) {
     ASSERT_NO_THROW(RunWithTimeout([]{
         const auto listen_address = create_ipv4_address(0, 0, 0, 0, 48153);
         tinysockets::ServerSocket server_socket(listen_address);
-        EXPECT_TRUE(server_socket.bind());
         EXPECT_TRUE(server_socket.listen());
         EXPECT_TRUE(server_socket.runAsync());
         EXPECT_FALSE(server_socket.runAsync()); // Should fail because server is already running
@@ -149,7 +135,6 @@ TEST(TestServerSocket, test_interrupt_and_join) {
     ASSERT_NO_THROW(RunWithTimeout([]{
         const auto listen_address = create_ipv4_address(0, 0, 0, 0, 48154);
         tinysockets::ServerSocket server_socket(listen_address);
-        EXPECT_TRUE(server_socket.bind());
         EXPECT_TRUE(server_socket.listen());
         EXPECT_TRUE(server_socket.runAsync());
 
@@ -203,7 +188,6 @@ TEST(TestServerSocket, test_client_connection_and_callbacks) {
             });
 
         // Bind and listen
-        EXPECT_TRUE(server_socket.bind());
         EXPECT_TRUE(server_socket.listen());
 
         // Run the server asynchronously
@@ -273,7 +257,6 @@ TEST(TestServerSocket, test_close_client_connection) {
             });
 
         // Bind and listen
-        EXPECT_TRUE(server_socket.bind());
         EXPECT_TRUE(server_socket.listen());
 
         // Run the server asynchronously
@@ -306,24 +289,13 @@ TEST(TestServerSocket, test_close_client_connection) {
         }, 10000));
 }
 
-// Test running server async without calling listen first
-TEST(TestServerSocket, test_run_async_without_listen) {
-    ASSERT_NO_THROW(RunWithTimeout([]{
-        const auto listen_address = create_ipv4_address(0, 0, 0, 0, 48157);
-        tinysockets::ServerSocket server_socket(listen_address);
-        // Bind is done but not listen
-        EXPECT_TRUE(server_socket.bind());
-        EXPECT_FALSE(server_socket.runAsync()); // Should fail because not listening yet
-        }, 1000));
-}
-
 // Test binding the same socket twice
 TEST(TestServerSocket, test_bind_twice) {
     ASSERT_NO_THROW(RunWithTimeout([]{
         const auto listen_address = create_ipv4_address(0, 0, 0, 0, 48158);
         tinysockets::ServerSocket server_socket(listen_address);
-        EXPECT_TRUE(server_socket.bind());
-        EXPECT_FALSE(server_socket.bind()); // Second bind should fail
+        EXPECT_TRUE(server_socket.listen());
+        EXPECT_FALSE(server_socket.listen()); // Second bind should fail
         }, 1000));
 }
 
@@ -332,7 +304,6 @@ TEST(TestServerSocket, test_listen_twice) {
     ASSERT_NO_THROW(RunWithTimeout([]{
         const auto listen_address = create_ipv4_address(0, 0, 0, 0, 48159);
         tinysockets::ServerSocket server_socket(listen_address);
-        EXPECT_TRUE(server_socket.bind());
         EXPECT_TRUE(server_socket.listen());
         EXPECT_FALSE(server_socket.listen()); // Second listen should fail
         }, 1000));
@@ -343,7 +314,6 @@ TEST(TestServerSocket, test_run_async_after_interrupt) {
     ASSERT_NO_THROW(RunWithTimeout([]{
         const auto listen_address = create_ipv4_address(0, 0, 0, 0, 48160);
         tinysockets::ServerSocket server_socket(listen_address);
-        EXPECT_TRUE(server_socket.bind());
         EXPECT_TRUE(server_socket.listen());
         EXPECT_TRUE(server_socket.runAsync());
 
@@ -369,7 +339,6 @@ TEST(TestServerSocket, test_multiple_clients) {
             }
             });
 
-        EXPECT_TRUE(server_socket.bind());
         EXPECT_TRUE(server_socket.listen());
         EXPECT_TRUE(server_socket.runAsync());
 
@@ -419,7 +388,6 @@ TEST(TestServerSocket, test_large_packet) {
             read_callback_called = true;
             });
 
-        EXPECT_TRUE(server_socket.bind());
         EXPECT_TRUE(server_socket.listen());
         EXPECT_TRUE(server_socket.runAsync());
 
@@ -446,7 +414,6 @@ TEST(TestServerSocket, test_close_non_existent_client) {
     ASSERT_NO_THROW(RunWithTimeout([]{
         const auto listen_address = create_ipv4_address(127, 0, 0, 1, 48163);
         tinysockets::ServerSocket server_socket(listen_address);
-        EXPECT_TRUE(server_socket.bind());
         EXPECT_TRUE(server_socket.listen());
         EXPECT_TRUE(server_socket.runAsync());
 
@@ -482,7 +449,6 @@ TEST(TestServerSocket, test_multiple_callbacks) {
             ++close_calls;
             });
 
-        EXPECT_TRUE(server_socket.bind());
         EXPECT_TRUE(server_socket.listen());
         EXPECT_TRUE(server_socket.runAsync());
 
@@ -511,8 +477,6 @@ TEST(TestServerSocket, test_client_connect_when_not_listening) {
     ASSERT_NO_THROW(RunWithTimeout([]{
         const auto listen_address = create_ipv4_address(127, 0, 0, 1, 49100);
         tinysockets::ServerSocket server_socket(listen_address);
-
-        EXPECT_TRUE(server_socket.bind());
         // Notice we do not call listen()
         tinysockets::BlockingIOSocket client_socket(listen_address);
         EXPECT_FALSE(client_socket.establishConnection()); // Should fail because server not listening
@@ -525,7 +489,6 @@ TEST(TestServerSocket, test_multiple_interrupts) {
         const auto listen_address = create_ipv4_address(127, 0, 0, 1, 49102);
         tinysockets::ServerSocket server_socket(listen_address);
 
-        EXPECT_TRUE(server_socket.bind());
         EXPECT_TRUE(server_socket.listen());
         EXPECT_TRUE(server_socket.runAsync());
 
@@ -543,7 +506,6 @@ TEST(TestServerSocket, test_rerun_after_join) {
         const auto listen_address = create_ipv4_address(127, 0, 0, 1, 49103);
         tinysockets::ServerSocket server_socket(listen_address);
 
-        EXPECT_TRUE(server_socket.bind());
         EXPECT_TRUE(server_socket.listen());
         EXPECT_TRUE(server_socket.runAsync());
 
@@ -572,7 +534,6 @@ TEST(TestServerSocket, test_zero_length_packet) {
             callback_called = true;
             });
 
-        EXPECT_TRUE(server_socket.bind());
         EXPECT_TRUE(server_socket.listen());
 
         EXPECT_TRUE(server_socket.runAsync());
@@ -624,7 +585,6 @@ TEST(TestServerSocket, test_unknown_packet_id) {
             callback_called = true;
             });
 
-        EXPECT_TRUE(server_socket.bind());
         EXPECT_TRUE(server_socket.listen());
 
         EXPECT_TRUE(server_socket.runAsync());
@@ -654,7 +614,6 @@ TEST(TestServerSocket, test_concurrent_client_connections) {
         const auto listen_address = create_ipv4_address(127, 0, 0, 1, 49107);
         tinysockets::ServerSocket server_socket(listen_address);
 
-        EXPECT_TRUE(server_socket.bind());
         EXPECT_TRUE(server_socket.listen());
         EXPECT_TRUE(server_socket.runAsync());
 
@@ -689,7 +648,6 @@ TEST(TestServerSocket, test_client_send_after_server_stop) {
         const auto listen_address = create_ipv4_address(127, 0, 0, 1, 49108);
         tinysockets::ServerSocket server_socket(listen_address);
 
-        EXPECT_TRUE(server_socket.bind());
         EXPECT_TRUE(server_socket.listen());
         EXPECT_TRUE(server_socket.runAsync());
 
@@ -725,7 +683,6 @@ TEST(TestServerSocket, test_close_client_after_server_stopped) {
     ASSERT_NO_THROW(RunWithTimeout([]{
         const auto listen_address = create_ipv4_address(127, 0, 0, 1, 49109);
         tinysockets::ServerSocket server_socket(listen_address);
-        EXPECT_TRUE(server_socket.bind());
         EXPECT_TRUE(server_socket.listen());
         EXPECT_TRUE(server_socket.runAsync());
 
@@ -765,7 +722,6 @@ TEST(TestServerSocket, test_server_send_data) {
             EXPECT_TRUE(server_socket.sendPacket(addr, response));
         });
 
-        EXPECT_TRUE(server_socket.bind());
         EXPECT_TRUE(server_socket.listen());
         EXPECT_TRUE(server_socket.runAsync());
 
@@ -810,7 +766,6 @@ TEST(TestServerSocket, test_server_send_on_client_connect) {
             EXPECT_TRUE(server_socket.sendPacket(addr, p));
         });
 
-        EXPECT_TRUE(server_socket.bind());
         EXPECT_TRUE(server_socket.listen());
         EXPECT_TRUE(server_socket.runAsync());
 
@@ -861,7 +816,6 @@ TEST(TestServerSocket, test_server_send_on_client_message) {
             EXPECT_TRUE(server_socket.sendPacket(addr, response));
         });
 
-        EXPECT_TRUE(server_socket.bind());
         EXPECT_TRUE(server_socket.listen());
         EXPECT_TRUE(server_socket.runAsync());
 
@@ -910,7 +864,6 @@ TEST(TestServerSocket, test_server_send_after_client_disconnect) {
             EXPECT_FALSE(server_socket.sendPacket(addr, p)); // Should fail
         });
 
-        EXPECT_TRUE(server_socket.bind());
         EXPECT_TRUE(server_socket.listen());
         EXPECT_TRUE(server_socket.runAsync());
 
@@ -955,7 +908,6 @@ TEST(TestServerSocket, test_server_send_large_packets) {
             EXPECT_TRUE(server_socket.sendPacket(addr, p));
         });
 
-        EXPECT_TRUE(server_socket.bind());
         EXPECT_TRUE(server_socket.listen());
         EXPECT_TRUE(server_socket.runAsync());
 
@@ -1009,7 +961,6 @@ TEST(TestServerSocket, test_server_send_to_multiple_clients) {
             EXPECT_TRUE(server_socket.sendPacket(addr, p));
         });
 
-        EXPECT_TRUE(server_socket.bind());
         EXPECT_TRUE(server_socket.listen());
         EXPECT_TRUE(server_socket.runAsync());
 
@@ -1043,7 +994,6 @@ TEST(TestServerSocket, test_server_send_to_non_existent_clients) {
         DummyPacket p{};
         p.payload = {0x55, 0x66};
 
-        EXPECT_TRUE(server_socket.bind());
         EXPECT_TRUE(server_socket.listen());
         EXPECT_TRUE(server_socket.runAsync());
 
@@ -1080,7 +1030,6 @@ TEST(TestServerSocket, test_client_send_extremely_large_packet) {
             read_callback_called = true;
         });
 
-        EXPECT_TRUE(server_socket.bind());
         EXPECT_TRUE(server_socket.listen());
         EXPECT_TRUE(server_socket.runAsync());
 
@@ -1129,7 +1078,6 @@ TEST(TestServerSocket, test_client_send_multiple_large_packets) {
             read_callbacks_called.fetch_add(1, std::memory_order_relaxed);
         });
 
-        EXPECT_TRUE(server_socket.bind());
         EXPECT_TRUE(server_socket.listen());
         EXPECT_TRUE(server_socket.runAsync());
 
@@ -1182,7 +1130,6 @@ TEST(TestServerSocket, test_client_send_large_packet_in_chunks) {
             read_callback_called = true;
         });
 
-        EXPECT_TRUE(server_socket.bind());
         EXPECT_TRUE(server_socket.listen());
         EXPECT_TRUE(server_socket.runAsync());
 
@@ -1235,7 +1182,6 @@ TEST(TestServerSocket, test_concurrent_clients_send_large_packets) {
             received_packets.fetch_add(1, std::memory_order_relaxed);
         });
 
-        EXPECT_TRUE(server_socket.bind());
         EXPECT_TRUE(server_socket.listen());
         EXPECT_TRUE(server_socket.runAsync());
 
@@ -1305,7 +1251,6 @@ TEST(TestServerSocket, test_client_send_exact_max_packet_size) {
             read_callback_called = true;
         });
 
-        EXPECT_TRUE(server_socket.bind());
         EXPECT_TRUE(server_socket.listen());
         EXPECT_TRUE(server_socket.runAsync());
 
