@@ -145,7 +145,7 @@ class Communicator:
         assert filename and filename.endswith('.dot')
         PCCLError.check(C.pcclSaveReducePlan(self._comm[0], bytes(filename, 'utf-8')))
 
-    def connect_master(self, address: str):
+    def connect(self, address: str):
         """
         Establishes a connection to a master node.
         This function must be called on a communicator for the communicator to be usable.
@@ -154,7 +154,7 @@ class Communicator:
         ip, port = address.split(":")
         ip = ip_address(ip)
         ccoip_address = _create_ccoip_socket_address(ip, int(port))
-        PCCLError.check(C.pcclConnectMaster(self._comm[0], ccoip_address[0]))
+        PCCLError.check(C.pcclConnect(self._comm[0], ccoip_address[0]))
 
     def all_reduce(self, send: Tensor, recv: Tensor, dtype: DataType, op: ReduceOp, tag: int) -> ReduceInfo:
         """Performs an all reduce operation on a communicator. Blocks until the all reduce is complete."""

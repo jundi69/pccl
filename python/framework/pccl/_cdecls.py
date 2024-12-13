@@ -1,4 +1,4 @@
-# Autogenered by /home/mario/Documents/projects/pccl-refactor/python/gen_bindings.py 2024-12-11 01:45:04.569448, do NOT edit!
+# Autogenered by /home/mario/Documents/projects/pccl-refactor/python/framework/gen_bindings.py 2024-12-13 11:16:25.207053, do NOT edit!
 
 __PCCL_CDECLS: str = '''
 
@@ -64,7 +64,7 @@ uint32_t world_size;
 uint64_t tx_bytes;
 uint64_t rx_bytes;
 } pcclReduceInfo_t;
-typedef struct pcclAsyncReduceOp_t{
+typedef struct pcclAsyncReduceOp_t {
 pcclComm_t *comm;
 uint64_t tag;
 } pcclAsyncReduceOp_t;
@@ -90,7 +90,7 @@ int *p_attribute_out);
  pcclResult_t pcclTopologySaveGraph(const pcclComm_t *communicator, const char *filename);
  pcclResult_t pcclSaveReducePlan(const pcclComm_t *communicator, const char *filename);
  pcclResult_t pcclDestroyCommunicator(pcclComm_t *communicator);
- pcclResult_t pcclConnectMaster(pcclComm_t *communicator, ccoip_socket_address_t socket_address);
+ pcclResult_t pcclConnect(pcclComm_t *communicator, ccoip_socket_address_t socket_address);
  pcclResult_t pcclUpdateTopology(pcclComm_t *communicator);
  pcclResult_t pcclAllReduce(const void *sendbuff, void *recvbuff, size_t count, pcclDataType_t datatype,
 pcclRedOp_t op, uint64_t tag, const pcclComm_t *communicator,
@@ -100,7 +100,7 @@ pcclRedOp_t op, uint64_t tag, const pcclComm_t *communicator,
 pcclReduceInfo_t *reduce_info_out,
 pcclAsyncReduceOp_t *reduce_handle_out);
  pcclResult_t pcclAwaitAsyncReduce(const pcclAsyncReduceOp_t *reduce_handle);
- pcclResult_t pcclSynchronizeSharedState(const pcclComm_t *comm,
+ pcclResult_t pcclSynchronizeSharedState(const pcclComm_t *communicator,
 pcclSharedState_t *shared_state);
 typedef struct pcclMasterInstanceState_t pcclMasterInstance_t;
  pcclResult_t pcclCreateMaster(ccoip_socket_address_t listen_address,

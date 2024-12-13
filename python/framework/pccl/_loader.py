@@ -1,6 +1,6 @@
 import sys
 from pathlib import Path
-from _cdecls import __PCCL_CDECLS
+from pccl._cdecls import __PCCL_CDECLS
 
 PCCL_LIBS = [
     ('win32', 'pccl.dll'),
@@ -14,8 +14,7 @@ def load_native_module():
     assert lib_name, f'Unsupported platform: {platform}'
 
     # Locate the library in the package directory
-    #pkg_path = Path(__file__).parent
-    pkg_path = Path('../../build/debug')  #override while developing the api
+    pkg_path = Path(__file__).parent
     lib_path = pkg_path / lib_name
     assert lib_path.exists(), f'PCCL shared library not found: {lib_path}'
 

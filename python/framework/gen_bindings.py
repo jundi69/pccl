@@ -4,8 +4,8 @@ import re
 OUTPUT_FILE: str = 'pccl/_cdecls.py'
 
 HEADERS = [
-    '../ccoip/public_include/ccoip_inet.h',
-    '../include/pccl.h',
+    '../../ccoip/public_include/ccoip_inet.h',
+    '../../include/pccl.h',
 ]
 
 def comment_replacer(match):
