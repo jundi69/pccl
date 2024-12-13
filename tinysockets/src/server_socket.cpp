@@ -99,33 +99,46 @@ bool tinysockets::ServerSocket::listen() {
     // bind to socket addr based on protocol
     bool failure = false;
     do {
-        const sockaddr *sock_addr = nullptr;
-
+        // If this isn't the first attempt, destroy the old handle (if any) and create a new one
         if (failure) {
-            // bump port if bind failed
             listen_address.port++;
             LOG(INFO) << "Bind to port failed, bumping port to " << listen_address.port;
+
+            uv_close(reinterpret_cast<uv_handle_t *>(server_socket_state->tcp_server.get()), nullptr);
+            server_socket_state->tcp_server = std::make_unique<uv_tcp_t>();
+            server_socket_state->tcp_server->data = this;
+            if (uv_tcp_init(server_socket_state->loop.get(), server_socket_state->tcp_server.get()) != 0) {
+                LOG(ERR) << "Failed to re-initialize TCP handle.";
+                return false;
+            }
         }
 
+        // Update sockaddr with the new port
+        const sockaddr *sock_addr = nullptr;
         if (listen_address.inet.protocol == inetIPv4) {
             addr_ipv4.sin_port = htons(listen_address.port);
-            sock_addr = reinterpret_cast<const sockaddr *>(&addr_ipv4);
-        } else if (listen_address.inet.protocol == inetIPv6) {
+            sock_addr = reinterpret_cast<const sockaddr*>(&addr_ipv4);
+        } else {
             addr_ipv6.sin6_port = htons(listen_address.port);
-            sock_addr = reinterpret_cast<const sockaddr *>(&addr_ipv6);
-        } else [[unlikely]] {
-            return false;
+            sock_addr = reinterpret_cast<const sockaddr*>(&addr_ipv6);
         }
 
-        failure = uv_tcp_bind(server_socket_state->tcp_server.get(), sock_addr, 0) != 0; // on windows, this already fails
+        const int bind_result = uv_tcp_bind(server_socket_state->tcp_server.get(), sock_addr, 0);
+        failure = bind_result != 0;
+        if (failure) {
+            LOG(ERR) << "uv_tcp_bind failed with error: " << uv_strerror(bind_result) << " (" << bind_result << ")";
+            continue;
+        }
 
-        if (failure) continue;
-
-        failure = (uv_listen(reinterpret_cast<uv_stream_t *>(server_socket_state->tcp_server.get()), 128,
-                             [](uv_stream_t *server, const int status) {
-                                 auto *this_ptr = static_cast<ServerSocket *>(server->data);
-                                 this_ptr->onNewConnection(reinterpret_cast<uv_server_stream_t *>(server), status);
-                             }) != 0); // on linux, this is where it fails
+        const int listen_result = uv_listen(reinterpret_cast<uv_stream_t*>(server_socket_state->tcp_server.get()), 128,
+            [](uv_stream_t *server, const int status) {
+                auto *this_ptr = static_cast<ServerSocket *>(server->data);
+                this_ptr->onNewConnection(reinterpret_cast<uv_server_stream_t *>(server), status);
+            });
+        failure = (listen_result != 0);
+        if (failure) {
+            LOG(ERR) << "uv_listen failed with error: " << uv_strerror(listen_result) << " (" << listen_result << ")";
+        }
     } while (bump_port_on_failure && failure);
 
     server_socket_state->async_handle = std::make_unique<uv_async_t>();

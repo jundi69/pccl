@@ -15,10 +15,11 @@ int convert_to_sockaddr_ipv4(const ccoip_socket_address_t &ccoip_addr, sockaddr_
         // IPv4 conversion
         sock_addr_out->sin_family = AF_INET;
         sock_addr_out->sin_port = htons(ccoip_addr.port); // Convert port to network byte order
-        sock_addr_out->sin_addr.s_addr = ccoip_addr.inet.ipv4.data[0] |
-                                         (ccoip_addr.inet.ipv4.data[1] << 8) |
-                                         (ccoip_addr.inet.ipv4.data[2] << 16) |
-                                         (ccoip_addr.inet.ipv4.data[3] << 24);
+        const uint32_t ip_num = (static_cast<uint32_t>(ccoip_addr.inet.ipv4.data[0]) << 24) |
+                  (static_cast<uint32_t>(ccoip_addr.inet.ipv4.data[1]) << 16) |
+                  (static_cast<uint32_t>(ccoip_addr.inet.ipv4.data[2]) << 8)  |
+                   static_cast<uint32_t>(ccoip_addr.inet.ipv4.data[3]);
+        sock_addr_out->sin_addr.s_addr = htonl(ip_num);
     } else if (ccoip_addr.inet.protocol == inetIPv6) {
         return -1; // Unsupported protocol
     }
