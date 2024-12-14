@@ -55,10 +55,7 @@ int main() {
 
         pcclGetAttribute(communicator, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size);
 
-        if (world_size < 2) {
-            std::this_thread::sleep_for(std::chrono::seconds(1));
-            continue;
-        }
+
 
         if (shared_state.revision >= MAX_STEPS) {
             break;
@@ -67,7 +64,10 @@ int main() {
         fill_uniform(gradients, n_peers);
         pcclAsyncReduceOp_t async_op{};
         do {
-            pcclAllReduceAsync(gradients, weights, n_peers, pcclFloat, pcclSum, 0, communicator, nullptr, &async_op);
+            pcclReduceInfo_t reduce_info{};
+            pcclAllReduceAsync(gradients, weights, n_peers, pcclFloat, pcclSum, 0, communicator, &reduce_info, &async_op);
+
+            std::cout << "Waiting for async reduce to complete..." << std::endl;
         } while (pcclAwaitAsyncReduce(&async_op) != pcclSuccess);
 
         shared_state.revision++;

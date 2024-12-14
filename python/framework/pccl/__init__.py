@@ -59,7 +59,7 @@ class DataType(Enum):
 
     def to_torch_dtype(self):
         """Converts a DataType to the corresponding PyTorch dtype."""
-        mapping = {
+        MAP = {
             DataType.UINT8: torch.uint8,
             DataType.INT8: torch.int8,
             DataType.UINT16: torch.uint16,
@@ -70,7 +70,70 @@ class DataType(Enum):
             DataType.FLOAT: torch.float32,
             DataType.DOUBLE: torch.float64,
         }
-        return mapping[self]
+        assert self in MAP, f'Unsupported DataType: {self}'
+        return MAP[self]
+
+    @staticmethod
+    def from_torch_dtype(dtype: torch.dtype):
+        """Converts a PyTorch dtype to the corresponding DataType."""
+        MAP = {
+            torch.uint8: DataType.UINT8,
+            torch.int8: DataType.INT8,
+            torch.uint16: DataType.UINT16,
+            torch.uint32: DataType.UINT32,
+            torch.int32: DataType.INT32,
+            torch.uint64: DataType.UINT64,
+            torch.int64: DataType.INT64,
+            torch.float32: DataType.FLOAT,
+            torch.float64: DataType.DOUBLE,
+        }
+        assert dtype in MAP, f'Unsupported dtype: {dtype}'
+        return MAP[dtype]
+
+class TensorInfo:
+    def __init__(self, name: str, data_ptr: int, *, numel: int, dtype: DataType, allow_content_inequality: bool):
+        self.name = name
+        self.data_ptr = data_ptr
+        self.numel = numel
+        self.dtype = dtype
+        self.allow_content_inequality = allow_content_inequality
+
+    @staticmethod
+    def from_torch(tensor: Tensor, name: str, *, allow_content_inequality: bool=False):
+        """Creates a TensorInfo from a PyTorch tensor."""
+        assert tensor.is_contiguous(), 'Input tensor must be contiguous'
+        assert tensor.device.type == 'cpu', 'Only CPU tensors are supported'
+        numel: int = tensor.numel()
+        data_ptr: int = tensor.data_ptr()
+        dtype: DataType = DataType.from_torch_dtype(tensor.dtype)
+        return TensorInfo(name, data_ptr, numel=numel, dtype=dtype, allow_content_inequality=allow_content_inequality)
+
+class SharedState:
+    def __init__(self, tensor_infos: list[TensorInfo]):
+        assert tensor_infos, 'At least one tensor info must be provided'
+        self._infos = ffi.new('pcclTensorInfo_t[]', len(tensor_infos))
+        for i, info in enumerate(tensor_infos):
+            self._infos[i].name = ffi.new('char[]', bytes(info.name, 'utf-8'))
+            self._infos[i].data = ffi.cast('void*', info.data_ptr)
+            self._infos[i].count = ffi.cast('size_t', info.numel)
+            self._infos[i].datatype = ffi.cast('pcclDataType_t', info.dtype.value)
+            self._infos[i].allow_content_inequality = info.allow_content_inequality
+        self._state = ffi.new('pcclSharedState_t*', {
+            'revision': 0,
+            'count': ffi.cast('size_t', len(tensor_infos)),
+            'infos': self._infos,
+        })
+
+    @property
+    def revision(self):
+        return self._state[0].revision
+
+    @revision.setter
+    def revision(self, value: int):
+        self._state[0].revision = value
+
+    def push_revision(self):
+        self._state[0].revision += 1
 
 class ReduceOp(Enum):
     """PCCL reduction operations."""
@@ -94,9 +157,9 @@ class AsyncReduceHandle:
     def __init__(self, handle: ffi.CData):
         self._handle = handle
 
-    def await_reduce(self):
+    def wait(self) -> bool:
         """Awaits the completion of an async reduce operation. Blocks until the operation is complete."""
-        PCCLError.check(C.pcclAwaitAsyncReduce(self._handle))
+        return C.pcclAwaitAsyncReduce(self._handle) == Result.SUCCESS.value
 
 # Init PCCL
 PCCLError.check(C.pcclInit())
@@ -156,38 +219,35 @@ class Communicator:
         ccoip_address = _create_ccoip_socket_address(ip, int(port))
         PCCLError.check(C.pcclConnect(self._comm[0], ccoip_address[0]))
 
-    def all_reduce(self, send: Tensor, recv: Tensor, dtype: DataType, op: ReduceOp, tag: int) -> ReduceInfo:
+    def all_reduce(self, send: Tensor, recv: Tensor, *, op: ReduceOp, tag: int=0) -> ReduceInfo:
         """Performs an all reduce operation on a communicator. Blocks until the all reduce is complete."""
         assert send.is_contiguous(), 'Input tensor must be contiguous'
         assert recv.is_contiguous(), 'Output tensor must be contiguous'
         assert send.device == recv.device, 'Input and output tensors must be on the same device'
         assert send.dtype == recv.dtype, 'Input and output tensors must have the same dtype'
-        assert send.dtype == dtype.to_torch_dtype(), 'Input and output tensors must have the same dtype'
-        assert send.numel() == recv.numel(), 'Input and output tensors must have the same number of elements'
         assert send.device.type == 'cpu', 'Only CPU tensors are supported'
         sendbuff: ffi.CData = ffi.cast('void*', send.data_ptr())
         recvbuff: ffi.CData = ffi.cast('void*', recv.data_ptr())
         numel: int = send.numel()
         info: ffi.CData = ffi.new('pcclReduceInfo_t*')
-        PCCLError.check(C.pcclAllReduce(sendbuff, recvbuff, numel, dtype.value, op.value, tag, self._comm[0], info))
+        dtype: int =  DataType.from_torch_dtype(send.dtype).value
+        PCCLError.check(C.pcclAllReduce(sendbuff, recvbuff, numel, dtype, op.value, tag, self._comm[0], info))
         return ReduceInfo(info.world_size, info.tx_bytes, info.rx_bytes)
 
 
-    def all_reduce_async(self, send: Tensor, recv: Tensor, dtype: DataType, op: ReduceOp, tag: int) -> (ReduceInfo, AsyncReduceHandle):
+    def all_reduce_async(self, send: Tensor, recv: Tensor, *, numel: int, op: ReduceOp, tag: int=0) -> (ReduceInfo, AsyncReduceHandle):
         """Performs an all reduce operation on a communicator. Async version of all_reduce."""
         assert send.is_contiguous(), 'Input tensor must be contiguous'
         assert recv.is_contiguous(), 'Output tensor must be contiguous'
         assert send.device == recv.device, 'Input and output tensors must be on the same device'
         assert send.dtype == recv.dtype, 'Input and output tensors must have the same dtype'
-        assert send.dtype == dtype.to_torch_dtype(), 'Input and output tensors must have the same dtype'
-        assert send.numel() == recv.numel(), 'Input and output tensors must have the same number of elements'
         assert send.device.type == 'cpu', 'Only CPU tensors are supported'
         sendbuff: ffi.CData = ffi.cast('void*', send.data_ptr())
         recvbuff: ffi.CData = ffi.cast('void*', recv.data_ptr())
-        numel: int = send.numel()
         info: ffi.CData = ffi.new('pcclReduceInfo_t*')
         handle: ffi.CData = ffi.new('pcclAsyncReduceOp_t*')
-        PCCLError.check(C.pcclAllReduceAsync(sendbuff, recvbuff, numel, dtype.value, op.value, tag, self._comm[0], info, handle))
+        dtype: int =  DataType.from_torch_dtype(send.dtype).value
+        PCCLError.check(C.pcclAllReduceAsync(sendbuff, recvbuff, numel, dtype, op.value, tag, self._comm[0], info, handle))
         return ReduceInfo(info.world_size, info.tx_bytes, info.rx_bytes), AsyncReduceHandle(handle)
 
     def update_topology(self):
@@ -200,13 +260,13 @@ class Communicator:
         """
         PCCLError.check(C.pcclUpdateTopology(self._comm[0]))
 
-    def sync_shared_state(self):
+    def sync_shared_state(self, shared_state: SharedState):
         """
         Synchronizes the shared state between all peers that are currently accepted.
         If the shared state revision of this peer is outdated, the shared state will be updated.
         The function will not unblock until it is confirmed all peers have the same shared state revision.
         """
-        PCCLError.check(C.pcclSynchronizeSharedState(self._comm[0]))
+        PCCLError.check(C.pcclSynchronizeSharedState(self._comm[0], shared_state._state))
 
 class MasterNode:
     def __init__(self, listen_address: str):
