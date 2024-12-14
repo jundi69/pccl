@@ -30,6 +30,21 @@ class Result(Enum): # Keep in sync with pccl_status.h.
     RANK_CONNECTION_LOST = C.pcclRankConnectionLost
     NO_SHARED_STATE_AVAILABLE = C.pcclNoSharedStateAvailable
 
+class PCCLError(Exception):
+    """PCCL specific exception."""
+    def __init__(self, result: Result):
+        super().__init__(f'PCCL error: {result}')
+        self.result = result
+
+    def __str__(self):
+        return f'{super().__str__()}: {self.result.name}'
+
+    @staticmethod
+    def check(result: int):
+        """Check the result and raise an exception if necessary."""
+        if result != Result.SUCCESS.value:
+            raise PCCLError(Result(result))
+
 class DataType(Enum):
     """PCCL primitive data types."""
     UINT8 = C.pcclUint8
@@ -82,21 +97,6 @@ class AsyncReduceHandle:
     def await_reduce(self):
         """Awaits the completion of an async reduce operation. Blocks until the operation is complete."""
         PCCLError.check(C.pcclAwaitAsyncReduce(self._handle))
-
-class PCCLError(Exception):
-    """PCCL specific exception."""
-    def __init__(self, result: Result):
-        super().__init__(f'PCCL error: {result}')
-        self.result = result
-
-    def __str__(self):
-        return f'{super().__str__()}: {self.result.name}'
-
-    @staticmethod
-    def check(result: int):
-        """Check the result and raise an exception if necessary."""
-        if result != Result.SUCCESS.value:
-            raise PCCLError(Result(result))
 
 # Init PCCL
 PCCLError.check(C.pcclInit())
@@ -201,8 +201,12 @@ class Communicator:
         PCCLError.check(C.pcclUpdateTopology(self._comm[0]))
 
     def sync_shared_state(self):
-        """Awaits the completion of an async reduce operation. Blocks until the operation is complete."""
-        PCCLError.check(C.pcclAwaitAsyncReduce(self._comm[0]))
+        """
+        Synchronizes the shared state between all peers that are currently accepted.
+        If the shared state revision of this peer is outdated, the shared state will be updated.
+        The function will not unblock until it is confirmed all peers have the same shared state revision.
+        """
+        PCCLError.check(C.pcclSynchronizeSharedState(self._comm[0]))
 
 class MasterNode:
     def __init__(self, listen_address: str):
