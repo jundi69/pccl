@@ -56,10 +56,11 @@ bool ccoip::CCoIPMasterState::unregisterClient(const ccoip_socket_address_t &cli
                     " not found in uuid->ClientInfo mapping. This means client info mapping is inconsistent";
             return false;
         }
-        client_uuids.erase(it);
 
         // remove from all voting sets
         votes_accept_new_peers.erase(it->second);
+        client_uuids.erase(it);
+
         peer_list_changed = true;
     } else {
         LOG(WARN) << "Client " << ccoip_sockaddr_to_str(client_address) << " not found";
