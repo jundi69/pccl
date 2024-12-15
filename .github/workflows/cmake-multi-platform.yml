@@ -68,4 +68,4 @@ jobs:
         run: pip3 install pytest
 
       - name: Test Python
-        run: python -m pytest ${{ github.workspace }}/python/framework/tests
+        run: python -m pytest ${{ github.workspace }}/python/tests
