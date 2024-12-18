@@ -20,7 +20,7 @@ TEST(FVN1aTest, BenchmarkAgainstBaseline) {
     {
         std::random_device rd;
         std::mt19937_64 generator(rd());
-        std::uniform_int_distribution<uint8_t> dist(0, 255);
+        std::uniform_int_distribution<uint32_t> dist(0, 255);
         for (size_t i = 0; i < data.size(); ++i) { // NOLINT(*-loop-convert)
             data[i] = dist(generator);
         }

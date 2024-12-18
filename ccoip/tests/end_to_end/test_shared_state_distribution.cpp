@@ -52,8 +52,8 @@ TEST(SharedStateDistribution, TestBasic) {
         ccoip_shared_state_t shared_state{};
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
             .key = "key1",
-            .value = std::span(reinterpret_cast<std::byte *>(value1.get()), value1_size),
-            .data_type = ccoipUint8
+            .data_type = ccoipUint8,
+            .value = std::span(reinterpret_cast<std::byte *>(value1.get()), value1_size)
         });
         shared_state.revision = 2;
         ASSERT_TRUE(client1.syncSharedState(shared_state));
@@ -68,8 +68,8 @@ TEST(SharedStateDistribution, TestBasic) {
         ccoip_shared_state_t shared_state{};
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
             .key = "key1",
-            .value = std::span(reinterpret_cast<std::byte *>(value2.get()), value2_size),
-            .data_type = ccoipUint8
+            .data_type = ccoipUint8,
+            .value = std::span(reinterpret_cast<std::byte *>(value2.get()), value2_size)
         });
         shared_state.revision = 1;
         ASSERT_TRUE(client2.syncSharedState(shared_state));
