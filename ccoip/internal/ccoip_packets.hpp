@@ -3,6 +3,7 @@
 #include <ccoip_packet.hpp>
 #include <ccoip_inet.h>
 #include <ccoip_packet_buffer.hpp>
+#include <ccoip_shared_state.hpp>
 #include <ccoip_types.hpp>
 
 namespace ccoip {
@@ -67,6 +68,8 @@ namespace ccoip {
     struct SharedStateHashEntry {
         std::string key;
         uint64_t hash;
+        ccoip_data_type_t data_type;
+        boolean allow_content_inequality;
     };
 
     class C2MPacketSyncSharedState final : public Packet {
@@ -74,7 +77,6 @@ namespace ccoip {
         static packetId_t packet_id;
 
         uint64_t shared_state_revision;
-        boolean ignore_hashes;
         std::vector<SharedStateHashEntry> shared_state_hashes;
 
         void serialize(PacketWriteBuffer &buffer) const override;

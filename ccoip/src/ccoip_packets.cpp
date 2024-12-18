@@ -25,29 +25,25 @@ ccoip::packetId_t ccoip::C2MPacketSyncSharedState::packet_id = C2M_PACKET_SYNC_S
 
 void ccoip::C2MPacketSyncSharedState::serialize(PacketWriteBuffer &buffer) const {
     buffer.write<uint64_t>(shared_state_revision);
-    buffer.write<boolean>(ignore_hashes);
     buffer.write<uint64_t>(shared_state_hashes.size());
     for (const auto &entry: shared_state_hashes) {
         buffer.writeString(entry.key);
-        if (!ignore_hashes) {
-            buffer.write<uint64_t>(entry.hash);
-        }
+        buffer.write<uint64_t>(entry.hash);
+        buffer.write<uint8_t>(static_cast<uint8_t>(entry.data_type));
+        buffer.write<boolean>(entry.allow_content_inequality);
     }
 }
 
 bool ccoip::C2MPacketSyncSharedState::deserialize(PacketReadBuffer &buffer) {
     shared_state_revision = buffer.read<uint64_t>();
-    ignore_hashes = buffer.read<boolean>();
     const auto n_entries = buffer.read<uint64_t>();
     shared_state_hashes.reserve(n_entries);
     for (size_t i = 0; i < n_entries; i++) {
         SharedStateHashEntry entry{};
         entry.key = buffer.readString();
-        if (!ignore_hashes) {
-            entry.hash = buffer.read<uint64_t>();
-        } else {
-            entry.hash = 0;
-        }
+        entry.hash = buffer.read<uint64_t>();
+        entry.data_type = static_cast<ccoip_data_type_t>(buffer.read<uint8_t>());
+        entry.allow_content_inequality = buffer.read<boolean>();
         shared_state_hashes.push_back(entry);
     }
     return true;

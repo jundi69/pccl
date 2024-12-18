@@ -250,8 +250,7 @@ bool ccoip::CCoIPMasterState::hasPeerListChanged() {
 
 ccoip::CCoIPMasterState::SharedStateMismatchStatus ccoip::CCoIPMasterState::sharedStateMatches(
     const ccoip_uuid_t &peer_uuid, const uint64_t revision,
-    const std::vector<SharedStateHashEntry> &entries,
-    const bool ignore_hashes
+    const std::vector<SharedStateHashEntry> &entries
 ) {
     SharedStateMismatchStatus status = SUCCESSFUL_MATCH;
     if (revision == shared_state_revision) {
@@ -272,12 +271,21 @@ ccoip::CCoIPMasterState::SharedStateMismatchStatus ccoip::CCoIPMasterState::shar
     }
 
     for (size_t i = 0; i < shared_state_mask.size(); i++) {
-        if (shared_state_mask[i].key != entries[i].key) {
+        const auto &mask_entry = shared_state_mask[i];
+        if (mask_entry.key != entries[i].key) {
             status = KEY_SET_MISMATCH;
             goto end;
         }
-        if (!ignore_hashes && shared_state_mask[i].hash != entries[i].hash) {
+        if (mask_entry.hash != entries[i].hash) {
             status = CONTENT_HASH_MISMATCH;
+            goto end;
+        }
+        if (mask_entry.allow_content_inequality != entries[i].allow_content_inequality) {
+            status = KEY_SET_MISMATCH;
+            goto end;
+        }
+        if (mask_entry.data_type != entries[i].data_type) {
+            status = KEY_SET_MISMATCH;
             goto end;
         }
     }
@@ -293,17 +301,6 @@ std::optional<ccoip::CCoIPMasterState::SharedStateMismatchStatus> ccoip::CCoIPMa
         return it->second;
     }
     return std::nullopt;
-}
-
-bool ccoip::CCoIPMasterState::ignoreSharedStateHashStateMatches(bool ignore_hashes) {
-    if (!ignore_hashes_state.has_value()) {
-        ignore_hashes_state = ignore_hashes;
-        return true;
-    }
-    if (*ignore_hashes_state == ignore_hashes) {
-        return true;
-    }
-    return false;
 }
 
 bool ccoip::CCoIPMasterState::transitionToSharedStateDistributionPhase() {
@@ -331,7 +328,6 @@ bool ccoip::CCoIPMasterState::transitionToSharedStateDistributionPhase() {
     }
     shared_state_mask.clear();
     shared_state_responses.clear();
-    ignore_hashes_state.reset();
     return true;
 }
 

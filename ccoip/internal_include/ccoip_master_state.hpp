@@ -117,14 +117,6 @@ namespace ccoip {
         /// See @code hasPeerListChanged @endcode
         bool peer_list_changed = false;
 
-        /// State of whether to ignore hashes while comparing shared state entries.
-        /// Represents the ignore shared state hash state of the first client to sync shared state.
-        /// If subsequent clients disagree with this state, they will be kicked. Clients must unilaterally agree
-        /// to ignore/not ignore hashes while syncing shared state.
-        /// Consensus resets every time the shared state vote phase ends.
-        /// std::nullopt represents that the state has not been set yet.
-        std::optional<bool> ignore_hashes_state = std::nullopt;
-
         /// Defines the "mask" for shared state entries.
         /// The mask is defined by the identity of the set of shared state key strings and their corresponding hashes.
         /// This mask is checked against the by clients synchronizing shared state.
@@ -221,19 +213,13 @@ namespace ccoip {
         [[nodiscard]] SharedStateMismatchStatus sharedStateMatches(
             const ccoip_uuid_t &peer_uuid,
             uint64_t revision,
-            const std::vector<SharedStateHashEntry> &entries,
-            bool ignore_hashes);
+            const std::vector<SharedStateHashEntry> &entries);
 
         /// Returns the shared state mismatch status. This status is set by @code sharedStateMatches @endcode.
         /// If @code sharedStateMatches @endcode has not been called yet since the start of the current shared state voting phase,
         /// this function will return std::nullopt.
         [[nodiscard]] std::optional<SharedStateMismatchStatus> getSharedStateMismatchStatus(
             const ccoip_uuid_t &peer_uuid);
-
-        /// Returns false if the client requests to ignore/not ignore hashes while other clients up until now have requested otherwise.
-        /// In other words, checks if ignore hashes state supplied matches what is current consensus.
-        /// Consensus resets every time the shared state voting phase ends.
-        [[nodiscard]] bool ignoreSharedStateHashStateMatches(bool ignore_hashes);
 
         /// Transition to the shared state distribution phase
         /// Triggered after all clients have voted to synchronize shared state

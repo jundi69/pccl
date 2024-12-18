@@ -251,15 +251,6 @@ void ccoip::CCoIPMasterHandler::handleSyncSharedState(const ccoip_socket_address
     THREAD_GUARD(server_thread_id);
     LOG(DEBUG) << "Received C2MPacketSyncSharedState from " << ccoip_sockaddr_to_str(client_address);
 
-    if (!server_state.ignoreSharedStateHashStateMatches(packet.ignore_hashes)) {
-        LOG(WARN) << "Client " << ccoip_sockaddr_to_str(client_address) <<
-                " requested to ignore/not ignore hashes while other clients up until now have requested otherwise. Please make sure all clients unilaterally agree to ignore/not ignore hashes when syncing shared state; Client will be kicked.";
-        if (!kickClient(client_address)) [[unlikely]] {
-            LOG(ERR) << "Failed to kick client " << ccoip_sockaddr_to_str(client_address);
-        }
-        return;
-    }
-
     // obtain client uuid from client address
     ccoip_uuid_t client_uuid{}; {
         const auto client_uuid_opt = server_state.findClientUUID(client_address);
@@ -280,8 +271,7 @@ void ccoip::CCoIPMasterHandler::handleSyncSharedState(const ccoip_socket_address
     // If the client is the first to sync shared state, then that peer's shared state is the reference
     // "mask" for the other clients.
     const CCoIPMasterState::SharedStateMismatchStatus status = server_state
-            .sharedStateMatches(client_uuid, packet.shared_state_revision, packet.shared_state_hashes,
-                                packet.ignore_hashes);
+            .sharedStateMatches(client_uuid, packet.shared_state_revision, packet.shared_state_hashes);
 
     if (status == CCoIPMasterState::KEY_SET_MISMATCH) {
         LOG(WARN) << "Shared state key set mismatch for " << ccoip_sockaddr_to_str(client_address) <<

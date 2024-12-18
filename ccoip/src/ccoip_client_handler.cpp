@@ -102,8 +102,14 @@ bool ccoip::CCoIPClientHandler::syncSharedState(const ccoip_shared_state_t &shar
     // prepare shared state hashes
     std::vector<SharedStateHashEntry> shared_state_hashes{};
     shared_state_hashes.reserve(shared_state.entries.size());
-    for (const auto &[key, entry]: shared_state.entries) {
-        shared_state_hashes.push_back({key, FVN1a_512Hash(entry.data(), entry.size_bytes())});
+    for (const auto &entry: shared_state.entries) {
+        auto &key = entry.key;
+        auto &value = entry.value;
+        uint64_t hash = 0;
+        if (!entry.allow_content_inequality) {
+            hash = FVN1a_512Hash(value.data(), value.size_bytes());
+        }
+        shared_state_hashes.push_back({key, hash});
     }
 
     // vote for shared state sync

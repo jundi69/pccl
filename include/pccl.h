@@ -38,14 +38,35 @@ typedef enum pcclResult_t {
 typedef enum pcclDataType_t {
     pcclUint8 = 0,
     pcclInt8 = 1,
-    pcclUint16 = 2,
-    pcclUint32 = 3,
-    pcclInt32 = 4,
-    pcclUint64 = 5,
-    pcclInt64 = 6,
-    pcclFloat = 7,
-    pcclDouble = 8
+    pcclInt16 = 2,
+    pcclUint16 = 3,
+    pcclUint32 = 4,
+    pcclInt32 = 5,
+    pcclUint64 = 6,
+    pcclInt64 = 7,
+    pcclFloat = 8,
+    pcclDouble = 9
 } pcclDataType_t;
+
+inline size_t pcclDataTypeSize(const pcclDataType_t datatype) {
+    switch (datatype) {
+        case pcclUint8:
+        case pcclInt8:
+            return 1;
+        case pcclUint16:
+            return 2;
+        case pcclUint32:
+        case pcclInt32:
+        case pcclFloat:
+            return 4;
+        case pcclUint64:
+        case pcclInt64:
+        case pcclDouble:
+            return 8;
+        default:
+            return 0;
+    }
+}
 
 typedef enum pcclRedOp_t {
     pcclSum,

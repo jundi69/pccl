@@ -139,13 +139,45 @@ pcclResult_t pcclAwaitAsyncReduce(const pcclAsyncReduceOp_t *reduce_handle) {
     return pcclSuccess;
 }
 
+static std::optional<ccoip_data_type_t> getCCoIPDataType(const pcclDataType_t datatype) {
+    switch (datatype) {
+        case pcclUint8: return ccoipUint8;
+        case pcclUint16: return ccoipUint16;
+        case pcclUint32: return ccoipUint32;
+        case pcclUint64: return ccoipUint64;
+        case pcclInt8: return ccoipInt8;
+        case pcclInt16: return ccoipInt16;
+        case pcclInt32: return ccoipInt32;
+        case pcclInt64: return ccoipInt64;
+        case pcclFloat: return ccoipFloat;
+        case pcclDouble: return ccoipDouble;
+    }
+    return std::nullopt;
+}
+
 pcclResult_t pcclSynchronizeSharedState(const pcclComm_t *communicator, pcclSharedState_t *shared_state) {
     PCCL_VALIDATE_INITIALIZED();
     PCCL_VALIDATE(communicator != nullptr, pcclInvalidArgument);
     PCCL_VALIDATE(communicator->ccoip_client != nullptr, pcclInvalidUsage);
 
     // sync shared state
-    if (!communicator->ccoip_client->syncSharedState()) [[unlikely]] {
+    ccoip_shared_state_t shared_state_internal{};
+    shared_state_internal.revision = shared_state->revision;
+    for (size_t i = 0; i < shared_state->count; ++i) {
+        const pcclTensorInfo_t &entry = shared_state->infos[i];
+        const size_t entry_bytes = entry.count * pcclDataTypeSize(entry.datatype);
+        auto ccoip_data_type = getCCoIPDataType(entry.datatype);
+        if (!ccoip_data_type) {
+            return pcclInvalidArgument;
+        }
+        shared_state_internal.entries.push_back(ccoip_shared_state_entry_t{
+            .key = entry.name,
+            .data_type = *ccoip_data_type,
+            .value = std::span(static_cast<std::byte *>(entry.data), entry_bytes),
+            .identity_check = entry.allow_content_inequality
+        });
+    }
+    if (!communicator->ccoip_client->syncSharedState(shared_state_internal)) [[unlikely]] {
         return pcclInvalidUsage;
     }
 
