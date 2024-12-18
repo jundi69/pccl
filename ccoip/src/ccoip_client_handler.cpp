@@ -2,30 +2,51 @@
 #include "ccoip_types.hpp"
 #include <pccl_log.hpp>
 #include <ccoip.h>
+#include <hash_utils.hpp>
 
 #include "ccoip_inet_utils.hpp"
 #include "ccoip_packets.hpp"
 #include <thread_guard.hpp>
 
 ccoip::CCoIPClientHandler::CCoIPClientHandler(const ccoip_socket_address_t &address) : client_socket(address),
-    p2p_socket({address.inet.protocol, {}, {}}, CCOIP_PROTOCOL_PORT_P2P) {
+    p2p_socket({address.inet.protocol, {}, {}}, CCOIP_PROTOCOL_PORT_P2P),
+    shared_state_socket({address.inet.protocol, {}, {}}, CCOIP_PROTOCOL_PORT_SHARED_STATE) {
 }
 
 bool ccoip::CCoIPClientHandler::connect() {
     // start listening on p2p socket
-    p2p_socket.addReadCallback(
-        [this](const ccoip_socket_address_t &client_address, const std::span<std::uint8_t> &data) {
-            onP2PClientRead(client_address, data);
-        });
-    if (!p2p_socket.listen()) {
-        LOG(ERR) << "Failed to bind P2P socket " << p2p_socket.getListenPort();
-        return false;
+    {
+        p2p_socket.addReadCallback(
+            [this](const ccoip_socket_address_t &client_address, const std::span<std::uint8_t> &data) {
+                onP2PClientRead(client_address, data);
+            });
+        if (!p2p_socket.listen()) {
+            LOG(ERR) << "Failed to bind P2P socket " << p2p_socket.getListenPort();
+            return false;
+        }
+        if (!p2p_socket.runAsync()) [[unlikely]] {
+            return false;
+        }
+        p2p_server_thread_id = p2p_socket.getServerThreadId();
+        LOG(INFO) << "P2P socket listening on port " << p2p_socket.getListenPort() << "...";
     }
-    if (!p2p_socket.runAsync()) [[unlikely]] {
-        return false;
+
+    // start listening with shared state distribution server
+    {
+        shared_state_socket.addReadCallback(
+            [this](const ccoip_socket_address_t &client_address, const std::span<std::uint8_t> &data) {
+                onSharedStateClientRead(client_address, data);
+            });
+        if (!shared_state_socket.listen()) {
+            LOG(ERR) << "Failed to bind shared state socket " << shared_state_socket.getListenPort();
+            return false;
+        }
+        if (!shared_state_socket.runAsync()) [[unlikely]] {
+            return false;
+        }
+        shared_state_server_thread_id = shared_state_socket.getServerThreadId();
+        LOG(INFO) << "Shared state socket listening on port " << shared_state_socket.getListenPort() << "...";
     }
-    p2p_server_thread_id = p2p_socket.getServerThreadId();
-    LOG(INFO) << "P2P socket listening on port " << p2p_socket.getListenPort() << "...";
 
     if (!client_socket.establishConnection()) {
         return false;
@@ -77,6 +98,32 @@ bool ccoip::CCoIPClientHandler::acceptNewPeers() {
     return true;
 }
 
+bool ccoip::CCoIPClientHandler::syncSharedState(const ccoip_shared_state_t &shared_state) {
+    // prepare shared state hashes
+    std::vector<SharedStateHashEntry> shared_state_hashes{};
+    shared_state_hashes.reserve(shared_state.entries.size());
+    for (const auto &[key, entry]: shared_state.entries) {
+        shared_state_hashes.push_back({key, FVN1a_512Hash(entry.data(), entry.size_bytes())});
+    }
+
+    // vote for shared state sync
+    C2MPacketSyncSharedState packet{};
+    packet.shared_state_revision = shared_state.revision;
+    packet.shared_state_hashes = shared_state_hashes;
+    if (!client_socket.sendPacket<C2MPacketSyncSharedState>(packet)) {
+        return false;
+    }
+    // wait for confirmation from master that all peers have voted to sync the shared state
+    const auto response = client_socket.receivePacket<M2CPacketSyncSharedState>();
+    if (!response) {
+        return false;
+    }
+    if (response->is_outdated) {
+        // if shared state is outdated, request shared state from master
+    }
+    return true;
+}
+
 bool ccoip::CCoIPClientHandler::updateTopology() {
     return true;
 }
@@ -88,6 +135,9 @@ bool ccoip::CCoIPClientHandler::interrupt() {
     if (!p2p_socket.interrupt()) [[unlikely]] {
         return false;
     }
+    if (!shared_state_socket.interrupt()) [[unlikely]] {
+        return false;
+    }
     if (!client_socket.closeConnection()) [[unlikely]] {
         return false;
     }
@@ -97,6 +147,7 @@ bool ccoip::CCoIPClientHandler::interrupt() {
 
 bool ccoip::CCoIPClientHandler::join() {
     p2p_socket.join();
+    shared_state_socket.join();
     return true;
 }
 
@@ -114,20 +165,16 @@ bool ccoip::CCoIPClientHandler::establishP2PConnections() {
         return false;
     }
     if (!new_peers->unchanged) {
-        // add all new peers to the client state
-        for (auto &peer: new_peers->new_peers) {
-            if (!client_state.registerPeer(peer.p2p_listen_addr, peer.peer_uuid)) [[unlikely]] {
-                LOG(ERR) << "Failed to register peer " << uuid_to_string(peer.peer_uuid);
-                return false;
-            }
-        }
-
         // establish p2p connections
         for (auto &peer: new_peers->new_peers) {
-
             // check if connection already exists
             if (p2p_connections.contains(peer.peer_uuid)) {
                 continue;
+            }
+
+            if (!client_state.registerPeer(peer.p2p_listen_addr, peer.peer_uuid)) [[unlikely]] {
+                LOG(ERR) << "Failed to register peer " << uuid_to_string(peer.peer_uuid);
+                return false;
             }
 
             if (!establishP2PConnection(peer)) {
@@ -193,5 +240,37 @@ void ccoip::CCoIPClientHandler::onP2PClientRead(const ccoip_socket_address_t &cl
         P2PPacketHello packet{};
         packet.deserialize(buffer);
         handleP2PHello(client_address, packet);
+    } else {
+        LOG(ERR) << "Unknown packet type " << packet_type << " from " << ccoip_sockaddr_to_str(client_address);
+        if (!p2p_socket.closeClientConnection(client_address)) [[unlikely]] {
+            LOG(ERR) << "Failed to close connection with " << ccoip_sockaddr_to_str(client_address);
+        }
+    }
+}
+
+void ccoip::CCoIPClientHandler::handleSharedStateRequest(const ccoip_socket_address_t &client_address,
+                                                         const C2SPacketRequestSharedState &packet) {
+    // TODO: implement shared state handling
+    S2CPacketSharedStateResponse response{};
+    response.status = SHARED_STATE_NOT_DISTRIBUTED;
+    if (!shared_state_socket.sendPacket(client_address, response)) {
+        LOG(ERR) << "Failed to send shared state response to " << ccoip_sockaddr_to_str(client_address);
+    }
+}
+
+void ccoip::CCoIPClientHandler::onSharedStateClientRead(const ccoip_socket_address_t &client_address,
+                                                        const std::span<std::uint8_t> &data) {
+    THREAD_GUARD(shared_state_server_thread_id);
+    PacketReadBuffer buffer = PacketReadBuffer::wrap(data);
+    if (const auto packet_type = buffer.read<uint16_t>();
+        packet_type == C2SPacketRequestSharedState::packet_id) {
+        C2SPacketRequestSharedState packet{};
+        packet.deserialize(buffer);
+        handleSharedStateRequest(client_address, packet);
+    } else {
+        LOG(ERR) << "Unknown packet type " << packet_type << " from " << ccoip_sockaddr_to_str(client_address);
+        if (!shared_state_socket.closeClientConnection(client_address)) [[unlikely]] {
+            LOG(ERR) << "Failed to close connection with " << ccoip_sockaddr_to_str(client_address);
+        }
     }
 }

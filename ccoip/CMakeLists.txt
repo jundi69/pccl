@@ -1,6 +1,6 @@
 add_library(ccoip_private STATIC
         src/ccoip_master.cpp src/ccoip_client_handler.cpp src/ccoip_master_handler.cpp
-        src/ccoip_packets.cpp src/ccoip_packet_buffer.cpp src/ccoip_client.cpp src/uuid_utils.cpp
+        src/ccoip_packets.cpp src/ccoip_packet_buffer.cpp src/ccoip_client.cpp src/uuid_utils.cpp src/fvn1a_hash.cpp
         src/ccoip_master_state.cpp src/ccoip_client_state.cpp)
 
 add_library(ccoip_public INTERFACE)

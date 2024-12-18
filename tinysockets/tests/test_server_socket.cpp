@@ -154,9 +154,10 @@ struct DummyPacket final : ccoip::Packet {
         buffer.writeContents(payload.data(), payload.size());
     }
 
-    void deserialize(PacketReadBuffer &buffer) override {
+    bool deserialize(PacketReadBuffer &buffer) override {
         payload.resize(buffer.remaining());
         buffer.readContents(payload.data(), payload.size());
+        return true;
     }
 };
 
@@ -565,9 +566,10 @@ struct UnknownPacket final : ccoip::Packet {
     static constexpr ccoip::packetId_t packet_id = 0x9999;
     void serialize(PacketWriteBuffer &buffer) const override { buffer.writeContents(payload.data(), payload.size()); }
 
-    void deserialize(PacketReadBuffer &buffer) override {
+    bool deserialize(PacketReadBuffer &buffer) override {
         payload.resize(buffer.remaining());
         buffer.readContents(payload.data(), payload.size());
+        return true;
     }
 };
 

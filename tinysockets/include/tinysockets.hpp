@@ -107,7 +107,10 @@ namespace tinysockets {
                 return std::nullopt;
             }
             T packet{};
-            packet.deserialize(buffer);
+            if (!packet.deserialize(buffer)) {
+                LOG(ERR) << "Failed to deserialize packet with ID " << packet_id;
+                return std::nullopt;
+            }
             return packet;
         }
 
@@ -209,7 +212,10 @@ namespace tinysockets {
                 return std::nullopt;
             }
             T packet{};
-            packet.deserialize(buffer);
+            if (!packet.deserialize(buffer)) {
+                LOG(ERR) << "Failed to deserialize packet with ID " << packet_id;
+                return std::nullopt;
+            }
             return packet;
         }
     };

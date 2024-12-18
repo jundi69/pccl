@@ -9,6 +9,7 @@ enum LogLevel {
     WARN,
     ERR,
     FATAL,
+    BUG,
     NONE
 };
 
