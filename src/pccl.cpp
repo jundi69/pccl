@@ -1,6 +1,6 @@
 #include "pccl.h"
 #include "pccl_internal.hpp"
-
+#include <optional>
 #include <ccoip_master.hpp>
 
 static constinit bool pccl_initialized = false;
@@ -174,7 +174,7 @@ pcclResult_t pcclSynchronizeSharedState(const pcclComm_t *communicator, pcclShar
             .key = entry.name,
             .data_type = *ccoip_data_type,
             .value = std::span(static_cast<std::byte *>(entry.data), entry_bytes),
-            .identity_check = entry.allow_content_inequality
+            .allow_content_inequality = entry.allow_content_inequality
         });
     }
     if (!communicator->ccoip_client->syncSharedState(shared_state_internal)) [[unlikely]] {
