@@ -1,6 +1,7 @@
 #pragma once
 
 #include <ccoip_inet.h>
+#include <ccoip_shared_state.hpp>
 
 namespace ccoip {
     class CCoIPClientHandler;
@@ -12,8 +13,11 @@ namespace ccoip {
         explicit CCoIPClient(const ccoip_socket_address_t &master_socket_address);
 
         CCoIPClient(const CCoIPClient &other) = delete;
+
         CCoIPClient(CCoIPClient &&other) = delete;
+
         CCoIPClient &operator=(const CCoIPClient &other) = delete;
+
         CCoIPClient &operator=(CCoIPClient &&other) = delete;
 
         /// Connect to the master
@@ -21,6 +25,9 @@ namespace ccoip {
 
         /// Accept new peers if necessary and establish p2p connections
         [[nodiscard]] bool acceptNewPeers() const;
+
+        /// Synchronize the shared state
+        [[nodiscard]] bool syncSharedState(const ccoip_shared_state_t &shared_state) const;
 
         /// Interrupt the client
         [[nodiscard]] bool interrupt() const;
@@ -35,6 +42,5 @@ namespace ccoip {
         [[nodiscard]] bool isInterrupted() const;
 
         ~CCoIPClient();
-
     };
 };

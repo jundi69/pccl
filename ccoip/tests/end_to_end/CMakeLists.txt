@@ -1,0 +1,7 @@
+# test accept new peers
+add_sanitized_gtest(test_accept_new_peers test_accept_new_peers.cpp)
+target_link_libraries(test_accept_new_peers PRIVATE ccoip_private)
+
+# test shared state distribution
+add_sanitized_gtest(test_shared_state_distribution test_shared_state_distribution.cpp)
+target_link_libraries(test_shared_state_distribution PRIVATE ccoip_private)

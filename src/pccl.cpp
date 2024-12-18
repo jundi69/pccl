@@ -1,6 +1,6 @@
 #include "pccl.h"
 #include "pccl_internal.hpp"
-
+#include <optional>
 #include <ccoip_master.hpp>
 
 static constinit bool pccl_initialized = false;
@@ -111,15 +111,6 @@ pcclResult_t pcclUpdateTopology(pcclComm_t *communicator) {
     return pcclSuccess;
 }
 
-pcclResult_t pcclAllReduce(const void *sendbuff, void *recvbuff, size_t count, pcclDataType_t datatype,
-                           pcclRedOp_t op, uint64_t tag, const pcclComm_t *communicator,
-                           pcclReduceInfo_t *reduce_info_out) {
-    PCCL_VALIDATE_INITIALIZED();
-    PCCL_VALIDATE(communicator != nullptr, pcclInvalidArgument);
-    PCCL_VALIDATE(communicator->ccoip_client != nullptr, pcclInvalidUsage);
-    return pcclSuccess;
-}
-
 pcclResult_t pcclAllReduceAsync(const void *sendbuff, void *recvbuff, size_t count, pcclDataType_t datatype,
                                 pcclRedOp_t op, uint64_t tag, const pcclComm_t *communicator,
                                 pcclReduceInfo_t *reduce_info_out,
@@ -131,15 +122,65 @@ pcclResult_t pcclAllReduceAsync(const void *sendbuff, void *recvbuff, size_t cou
     return pcclSuccess;
 }
 
+pcclResult_t pcclAllReduce(const void *sendbuff, void *recvbuff, size_t count, pcclDataType_t datatype,
+                           pcclRedOp_t op, uint64_t tag, const pcclComm_t *communicator,
+                           pcclReduceInfo_t *reduce_info_out) {
+    PCCL_VALIDATE_INITIALIZED();
+    PCCL_VALIDATE(communicator != nullptr, pcclInvalidArgument);
+    PCCL_VALIDATE(communicator->ccoip_client != nullptr, pcclInvalidUsage);
+    pcclAsyncReduceOp_t reduce_handle{};
+    pcclAllReduceAsync(sendbuff, recvbuff, count, datatype, op, tag, communicator, reduce_info_out, &reduce_handle);
+    pcclAwaitAsyncReduce(&reduce_handle);
+    return pcclSuccess;
+}
+
 pcclResult_t pcclAwaitAsyncReduce(const pcclAsyncReduceOp_t *reduce_handle) {
     PCCL_VALIDATE_INITIALIZED();
     return pcclSuccess;
+}
+
+static std::optional<ccoip_data_type_t> getCCoIPDataType(const pcclDataType_t datatype) {
+    switch (datatype) {
+        case pcclUint8: return ccoipUint8;
+        case pcclUint16: return ccoipUint16;
+        case pcclUint32: return ccoipUint32;
+        case pcclUint64: return ccoipUint64;
+        case pcclInt8: return ccoipInt8;
+        case pcclInt16: return ccoipInt16;
+        case pcclInt32: return ccoipInt32;
+        case pcclInt64: return ccoipInt64;
+        case pcclFloat: return ccoipFloat;
+        case pcclDouble: return ccoipDouble;
+    }
+    return std::nullopt;
 }
 
 pcclResult_t pcclSynchronizeSharedState(const pcclComm_t *communicator, pcclSharedState_t *shared_state) {
     PCCL_VALIDATE_INITIALIZED();
     PCCL_VALIDATE(communicator != nullptr, pcclInvalidArgument);
     PCCL_VALIDATE(communicator->ccoip_client != nullptr, pcclInvalidUsage);
+
+    // sync shared state
+    ccoip_shared_state_t shared_state_internal{};
+    shared_state_internal.revision = shared_state->revision;
+    for (size_t i = 0; i < shared_state->count; ++i) {
+        const pcclTensorInfo_t &entry = shared_state->infos[i];
+        const size_t entry_bytes = entry.count * pcclDataTypeSize(entry.datatype);
+        auto ccoip_data_type = getCCoIPDataType(entry.datatype);
+        if (!ccoip_data_type) {
+            return pcclInvalidArgument;
+        }
+        shared_state_internal.entries.push_back(ccoip_shared_state_entry_t{
+            .key = entry.name,
+            .data_type = *ccoip_data_type,
+            .value = std::span(static_cast<std::byte *>(entry.data), entry_bytes),
+            .allow_content_inequality = entry.allow_content_inequality
+        });
+    }
+    if (!communicator->ccoip_client->syncSharedState(shared_state_internal)) [[unlikely]] {
+        return pcclInvalidUsage;
+    }
+
     return pcclSuccess;
 }
 

@@ -9,8 +9,9 @@ void ccoip::C2MPacketRequestSessionRegistration::serialize(PacketWriteBuffer &bu
     buffer.write<uint16_t>(p2p_listen_port);
 }
 
-void ccoip::C2MPacketRequestSessionRegistration::deserialize(PacketReadBuffer &buffer) {
+bool ccoip::C2MPacketRequestSessionRegistration::deserialize(PacketReadBuffer &buffer) {
     p2p_listen_port = buffer.read<uint16_t>();
+    return true;
 }
 
 // C2MPacketAcceptNewPeers
@@ -19,26 +20,76 @@ ccoip::packetId_t ccoip::C2MPacketAcceptNewPeers::packet_id = C2M_PACKET_ACCEPT_
 // C2MPacketP2PConnectionsEstablished
 ccoip::packetId_t ccoip::C2MPacketP2PConnectionsEstablished::packet_id = C2M_PACKET_P2P_CONNECTIONS_ESTABLISHED_ID;
 
+// C2MPacketSyncSharedState
+ccoip::packetId_t ccoip::C2MPacketSyncSharedState::packet_id = C2M_PACKET_SYNC_SHARED_STATE_ID;
+
+void ccoip::C2MPacketSyncSharedState::serialize(PacketWriteBuffer &buffer) const {
+    buffer.write<uint64_t>(shared_state_revision);
+    buffer.write<uint64_t>(shared_state_hashes.size());
+    for (const auto &entry: shared_state_hashes) {
+        buffer.writeString(entry.key);
+        buffer.write<uint64_t>(entry.hash);
+        buffer.write<uint8_t>(static_cast<uint8_t>(entry.data_type));
+        buffer.write<boolean>(entry.allow_content_inequality);
+    }
+}
+
+bool ccoip::C2MPacketSyncSharedState::deserialize(PacketReadBuffer &buffer) {
+    shared_state_revision = buffer.read<uint64_t>();
+    const auto n_entries = buffer.read<uint64_t>();
+    shared_state_hashes.reserve(n_entries);
+    for (size_t i = 0; i < n_entries; i++) {
+        SharedStateHashEntry entry{};
+        entry.key = buffer.readString();
+        entry.hash = buffer.read<uint64_t>();
+        entry.data_type = static_cast<ccoip_data_type_t>(buffer.read<uint8_t>());
+        entry.allow_content_inequality = buffer.read<boolean>();
+        shared_state_hashes.push_back(entry);
+    }
+    return true;
+}
+
 // EmptyPacket
 void ccoip::EmptyPacket::serialize(PacketWriteBuffer &buffer) const {
     // do nothing
 }
 
-void ccoip::EmptyPacket::deserialize(PacketReadBuffer &buffer) {
+bool ccoip::EmptyPacket::deserialize(PacketReadBuffer &buffer) {
     // do nothing
+    return true;
 }
 
 // M2CPacketSessionRegistrationResponse
 ccoip::packetId_t ccoip::M2CPacketSessionRegistrationResponse::packet_id = M2C_PACKET_SESSION_REGISTRATION_RESPONSE_ID;
+
 
 void ccoip::M2CPacketSessionRegistrationResponse::serialize(PacketWriteBuffer &buffer) const {
     buffer.write<boolean>(accepted);
     buffer.writeFixedArray(assigned_uuid.data);
 }
 
-void ccoip::M2CPacketSessionRegistrationResponse::deserialize(PacketReadBuffer &buffer) {
+bool ccoip::M2CPacketSessionRegistrationResponse::deserialize(PacketReadBuffer &buffer) {
     accepted = buffer.read<boolean>();
     assigned_uuid.data = buffer.readFixedArray<uint8_t, CCOIP_UUID_N_BYTES>();
+    return true;
+}
+
+static void writeSocketAddress(PacketWriteBuffer &buffer, const ccoip_socket_address_t &socket_address) {
+    buffer.write<bool>(socket_address.inet.protocol == inetIPv4);
+    if (socket_address.inet.protocol == inetIPv4) {
+        std::array<uint8_t, 4> ipv4_data{};
+        for (size_t i = 0; i < 4; i++) {
+            ipv4_data[i] = socket_address.inet.ipv4.data[i];
+        }
+        buffer.writeFixedArray(ipv4_data);
+    } else if (socket_address.inet.protocol == inetIPv6) {
+        std::array<uint8_t, 16> ipv6_data{};
+        for (size_t i = 0; i < 16; i++) {
+            ipv6_data[i] = socket_address.inet.ipv6.data[i];
+        }
+        buffer.writeFixedArray(ipv6_data);
+    }
+    buffer.write<uint16_t>(socket_address.port);
 }
 
 // M2CPacketNewPeers
@@ -49,54 +100,99 @@ void ccoip::M2CPacketNewPeers::serialize(PacketWriteBuffer &buffer) const {
     }
     buffer.write<uint64_t>(new_peers.size());
     for (auto &new_peer: new_peers) {
-        buffer.write<bool>(new_peer.p2p_listen_addr.inet.protocol == inetIPv4);
-        if (new_peer.p2p_listen_addr.inet.protocol == inetIPv4) {
-            std::array<uint8_t, 4> ipv4_data{};
-            for (size_t i = 0; i < 4; i++) {
-                ipv4_data[i] = new_peer.p2p_listen_addr.inet.ipv4.data[i];
-            }
-            buffer.writeFixedArray(ipv4_data);
-        } else if (new_peer.p2p_listen_addr.inet.protocol == inetIPv6) {
-            std::array<uint8_t, 16> ipv6_data{};
-            for (size_t i = 0; i < 16; i++) {
-                ipv6_data[i] = new_peer.p2p_listen_addr.inet.ipv6.data[i];
-            }
-            buffer.writeFixedArray(ipv6_data);
-        }
-        buffer.write<uint16_t>(new_peer.p2p_listen_addr.port);
+        writeSocketAddress(buffer, new_peer.p2p_listen_addr);
         buffer.writeFixedArray(new_peer.peer_uuid.data);
     }
 }
 
-void ccoip::M2CPacketNewPeers::deserialize(PacketReadBuffer &buffer) {
+static ccoip_socket_address_t readSocketAddress(PacketReadBuffer &buffer) {
+    ccoip_socket_address_t address{};
+    if (buffer.read<bool>()) {
+        address.inet.protocol = inetIPv4;
+        for (unsigned char &octet: address.inet.ipv4.data) {
+            octet = buffer.read<uint8_t>();
+        }
+    } else {
+        address.inet.protocol = inetIPv6;
+        for (unsigned char &octet: address.inet.ipv6.data) {
+            octet = buffer.read<uint8_t>();
+        }
+    }
+
+    const auto port = buffer.read<uint16_t>();
+    address.port = port;
+    return address;
+}
+
+bool ccoip::M2CPacketNewPeers::deserialize(PacketReadBuffer &buffer) {
     unchanged = buffer.read<boolean>();
     if (unchanged) {
-        return;
+        return true;
     }
     const auto n_peers = buffer.read<uint64_t>();
     new_peers.reserve(n_peers);
     for (size_t i = 0; i < n_peers; i++) {
         M2CPacketNewPeerInfo peer_info{};
-        if (buffer.read<bool>()) {
-            peer_info.p2p_listen_addr.inet.protocol = inetIPv4;
-            for (unsigned char &octet: peer_info.p2p_listen_addr.inet.ipv4.data) {
-                octet = buffer.read<uint8_t>();
-            }
-        } else {
-            peer_info.p2p_listen_addr.inet.protocol = inetIPv6;
-            for (unsigned char &octet: peer_info.p2p_listen_addr.inet.ipv6.data) {
-                octet = buffer.read<uint8_t>();
-            }
-        }
-
-        const auto port = buffer.read<uint16_t>();
-        peer_info.p2p_listen_addr.port = port;
+        peer_info.p2p_listen_addr = readSocketAddress(buffer);
 
         for (unsigned char &byte: peer_info.peer_uuid.data) {
             byte = buffer.read<uint8_t>();
         }
         new_peers.push_back(peer_info);
     }
+    return true;
+}
+
+// M2CPacketSyncSharedState
+ccoip::packetId_t ccoip::M2CPacketSyncSharedState::packet_id = M2C_PACKET_SYNC_SHARED_STATE_ID;
+
+void ccoip::M2CPacketSyncSharedState::serialize(PacketWriteBuffer &buffer) const {
+    buffer.write<boolean>(is_outdated);
+    writeSocketAddress(buffer, distributor_address);
+}
+
+bool ccoip::M2CPacketSyncSharedState::deserialize(PacketReadBuffer &buffer) {
+    is_outdated = buffer.read<boolean>();
+    distributor_address = readSocketAddress(buffer);
+    return true;
+}
+
+// C2SPacketRequestSharedState
+ccoip::packetId_t ccoip::C2SPacketRequestSharedState::packet_id = C2S_PACKET_REQUEST_SHARED_STATE_ID;
+
+// S2CPacketSharedStateResponse
+ccoip::packetId_t ccoip::S2CPacketSharedStateResponse::packet_id = S2C_PACKET_SHARED_STATE_RESPONSE_ID;
+
+void ccoip::S2CPacketSharedStateResponse::serialize(PacketWriteBuffer &buffer) const {
+    buffer.write<uint8_t>(static_cast<uint8_t>(status));
+    buffer.write<uint64_t>(revision);
+
+    // write entries
+    buffer.write<uint64_t>(entries.size());
+    for (const auto &entry: entries) {
+        buffer.writeString(entry.key);
+        buffer.writeContents(entry.buffer.data(), entry.buffer.size_bytes());
+    }
+}
+
+bool ccoip::S2CPacketSharedStateResponse::deserialize(PacketReadBuffer &buffer) {
+    status = static_cast<SharedStateResponseStatus>(buffer.read<uint8_t>());
+    revision = buffer.read<uint64_t>();
+
+    // read entries
+    const auto n_entries = buffer.read<uint64_t>();
+    entries.reserve(n_entries);
+    for (size_t i = 0; i < n_entries; i++) {
+        SharedStateEntry entry{};
+        entry.key = buffer.readString();
+        const auto length = buffer.read<uint64_t>();
+        if (length > buffer.remaining()) {
+            return false;
+        }
+        buffer.readContents(entry.buffer.data(), length);
+        entries.push_back(entry);
+    }
+    return true;
 }
 
 // M2CPacketNewPeers

@@ -63,7 +63,13 @@ void ccoip::CCoIPMasterHandler::onClientRead(const ccoip_socket_address_t &clien
     if (const auto packet_type = buffer.read<uint16_t>();
         packet_type == C2MPacketRequestSessionRegistration::packet_id) {
         C2MPacketRequestSessionRegistration packet{};
-        packet.deserialize(buffer);
+        if (!packet.deserialize(buffer)) {
+            LOG(ERR) << "Failed to deserialize C2MPacketRequestSessionJoin from " << ccoip_sockaddr_to_str(
+                client_address);
+            if (!kickClient(client_address)) [[unlikely]] {
+                LOG(ERR) << "Failed to kick client " << ccoip_sockaddr_to_str(client_address);
+            }
+        }
         handleRequestSessionJoin(client_address, packet);
     } else if (packet_type == C2MPacketAcceptNewPeers::packet_id) {
         C2MPacketAcceptNewPeers packet{};
@@ -73,6 +79,15 @@ void ccoip::CCoIPMasterHandler::onClientRead(const ccoip_socket_address_t &clien
         C2MPacketP2PConnectionsEstablished packet{};
         packet.deserialize(buffer);
         handleP2PConnectionsEstablished(client_address, packet);
+    } else if (packet_type == C2MPacketSyncSharedState::packet_id) {
+        C2MPacketSyncSharedState packet{};
+        if (!packet.deserialize(buffer)) {
+            LOG(ERR) << "Failed to deserialize C2MPacketSyncSharedState from " << ccoip_sockaddr_to_str(client_address);
+            if (!kickClient(client_address)) [[unlikely]] {
+                LOG(ERR) << "Failed to kick client " << ccoip_sockaddr_to_str(client_address);
+            }
+        }
+        handleSyncSharedState(client_address, packet);
     }
 }
 
@@ -133,7 +148,7 @@ void ccoip::CCoIPMasterHandler::checkP2PConnectionsEstablished() {
             }
         }
         if (!server_state.transitionToP2PConnectionsEstablishedPhase()) [[unlikely]] {
-            LOG(WARN) << "Failed to transition to P2P connections established phase";
+            LOG(BUG) << "Failed to transition to P2P connections established phase; This is a bug";
         }
     }
 }
@@ -146,6 +161,75 @@ void ccoip::CCoIPMasterHandler::checkAcceptNewPeersConsensus() {
     }
 }
 
+std::optional<ccoip_socket_address_t>
+ccoip::CCoIPMasterHandler::findBestSharedStateTxPeer(const ccoip_socket_address_t &peer_address) {
+    // TODO: should be topology aware
+    // for now, just return the first peer that distributes the shared state
+    for (const auto &[peer_uuid, peer_address]: server_state.getClientEntrySet()) {
+        const auto peer_info_opt = server_state.getClientInfo(peer_address);
+        if (!peer_info_opt) [[unlikely]] {
+            LOG(BUG) << "Client " << ccoip_sockaddr_to_str(peer_address) << " not found";
+            continue;
+        }
+        if (const auto &peer_info = peer_info_opt->get();
+            peer_info.connection_phase == PEER_ACCEPTED && peer_info.connection_state == DISTRIBUTE_SHARED_STATE) {
+            return peer_address;
+        }
+    }
+    return std::nullopt;
+}
+
+void ccoip::CCoIPMasterHandler::checkSyncSharedStateConsensus() {
+    // check if all clients have voted to sync shared state
+    if (server_state.syncSharedStateConsensus()) {
+        if (!server_state.transitionToSharedStateDistributionPhase()) [[unlikely]] {
+            LOG(BUG) << "Failed to transition to shared state distribution phase; This is a bug!";
+        }
+
+        // send confirmation packets to all clients
+        for (auto &[peer_uuid, peer_address]: server_state.getClientEntrySet()) {
+            const auto peer_info_opt = server_state.getClientInfo(peer_address);
+            if (!peer_info_opt) [[unlikely]] {
+                LOG(BUG) << "Client " << ccoip_sockaddr_to_str(peer_address) << " not found";
+                continue;
+            }
+            const auto &peer_info = peer_info_opt->get();
+            if (peer_info.connection_phase != PEER_ACCEPTED) {
+                continue;
+            }
+
+            // only these are valid states for accepted clients to be in after the shared state voting phase
+            if (peer_info.connection_state != DISTRIBUTE_SHARED_STATE && peer_info.connection_state !=
+                REQUEST_SHARED_STATE) {
+                LOG(BUG) << "Client " << ccoip_sockaddr_to_str(peer_address) <<
+                        " in state " << peer_info.connection_state <<
+                        " but expected DISTRIBUTE_SHARED_STATE or REQUEST_SHARED_STATE";
+                continue;
+            }
+
+            M2CPacketSyncSharedState response{};
+
+            // if the state is REQUEST_SHARED_STATE, then transitionToSharedStateDistributionPhase has
+            // determined that the shared state hash does not match; notify the client to re-request the shared state
+            const bool needs_update = peer_info.connection_state == REQUEST_SHARED_STATE;
+            response.is_outdated = needs_update;
+            if (needs_update) {
+                auto best_peer_opt = findBestSharedStateTxPeer(peer_address);
+                if (!best_peer_opt) [[unlikely]] {
+                    LOG(BUG) << "No peer found to distribute shared state to " << ccoip_sockaddr_to_str(peer_address) <<
+                            " while peers is marked to request shared state. This is a bug!";
+                    continue;
+                }
+                response.distributor_address = *best_peer_opt;
+            }
+
+            if (!server_socket.sendPacket<M2CPacketSyncSharedState>(peer_address, response)) {
+                LOG(ERR) << "Failed to send M2CPacketSyncSharedState to " << ccoip_sockaddr_to_str(peer_address);
+            }
+        }
+    }
+}
+
 void ccoip::CCoIPMasterHandler::handleP2PConnectionsEstablished(const ccoip_socket_address_t &client_address,
                                                                 const C2MPacketP2PConnectionsEstablished &) {
     THREAD_GUARD(server_thread_id);
@@ -155,12 +239,58 @@ void ccoip::CCoIPMasterHandler::handleP2PConnectionsEstablished(const ccoip_sock
         LOG(WARN) << "Failed to mark P2P connections established for " << ccoip_sockaddr_to_str(client_address);
         if (!kickClient(client_address)) [[unlikely]] {
             LOG(ERR) << "Failed to kick client " << ccoip_sockaddr_to_str(client_address);
-            return;
         }
         return;
     }
 
     checkP2PConnectionsEstablished();
+}
+
+void ccoip::CCoIPMasterHandler::handleSyncSharedState(const ccoip_socket_address_t &client_address,
+                                                      const C2MPacketSyncSharedState &packet) {
+    THREAD_GUARD(server_thread_id);
+    LOG(DEBUG) << "Received C2MPacketSyncSharedState from " << ccoip_sockaddr_to_str(client_address);
+
+    // obtain client uuid from client address
+    ccoip_uuid_t client_uuid{}; {
+        const auto client_uuid_opt = server_state.findClientUUID(client_address);
+        if (!client_uuid_opt) [[unlikely]] {
+            LOG(WARN) << "Client " << ccoip_sockaddr_to_str(client_address) << " not found";
+            if (!kickClient(client_address)) [[unlikely]] {
+                LOG(ERR) << "Failed to kick client " << ccoip_sockaddr_to_str(client_address);
+            }
+            return;
+        }
+        client_uuid = client_uuid_opt.value();
+    }
+
+    // check if shared state request follows the right "mask" as in:
+    // 1. requests same keys as the other clients; mismatch will result in a kick
+    // 2. hash of the shared state is the same as the hash of the shared state of the other clients; mismatch will
+    //    result in the client being notified to re-request the shared state entry whose hash does not match.
+    // If the client is the first to sync shared state, then that peer's shared state is the reference
+    // "mask" for the other clients.
+    const CCoIPMasterState::SharedStateMismatchStatus status = server_state
+            .sharedStateMatches(client_uuid, packet.shared_state_revision, packet.shared_state_hashes);
+
+    if (status == CCoIPMasterState::KEY_SET_MISMATCH) {
+        LOG(WARN) << "Shared state key set mismatch for " << ccoip_sockaddr_to_str(client_address) <<
+                ". Please make sure all clients have the same shared state keys; Client will be kicked.";
+        if (!kickClient(client_address)) [[unlikely]] {
+            LOG(ERR) << "Failed to kick client " << ccoip_sockaddr_to_str(client_address);
+        }
+        return;
+    }
+
+    // vote for sync shared state
+    if (!server_state.voteSyncSharedState(client_address)) [[unlikely]] {
+        LOG(WARN) << "Failed to vote to sync shared state from " << ccoip_sockaddr_to_str(client_address);
+        if (!kickClient(client_address)) [[unlikely]] {
+            LOG(ERR) << "Failed to kick client " << ccoip_sockaddr_to_str(client_address);
+        }
+        return;
+    }
+    checkSyncSharedStateConsensus();
 }
 
 void ccoip::CCoIPMasterHandler::onClientDisconnect(const ccoip_socket_address_t &client_address) {
@@ -175,7 +305,14 @@ void ccoip::CCoIPMasterHandler::onClientDisconnect(const ccoip_socket_address_t 
     }
     if (!server_state.unregisterClient(client_address)) {
         LOG(WARN) << "Failed to unregister client " << ccoip_sockaddr_to_str(client_address);
+        return;
     }
+
+    // the client disconnecting might result in consensus changes for ongoing votes;
+    // If the client that left was the only outstanding vote to e.g. accept new peers, then we need to re-check
+    // the consensus and send response packets as necessary.
+    checkSyncSharedStateConsensus();
+    checkAcceptNewPeersConsensus();
 }
 
 void ccoip::CCoIPMasterHandler::handleAcceptNewPeers(const ccoip_socket_address_t &client_address,
@@ -188,6 +325,7 @@ void ccoip::CCoIPMasterHandler::handleAcceptNewPeers(const ccoip_socket_address_
         if (!kickClient(client_address)) [[unlikely]] {
             LOG(ERR) << "Failed to kick client " << ccoip_sockaddr_to_str(client_address);
         }
+        return;
     }
 
     checkAcceptNewPeersConsensus();

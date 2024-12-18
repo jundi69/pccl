@@ -105,6 +105,15 @@ bool tinysockets::ServerSocket::listen() {
             LOG(INFO) << "Bind to port failed, bumping port to " << listen_address.port;
 
             uv_close(reinterpret_cast<uv_handle_t *>(server_socket_state->tcp_server.get()), nullptr);
+
+            // Run the loop once to let the handle finish closing
+            // This is necessary because uv_close is asynchronous and the handle is not guaranteed to be closed.
+            // Otherwise, we would reinitialize the tcp_server too early, leading to its deletion
+            // before uv has finished closing it.
+            while (uv_run(server_socket_state->loop.get(), UV_RUN_NOWAIT) != 0) {
+            }
+
+            // Now it is safe to re-initialize the tcp handle
             server_socket_state->tcp_server = std::make_unique<uv_tcp_t>();
             server_socket_state->tcp_server->data = this;
             if (uv_tcp_init(server_socket_state->loop.get(), server_socket_state->tcp_server.get()) != 0) {
@@ -145,8 +154,8 @@ bool tinysockets::ServerSocket::listen() {
     server_socket_state->async_handle->data = this;
     UV_ERR_CHECK(
         uv_async_init(server_socket_state->loop.get(), server_socket_state->async_handle.get(), [](uv_async_t *handle) {
-            const auto *this_ptr = static_cast<ServerSocket *>(handle->data);
-            this_ptr->onAsyncSignal();
+                const auto *this_ptr = static_cast<ServerSocket *>(handle->data);
+                this_ptr->onAsyncSignal();
             }
         ));
 
@@ -287,9 +296,6 @@ uint16_t tinysockets::ServerSocket::getListenPort() const {
 
 void tinysockets::ServerSocket::onAsyncSignal() const {
     uv_stop(server_socket_state->async_handle->loop);
-    if (!closeAllClientConnections()) [[unlikely]] {
-        LOG(ERR) << "Failed to close all client connections";
-    }
 }
 
 static void createBuffer(uv_handle_t *, const size_t suggested_size, uv_buf_t *buf) {
@@ -306,19 +312,26 @@ std::optional<ccoip_socket_address_t> tinysockets::ServerSocket::getUvStreamAddr
 }
 
 void tinysockets::ServerSocket::performLoopShutdown() const {
+    // Close the server and async handles
     uv_close(reinterpret_cast<uv_handle_t *>(server_socket_state->tcp_server.get()), nullptr);
     uv_close(reinterpret_cast<uv_handle_t *>(server_socket_state->async_handle.get()), nullptr);
-    UV_ERR_CHECK(uv_run(server_socket_state->loop.get(), UV_RUN_NOWAIT));
-    int status = 0;
-    do {
-        if (status != 0) {
-            if (!closeAllClientConnections()) [[unlikely]] {
-                LOG(ERR) << "Failed to close all clients connections";
-            }
-        }
-        status = uv_loop_close(server_socket_state->loop.get());
-        UV_ERR_CHECK(uv_run(server_socket_state->loop.get(), UV_RUN_NOWAIT));
-    } while (status == UV_EBUSY);
+
+    // If needed, close client connections as well before the loop is closed
+    if (!closeAllClientConnections()) {
+        LOG(ERR) << "Failed to close all clients connections";
+    }
+
+    // Run the loop until all pending close callbacks are processed
+    while (uv_run(server_socket_state->loop.get(), UV_RUN_DEFAULT) != 0) {
+        // This will spin until all handles are closed
+    }
+
+    // Now that all handles are closed, uv_loop_close should not return UV_EBUSY
+    if (const int status = uv_loop_close(server_socket_state->loop.get()); status != 0) {
+        LOG(ERR) << "uv_loop_close failed with: " << uv_err_name(status);
+    }
+
+    // Set the loop pointer to null after it's closed
     server_socket_state->loop = nullptr;
 }
 
@@ -350,15 +363,22 @@ void tinysockets::ServerSocket::onNewConnection(uv_server_stream_t *server, cons
         LOG(INFO) << "New connection accepted";
 
         const auto client_addr = getUvStreamAddress(reinterpret_cast<uv_stream_t *>(client));
+
+        if (!client_addr) [[unlikely]] {
+            LOG(ERR) << "Failed to get client address";
+            if (!uv_is_closing(reinterpret_cast<uv_handle_t *>(client))) {
+                uv_close(reinterpret_cast<uv_handle_t *>(client), [](uv_handle_t *handle) {
+                    const auto *uv_tcp = reinterpret_cast<uv_tcp_t *>(handle);
+                    delete uv_tcp;
+                });
+            }
+            return;
+        }
+
         const auto inet_internal = ccoip_socket_to_internal(*client_addr);
         server_socket_state->sockaddr_to_uvstream[inet_internal] = reinterpret_cast<uv_stream_t *>(client);
         server_socket_state->uvstream_to_sockaddr[reinterpret_cast<uv_handle_t *>(client)] = inet_internal;
 
-        if (!client_addr) [[unlikely]] {
-            LOG(ERR) << "Failed to get client address";
-            uv_close(reinterpret_cast<uv_handle_t *>(client), nullptr);
-            return;
-        }
         uv_read_start(reinterpret_cast<uv_stream_t *>(client), createBuffer,
                       [](uv_stream_t *stream, const ssize_t n_read, const uv_buf_t *buf) {
                           // Handle EOF or errors
@@ -386,8 +406,12 @@ void tinysockets::ServerSocket::onNewConnection(uv_server_stream_t *server, cons
             callback(*client_addr);
         }
     } else {
-        uv_close(reinterpret_cast<uv_handle_t *>(client), nullptr);
-        delete client;
+        if (!uv_is_closing(reinterpret_cast<uv_handle_t *>(client))) {
+            uv_close(reinterpret_cast<uv_handle_t *>(client), [](uv_handle_t *handle) {
+                const auto *uv_tcp = reinterpret_cast<uv_tcp_t *>(handle);
+                delete uv_tcp;
+            });
+        }
     }
 }
 

@@ -13,16 +13,15 @@ namespace ccoip {
 
         virtual void serialize(PacketWriteBuffer &buffer) const = 0;
 
-        virtual void deserialize(PacketReadBuffer &buffer) = 0;
+        [[nodiscard]] virtual bool deserialize(PacketReadBuffer &buffer) = 0;
     };
 
     class EmptyPacket : public Packet {
     public:
-
         static size_t serialized_size;
 
         void serialize(PacketWriteBuffer &buffer) const override;
 
-        void deserialize(PacketReadBuffer &buffer) override;
+        bool deserialize(PacketReadBuffer &buffer) override;
     };
 }
