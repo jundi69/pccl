@@ -17,12 +17,7 @@ def load_native_module():
     # Locate the library in the package directory
     pkg_path = Path(__file__).parent
     lib_path = pkg_path / lib_name
-    if not lib_path.exists():
-        # windows only run cmd and print dir
-        system(f'dir {pkg_path}')
-        # and print all files in working dir
-        system('dir')
-        raise FileNotFoundError(f'Library not found: {lib_path}')
+    assert lib_path.exists(), f'Native PCCL library not found: {lib_path}'
 
     # Load the library using cffi
     from cffi import FFI
