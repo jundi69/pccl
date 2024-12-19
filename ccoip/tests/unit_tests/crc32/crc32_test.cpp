@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include <hash_utils.hpp>
 #include <random>
+#include <array>
 #include <chrono>
 
 uint32_t CRC32Ref(const void *data, const size_t size) {
