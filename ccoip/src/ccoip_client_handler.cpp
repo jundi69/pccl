@@ -108,7 +108,7 @@ bool ccoip::CCoIPClientHandler::syncSharedState(ccoip_shared_state_t &shared_sta
         auto &value = entry.value;
         shared_state_hashes.push_back(SharedStateHashEntry{
             .key = key,
-            .hash = entry.allow_content_inequality ? 0 : hash_utils::FVN1a_512Hash(value.data(), value.size_bytes()),
+            .hash = entry.allow_content_inequality ? 0 : hash_utils::CRC32(value.data(), value.size_bytes()),
             .data_type = entry.data_type,
             .allow_content_inequality = entry.allow_content_inequality
         });
@@ -185,7 +185,7 @@ bool ccoip::CCoIPClientHandler::syncSharedState(ccoip_shared_state_t &shared_sta
                     std::memcpy(entry.value.data(), new_entry->dst_buffer.get(), new_entry->dst_size);
 
                     if (i < response->expected_hashes.size()) {
-                        uint64_t actual_hash = hash_utils::FVN1a_512Hash(entry.value.data(), entry.value.size_bytes());
+                        uint64_t actual_hash = hash_utils::CRC32(entry.value.data(), entry.value.size_bytes());
                         if (uint64_t expected_hash = response->expected_hashes[i]; actual_hash != expected_hash) {
                             LOG(ERR) << "Shared state distributor transmitted incorrect shared state entry for key " <<
                                     entry.key << ": Expected hash " << expected_hash << " but got " << actual_hash;

@@ -4,6 +4,17 @@ project(pccl)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "(x86)|(X86)|(amd64)|(AMD64)")
+    set(IS_AMD64 TRUE)
+else()
+    set(IS_AMD64 FALSE)
+endif()
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "(aarch64)|(arm64)")
+    set(IS_ARM64 TRUE)
+else()
+    set(IS_ARM64 FALSE)
+endif()
+
 # add third party libraries
 add_subdirectory(third_party)
 
