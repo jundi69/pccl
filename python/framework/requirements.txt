@@ -1,6 +1,4 @@
-cffi==1.17.1
-pycparser==2.22
-cffi==1.17.1
-ipaddress==1.0.23
-pycparser==2.22
-torch==2.5.1
+cffi
+ipaddress
+pycparser
+torch
