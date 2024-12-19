@@ -227,8 +227,15 @@ void ccoip::CCoIPMasterHandler::checkSyncSharedStateConsensus() {
                     continue;
                 }
                 response.distributor_address = *best_peer_opt;
-                const auto &outdated_keys = server_state.getOutdatedSharedStateKeys(peer_uuid);
+                auto outdated_keys = server_state.getOutdatedSharedStateKeys(peer_uuid);
+                if (outdated_keys.empty()) {
+                    outdated_keys = server_state.getSharedStateKeys();
+                }
                 response.outdated_keys = outdated_keys;
+
+                for (const auto &key: outdated_keys) {
+                    response.expected_hashes.push_back(server_state.getSharedStateEntryHash(key));
+                }
             }
 
             if (!server_socket.sendPacket<M2CPacketSyncSharedState>(peer_address, response)) {

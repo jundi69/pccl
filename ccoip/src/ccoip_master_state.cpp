@@ -60,6 +60,8 @@ bool ccoip::CCoIPMasterState::unregisterClient(const ccoip_socket_address_t &cli
 
         // remove from all voting sets
         votes_accept_new_peers.erase(it->second);
+        votes_p2p_connections_established.erase(it->second);
+        votes_sync_shared_state.erase(it->second);
         client_uuids.erase(it);
 
         peer_list_changed = true;
@@ -227,6 +229,9 @@ bool ccoip::CCoIPMasterState::endSharedStateSyncPhase() {
             return false;
         }
     }
+    shared_state_mask.clear();
+    shared_state_hashes.clear();
+    shared_state_responses.clear();
     shared_state_dirty_keys.clear();
     votes_sync_shared_state_complete.clear();
     return true;
@@ -339,7 +344,14 @@ ccoip::CCoIPMasterState::SharedStateMismatchStatus ccoip::CCoIPMasterState::shar
     }
 
     if (shared_state_mask.empty()) {
+        // set shared_state_mask
         shared_state_mask = entries;
+
+        // populate shared_state_hashes
+        for (auto &entry: shared_state_mask) {
+            shared_state_hashes[entry.key] = entry.hash;
+        }
+
         status = SUCCESSFUL_MATCH;
         goto end;
     }
@@ -415,8 +427,6 @@ bool ccoip::CCoIPMasterState::transitionToSharedStateSyncPhase() {
             return false;
         }
     }
-    shared_state_mask.clear();
-    shared_state_responses.clear();
     votes_sync_shared_state.clear();
     return true;
 }
@@ -456,4 +466,21 @@ uint64_t ccoip::CCoIPMasterState::getSharedStateRevision() const {
 
 const std::vector<std::string> &ccoip::CCoIPMasterState::getOutdatedSharedStateKeys(const ccoip_uuid_t peer_uuid) {
     return shared_state_dirty_keys[peer_uuid];
+}
+
+uint64_t ccoip::CCoIPMasterState::getSharedStateEntryHash(const std::string &key) const {
+    const auto it = shared_state_hashes.find(key);
+    if (it == shared_state_hashes.end()) {
+        return 0;
+    }
+    return it->second;
+}
+
+std::vector<std::string> ccoip::CCoIPMasterState::getSharedStateKeys() const {
+    std::vector<std::string> keys{};
+    keys.reserve(shared_state_mask.size());
+    for (const auto &entry: shared_state_mask) {
+        keys.push_back(entry.key);
+    }
+    return keys;
 }

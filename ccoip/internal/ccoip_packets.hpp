@@ -139,6 +139,7 @@ namespace ccoip {
         boolean is_outdated;
         ccoip_socket_address_t distributor_address;
         std::vector<std::string> outdated_keys;
+        std::vector<uint64_t> expected_hashes;
 
         void serialize(PacketWriteBuffer &buffer) const override;
 

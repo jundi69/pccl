@@ -158,6 +158,9 @@ void ccoip::M2CPacketSyncSharedState::serialize(PacketWriteBuffer &buffer) const
     for (const auto &key: outdated_keys) {
         buffer.writeString(key);
     }
+    for (const auto &hash: expected_hashes) {
+        buffer.write<uint64_t>(hash);
+    }
 }
 
 bool ccoip::M2CPacketSyncSharedState::deserialize(PacketReadBuffer &buffer) {
@@ -167,6 +170,10 @@ bool ccoip::M2CPacketSyncSharedState::deserialize(PacketReadBuffer &buffer) {
     outdated_keys.reserve(n_keys);
     for (size_t i = 0; i < n_keys; i++) {
         outdated_keys.push_back(buffer.readString());
+    }
+    expected_hashes.reserve(n_keys);
+    for (size_t i = 0; i < n_keys; i++) {
+        expected_hashes.push_back(buffer.read<uint64_t>());
     }
     return true;
 }

@@ -141,8 +141,13 @@ namespace ccoip {
         /// Mismatch of the keys results in the client being kicked.
         /// Mismatch of a hash results will result in the client being notified to re-request the shared state entry
         /// whose hash does not match.
-        /// Cleared once the shared state voting phase ends.
+        /// Cleared once the shared state distribution phase ends.
         std::vector<SharedStateHashEntry> shared_state_mask{};
+
+        /// Cache of the shared state hashes for all entries in the shared state mask
+        /// by their key string.
+        /// Cleared when the shared state distribution phase ends.
+        std::unordered_map<std::string, uint64_t> shared_state_hashes{};
 
         /// The revision of the current shared state.
         /// If a client requests to sync a shared state with a revision smaller than this,
@@ -162,8 +167,8 @@ namespace ccoip {
 
         /// Maps the client UUID to the set of shared state keys that have dirty content, meaning
         /// that the hash of the shared state entry does not match the hash in the shared state mask.
-        /// Cleared once the shared state voting phase ends.
-        std::unordered_map<ccoip_uuid_t, std::vector<std::string>> shared_state_dirty_keys{};
+        /// Cleared once the shared state distribution phase ends.
+        std::unordered_map<ccoip_uuid_t, std::vector<std::string> > shared_state_dirty_keys{};
 
     public:
         /// Registers a client
@@ -280,8 +285,14 @@ namespace ccoip {
         /// does not match the hash in the shared state mask.
         /// If @code sharedStateMatches@endcode has not been called yet since the start of the current shared state voting phase,
         /// this function will return an empty vector.
-        const std::vector<std::string> &getOutdatedSharedStateKeys(ccoip_uuid_t peer_uuid);
+        [[nodiscard]] const std::vector<std::string> &getOutdatedSharedStateKeys(ccoip_uuid_t peer_uuid);
 
-    private:
+        /// Returns the shared state entry hash for a particular key; returns 0 if the key is not found
+        /// For a key to be found, it must be present in the shared state mask.
+        /// The shared state mask needs to be populated by @code sharedStateMatches@endcode before calling this function.
+        [[nodiscard]] uint64_t getSharedStateEntryHash(const std::string &key) const;
+
+        /// Returns the set of shared state keys
+        [[nodiscard]] std::vector<std::string> getSharedStateKeys() const;
     };
 }

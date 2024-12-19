@@ -145,15 +145,9 @@ bool ccoip::CCoIPClientHandler::syncSharedState(ccoip_shared_state_t &shared_sta
                 return false;
             }
             C2SPacketRequestSharedState request{};
-            if (!response->outdated_keys.empty()) {
-                request.requested_keys.reserve(response->outdated_keys.size());
-                for (const auto &key: response->outdated_keys) {
-                    request.requested_keys.push_back(key);
-                }
-            } else {
-                for (const auto &entry: shared_state.entries) {
-                    request.requested_keys.push_back(entry.key);
-                }
+            request.requested_keys.reserve(response->outdated_keys.size());
+            for (const auto &key: response->outdated_keys) {
+                request.requested_keys.push_back(key);
             }
             if (!req_socket.sendPacket<C2SPacketRequestSharedState>(request)) {
                 LOG(ERR) << "Failed to sync shared state: Failed to send C2SPacketRequestSharedState to distributor";
@@ -179,14 +173,28 @@ bool ccoip::CCoIPClientHandler::syncSharedState(ccoip_shared_state_t &shared_sta
             }
 
             // copy content buffers of shared state entries to user controlled buffers
-            for (auto &entry: shared_state.entries) {
+            for (size_t i = 0; i < shared_state.entries.size(); i++) {
+                const auto &entry = shared_state.entries[i];
                 if (new_entries.contains(entry.key)) {
                     const auto &new_entry = new_entries[entry.key];
                     if (new_entry->dst_size != entry.value.size_bytes()) {
-                        LOG(ERR) << "Failed to sync shared state: Shared state entry size mismatch for key " << entry.key;
+                        LOG(ERR) << "Failed to sync shared state: Shared state entry size mismatch for key " << entry.
+                                key;
                         return false;
                     }
                     std::memcpy(entry.value.data(), new_entry->dst_buffer.get(), new_entry->dst_size);
+
+                    if (i < response->expected_hashes.size()) {
+                        uint64_t actual_hash = hash_utils::FVN1a_512Hash(entry.value.data(), entry.value.size_bytes());
+                        if (uint64_t expected_hash = response->expected_hashes[i]; actual_hash != expected_hash) {
+                            LOG(ERR) << "Shared state distributor transmitted incorrect shared state entry for key " <<
+                                    entry.key << ": Expected hash " << expected_hash << " but got " << actual_hash;
+                            return false;
+                        }
+                    } else {
+                        LOG(WARN) << "Master did not transmit expected hash for shared state entry " << entry.key <<
+                                "; Skipping hash check...";
+                    }
                 }
             }
         }
@@ -197,8 +205,10 @@ bool ccoip::CCoIPClientHandler::syncSharedState(ccoip_shared_state_t &shared_sta
         }
 
         // wait for confirmation from master that all peers have synced the shared state
-        if (const auto sync_response = client_socket.receivePacket<M2CPacketSyncSharedStateComplete>(); !sync_response) {
-            LOG(ERR) << "Failed to sync shared state: Failed to receive M2CPacketSyncSharedStateComplete response from master";
+        if (const auto sync_response = client_socket.receivePacket<M2CPacketSyncSharedStateComplete>(); !
+            sync_response) {
+            LOG(ERR) <<
+                    "Failed to sync shared state: Failed to receive M2CPacketSyncSharedStateComplete response from master";
             return false;
         }
     }
