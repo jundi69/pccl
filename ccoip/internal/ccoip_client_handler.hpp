@@ -38,7 +38,7 @@ namespace ccoip {
 
         [[nodiscard]] bool acceptNewPeers();
 
-        [[nodiscard]] bool syncSharedState(const ccoip_shared_state_t &shared_state);
+        [[nodiscard]] bool syncSharedState(ccoip_shared_state_t &shared_state);
 
         [[nodiscard]] bool interrupt();
 

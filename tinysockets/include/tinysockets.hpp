@@ -206,8 +206,7 @@ namespace tinysockets {
                 return std::nullopt;
             }
             PacketReadBuffer buffer{data.data(), data.size()};
-            const auto actual_packet_id = buffer.read<ccoip::packetId_t>();
-            if (actual_packet_id != packet_id) {
+            if (const auto actual_packet_id = buffer.read<ccoip::packetId_t>(); actual_packet_id != packet_id) {
                 LOG(ERR) << "Expected packet ID " << packet_id << " but received " << actual_packet_id;
                 return std::nullopt;
             }

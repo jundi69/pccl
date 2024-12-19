@@ -27,8 +27,8 @@ namespace ccoip {
         /// The client is idle.
         /// It does not participate in any collective communications operations
         /// or shared state distribution.
-        /// When the @code ConnectionPhase @endcode is @code PEER_REGISTERED @endcode,
-        /// this is the only legal state for the client to be in (with the exception of @code CONNECTING_TO_PEERS @endcode).
+        /// When the @code ConnectionPhase@endcode is @code PEER_REGISTERED@endcode,
+        /// this is the only legal state for the client to be in (with the exception of @code CONNECTING_TO_PEERS@endcode).
         IDLE,
 
         /// The client has voted to accept new peers.
@@ -41,9 +41,9 @@ namespace ccoip {
 
         /// When the node has established p2p connections with all peers,
         /// but other peers have not yet declared that they have established p2p connections,
-        /// the client will be in the @code WAITING_FOR_OTHER_PEERS @endcode state.
+        /// the client will be in the @code WAITING_FOR_OTHER_PEERS@endcode state.
         /// Once all peers have declared that they have established p2p connections,
-        /// the client will return to the @code IDLE @endcode state.
+        /// the client will return to the @code IDLE@endcode state.
         WAITING_FOR_OTHER_PEERS,
 
         /// The client has voted to synchronize shared state.
@@ -52,8 +52,8 @@ namespace ccoip {
 
         /// When all peers have voted to synchronize shared state, depending on whether
         /// the client has an up-to-date shared state, the client will either
-        /// enter the @code DISTRIBUTE_SHARED_STATE @endcode state or the @code REQUEST_SHARED_STATE @endcode state.
-        /// In the @code DISTRIBUTE_SHARED_STATE @endcode state, the client will distribute its shared state to peers
+        /// enter the @code DISTRIBUTE_SHARED_STATE@endcode state or the @code REQUEST_SHARED_STATE@endcode state.
+        /// In the @code DISTRIBUTE_SHARED_STATE@endcode state, the client will distribute its shared state to peers
         /// that request it.
         /// Shared state distribution happens over one-off, non-persistent connections, similar to HTTP/1.1 connections.
         /// This is because of the logical mismatch between the persistent nature of the p2p connections
@@ -64,11 +64,25 @@ namespace ccoip {
 
         /// When all peers have voted to synchronize shared state, depending on whether
         /// the client has an up-to-date shared state, the client will either
-        /// enter the @code DISTRIBUTE_SHARED_STATE @endcode state or the @code REQUEST_SHARED_STATE @endcode state.
-        /// In the @code REQUEST_SHARED_STATE @endcode state, the client will request shared state from a peer
+        /// enter the @code DISTRIBUTE_SHARED_STATE@endcode state or the @code REQUEST_SHARED_STATE@endcode state.
+        /// In the @code REQUEST_SHARED_STATE@endcode state, the client will request shared state from a peer
         /// the master node has designated. This node may or may not be a topological neighbor as determined
         /// by the reduce topology. The client will then initiate a one-off connection to the designated peer.
-        REQUEST_SHARED_STATE
+        REQUEST_SHARED_STATE,
+
+
+        /// The client has voted to complete the shared state distribution phase.
+        /// After each client has requested the set of shared state entries that were declared outdated and subsequent distribution was successful,
+        /// the client will vote to complete the shared state distribution phase.
+        /// Clients that do not have any outdated shared state entries will immediately vote to complete the shared state distribution phase.
+        /// Consensus is required for the vote to complete, meaning all clients in the @code PEER_ACCEPTED@endcode phase must vote to complete the shared state distribution phase.
+        /// This consensus ensures that no client proceeds beyond the shared state distribution phase until all clients have received the shared state entries that were outdated
+        /// and further, that clients that could act as shared state distributors progress. While shared state distributors by definition
+        /// have non-dirty shared state and will thus immediately vote to complete the shared state distribution phase, this however does not
+        /// imply that these clients progress to the next phase! They will wait, as intended for all clients to vote to complete the shared state distribution phase
+        /// and while doing so process incoming shared state distribution requests.
+        /// After the shared state synchronization phase ends, clients return to the @code IDLE@endcode state.
+        VOTE_COMPLETE_SHARED_STATE_SYNC
     };
 
     struct ClientInfo {
@@ -113,8 +127,12 @@ namespace ccoip {
         /// cleared once shared state distribution consensus is reached.
         std::unordered_set<ccoip_uuid_t> votes_sync_shared_state{};
 
+        /// set of all uuids that have voted to complete shared state distribution.
+        /// cleared once the shared state distribution phase ends.
+        std::unordered_set<ccoip_uuid_t> votes_sync_shared_state_complete{};
+
         /// Flag to indicate if the peer list has changed
-        /// See @code hasPeerListChanged @endcode
+        /// See @code hasPeerListChanged@endcode
         bool peer_list_changed = false;
 
         /// Defines the "mask" for shared state entries.
@@ -123,8 +141,13 @@ namespace ccoip {
         /// Mismatch of the keys results in the client being kicked.
         /// Mismatch of a hash results will result in the client being notified to re-request the shared state entry
         /// whose hash does not match.
-        /// Cleared once the shared state voting phase ends.
+        /// Cleared once the shared state distribution phase ends.
         std::vector<SharedStateHashEntry> shared_state_mask{};
+
+        /// Cache of the shared state hashes for all entries in the shared state mask
+        /// by their key string.
+        /// Cleared when the shared state distribution phase ends.
+        std::unordered_map<std::string, uint64_t> shared_state_hashes{};
 
         /// The revision of the current shared state.
         /// If a client requests to sync a shared state with a revision smaller than this,
@@ -138,9 +161,14 @@ namespace ccoip {
         /// result in a kick.
         uint64_t shared_state_revision = 0;
 
-        /// Maps the client UUID to the shared state mismatch status populated by the last invocation of @code sharedStateMatches @endcode.
-        /// Cleared once the shared state voting phase ends.
+        /// Maps the client UUID to the shared state mismatch status populated by the last invocation of @code sharedStateMatches@endcode.
+        /// Cleared once the shared state distribution phase ends.
         std::unordered_map<ccoip_uuid_t, SharedStateMismatchStatus> shared_state_responses{};
+
+        /// Maps the client UUID to the set of shared state keys that have dirty content, meaning
+        /// that the hash of the shared state entry does not match the hash in the shared state mask.
+        /// Cleared once the shared state distribution phase ends.
+        std::unordered_map<ccoip_uuid_t, std::vector<std::string> > shared_state_dirty_keys{};
 
     public:
         /// Registers a client
@@ -161,8 +189,16 @@ namespace ccoip {
         /// All clients must vote to synchronize shared state before shared state distribution can begin.
         [[nodiscard]] bool voteSyncSharedState(const ccoip_socket_address_t &client_address);
 
+        /// Called when a client votes to complete the shared state distribution phase.
+        /// This indicates that it has completed receiving the subset of shared state that was outdated.
+        /// All clients must vote to complete shared state distribution before shared state distribution can end.
+        /// With the shared state distribution ending, the shared state synchronization phase also ends.
+        /// When consensus is reached, @code endSharedStateDistributionPhase()@endcode will be called.
+        /// All clients here shall mean the subset of clients that are in the @code PEER_ACCEPTED@endcode phase.
+        [[nodiscard]] bool voteDistSharedStateComplete(const ccoip_socket_address_t &client_address);
+
         /// Returns true if all clients have voted to synchronize the shared state
-        /// All clients here shall mean the subset of clients that are in the @code PEER_ACCEPTED @endcode phase
+        /// All clients here shall mean the subset of clients that are in the @code PEER_ACCEPTED@endcode phase.
         [[nodiscard]] bool syncSharedStateConsensus() const;
 
         /// Returns true if all clients have voted to accept new peers
@@ -173,21 +209,46 @@ namespace ccoip {
         void transitionToP2PEstablishmentPhase();
 
         /// Marks that p2p connections have been established by a particular client.
-        /// The particular client will be transitioned to the @code WAITING_FOR_OTHER_PEERS @endcode state
+        /// The particular client will be transitioned to the @code WAITING_FOR_OTHER_PEERS@endcode state
         /// until all peers have declared that they have established p2p connections.
         ///
         /// Once all peers have declared that they have established p2p connections,
-        /// clients return back to the @code IDLE @endcode state.
+        /// clients return back to the @code IDLE@endcode state.
         [[nodiscard]] bool markP2PConnectionsEstablished(const ccoip_socket_address_t &client_address);
 
         /// Transition to the p2p connections established phase
         /// Triggered after all clients have declared that they have established p2p connections.
-        /// This means that all clients will return to the @code IDLE @endcode state.
-        /// Returns false if any client is not in the @code WAITING_FOR_OTHER_PEERS @endcode state
+        /// This means that all clients will return to the @code IDLE@endcode state.
+        /// Returns false if any client is not in the @code WAITING_FOR_OTHER_PEERS@endcode state
         [[nodiscard]] bool transitionToP2PConnectionsEstablishedPhase();
+
+        /// Transition to the shared state distribution phase
+        /// Triggered after all clients have voted to synchronize shared state
+        /// Returns false if a client is in the PEER_ACCEPTED phase but not in the VOTE_SYNC_SHARED_STATE state or if
+        /// @code sharedStateMatches@endcode has not been called for all clients.
+        [[nodiscard]] bool transitionToSharedStateSyncPhase();
+
+        /// Called to end the shared state distribution phase
+        /// Will revert all clients to the @code IDLE@endcode state
+        [[nodiscard]] bool endSharedStateSyncPhase();
 
         /// Returns true if all clients have declared that they have established p2p connections
         [[nodiscard]] bool p2pConnectionsEstablishConsensus() const;
+
+        /// Returns true if all clients have voted to complete the shared state distribution phase
+        [[nodiscard]] bool syncSharedStateCompleteConsensus() const;
+
+        /// Returns true if the shared state entries provided match the current "mask".
+        /// A "mask" is defined by the identity of the set of shared state key strings and their corresponding hashes.
+        /// If @code ignore_hashes@endcode is true, only the shared state keys are compared.
+        /// If this is the first client to sync shared state, then the supplied shared state will define the "mask"
+        /// for subsequent checks.
+        /// This status will be retained until the shared state voting phase ends and can be queried
+        /// via @code getSharedStateMismatchStatus@endcode.
+        [[nodiscard]] SharedStateMismatchStatus sharedStateMatches(
+            const ccoip_uuid_t &peer_uuid,
+            uint64_t revision,
+            const std::vector<SharedStateHashEntry> &entries);
 
         /// Returns the peers that a particular client should establish p2p connections with
         [[nodiscard]] std::vector<ClientInfo> getPeersForClient(
@@ -203,29 +264,11 @@ namespace ccoip {
         /// Returns true if the peer list has changed since the last invocation of this function
         [[nodiscard]] bool hasPeerListChanged();
 
-        /// Returns true if the shared state entries provided match the current "mask".
-        /// A "mask" is defined by the identity of the set of shared state key strings and their corresponding hashes.
-        /// If @code ignore_hashes @endcode is true, only the shared state keys are compared.
-        /// If this is the first client to sync shared state, then the supplied shared state will define the "mask"
-        /// for subsequent checks.
-        /// This status will be retained until the shared state voting phase ends and can be queried
-        /// via @code getSharedStateMismatchStatus @endcode.
-        [[nodiscard]] SharedStateMismatchStatus sharedStateMatches(
-            const ccoip_uuid_t &peer_uuid,
-            uint64_t revision,
-            const std::vector<SharedStateHashEntry> &entries);
-
-        /// Returns the shared state mismatch status. This status is set by @code sharedStateMatches @endcode.
-        /// If @code sharedStateMatches @endcode has not been called yet since the start of the current shared state voting phase,
+        /// Returns the shared state mismatch status. This status is set by @code sharedStateMatches@endcode.
+        /// If @code sharedStateMatches@endcode has not been called yet since the start of the current shared state voting phase,
         /// this function will return std::nullopt.
         [[nodiscard]] std::optional<SharedStateMismatchStatus> getSharedStateMismatchStatus(
             const ccoip_uuid_t &peer_uuid);
-
-        /// Transition to the shared state distribution phase
-        /// Triggered after all clients have voted to synchronize shared state
-        /// Returns false if a client is in the PEER_ACCEPTED phase but not in the VOTE_SYNC_SHARED_STATE state or if
-        /// @code sharedStateMatches @endcode has not been called for all clients.
-        [[nodiscard]] bool transitionToSharedStateDistributionPhase();
 
         /// Finds the client UUID from the client address; returns std::nullopt if not found
         [[nodiscard]] std::optional<ccoip_uuid_t> findClientUUID(const ccoip_socket_address_t &client_address);
@@ -234,8 +277,22 @@ namespace ccoip {
         [[nodiscard]] std::optional<std::reference_wrapper<ClientInfo> > getClientInfo(
             const ccoip_socket_address_t &client_address);
 
+        /// Returns the current shared state revision. This represents the current maximum revision of the shared state
+        /// that all clients have agreed upon to be the current shared state revision.
         [[nodiscard]] uint64_t getSharedStateRevision() const;
 
-    private:
+        /// Returns the set of shared state keys of a particular peer that have dirty content, meaning that the hash of the shared state entry
+        /// does not match the hash in the shared state mask.
+        /// If @code sharedStateMatches@endcode has not been called yet since the start of the current shared state voting phase,
+        /// this function will return an empty vector.
+        [[nodiscard]] const std::vector<std::string> &getOutdatedSharedStateKeys(ccoip_uuid_t peer_uuid);
+
+        /// Returns the shared state entry hash for a particular key; returns 0 if the key is not found
+        /// For a key to be found, it must be present in the shared state mask.
+        /// The shared state mask needs to be populated by @code sharedStateMatches@endcode before calling this function.
+        [[nodiscard]] uint64_t getSharedStateEntryHash(const std::string &key) const;
+
+        /// Returns the set of shared state keys
+        [[nodiscard]] std::vector<std::string> getSharedStateKeys() const;
     };
 }

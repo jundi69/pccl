@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <ccoip_packet.hpp>
 #include <ccoip_inet.h>
 #include <ccoip_packet_buffer.hpp>
@@ -24,12 +25,14 @@ namespace ccoip {
 #define C2M_PACKET_ACCEPT_NEW_PEERS_ID 2
 #define C2M_PACKET_P2P_CONNECTIONS_ESTABLISHED_ID 3
 #define C2M_PACKET_SYNC_SHARED_STATE_ID 4
+#define C2M_PACKET_DIST_SHARED_STATE_COMPLETE_ID 5
 
     // M2C packets:
 #define M2C_PACKET_SESSION_REGISTRATION_RESPONSE_ID 1
 #define M2C_PACKET_NEW_PEERS_ID 2
 #define M2C_PACKET_P2P_CONNECTIONS_ESTABLISHED_ID 3
 #define M2C_PACKET_SYNC_SHARED_STATE_ID 4
+#define M2C_PACKET_SYNC_SHARED_STATE_COMPLETE_ID 5
 
     // P2P packets:
 #define P2P_PACKET_HELLO_ID 1
@@ -68,6 +71,7 @@ namespace ccoip {
     struct SharedStateHashEntry {
         std::string key;
         uint64_t hash;
+        size_t num_elements;
         ccoip_data_type_t data_type;
         boolean allow_content_inequality;
     };
@@ -82,6 +86,12 @@ namespace ccoip {
         void serialize(PacketWriteBuffer &buffer) const override;
 
         [[nodiscard]] bool deserialize(PacketReadBuffer &buffer) override;
+    };
+
+    // C2MPacketDistSharedStateComplete
+    class C2MPacketDistSharedStateComplete final : public EmptyPacket {
+    public:
+        static packetId_t packet_id;
     };
 
     // M2CPacketSessionRegistrationResponse
@@ -128,10 +138,18 @@ namespace ccoip {
         static packetId_t packet_id;
         boolean is_outdated;
         ccoip_socket_address_t distributor_address;
+        std::vector<std::string> outdated_keys;
+        std::vector<uint64_t> expected_hashes;
 
         void serialize(PacketWriteBuffer &buffer) const override;
 
         [[nodiscard]] bool deserialize(PacketReadBuffer &buffer) override;
+    };
+
+    // M2CPacketSyncSharedStateComplete
+    class M2CPacketSyncSharedStateComplete final : public EmptyPacket {
+    public:
+        static packetId_t packet_id;
     };
 
     // P2PPacketHello
@@ -147,9 +165,17 @@ namespace ccoip {
     };
 
     // C2SPacketRequestSharedState
-    class C2SPacketRequestSharedState final : public EmptyPacket {
+    class C2SPacketRequestSharedState final : public Packet {
     public:
         static packetId_t packet_id;
+
+        /// the subset of shared state keys that the client is requesting to be transferred
+        /// can equal the full set of shared state keys
+        std::vector<std::string> requested_keys;
+
+        void serialize(PacketWriteBuffer &buffer) const override;
+
+        [[nodiscard]] bool deserialize(PacketReadBuffer &buffer) override;
     };
 
     // S2CPacketSharedStateResponse
@@ -163,17 +189,32 @@ namespace ccoip {
         /// The peer is currently not in shared state distribution mode and thus
         /// refuses to distribute the shared state.
         NOT_IN_SHARED_STATE_DISTRIBUTION_MODE = 3,
+
+        /// Unknown shared state key requested
+        UNKNOWN_SHARED_STATE_KEY = 4
     };
 
     struct SharedStateEntry {
         /// The key of the shared state entry
         std::string key;
 
-        /// On the client:
-        /// References memory into which the shared state entry will be copied.
-        /// On the server:
         /// References memory from which the shared state entry will be copied.
-        std::span<uint8_t> buffer;
+        /// The span points to user-controlled memory that the user ensures is valid until the packet is sent.
+        /// This variable should be used when SENDING a @code S2CPacketSharedStateResponse @endcode packet.
+        /// This variable will not be populated while receiving a @code S2CPacketSharedStateResponse @endcode packet.
+        /// @see dst_buffer for receiving shared state entries.
+        std::span<uint8_t> src_buffer;
+
+        /// The buffer that will be populated with the shared state entry data.
+        /// Points to memory that will be allocated during packet decoding. The user is responsible for
+        /// std::move'ing the buffer to prevent it from being deallocated.
+        /// This variable should be used when RECEIVING a @code S2CPacketSharedStateResponse @endcode packet.
+        /// For sending shared state entries, use @code src_buffer @endcode.
+        std::unique_ptr<uint8_t[]> dst_buffer;
+
+        /// The size of @code dst_buffer@encode in bytes.
+        /// Only used when receiving shared state entries.
+        size_t dst_size;
     };
 
     class S2CPacketSharedStateResponse final : public Packet {

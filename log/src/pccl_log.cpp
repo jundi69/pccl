@@ -16,6 +16,8 @@ const char *ToString(const LogLevel level) {
             return "ERR";
         case FATAL:
             return "FATAL";
+        case BUG:
+            return "BUG";
         default:
             return "UNKNOWN";
     }

@@ -2,6 +2,16 @@
 
 size_t ccoip::EmptyPacket::serialized_size = 0;
 
+// EmptyPacket
+void ccoip::EmptyPacket::serialize(PacketWriteBuffer &buffer) const {
+    // do nothing
+}
+
+bool ccoip::EmptyPacket::deserialize(PacketReadBuffer &buffer) {
+    // do nothing
+    return true;
+}
+
 // C2MPacketRequestSessionRegistration
 ccoip::packetId_t ccoip::C2MPacketRequestSessionRegistration::packet_id = C2M_PACKET_REQUEST_SESSION_REGISTRATION_ID;
 
@@ -29,6 +39,7 @@ void ccoip::C2MPacketSyncSharedState::serialize(PacketWriteBuffer &buffer) const
     for (const auto &entry: shared_state_hashes) {
         buffer.writeString(entry.key);
         buffer.write<uint64_t>(entry.hash);
+        buffer.write<uint64_t>(entry.num_elements);
         buffer.write<uint8_t>(static_cast<uint8_t>(entry.data_type));
         buffer.write<boolean>(entry.allow_content_inequality);
     }
@@ -42,6 +53,7 @@ bool ccoip::C2MPacketSyncSharedState::deserialize(PacketReadBuffer &buffer) {
         SharedStateHashEntry entry{};
         entry.key = buffer.readString();
         entry.hash = buffer.read<uint64_t>();
+        entry.num_elements = buffer.read<uint64_t>();
         entry.data_type = static_cast<ccoip_data_type_t>(buffer.read<uint8_t>());
         entry.allow_content_inequality = buffer.read<boolean>();
         shared_state_hashes.push_back(entry);
@@ -49,15 +61,8 @@ bool ccoip::C2MPacketSyncSharedState::deserialize(PacketReadBuffer &buffer) {
     return true;
 }
 
-// EmptyPacket
-void ccoip::EmptyPacket::serialize(PacketWriteBuffer &buffer) const {
-    // do nothing
-}
-
-bool ccoip::EmptyPacket::deserialize(PacketReadBuffer &buffer) {
-    // do nothing
-    return true;
-}
+// C2MPacketDistSharedStateComplete
+ccoip::packetId_t ccoip::C2MPacketDistSharedStateComplete::packet_id = C2M_PACKET_DIST_SHARED_STATE_COMPLETE_ID;
 
 // M2CPacketSessionRegistrationResponse
 ccoip::packetId_t ccoip::M2CPacketSessionRegistrationResponse::packet_id = M2C_PACKET_SESSION_REGISTRATION_RESPONSE_ID;
@@ -149,11 +154,48 @@ ccoip::packetId_t ccoip::M2CPacketSyncSharedState::packet_id = M2C_PACKET_SYNC_S
 void ccoip::M2CPacketSyncSharedState::serialize(PacketWriteBuffer &buffer) const {
     buffer.write<boolean>(is_outdated);
     writeSocketAddress(buffer, distributor_address);
+    buffer.write<uint64_t>(outdated_keys.size());
+    for (const auto &key: outdated_keys) {
+        buffer.writeString(key);
+    }
+    for (const auto &hash: expected_hashes) {
+        buffer.write<uint64_t>(hash);
+    }
 }
 
 bool ccoip::M2CPacketSyncSharedState::deserialize(PacketReadBuffer &buffer) {
     is_outdated = buffer.read<boolean>();
     distributor_address = readSocketAddress(buffer);
+    const auto n_keys = buffer.read<uint64_t>();
+    outdated_keys.reserve(n_keys);
+    for (size_t i = 0; i < n_keys; i++) {
+        outdated_keys.push_back(buffer.readString());
+    }
+    expected_hashes.reserve(n_keys);
+    for (size_t i = 0; i < n_keys; i++) {
+        expected_hashes.push_back(buffer.read<uint64_t>());
+    }
+    return true;
+}
+
+// M2CPacketSyncSharedStateComplete
+ccoip::packetId_t ccoip::M2CPacketSyncSharedStateComplete::packet_id = M2C_PACKET_SYNC_SHARED_STATE_COMPLETE_ID;
+
+
+// C2SPacketRequestSharedState
+void ccoip::C2SPacketRequestSharedState::serialize(PacketWriteBuffer &buffer) const {
+    buffer.write<uint64_t>(requested_keys.size());
+    for (const auto &key: requested_keys) {
+        buffer.writeString(key);
+    }
+}
+
+bool ccoip::C2SPacketRequestSharedState::deserialize(PacketReadBuffer &buffer) {
+    const auto n_keys = buffer.read<uint64_t>();
+    requested_keys.reserve(n_keys);
+    for (size_t i = 0; i < n_keys; i++) {
+        requested_keys.push_back(buffer.readString());
+    }
     return true;
 }
 
@@ -171,7 +213,8 @@ void ccoip::S2CPacketSharedStateResponse::serialize(PacketWriteBuffer &buffer) c
     buffer.write<uint64_t>(entries.size());
     for (const auto &entry: entries) {
         buffer.writeString(entry.key);
-        buffer.writeContents(entry.buffer.data(), entry.buffer.size_bytes());
+        buffer.write<uint64_t>(entry.src_buffer.size_bytes());
+        buffer.writeContents(entry.src_buffer.data(), entry.src_buffer.size_bytes());
     }
 }
 
@@ -183,14 +226,18 @@ bool ccoip::S2CPacketSharedStateResponse::deserialize(PacketReadBuffer &buffer) 
     const auto n_entries = buffer.read<uint64_t>();
     entries.reserve(n_entries);
     for (size_t i = 0; i < n_entries; i++) {
-        SharedStateEntry entry{};
-        entry.key = buffer.readString();
+        const std::string key = buffer.readString();
         const auto length = buffer.read<uint64_t>();
         if (length > buffer.remaining()) {
             return false;
         }
-        buffer.readContents(entry.buffer.data(), length);
-        entries.push_back(entry);
+        auto dst_buffer = std::unique_ptr<uint8_t[]>(new uint8_t[length]);
+        buffer.readContents(dst_buffer.get(), length);
+        entries.push_back(SharedStateEntry{
+            .key = key,
+            .dst_buffer = std::move(dst_buffer),
+            .dst_size = length
+        });
     }
     return true;
 }
