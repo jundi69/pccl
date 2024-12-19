@@ -72,5 +72,8 @@ jobs:
       - name: Install Pytest
         run: pip3 install pytest
 
+      - name: Dump Dir
+        run: dir 'C:\hostedtoolcache\windows\Python\3.9.13\x64\lib\site-packages\pccl'
+
       - name: Test Python
         run: python -m pytest ${{ github.workspace }}/python/tests
