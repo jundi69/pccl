@@ -1,5 +1,4 @@
 #include "hash_utils.hpp"
-#include <arm_neon.h>
 
 // FNV-1a with 512-bit chunks
 // Motivation: FNV-1a is a fast, non-cryptographic hash function that is suitable for hash tables.
