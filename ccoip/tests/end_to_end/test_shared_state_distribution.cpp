@@ -3,6 +3,7 @@
 #include <ccoip_client.hpp>
 #include <ccoip_master.hpp>
 #include <thread>
+#include <cstring>
 
 TEST(SharedStateDistribution, TestBasic) {
     ccoip::CCoIPMaster master({

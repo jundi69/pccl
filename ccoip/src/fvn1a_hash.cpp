@@ -55,8 +55,6 @@ uint64_t ccoip::hash_utils::FVN1a_512HashAccel(const void *data, const size_t si
             lane_hash[l] = 0xcbf29ce484222325ULL;
         }
 
-        // Process 8 words per lane
-        // Manual unrolling for clarity and possible ILP:
         // Each lane processes 8 words, total 64 words.
 #pragma unroll (8)
         for (int step = 0; step < 8; ++step) {
@@ -89,7 +87,7 @@ uint64_t ccoip::hash_utils::FVN1a_512HashAccel(const void *data, const size_t si
         }
     }
 
-    // Handle remainder if necessary
+    // Handle remainder
     const size_t remainder = num_words % block_size;
     const size_t start = num_words - remainder;
     for (size_t r = start; r < num_words; ++r) {
