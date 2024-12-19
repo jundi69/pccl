@@ -72,5 +72,8 @@ jobs:
       - name: Install Pytest
         run: pip3 install pytest
 
+      - name: Debug
+        run: dir /s /b ${{ github.workspace }}
+
       - name: Test Python
         run: python -m pytest ${{ github.workspace }}/python/tests
