@@ -14,7 +14,7 @@ bool ccoip::CCoIPClient::acceptNewPeers() const {
     return client->acceptNewPeers();
 }
 
-bool ccoip::CCoIPClient::syncSharedState(const ccoip_shared_state_t &shared_state) const {
+bool ccoip::CCoIPClient::syncSharedState(ccoip_shared_state_t &shared_state) const {
     return client->syncSharedState(shared_state);
 }
 

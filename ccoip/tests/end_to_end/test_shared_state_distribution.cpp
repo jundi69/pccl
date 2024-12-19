@@ -43,41 +43,46 @@ TEST(SharedStateDistribution, TestBasic) {
     client2_thread.join();
     client1_thread.join();
 
-    std::thread client1_sync_thread([&client1] {
-        constexpr size_t value1_size = 1024;
-        const std::unique_ptr<uint8_t[]> value1(new uint8_t[value1_size]);
-        std::fill_n(value1.get(), value1_size, 0x42);
 
+    constexpr size_t value_size = 1024;
+    const std::unique_ptr<uint8_t[]> value1(new uint8_t[value_size]);
+    std::fill_n(value1.get(), value_size, 42);
+    std::thread client1_sync_thread([&client1, &value1, value_size] {
         // client 1 distributes shared state
         ccoip_shared_state_t shared_state{};
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
             .key = "key1",
             .data_type = ccoipUint8,
-            .value = std::span(reinterpret_cast<std::byte *>(value1.get()), value1_size)
+            .value = std::span(reinterpret_cast<std::byte *>(value1.get()), value_size),
+            .allow_content_inequality = false
         });
-        shared_state.revision = 2;
+        shared_state.revision = 1;
         ASSERT_TRUE(client1.syncSharedState(shared_state));
     });
 
-    std::thread client2_sync_thread([&client2] {
-        constexpr size_t value2_size = 1024;
-        const std::unique_ptr<uint8_t[]> value2(new uint8_t[value2_size]);
-        std::fill_n(value2.get(), value2_size, 0x0);
+    std::this_thread::sleep_for(std::chrono::seconds(1));
 
+    const std::unique_ptr<uint8_t[]> value2(new uint8_t[value_size]);
+    std::fill_n(value2.get(), value_size, 0x0);
+    std::thread client2_sync_thread([&client2, &value2, value_size] {
         // client 2 requests shared state
         ccoip_shared_state_t shared_state{};
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
             .key = "key1",
             .data_type = ccoipUint8,
-            .value = std::span(reinterpret_cast<std::byte *>(value2.get()), value2_size)
+            .value = std::span(reinterpret_cast<std::byte *>(value2.get()), value_size),
+            .allow_content_inequality = false
         });
-        shared_state.revision = 1;
+        shared_state.revision = 0;
         ASSERT_TRUE(client2.syncSharedState(shared_state));
     });
 
     // wait for shared state sync to complete
     client1_sync_thread.join();
     client2_sync_thread.join();
+
+    // assert the shared state of client 2 to be equal to that of client 1
+    ASSERT_EQ(std::memcmp(value1.get(), value2.get(), value_size), 0);
 
     // clean shutdown
     ASSERT_TRUE(client2.interrupt());

@@ -47,6 +47,8 @@ namespace ccoip {
 
         void checkSyncSharedStateConsensus();
 
+        void checkSyncSharedStateCompleteConsensus();
+
         // packet handling functions
         void handleAcceptNewPeers(const ccoip_socket_address_t &client_address,
                                   const C2MPacketAcceptNewPeers &packet);
@@ -59,7 +61,10 @@ namespace ccoip {
                                              const C2MPacketP2PConnectionsEstablished &packet);
 
         void handleSyncSharedState(const ccoip_socket_address_t &client_address,
-                                   const ccoip::C2MPacketSyncSharedState &packet);
+                                   const C2MPacketSyncSharedState &packet);
+
+        void handleSyncSharedStateComplete(const ccoip_socket_address_t &client_address,
+                                           const C2MPacketDistSharedStateComplete &packet);
 
         // server socket callbacks
         void onClientRead(const ccoip_socket_address_t &client_address,
