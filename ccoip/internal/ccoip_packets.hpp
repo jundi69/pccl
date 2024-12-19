@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <ccoip_packet.hpp>
 #include <ccoip_inet.h>
 #include <ccoip_packet_buffer.hpp>
