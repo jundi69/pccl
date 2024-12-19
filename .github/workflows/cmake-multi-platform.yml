@@ -59,7 +59,7 @@ jobs:
         run: ctest --build-config ${{ matrix.build_type }} --output-on-failure
 
       - name: Compile Python wheel
-        run: cd ${{ github.workspace }}/python/framework && pip3 wheel -w dist .
+        run: cd ${{ github.workspace }}/python/framework && pip3 wheel --verbose -w dist .
 
       - name: Install Python wheel Win32
         if: runner.os == 'Windows'
@@ -71,9 +71,6 @@ jobs:
 
       - name: Install Pytest
         run: pip3 install pytest
-
-      - name: Dump Dir
-        run: dir 'C:\hostedtoolcache\windows\Python\3.9.13\x64\lib\site-packages\pccl'
 
       - name: Test Python
         run: python -m pytest ${{ github.workspace }}/python/tests
