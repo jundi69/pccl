@@ -4,7 +4,7 @@ from pathlib import Path
 from pccl._cdecls import __PCCL_CDECLS
 
 PCCL_LIBS = [
-    ('win32', 'pccl.dll'),
+    ('win32', 'Release/Debug/pccl.dll'),
     ('linux', 'libpccl.so'),
     ('darwin', 'libpccl.dylib'),
 ]
