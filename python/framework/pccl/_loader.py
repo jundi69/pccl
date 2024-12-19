@@ -16,7 +16,10 @@ def load_native_module():
     # Locate the library in the package directory
     pkg_path = Path(__file__).parent
     lib_path = pkg_path / lib_name
-    assert lib_path.exists(), f'PCCL shared library not found: {lib_path}'
+    if not lib_path.exists():
+        for entry in lib_path.iterdir():
+            print(entry)
+        raise FileNotFoundError(f'Library not found: {lib_path}')
 
     # Load the library using cffi
     from cffi import FFI
