@@ -1,4 +1,5 @@
 import sys
+from os import system
 from pathlib import Path
 from pccl._cdecls import __PCCL_CDECLS
 
@@ -17,8 +18,10 @@ def load_native_module():
     pkg_path = Path(__file__).parent
     lib_path = pkg_path / lib_name
     if not lib_path.exists():
-        for entry in lib_path.iterdir():
-            print(entry)
+        # windows only run cmd and print dir
+        system(f'dir {pkg_path}')
+        # and print all files in working dir
+        system('dir')
         raise FileNotFoundError(f'Library not found: {lib_path}')
 
     # Load the library using cffi
