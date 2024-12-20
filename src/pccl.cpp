@@ -113,7 +113,7 @@ pcclResult_t pcclUpdateTopology(pcclComm_t *communicator) {
 
 pcclResult_t pcclAllReduceAsync(const void *sendbuff, void *recvbuff, size_t count, pcclDataType_t datatype,
                                 pcclRedOp_t op, uint64_t tag, const pcclComm_t *communicator,
-                                pcclReduceInfo_t *reduce_info_out,
+                                pcclReduceInfo_t *PCCL_NULLABLE reduce_info_out,
                                 pcclAsyncReduceOp_t *reduce_handle_out) {
     PCCL_VALIDATE_INITIALIZED();
     PCCL_VALIDATE(communicator != nullptr, pcclInvalidArgument);
@@ -124,7 +124,7 @@ pcclResult_t pcclAllReduceAsync(const void *sendbuff, void *recvbuff, size_t cou
 
 pcclResult_t pcclAllReduce(const void *sendbuff, void *recvbuff, size_t count, pcclDataType_t datatype,
                            pcclRedOp_t op, uint64_t tag, const pcclComm_t *communicator,
-                           pcclReduceInfo_t *reduce_info_out) {
+                           pcclReduceInfo_t *PCCL_NULLABLE reduce_info_out) {
     PCCL_VALIDATE_INITIALIZED();
     PCCL_VALIDATE(communicator != nullptr, pcclInvalidArgument);
     PCCL_VALIDATE(communicator->ccoip_client != nullptr, pcclInvalidUsage);
@@ -155,7 +155,8 @@ static std::optional<ccoip_data_type_t> getCCoIPDataType(const pcclDataType_t da
     return std::nullopt;
 }
 
-pcclResult_t pcclSynchronizeSharedState(const pcclComm_t *communicator, pcclSharedState_t *shared_state) {
+pcclResult_t pcclSynchronizeSharedState(const pcclComm_t *communicator, pcclSharedState_t *shared_state,
+                                        pcclSharedStateSyncInfo_t *PCCL_NULLABLE sync_info_out) {
     PCCL_VALIDATE_INITIALIZED();
     PCCL_VALIDATE(communicator != nullptr, pcclInvalidArgument);
     PCCL_VALIDATE(communicator->ccoip_client != nullptr, pcclInvalidUsage);
@@ -177,10 +178,16 @@ pcclResult_t pcclSynchronizeSharedState(const pcclComm_t *communicator, pcclShar
             .allow_content_inequality = entry.allow_content_inequality
         });
     }
-    if (!communicator->ccoip_client->syncSharedState(shared_state_internal)) [[unlikely]] {
+    ccoip_shared_state_sync_info_t info{};
+    if (!communicator->ccoip_client->syncSharedState(shared_state_internal, info)) [[unlikely]] {
         return pcclInvalidUsage;
     }
-
+    if (sync_info_out != nullptr) {
+        *sync_info_out = pcclSharedStateSyncInfo_t{
+            .tx_bytes = info.tx_bytes,
+            .rx_bytes = info.rx_bytes,
+        };
+    }
     return pcclSuccess;
 }
 
