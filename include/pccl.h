@@ -273,11 +273,11 @@ PCCL_EXPORT pcclResult_t pcclAwaitAsyncReduce(const pcclAsyncReduceOp_t *reduce_
  * The function will not unblock until it is confirmed all peers have the same shared state revision.
  * @param communicator The communicator to synchronize the shared state on.
  * @param shared_state The shared state referencing user-owned data to be synchronized.
- * @param info_out shared state synchronization info.
+ * @param sync_info_out shared state synchronization info.
  */
 PCCL_EXPORT pcclResult_t pcclSynchronizeSharedState(const pcclComm_t *communicator,
                                                     pcclSharedState_t *shared_state,
-                                                    pcclSharedStateSyncInfo_t *PCCL_NULLABLE info_out);
+                                                    pcclSharedStateSyncInfo_t *PCCL_NULLABLE sync_info_out);
 
 /**
  * Creates a master node handle.
