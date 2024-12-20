@@ -85,12 +85,20 @@ namespace ccoip {
         VOTE_COMPLETE_SHARED_STATE_SYNC
     };
 
+    struct CCoIPClientVariablePorts {
+        /// The port the peer listens to for p2p connections
+        uint16_t p2p_listen_port;
+
+        /// The port the peer listens to for shared state distribution requests
+        uint16_t shared_dist_state_listen_port;
+    };
+
     struct ClientInfo {
         ccoip_uuid_t client_uuid;
         ConnectionPhase connection_phase = PEER_REGISTERED;
         ConnectionState connection_state = IDLE;
         ccoip_socket_address_t socket_address;
-        uint16_t p2p_listen_port;
+        CCoIPClientVariablePorts variable_ports;
     };
 
     class CCoIPMasterState {
@@ -171,9 +179,10 @@ namespace ccoip {
         std::unordered_map<ccoip_uuid_t, std::vector<std::string> > shared_state_dirty_keys{};
 
     public:
+
         /// Registers a client
         [[nodiscard]] auto registerClient(const ccoip_socket_address_t &client_address,
-                                          uint16_t p2p_listen_port, ccoip_uuid_t uuid) -> bool;
+                                          const CCoIPClientVariablePorts &variable_ports, ccoip_uuid_t uuid) -> bool;
 
         /// Unregisters a client
         [[nodiscard]] bool unregisterClient(const ccoip_socket_address_t &client_address);

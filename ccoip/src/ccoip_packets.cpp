@@ -17,10 +17,12 @@ ccoip::packetId_t ccoip::C2MPacketRequestSessionRegistration::packet_id = C2M_PA
 
 void ccoip::C2MPacketRequestSessionRegistration::serialize(PacketWriteBuffer &buffer) const {
     buffer.write<uint16_t>(p2p_listen_port);
+    buffer.write<uint16_t>(shared_state_listen_port);
 }
 
 bool ccoip::C2MPacketRequestSessionRegistration::deserialize(PacketReadBuffer &buffer) {
     p2p_listen_port = buffer.read<uint16_t>();
+    shared_state_listen_port = buffer.read<uint16_t>();
     return true;
 }
 

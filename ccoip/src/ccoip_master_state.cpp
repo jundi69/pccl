@@ -4,7 +4,7 @@
 #include <pccl_log.hpp>
 
 bool ccoip::CCoIPMasterState::registerClient(const ccoip_socket_address_t &client_address,
-                                             const uint16_t p2p_listen_port,
+                                             const CCoIPClientVariablePorts &variable_ports,
                                              const ccoip_uuid_t uuid) {
     if (isClientRegistered(client_address)) {
         LOG(WARN) << "Client " << ccoip_sockaddr_to_str(client_address) << " already registered";
@@ -18,7 +18,7 @@ bool ccoip::CCoIPMasterState::registerClient(const ccoip_socket_address_t &clien
         .client_uuid = uuid,
         .connection_phase = PEER_REGISTERED,
         .socket_address = client_address,
-        .p2p_listen_port = p2p_listen_port
+        .variable_ports = variable_ports
     };
     peer_list_changed = true;
 

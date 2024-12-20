@@ -10,6 +10,11 @@
 #include <guard_utils.hpp>
 
 ccoip::CCoIPClientHandler::CCoIPClientHandler(const ccoip_socket_address_t &address) : client_socket(address),
+    // Both p2p_socket and shared_state_socket listen to the first free port above the specified port number
+    // as the constructor with inet_addr and above_port is called, which will bump on failure to bind.
+    // this is by design and the chosen ports will be communicated to the master, which will then distribute
+    // this information to clients to then correctly establish connections. The protocol does not assert these
+    // ports to be static; The only asserted static port is the master listening port.
     p2p_socket({address.inet.protocol, {}, {}}, CCOIP_PROTOCOL_PORT_P2P),
     shared_state_socket({address.inet.protocol, {}, {}}, CCOIP_PROTOCOL_PORT_SHARED_STATE) {
 }
@@ -61,6 +66,8 @@ bool ccoip::CCoIPClientHandler::connect() {
     // send join request packet to master
     C2MPacketRequestSessionRegistration join_request{};
     join_request.p2p_listen_port = p2p_socket.getListenPort();
+    join_request.shared_state_listen_port = shared_state_socket.getListenPort();
+
     if (!client_socket.sendPacket<C2MPacketRequestSessionRegistration>(join_request)) {
         return false;
     }
@@ -95,12 +102,14 @@ bool ccoip::CCoIPClientHandler::connect() {
 
 bool ccoip::CCoIPClientHandler::acceptNewPeers() {
     if (!connected) {
-        LOG(WARN) << "CCoIPClientHandler::acceptNewPeers() before CCoIPClientHandler::connect() was called. Establish master connection first before performing client actions.";
+        LOG(WARN) <<
+                "CCoIPClientHandler::acceptNewPeers() before CCoIPClientHandler::connect() was called. Establish master connection first before performing client actions.";
         return false;
     }
 
     if (!client_socket.isOpen()) {
-        LOG(ERR) << "Failed to sync shared state: Client socket has been closed; This may mean the client was kicked by the master";
+        LOG(ERR) <<
+                "Failed to sync shared state: Client socket has been closed; This may mean the client was kicked by the master";
         return false;
     }
 
@@ -118,12 +127,14 @@ bool ccoip::CCoIPClientHandler::acceptNewPeers() {
 bool ccoip::CCoIPClientHandler::syncSharedState(ccoip_shared_state_t &shared_state,
                                                 ccoip_shared_state_sync_info_t &info_out) {
     if (!connected) {
-        LOG(WARN) << "CCoIPClientHandler::syncSharedState() before CCoIPClientHandler::connect() was called. Establish master connection first before performing client actions.";
+        LOG(WARN) <<
+                "CCoIPClientHandler::syncSharedState() before CCoIPClientHandler::connect() was called. Establish master connection first before performing client actions.";
         return false;
     }
 
     if (!client_socket.isOpen()) {
-        LOG(ERR) << "Failed to sync shared state: Client socket has been closed; This may mean the client was kicked by the master";
+        LOG(ERR) <<
+                "Failed to sync shared state: Client socket has been closed; This may mean the client was kicked by the master";
         return false;
     }
 
