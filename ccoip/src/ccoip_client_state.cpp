@@ -4,10 +4,18 @@
 
 bool ccoip::CCoIPClientState::registerPeer(const ccoip_socket_address_t &address, const ccoip_uuid_t uuid) {
     const auto internal_address = ccoip_socket_to_internal(address);
-    if (!inet_addrs_to_uuids.contains(internal_address)) {
-        inet_addrs_to_uuids[internal_address] = std::unordered_set<ccoip_uuid_t>();
+    if (const auto it = socket_addr_to_uuid.find(internal_address); it != socket_addr_to_uuid.end()) {
+        return false;
     }
-    inet_addrs_to_uuids[internal_address].insert(uuid);
+    socket_addr_to_uuid[internal_address] = uuid;
+    return true;
+}
+
+bool ccoip::CCoIPClientState::unregisterPeer(const ccoip_socket_address_t &address) {
+    const auto internal_address = ccoip_socket_to_internal(address);
+    if (const auto n = socket_addr_to_uuid.erase(internal_address); n == 0) {
+        return false;
+    }
     return true;
 }
 
@@ -23,4 +31,16 @@ void ccoip::CCoIPClientState::endSyncSharedStatePhase() {
 
 bool ccoip::CCoIPClientState::isSyncingSharedState() const {
     return is_syncing_shared_state;
+}
+
+size_t ccoip::CCoIPClientState::getSharedStateSyncTxBytes() const {
+    return shared_state_sync_tx_bytes;
+}
+
+void ccoip::CCoIPClientState::trackSharedStateTxBytes(const size_t tx_bytes) {
+    shared_state_sync_tx_bytes += tx_bytes;
+}
+
+void ccoip::CCoIPClientState::resetSharedStateSyncTxBytes() {
+    shared_state_sync_tx_bytes = 0;
 }

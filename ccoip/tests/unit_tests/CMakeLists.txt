@@ -1,1 +1,1 @@
-add_subdirectory(fvn1a_hash)
+add_subdirectory(crc32)

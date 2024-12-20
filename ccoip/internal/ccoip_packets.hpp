@@ -49,6 +49,7 @@ namespace ccoip {
     public:
         static packetId_t packet_id;
         uint16_t p2p_listen_port;
+        uint16_t shared_state_listen_port;
 
         void serialize(PacketWriteBuffer &buffer) const override;
 

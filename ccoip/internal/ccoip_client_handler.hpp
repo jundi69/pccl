@@ -31,6 +31,8 @@ namespace ccoip {
 
         bool interrupted = false;
 
+        bool connected = false;
+
     public:
         explicit CCoIPClientHandler(const ccoip_socket_address_t &address);
 
@@ -38,7 +40,7 @@ namespace ccoip {
 
         [[nodiscard]] bool acceptNewPeers();
 
-        [[nodiscard]] bool syncSharedState(ccoip_shared_state_t &shared_state);
+        [[nodiscard]] bool syncSharedState(ccoip_shared_state_t &shared_state, ccoip_shared_state_sync_info_t &info_out);
 
         [[nodiscard]] bool interrupt();
 
@@ -54,6 +56,8 @@ namespace ccoip {
         [[nodiscard]] bool establishP2PConnections();
 
         [[nodiscard]] bool establishP2PConnection(const M2CPacketNewPeerInfo &peer);
+
+        [[nodiscard]] bool closeP2PConnection(const ccoip_uuid_t &uuid, tinysockets::BlockingIOSocket &socket);
 
         // p2p packet handlers
         void handleP2PHello(const ccoip_socket_address_t &client_address, const P2PPacketHello &packet);

@@ -27,7 +27,10 @@ namespace ccoip {
         [[nodiscard]] bool acceptNewPeers() const;
 
         /// Synchronize the shared state
-        [[nodiscard]] bool syncSharedState(ccoip_shared_state_t &shared_state) const;
+        /// @param shared_state the shared state object referencing user-owned memory to be synchronized
+        /// @param info_out is populated with information about this sync operation such as the number of bytes sent/received to facilitate it
+        [[nodiscard]] bool syncSharedState(ccoip_shared_state_t &shared_state,
+                                           ccoip_shared_state_sync_info_t &info_out) const;
 
         /// Interrupt the client
         [[nodiscard]] bool interrupt() const;

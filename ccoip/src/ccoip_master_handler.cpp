@@ -110,7 +110,8 @@ void ccoip::CCoIPMasterHandler::handleRequestSessionJoin(const ccoip_socket_addr
         return;
     }
 
-    const int p2p_listen_port = packet.p2p_listen_port;
+    const uint16_t p2p_listen_port = packet.p2p_listen_port;
+    const uint16_t shared_state_listen_port = packet.shared_state_listen_port;
 
     // generate uuid for new peer
     ccoip_uuid_t new_uuid{};
@@ -122,7 +123,10 @@ void ccoip::CCoIPMasterHandler::handleRequestSessionJoin(const ccoip_socket_addr
     response.assigned_uuid = new_uuid;
 
     // register client uuid
-    if (!server_state.registerClient(client_address, p2p_listen_port, new_uuid)) [[unlikely]] {
+    if (!server_state.registerClient(client_address,
+                                     CCoIPClientVariablePorts{p2p_listen_port, shared_state_listen_port},
+                                     new_uuid)) [[
+        unlikely]] {
         LOG(ERR) << "Failed to register client " << ccoip_sockaddr_to_str(client_address);
         response.accepted = false;
     }
@@ -178,7 +182,7 @@ ccoip::CCoIPMasterHandler::findBestSharedStateTxPeer(const ccoip_socket_address_
         }
         if (const auto &peer_info = peer_info_opt->get();
             peer_info.connection_phase == PEER_ACCEPTED && peer_info.connection_state == DISTRIBUTE_SHARED_STATE) {
-            return ccoip_socket_address_t{peer_address.inet, CCOIP_PROTOCOL_PORT_SHARED_STATE};
+            return ccoip_socket_address_t{peer_address.inet, peer_info.variable_ports.shared_dist_state_listen_port};
         }
     }
     return std::nullopt;
@@ -277,7 +281,8 @@ void ccoip::CCoIPMasterHandler::checkSyncSharedStateCompleteConsensus() {
 
             // send confirmation packet
             if (!server_socket.sendPacket<M2CPacketSyncSharedStateComplete>(peer_address, {})) {
-                LOG(ERR) << "Failed to send M2CPacketSyncSharedStateComplete to " << ccoip_sockaddr_to_str(peer_address);
+                LOG(ERR) << "Failed to send M2CPacketSyncSharedStateComplete to " <<
+                        ccoip_sockaddr_to_str(peer_address);
             }
         }
     }
@@ -419,7 +424,7 @@ void ccoip::CCoIPMasterHandler::sendP2PConnectionInformation() {
             new_peers.new_peers.push_back({
                 .p2p_listen_addr = ccoip_socket_address_t{
                     .inet = client_info.socket_address.inet,
-                    .port = client_info.p2p_listen_port
+                    .port = client_info.variable_ports.p2p_listen_port
                 },
                 .peer_uuid = client_info.client_uuid
             });

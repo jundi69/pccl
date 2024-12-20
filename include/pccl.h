@@ -117,6 +117,15 @@ typedef struct pcclSharedState_t {
     pcclTensorInfo_t *infos;
 } pcclSharedState_t;
 
+typedef struct pcclSharedStateSyncInfo_t {
+    uint64_t tx_bytes;
+    uint64_t rx_bytes;
+} pcclSharedStateSyncInfo_t;
+
+typedef struct pcclMasterInstanceState_t pcclMasterInstance_t;
+
+#define PCCL_NULLABLE /* nothing */
+
 /**
  * Initializes the pccl library.
  * Must be called before pccl library functions are used.
@@ -222,7 +231,7 @@ PCCL_EXPORT pcclResult_t pcclUpdateTopology(pcclComm_t *communicator);
  */
 PCCL_EXPORT pcclResult_t pcclAllReduce(const void *sendbuff, void *recvbuff, size_t count, pcclDataType_t datatype,
                                        pcclRedOp_t op, uint64_t tag, const pcclComm_t *communicator,
-                                       pcclReduceInfo_t *reduce_info_out);
+                                       pcclReduceInfo_t *PCCL_NULLABLE reduce_info_out);
 
 /**
 * Performs an all reduce operation on a communicator. Async version of @code pcclAllReduce@endcode.
@@ -245,7 +254,7 @@ PCCL_EXPORT pcclResult_t pcclAllReduce(const void *sendbuff, void *recvbuff, siz
 */
 PCCL_EXPORT pcclResult_t pcclAllReduceAsync(const void *sendbuff, void *recvbuff, size_t count, pcclDataType_t datatype,
                                             pcclRedOp_t op, uint64_t tag, const pcclComm_t *communicator,
-                                            pcclReduceInfo_t *reduce_info_out,
+                                            pcclReduceInfo_t *PCCL_NULLABLE reduce_info_out,
                                             pcclAsyncReduceOp_t *reduce_handle_out);
 
 /**
@@ -262,11 +271,13 @@ PCCL_EXPORT pcclResult_t pcclAwaitAsyncReduce(const pcclAsyncReduceOp_t *reduce_
  * Synchronizes the shared state between all peers that are currently accepted.
  * If the shared state revision of this peer is outdated, the shared state will be updated.
  * The function will not unblock until it is confirmed all peers have the same shared state revision.
+ * @param communicator The communicator to synchronize the shared state on.
+ * @param shared_state The shared state referencing user-owned data to be synchronized.
+ * @param sync_info_out shared state synchronization info.
  */
 PCCL_EXPORT pcclResult_t pcclSynchronizeSharedState(const pcclComm_t *communicator,
-                                                    pcclSharedState_t *shared_state);
-
-typedef struct pcclMasterInstanceState_t pcclMasterInstance_t;
+                                                    pcclSharedState_t *shared_state,
+                                                    pcclSharedStateSyncInfo_t *PCCL_NULLABLE sync_info_out);
 
 /**
  * Creates a master node handle.

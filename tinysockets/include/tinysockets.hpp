@@ -152,7 +152,6 @@ namespace tinysockets {
     };
 
     class BlockingIOSocket final {
-    private:
         int socket_fd;
         ccoip_socket_address_t connect_sockaddr;
 
@@ -173,6 +172,8 @@ namespace tinysockets {
 
         [[nodiscard]] bool isOpen() const;
 
+        [[nodiscard]] const ccoip_socket_address_t &getConnectSockAddr() const;
+
         template<typename T> requires std::is_base_of_v<ccoip::Packet, T>
         [[nodiscard]] bool sendPacket(const T &packet) {
             const ccoip::packetId_t id = T::packet_id;
@@ -191,13 +192,17 @@ namespace tinysockets {
         // Packet decoding / encoding functions
         [[nodiscard]] bool sendLtvPacket(ccoip::packetId_t packet_id, const PacketWriteBuffer &buffer) const;
 
-        [[nodiscard]] size_t receivePacketLength() const;
+        [[nodiscard]] std::optional<size_t> receivePacketLength() const;
 
         [[nodiscard]] bool receivePacketData(std::span<std::uint8_t> &dst) const;
 
         template<typename T> requires std::is_base_of_v<ccoip::Packet, T>
         [[nodiscard]] std::optional<T> receiveLtvPacket(const ccoip::packetId_t packet_id) {
-            const size_t length = receivePacketLength();
+            const std::optional<size_t> length_opt = receivePacketLength();
+            if (!length_opt) {
+                return std::nullopt;
+            }
+            const size_t length = *length_opt;
             const std::unique_ptr<uint8_t[]> data_ptr{new uint8_t[length]};
             std::span data{data_ptr.get(), length};
             if (!receivePacketData(data)) {

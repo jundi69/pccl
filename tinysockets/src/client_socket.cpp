@@ -182,6 +182,10 @@ bool tinysockets::BlockingIOSocket::isOpen() const {
 #endif
 }
 
+const ccoip_socket_address_t &tinysockets::BlockingIOSocket::getConnectSockAddr() const {
+    return connect_sockaddr;
+}
+
 bool tinysockets::BlockingIOSocket::sendLtvPacket(const ccoip::packetId_t packet_id,
                                                   const PacketWriteBuffer &buffer) const {
     PacketWriteBuffer tlv_buffer{};
@@ -205,7 +209,7 @@ bool tinysockets::BlockingIOSocket::sendLtvPacket(const ccoip::packetId_t packet
         const size_t bytes_remaining = tlv_buffer.size() - bytes_sent;
         const size_t to_send = std::min(bytes_remaining, static_cast<size_t>(max_buffer_size));
         const size_t bytes_sent_now = sendvp(socket_fd, tlv_buffer.data() + bytes_sent,
-                                           to_send, MSG_NOSIGNAL);
+                                             to_send, MSG_NOSIGNAL);
         if (bytes_sent_now == -1) {
             const std::string error_message = std::strerror(errno);
             LOG(INFO) << "Failed to send packet with error: " << error_message;
@@ -216,10 +220,18 @@ bool tinysockets::BlockingIOSocket::sendLtvPacket(const ccoip::packetId_t packet
     return true;
 }
 
-size_t tinysockets::BlockingIOSocket::receivePacketLength() const {
+std::optional<size_t> tinysockets::BlockingIOSocket::receivePacketLength() const {
     uint64_t length;
-    while (recvvp(socket_fd, &length, sizeof(length), 0) != sizeof(length)) {
-    }
+    size_t n_received = 0;
+    do {
+        const ssize_t i = recvvp(socket_fd, &length, sizeof(length), 0);
+        if (i == 0 || i == -1) {
+            const std::string error_message = std::strerror(errno);
+            LOG(INFO) << "Failed to receive packet length with error: " << error_message;
+            return std::nullopt;
+        }
+        n_received += i;
+    } while (n_received < sizeof(length));
     return net_u64_to_host(length);
 }
 

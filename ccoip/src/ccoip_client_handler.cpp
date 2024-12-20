@@ -10,11 +10,21 @@
 #include <guard_utils.hpp>
 
 ccoip::CCoIPClientHandler::CCoIPClientHandler(const ccoip_socket_address_t &address) : client_socket(address),
+    // Both p2p_socket and shared_state_socket listen to the first free port above the specified port number
+    // as the constructor with inet_addr and above_port is called, which will bump on failure to bind.
+    // this is by design and the chosen ports will be communicated to the master, which will then distribute
+    // this information to clients to then correctly establish connections. The protocol does not assert these
+    // ports to be static; The only asserted static port is the master listening port.
     p2p_socket({address.inet.protocol, {}, {}}, CCOIP_PROTOCOL_PORT_P2P),
     shared_state_socket({address.inet.protocol, {}, {}}, CCOIP_PROTOCOL_PORT_SHARED_STATE) {
 }
 
 bool ccoip::CCoIPClientHandler::connect() {
+    if (connected) {
+        LOG(WARN) << "CCoIPClientHandler::connect() called while already connected";
+        return false;
+    }
+
     // start listening on p2p socket
     {
         p2p_socket.addReadCallback(
@@ -56,6 +66,8 @@ bool ccoip::CCoIPClientHandler::connect() {
     // send join request packet to master
     C2MPacketRequestSessionRegistration join_request{};
     join_request.p2p_listen_port = p2p_socket.getListenPort();
+    join_request.shared_state_listen_port = shared_state_socket.getListenPort();
+
     if (!client_socket.sendPacket<C2MPacketRequestSessionRegistration>(join_request)) {
         return false;
     }
@@ -74,6 +86,7 @@ bool ccoip::CCoIPClientHandler::connect() {
         LOG(ERR) << "Failed to establish P2P connections";
         return false;
     }
+    connected = true;
     return true;
 }
 
@@ -88,6 +101,18 @@ bool ccoip::CCoIPClientHandler::connect() {
 // us the ip of the peer is, and then we mark the connection as rx side open (rx side = their connection to us listening)
 
 bool ccoip::CCoIPClientHandler::acceptNewPeers() {
+    if (!connected) {
+        LOG(WARN) <<
+                "CCoIPClientHandler::acceptNewPeers() before CCoIPClientHandler::connect() was called. Establish master connection first before performing client actions.";
+        return false;
+    }
+
+    if (!client_socket.isOpen()) {
+        LOG(ERR) <<
+                "Failed to sync shared state: Client socket has been closed; This may mean the client was kicked by the master";
+        return false;
+    }
+
     if (!client_socket.sendPacket<C2MPacketAcceptNewPeers>({})) {
         return false;
     }
@@ -99,7 +124,20 @@ bool ccoip::CCoIPClientHandler::acceptNewPeers() {
     return true;
 }
 
-bool ccoip::CCoIPClientHandler::syncSharedState(ccoip_shared_state_t &shared_state) {
+bool ccoip::CCoIPClientHandler::syncSharedState(ccoip_shared_state_t &shared_state,
+                                                ccoip_shared_state_sync_info_t &info_out) {
+    if (!connected) {
+        LOG(WARN) <<
+                "CCoIPClientHandler::syncSharedState() before CCoIPClientHandler::connect() was called. Establish master connection first before performing client actions.";
+        return false;
+    }
+
+    if (!client_socket.isOpen()) {
+        LOG(ERR) <<
+                "Failed to sync shared state: Client socket has been closed; This may mean the client was kicked by the master";
+        return false;
+    }
+
     // prepare shared state hashes
     std::vector<SharedStateHashEntry> shared_state_hashes{};
     shared_state_hashes.reserve(shared_state.entries.size());
@@ -108,7 +146,7 @@ bool ccoip::CCoIPClientHandler::syncSharedState(ccoip_shared_state_t &shared_sta
         auto &value = entry.value;
         shared_state_hashes.push_back(SharedStateHashEntry{
             .key = key,
-            .hash = entry.allow_content_inequality ? 0 : hash_utils::FVN1a_512Hash(value.data(), value.size_bytes()),
+            .hash = entry.allow_content_inequality ? 0 : hash_utils::CRC32(value.data(), value.size_bytes()),
             .data_type = entry.data_type,
             .allow_content_inequality = entry.allow_content_inequality
         });
@@ -183,9 +221,10 @@ bool ccoip::CCoIPClientHandler::syncSharedState(ccoip_shared_state_t &shared_sta
                         return false;
                     }
                     std::memcpy(entry.value.data(), new_entry->dst_buffer.get(), new_entry->dst_size);
+                    info_out.rx_bytes += new_entry->dst_size;
 
                     if (i < response->expected_hashes.size()) {
-                        uint64_t actual_hash = hash_utils::FVN1a_512Hash(entry.value.data(), entry.value.size_bytes());
+                        uint64_t actual_hash = hash_utils::CRC32(entry.value.data(), entry.value.size_bytes());
                         if (uint64_t expected_hash = response->expected_hashes[i]; actual_hash != expected_hash) {
                             LOG(ERR) << "Shared state distributor transmitted incorrect shared state entry for key " <<
                                     entry.key << ": Expected hash " << expected_hash << " but got " << actual_hash;
@@ -211,6 +250,8 @@ bool ccoip::CCoIPClientHandler::syncSharedState(ccoip_shared_state_t &shared_sta
                     "Failed to sync shared state: Failed to receive M2CPacketSyncSharedStateComplete response from master";
             return false;
         }
+        info_out.tx_bytes = client_state.getSharedStateSyncTxBytes();
+        client_state.resetSharedStateSyncTxBytes();
     }
     return true;
 }
@@ -262,15 +303,23 @@ bool ccoip::CCoIPClientHandler::establishP2PConnections() {
             if (p2p_connections.contains(peer.peer_uuid)) {
                 continue;
             }
-
-            if (!client_state.registerPeer(peer.p2p_listen_addr, peer.peer_uuid)) [[unlikely]] {
-                LOG(ERR) << "Failed to register peer " << uuid_to_string(peer.peer_uuid);
-                return false;
-            }
-
             if (!establishP2PConnection(peer)) {
                 LOG(ERR) << "Failed to establish P2P connection with peer " << uuid_to_string(peer.peer_uuid);
                 return false;
+            }
+        }
+        // close p2p connections that are no longer needed
+        for (auto it = p2p_connections.begin(); it != p2p_connections.end();) {
+            if (std::ranges::find_if(new_peers->new_peers,
+                                     [&it](const M2CPacketNewPeerInfo &peer) {
+                                         return peer.peer_uuid == it->first;
+                                     }) == new_peers->new_peers.end()) {
+                if (!closeP2PConnection(it->first, it->second)) {
+                    LOG(WARN) << "Failed to close p2p connection with peer " << uuid_to_string(it->first);
+                }
+                it = p2p_connections.erase(it);
+            } else {
+                ++it;
             }
         }
     }
@@ -310,6 +359,19 @@ bool ccoip::CCoIPClientHandler::establishP2PConnection(const M2CPacketNewPeerInf
     }
     if (!client_state.registerPeer(peer.p2p_listen_addr, peer.peer_uuid)) {
         LOG(ERR) << "Failed to register peer " << uuid_to_string(peer.peer_uuid);
+        return false;
+    }
+    return true;
+}
+
+bool ccoip::CCoIPClientHandler::closeP2PConnection(const ccoip_uuid_t &uuid, tinysockets::BlockingIOSocket &socket) {
+    if (!socket.closeConnection()) [[unlikely]] {
+        LOG(BUG) << "Failed to close connection with peer " << uuid_to_string(uuid);
+        return false;
+    }
+    if (!client_state.unregisterPeer(socket.getConnectSockAddr())) [[unlikely]] {
+        LOG(BUG) << "Failed to unregister peer " << uuid_to_string(uuid) <<
+                ". This means the client was already unregistered; This is a bug!";
         return false;
     }
     return true;
@@ -369,6 +431,7 @@ void ccoip::CCoIPClientHandler::handleSharedStateRequest(const ccoip_socket_addr
                 .key = requested_key,
                 .src_buffer = std::span(reinterpret_cast<uint8_t *>(it->value.data()), it->value.size_bytes())
             });
+            client_state.trackSharedStateTxBytes(it->value.size_bytes());
         }
     }
 

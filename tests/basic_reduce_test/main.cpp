@@ -51,7 +51,7 @@ int main() {
 
     while (true) {
         PCCL_CHECK(pcclUpdateTopology(communicator));
-        PCCL_CHECK(pcclSynchronizeSharedState(communicator, &shared_state));
+        PCCL_CHECK(pcclSynchronizeSharedState(communicator, &shared_state, nullptr));
 
         pcclGetAttribute(communicator, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size);
 
