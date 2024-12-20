@@ -1,3 +1,4 @@
+#include <ccoip.h>
 #include <iostream>
 #include <pccl.h>
 #include <random>
@@ -17,17 +18,21 @@ void fill_uniform(float *data, const size_t count) {
 #define MAX_STEPS 100
 
 int main() {
-    pcclInit();
+    PCCL_CHECK(pcclInit());
 
     pcclComm_t *communicator{};
-    PCCL_CHECK(pcclCreateCommunicator(&communicator));
-
-    ccoip_socket_address_t connect_address{};
-    connect_address.inet.protocol = inetIPv4;
-    connect_address.inet.ipv4 = {127, 0, 0, 1};
-    connect_address.port = 48148;
-
-    PCCL_CHECK(pcclConnect(communicator, connect_address));
+    constexpr pcclCommCreateParams_t params{
+        .master_address = {
+            .inet = {
+                .protocol = inetIPv4,
+                .ipv4 = {127, 0, 0, 1}
+            },
+            .port = CCOIP_PROTOCOL_PORT_MASTER
+        },
+        .peer_group = 0
+    };
+    PCCL_CHECK(pcclCreateCommunicator(&params, &communicator));
+    PCCL_CHECK(pcclConnect(communicator));
 
     int world_size{};
     pcclGetAttribute(communicator, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size);

@@ -23,15 +23,15 @@ pcclResult_t pcclInit() {
     return pcclSuccess;
 }
 
-pcclResult_t pcclCreateCommunicator(pcclComm_t **comm_out) {
+pcclResult_t pcclCreateCommunicator(const pcclCommCreateParams_t *params, pcclComm_t **comm_out) {
     PCCL_VALIDATE_INITIALIZED();
     PCCL_VALIDATE(comm_out != nullptr, pcclInvalidArgument);
-    *comm_out = new pcclComm_t();
+    *comm_out = new pcclComm_t(*params);
     return pcclSuccess;
 }
 
 pcclResult_t pcclGetAttribute(const pcclComm_t *communicator,
-                              pcclAttribute_t attribute,
+                              const pcclAttribute_t attribute,
                               int *p_attribute_out) {
     PCCL_VALIDATE_INITIALIZED();
     PCCL_VALIDATE(communicator != nullptr, pcclInvalidArgument);
@@ -75,11 +75,12 @@ pcclResult_t pcclDestroyCommunicator(pcclComm_t *communicator) {
     return pcclSuccess;
 }
 
-pcclResult_t pcclConnect(pcclComm_t *communicator, ccoip_socket_address_t socket_address) {
+pcclResult_t pcclConnect(pcclComm_t *communicator) {
     PCCL_VALIDATE_INITIALIZED();
     PCCL_VALIDATE(communicator != nullptr, pcclInvalidArgument);
     PCCL_VALIDATE(communicator->ccoip_client == nullptr, pcclInvalidUsage);
-    communicator->ccoip_client = std::make_unique<ccoip::CCoIPClient>(socket_address);
+    communicator->ccoip_client = std::make_unique<ccoip::CCoIPClient>(communicator->params.master_address,
+                                                                      communicator->params.peer_group);
     if (!communicator->ccoip_client->connect()) [[unlikely]] {
         if (!communicator->ccoip_client->interrupt()) [[unlikely]] {
             return pcclInternalError;

@@ -45,9 +45,9 @@ namespace ccoip {
         /// Finds the optimal peer to distribute the shared state to the specified requester.
         std::optional<ccoip_socket_address_t> findBestSharedStateTxPeer(const ccoip_socket_address_t &peer_address);
 
-        void checkSyncSharedStateConsensus();
+        void checkSyncSharedStateConsensus(uint32_t peer_group);
 
-        void checkSyncSharedStateCompleteConsensus();
+        void checkSyncSharedStateCompleteConsensus(uint32_t peer_group);
 
         // packet handling functions
         void handleAcceptNewPeers(const ccoip_socket_address_t &client_address,

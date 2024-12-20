@@ -2,8 +2,8 @@
 
 #include <ccoip_client_handler.hpp>
 
-ccoip::CCoIPClient::CCoIPClient(const ccoip_socket_address_t &master_socket_address) : client(
-    new CCoIPClientHandler(master_socket_address)) {
+ccoip::CCoIPClient::CCoIPClient(const ccoip_socket_address_t &master_socket_address, const uint32_t peer_group) : client(
+    new CCoIPClientHandler(master_socket_address, peer_group)) {
 }
 
 bool ccoip::CCoIPClient::connect() const {

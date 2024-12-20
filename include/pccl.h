@@ -80,6 +80,21 @@ typedef enum pcclAttribute_t {
     PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE = 1
 } pcclAttribute_t;
 
+typedef struct pcclCommCreateParams_t {
+    /**
+     * The address of the master node to connect to.
+     */
+    ccoip_socket_address_t master_address;
+
+    /**
+     * The world is split into peer groups, where each peer group is a set of peers that can communicate with each other.
+     * Shared state distribution and collective communications operations will span only across peers in the same peer group.
+     * To allow all peers to communicate with each other, all peers must be in the same peer group, e.g. by setting this to 0.
+     * The peer group is a 32-bit unsigned integer whose identity determines the peer group the client is part of.
+     */
+    uint32_t peer_group;
+} pcclCommCreateParams_t;
+
 typedef struct pcclComm_t pcclComm_t;
 
 typedef struct pcclRankInfo_t pcclRankInfo_t;
@@ -134,11 +149,13 @@ PCCL_EXPORT pcclResult_t pcclInit();
 
 /**
  * Creates a new communicator.
+ * @param params Parameters to create the communicator with.
  * @param comm_out Pointer to the communicator to be created.
  * @return @code pcclSuccess@endcode if the communicator was created successfully.
  * @return @code pcclNotInitialized@endcode if @code pcclInit@endcode has not been called yet.
  */
-PCCL_EXPORT pcclResult_t pcclCreateCommunicator(pcclComm_t **comm_out);
+PCCL_EXPORT pcclResult_t pcclCreateCommunicator(const pcclCommCreateParams_t *params,
+                                                pcclComm_t **comm_out);
 
 /**
  * Gets an attribute of a communicator.
@@ -194,7 +211,7 @@ PCCL_EXPORT pcclResult_t pcclDestroyCommunicator(pcclComm_t *communicator);
  * @return @code pcclInvalidArgument@endcode if the communicator is null.
  * @return @code pcclInvalidUsage@endcode if the communicator is already connected to a master node.
  */
-PCCL_EXPORT pcclResult_t pcclConnect(pcclComm_t *communicator, ccoip_socket_address_t socket_address);
+PCCL_EXPORT pcclResult_t pcclConnect(pcclComm_t *communicator);
 
 /**
  * Update the topology of a communicator if required.

@@ -9,14 +9,15 @@
 #include <thread_guard.hpp>
 #include <guard_utils.hpp>
 
-ccoip::CCoIPClientHandler::CCoIPClientHandler(const ccoip_socket_address_t &address) : client_socket(address),
+ccoip::CCoIPClientHandler::CCoIPClientHandler(const ccoip_socket_address_t &address, uint32_t peer_group) : client_socket(address),
     // Both p2p_socket and shared_state_socket listen to the first free port above the specified port number
     // as the constructor with inet_addr and above_port is called, which will bump on failure to bind.
     // this is by design and the chosen ports will be communicated to the master, which will then distribute
     // this information to clients to then correctly establish connections. The protocol does not assert these
     // ports to be static; The only asserted static port is the master listening port.
     p2p_socket({address.inet.protocol, {}, {}}, CCOIP_PROTOCOL_PORT_P2P),
-    shared_state_socket({address.inet.protocol, {}, {}}, CCOIP_PROTOCOL_PORT_SHARED_STATE) {
+    shared_state_socket({address.inet.protocol, {}, {}}, CCOIP_PROTOCOL_PORT_SHARED_STATE),
+    peer_group(peer_group) {
 }
 
 bool ccoip::CCoIPClientHandler::connect() {
@@ -67,6 +68,7 @@ bool ccoip::CCoIPClientHandler::connect() {
     C2MPacketRequestSessionRegistration join_request{};
     join_request.p2p_listen_port = p2p_socket.getListenPort();
     join_request.shared_state_listen_port = shared_state_socket.getListenPort();
+    join_request.peer_group = peer_group;
 
     if (!client_socket.sendPacket<C2MPacketRequestSessionRegistration>(join_request)) {
         return false;

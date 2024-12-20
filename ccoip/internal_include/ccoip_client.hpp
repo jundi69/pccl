@@ -10,7 +10,7 @@ namespace ccoip {
         CCoIPClientHandler *client;
 
     public:
-        explicit CCoIPClient(const ccoip_socket_address_t &master_socket_address);
+        explicit CCoIPClient(const ccoip_socket_address_t &master_socket_address, uint32_t peer_group);
 
         CCoIPClient(const CCoIPClient &other) = delete;
 

@@ -29,12 +29,15 @@ namespace ccoip {
         /// Open p2p connections
         std::unordered_map<ccoip_uuid_t, tinysockets::BlockingIOSocket> p2p_connections;
 
+        /// Peer group of the client
+        uint32_t peer_group;
+
         bool interrupted = false;
 
         bool connected = false;
 
     public:
-        explicit CCoIPClientHandler(const ccoip_socket_address_t &address);
+        explicit CCoIPClientHandler(const ccoip_socket_address_t &address, uint32_t peer_group);
 
         [[nodiscard]] bool connect();
 
