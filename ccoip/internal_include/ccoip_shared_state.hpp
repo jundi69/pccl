@@ -39,3 +39,18 @@ struct ccoip_shared_state_t {
     uint64_t revision;
     std::vector<ccoip_shared_state_entry_t> entries;
 };
+
+/// Contains information about a performed shared state synchronization operation
+/// such as the number of bytes received
+struct ccoip_shared_state_sync_info_t {
+
+    /// Number of bytes received during shared state synchronization
+    /// If this value is > 0, that means this peer's shared state was outdated
+    /// and thus needed to be updated.
+    size_t rx_bytes;
+
+    /// Number of bytes sent during shared state synchronization
+    /// If this value is > 0, that means this peer acted as a shared state distributor
+    /// for another peer whose shared state was outdated.
+    size_t tx_bytes;
+};
