@@ -10,6 +10,7 @@ static void establishConnections(const std::vector<const ccoip::CCoIPClient *> &
     size_t n_clients = clients.size();
 
     std::atomic_int clients_connected = 0;
+    uint32_t target_n_clients = 0;
     std::vector<std::thread> client_threads{};
     for (const auto &client: clients) {
         std::thread client_thread([n_clients, &clients_connected, &client] {
@@ -17,11 +18,14 @@ static void establishConnections(const std::vector<const ccoip::CCoIPClient *> &
             ++clients_connected;
             while (clients_connected < n_clients) {
                 ASSERT_TRUE(client->acceptNewPeers());
-                std::this_thread::sleep_for(std::chrono::milliseconds(50));
+                std::this_thread::sleep_for(std::chrono::milliseconds(150));
             }
         });
         client_threads.push_back(std::move(client_thread));
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        target_n_clients++;
+        while (clients_connected < target_n_clients) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        }
     }
 
     for (auto &client_thread: client_threads) {
@@ -718,7 +722,6 @@ TEST(SharedStateDistribution, TestDragAlongClient) {
         });
         shared_state.revision = 0; // Client 2 does not update revision
 
-
         const std::unique_ptr<uint8_t[]> value1_inferred(new uint8_t[value_size]);
         for (int step = 1; step <= num_steps; ++step) {
             ccoip_shared_state_sync_info_t info{};
@@ -1284,7 +1287,8 @@ TEST(SharedStateDistribution, TestChangingPeerGroupMembershipBetweenSynchronizat
                         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                         .port = CCOIP_PROTOCOL_PORT_MASTER
                     }, group);
-                const std::unique_ptr<ccoip::CCoIPClient> &added_client = group_clients.emplace_back(std::move(new_client));
+                const std::unique_ptr<ccoip::CCoIPClient> &added_client = group_clients.emplace_back(
+                    std::move(new_client));
                 std::thread added_client_thread([&added_client, &client3_joined] {
                     std::cout << "Added client connecting" << std::endl;
                     ASSERT_TRUE(added_client->connect());
@@ -1378,5 +1382,7 @@ TEST(SharedStateDistribution, TestChangingPeerGroupMembershipBetweenSynchronizat
 
 int main(int argc, char **argv) {
     testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
+    while (true) {
+        RUN_ALL_TESTS();
+    }
 }
