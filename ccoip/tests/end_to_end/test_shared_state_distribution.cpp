@@ -1382,7 +1382,5 @@ TEST(SharedStateDistribution, TestChangingPeerGroupMembershipBetweenSynchronizat
 
 int main(int argc, char **argv) {
     testing::InitGoogleTest(&argc, argv);
-    while (true) {
-        RUN_ALL_TESTS();
-    }
+    return RUN_ALL_TESTS();
 }
