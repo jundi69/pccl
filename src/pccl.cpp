@@ -14,6 +14,26 @@ static pcclResult_t internalPcclInit() {
     return pcclSuccess;
 }
 
+size_t pcclDataTypeSize(const pcclDataType_t datatype) {
+    switch (datatype) {
+    case pcclUint8:
+    case pcclInt8:
+        return 1;
+    case pcclUint16:
+        return 2;
+    case pcclUint32:
+    case pcclInt32:
+    case pcclFloat:
+        return 4;
+    case pcclUint64:
+    case pcclInt64:
+    case pcclDouble:
+        return 8;
+    default:
+        return 0;
+    }
+}
+
 pcclResult_t pcclInit() {
     if (pccl_initialized) {
         return pcclSuccess;
@@ -113,7 +133,7 @@ pcclResult_t pcclUpdateTopology(pcclComm_t *communicator) {
 
 pcclResult_t pcclAllReduceAsync(const void *sendbuff, void *recvbuff, size_t count, pcclDataType_t datatype,
                                 pcclRedOp_t op, uint64_t tag, const pcclComm_t *communicator,
-                                pcclReduceInfo_t *PCCL_NULLABLE reduce_info_out,
+                                pcclReduceInfo_t *reduce_info_out,
                                 pcclAsyncReduceOp_t *reduce_handle_out) {
     PCCL_VALIDATE_INITIALIZED();
     PCCL_VALIDATE(communicator != nullptr, pcclInvalidArgument);
@@ -124,7 +144,7 @@ pcclResult_t pcclAllReduceAsync(const void *sendbuff, void *recvbuff, size_t cou
 
 pcclResult_t pcclAllReduce(const void *sendbuff, void *recvbuff, size_t count, pcclDataType_t datatype,
                            pcclRedOp_t op, uint64_t tag, const pcclComm_t *communicator,
-                           pcclReduceInfo_t *PCCL_NULLABLE reduce_info_out) {
+                           pcclReduceInfo_t *reduce_info_out) {
     PCCL_VALIDATE_INITIALIZED();
     PCCL_VALIDATE(communicator != nullptr, pcclInvalidArgument);
     PCCL_VALIDATE(communicator->ccoip_client != nullptr, pcclInvalidUsage);
@@ -156,7 +176,7 @@ static std::optional<ccoip_data_type_t> getCCoIPDataType(const pcclDataType_t da
 }
 
 pcclResult_t pcclSynchronizeSharedState(const pcclComm_t *communicator, pcclSharedState_t *shared_state,
-                                        pcclSharedStateSyncInfo_t *PCCL_NULLABLE sync_info_out) {
+                                        pcclSharedStateSyncInfo_t *sync_info_out) {
     PCCL_VALIDATE_INITIALIZED();
     PCCL_VALIDATE(communicator != nullptr, pcclInvalidArgument);
     PCCL_VALIDATE(communicator->ccoip_client != nullptr, pcclInvalidUsage);

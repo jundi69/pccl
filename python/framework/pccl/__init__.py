@@ -153,6 +153,11 @@ class ReduceInfo:
         self.tx_bytes = tx_bytes
         self.rx_bytes = rx_bytes
 
+class SharedStateSyncInfo:
+    def __init__(self, tx_bytes: int, rx_bytes: int):
+        self.tx_bytes = tx_bytes
+        self.rx_bytes = rx_bytes
+
 class AsyncReduceHandle:
     def __init__(self, handle: ffi.CData):
         self._handle = handle
@@ -260,13 +265,15 @@ class Communicator:
         """
         PCCLError.check(C.pcclUpdateTopology(self._comm[0]))
 
-    def sync_shared_state(self, shared_state: SharedState):
+    def sync_shared_state(self, shared_state: SharedState) -> SharedStateSyncInfo:
         """
         Synchronizes the shared state between all peers that are currently accepted.
         If the shared state revision of this peer is outdated, the shared state will be updated.
         The function will not unblock until it is confirmed all peers have the same shared state revision.
         """
-        PCCLError.check(C.pcclSynchronizeSharedState(self._comm[0], shared_state._state))
+        sync_info: ffi.CData = ffi.new('pcclSharedStateSyncInfo_t*')
+        PCCLError.check(C.pcclSynchronizeSharedState(self._comm[0], shared_state._state, sync_info))
+        return SharedStateSyncInfo(sync_info.tx_bytes, sync_info.rx_bytes)
 
 class MasterNode:
     def __init__(self, listen_address: str):

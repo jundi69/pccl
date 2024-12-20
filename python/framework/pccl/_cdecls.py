@@ -1,4 +1,4 @@
-# Autogenered by /home/mario/Documents/projects/pccl-refactor/python/framework/gen_bindings.py 2024-12-13 11:16:25.207053, do NOT edit!
+# Autogenered by /home/mario/Documents/projects/pccl-refactor/python/framework/gen_bindings.py 2024-12-20 20:50:27.011222, do NOT edit!
 
 __PCCL_CDECLS: str = '''
 
@@ -39,14 +39,16 @@ pcclNoSharedStateAvailable = 12,
 typedef enum pcclDataType_t {
 pcclUint8 = 0,
 pcclInt8 = 1,
-pcclUint16 = 2,
-pcclUint32 = 3,
-pcclInt32 = 4,
-pcclUint64 = 5,
-pcclInt64 = 6,
-pcclFloat = 7,
-pcclDouble = 8
+pcclInt16 = 2,
+pcclUint16 = 3,
+pcclUint32 = 4,
+pcclInt32 = 5,
+pcclUint64 = 6,
+pcclInt64 = 7,
+pcclFloat = 8,
+pcclDouble = 9
 } pcclDataType_t;
+size_t pcclDataTypeSize(pcclDataType_t datatype);
 typedef enum pcclRedOp_t {
 pcclSum,
 pcclAvg,
@@ -83,6 +85,11 @@ uint64_t revision;
 size_t count;
 pcclTensorInfo_t *infos;
 } pcclSharedState_t;
+typedef struct pcclSharedStateSyncInfo_t {
+uint64_t tx_bytes;
+uint64_t rx_bytes;
+} pcclSharedStateSyncInfo_t;
+typedef struct pcclMasterInstanceState_t pcclMasterInstance_t;
  pcclResult_t pcclInit();
  pcclResult_t pcclCreateCommunicator(pcclComm_t **comm_out);
  pcclResult_t pcclGetAttribute(const pcclComm_t *communicator, pcclAttribute_t attribute,
@@ -101,8 +108,8 @@ pcclReduceInfo_t *reduce_info_out,
 pcclAsyncReduceOp_t *reduce_handle_out);
  pcclResult_t pcclAwaitAsyncReduce(const pcclAsyncReduceOp_t *reduce_handle);
  pcclResult_t pcclSynchronizeSharedState(const pcclComm_t *communicator,
-pcclSharedState_t *shared_state);
-typedef struct pcclMasterInstanceState_t pcclMasterInstance_t;
+pcclSharedState_t *shared_state,
+pcclSharedStateSyncInfo_t *sync_info_out);
  pcclResult_t pcclCreateMaster(ccoip_socket_address_t listen_address,
 pcclMasterInstance_t **p_master_handle_out);
  pcclResult_t pcclRunMaster(pcclMasterInstance_t *master_instance);

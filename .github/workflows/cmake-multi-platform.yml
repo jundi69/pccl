@@ -54,6 +54,24 @@ jobs:
       - name: Build
         run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }}
 
-      - name: Test
+      - name: Test CPP
         working-directory: ${{ steps.strings.outputs.build-output-dir }}
         run: ctest --build-config ${{ matrix.build_type }} --output-on-failure
+
+      - name: Compile Python wheel
+        run: cd ${{ github.workspace }}/python/framework && pip3 wheel --verbose -w dist .
+
+      - name: Install Python wheel Win32
+        if: runner.os == 'Windows'
+        run: pip3 install ${{ github.workspace }}/python/framework/dist/pccl-0.1.0-cp39-cp39-win_amd64.whl
+
+      - name: Install Python wheel Unix
+        if: runner.os == 'Linux'
+        run: pip3 install ${{ github.workspace }}/python/framework/dist/*.whl
+
+      - name: Install Pytest
+        run: pip3 install pytest
+
+      - name: Test Python
+        if: runner.os != 'Windows'
+        run: python -m pytest ${{ github.workspace }}/python/tests

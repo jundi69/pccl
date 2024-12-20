@@ -48,25 +48,7 @@ typedef enum pcclDataType_t {
     pcclDouble = 9
 } pcclDataType_t;
 
-inline size_t pcclDataTypeSize(const pcclDataType_t datatype) {
-    switch (datatype) {
-        case pcclUint8:
-        case pcclInt8:
-            return 1;
-        case pcclUint16:
-            return 2;
-        case pcclUint32:
-        case pcclInt32:
-        case pcclFloat:
-            return 4;
-        case pcclUint64:
-        case pcclInt64:
-        case pcclDouble:
-            return 8;
-        default:
-            return 0;
-    }
-}
+size_t pcclDataTypeSize(pcclDataType_t datatype);
 
 typedef enum pcclRedOp_t {
     pcclSum,
@@ -123,8 +105,6 @@ typedef struct pcclSharedStateSyncInfo_t {
 } pcclSharedStateSyncInfo_t;
 
 typedef struct pcclMasterInstanceState_t pcclMasterInstance_t;
-
-#define PCCL_NULLABLE /* nothing */
 
 /**
  * Initializes the pccl library.
@@ -231,7 +211,7 @@ PCCL_EXPORT pcclResult_t pcclUpdateTopology(pcclComm_t *communicator);
  */
 PCCL_EXPORT pcclResult_t pcclAllReduce(const void *sendbuff, void *recvbuff, size_t count, pcclDataType_t datatype,
                                        pcclRedOp_t op, uint64_t tag, const pcclComm_t *communicator,
-                                       pcclReduceInfo_t *PCCL_NULLABLE reduce_info_out);
+                                       pcclReduceInfo_t *reduce_info_out);
 
 /**
 * Performs an all reduce operation on a communicator. Async version of @code pcclAllReduce@endcode.
@@ -254,7 +234,7 @@ PCCL_EXPORT pcclResult_t pcclAllReduce(const void *sendbuff, void *recvbuff, siz
 */
 PCCL_EXPORT pcclResult_t pcclAllReduceAsync(const void *sendbuff, void *recvbuff, size_t count, pcclDataType_t datatype,
                                             pcclRedOp_t op, uint64_t tag, const pcclComm_t *communicator,
-                                            pcclReduceInfo_t *PCCL_NULLABLE reduce_info_out,
+                                            pcclReduceInfo_t *reduce_info_out,
                                             pcclAsyncReduceOp_t *reduce_handle_out);
 
 /**
@@ -277,7 +257,7 @@ PCCL_EXPORT pcclResult_t pcclAwaitAsyncReduce(const pcclAsyncReduceOp_t *reduce_
  */
 PCCL_EXPORT pcclResult_t pcclSynchronizeSharedState(const pcclComm_t *communicator,
                                                     pcclSharedState_t *shared_state,
-                                                    pcclSharedStateSyncInfo_t *PCCL_NULLABLE sync_info_out);
+                                                    pcclSharedStateSyncInfo_t *sync_info_out);
 
 /**
  * Creates a master node handle.
