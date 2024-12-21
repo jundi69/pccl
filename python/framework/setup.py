@@ -40,19 +40,48 @@ class CMakeBuildExecutor(build_ext):
 
         cmake_args = [
             f'-DCMAKE_RUNTIME_OUTPUT_DIRECTORY={output_dir}',
-            # For multi-config generators like Visual Studio
-            f'-DCMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE={output_dir}',
-            f'-DCMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG={output_dir}',
-
             '-DCMAKE_BUILD_TYPE=Release',  # Specify the build type
         ]
 
-        build_args = [
-            '--target', 'pccl',  # Only build the pccl library
-            f'-j{NUM_JOBS}',
-            '-v',
-            '--config', 'Release',
+        # Probe configure to detect the cmake generator
+        print("Probe configure to detect the cmake generator...")
+        print(' '.join(['cmake', ext.root_dir] + cmake_args))
+        subprocess.check_call(['cmake', ext.root_dir] + cmake_args, cwd=self.build_temp)
+
+        def is_multi_config_generator(generator):
+            """Determine if the generator is multi-config."""
+            multi_config_generators = [
+                'Visual Studio',
+                'Xcode',
+                'NMake',
+                'MSYS Makefiles',
+            ]
+            return any(gen in generator for gen in multi_config_generators)
+
+        def get_cmake_generator(build_dir):
+            cache_file = os.path.join(build_dir, 'CMakeCache.txt')
+            if not os.path.isfile(cache_file):
+                raise FileNotFoundError(f"CMakeCache.txt not found in {build_dir}")
+
+            with open(cache_file, 'r') as f:
+                for line in f:
+                    if line.startswith('CMAKE_GENERATOR:INTERNAL='):
+                        generator = line.strip().split('=')[-1]
+                        return generator
+            raise ValueError("CMAKE_GENERATOR not found in CMakeCache.txt")
+
+        # For multi-config generators like Visual Studio
+        multi_config_generator_args = [
+            f'-DCMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE={output_dir}',
+            f'-DCMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG={output_dir}',
         ]
+
+        # Get the cmake generator
+        cmake_generator = get_cmake_generator(self.build_temp)
+        print(f"Detected CMake generator: {cmake_generator}")
+
+        if is_multi_config_generator(cmake_generator):
+            cmake_args += multi_config_generator_args
 
         # Configure the project
         print("Configuring the project with CMake arguments:")
@@ -60,6 +89,12 @@ class CMakeBuildExecutor(build_ext):
         subprocess.check_call(['cmake', ext.root_dir] + cmake_args, cwd=self.build_temp)
 
         # Build the project
+        build_args = [
+            '--target', 'pccl',  # Only build the pccl library
+            f'-j{NUM_JOBS}',
+            '-v',
+            '--config', 'Release',
+        ]
         print("Building the project with CMake arguments:")
         print(' '.join(['cmake', '--build', '.'] + build_args))
         subprocess.check_call(['cmake', '--build', '.'] + build_args, cwd=self.build_temp)
