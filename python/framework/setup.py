@@ -1,12 +1,13 @@
 import os
+import sys
 import subprocess
 import multiprocessing
 
 from setuptools import setup, Extension
 from setuptools.command.build_ext import build_ext
 
-CMAKE_ROOT: str = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')) # Root directory of the CMake project
-NUM_JOBS: int = max(multiprocessing.cpu_count() - 1, 1) # Use all but one core
+CMAKE_ROOT: str = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))  # Root directory of the CMake project
+NUM_JOBS: int = max(multiprocessing.cpu_count() - 1, 1)  # Use all but one core
 
 class BuildException(Exception):
     def __init__(self, message: str):
@@ -14,7 +15,7 @@ class BuildException(Exception):
         super().__init__(self.message)
 
 class CMakeBuildExtension(Extension):
-    def __init__(self, name, root_dir: str=''):
+    def __init__(self, name, root_dir: str = ''):
         super().__init__(name, sources=[])
         self.root_dir = os.path.abspath(root_dir)
 
@@ -34,25 +35,49 @@ class CMakeBuildExecutor(build_ext):
     def build_extension(self, ext):
         if not os.path.exists(self.build_temp):
             os.makedirs(self.build_temp)
+
+        output_dir = os.path.abspath(os.path.join(self.build_lib, "pccl"))
+
         cmake_args = [
-            f'-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={os.path.abspath(os.path.join(self.build_lib, "pccl"))}',
-            '-DCMAKE_BUILD_TYPE=Release',
+            f'-DCMAKE_RUNTIME_OUTPUT_DIRECTORY={output_dir}',
+            # For multi-config generators like Visual Studio
+            f'-DCMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE={output_dir}',
+            f'-DCMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG={output_dir}',
+
+            '-DCMAKE_BUILD_TYPE=Release',  # Specify the build type
         ]
+
         build_args = [
-            '--target pccl', # Only build the pccl library
+            '--target', 'pccl',  # Only build the pccl library
             f'-j{NUM_JOBS}',
-            '-v'
+            '-v',
+            '--config', 'Release',
         ]
-        print(subprocess.check_call(['cmake', ext.root_dir] + cmake_args, cwd=self.build_temp))
-        print(subprocess.check_call(['cmake', '--build', '.'] + build_args, cwd=self.build_temp))
+
+        # Configure the project
+        print("Configuring the project with CMake arguments:")
+        print(' '.join(['cmake', ext.root_dir] + cmake_args))
+        subprocess.check_call(['cmake', ext.root_dir] + cmake_args, cwd=self.build_temp)
+
+        # Build the project
+        print("Building the project with CMake arguments:")
+        print(' '.join(['cmake', '--build', '.'] + build_args))
+        subprocess.check_call(['cmake', '--build', '.'] + build_args, cwd=self.build_temp)
 
 # Setup dependencies from requirements.txt
 lib_folder = os.path.dirname(os.path.realpath(__file__))
-requirement_path = f'{lib_folder}/requirements.txt'
+requirement_path = os.path.join(lib_folder, 'requirements.txt')
 install_requires = []
 if os.path.isfile(requirement_path):
     with open(requirement_path) as f:
         install_requires = f.read().splitlines()
+
+if sys.platform.startswith('win'):
+    package_data_files = ['pccl.dll']
+elif sys.platform.startswith('darwin'):
+    package_data_files = ['pccl.dylib']
+else:
+    package_data_files = ['pccl.so']
 
 # Setup pccl package
 setup(
@@ -63,9 +88,9 @@ setup(
     long_description='An IP-based collective communications library',
     packages=['pccl'],
     package_data={
-        'pccl': ['*.dylib', '*.so', '*.dll'],
+        'pccl': package_data_files,
     },
-    include_package_data=True,
+    include_package_data=False,
     ext_modules=[CMakeBuildExtension('pccl', root_dir=CMAKE_ROOT)],
     cmdclass={
         'build_ext': CMakeBuildExecutor,

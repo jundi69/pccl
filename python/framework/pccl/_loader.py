@@ -4,7 +4,7 @@ from pathlib import Path
 from pccl._cdecls import __PCCL_CDECLS
 
 PCCL_LIBS = [
-    ('win32', 'Release/Debug/pccl.dll'),
+    ('win32', 'pccl.dll'),
     ('linux', 'libpccl.so'),
     ('darwin', 'libpccl.dylib'),
 ]
@@ -22,7 +22,6 @@ def load_native_module():
     # Load the library using cffi
     from cffi import FFI
     ffi = FFI()
-    ffi.dlopen('m')  # Math library
     ffi.cdef(__PCCL_CDECLS)  # Define the C declarations
     lib = ffi.dlopen(str(lib_path))  # Load the shared library
     return ffi, lib
