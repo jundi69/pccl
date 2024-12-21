@@ -110,9 +110,9 @@ if os.path.isfile(requirement_path):
 if sys.platform.startswith('win'):
     package_data_files = ['pccl.dll']
 elif sys.platform.startswith('darwin'):
-    package_data_files = ['pccl.dylib']
+    package_data_files = ['libpccl.dylib']
 else:
-    package_data_files = ['pccl.so']
+    package_data_files = ['libpccl.so']
 
 # Setup pccl package
 setup(
