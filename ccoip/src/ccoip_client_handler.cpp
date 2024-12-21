@@ -154,26 +154,39 @@ bool ccoip::CCoIPClientHandler::syncSharedState(ccoip_shared_state_t &shared_sta
         });
     }
 
-    // vote for shared state sync
-    C2MPacketSyncSharedState packet{};
-    packet.shared_state_revision = shared_state.revision;
-    packet.shared_state_hashes = shared_state_hashes;
-    if (!client_socket.sendPacket<C2MPacketSyncSharedState>(packet)) {
-        LOG(ERR) << "Failed to sync shared state: Failed to send C2MPacketSyncSharedState to master";
-        return false;
-    }
-    // wait for confirmation from master that all peers have voted to sync the shared state
-    const auto response = client_socket.receivePacket<M2CPacketSyncSharedState>();
-    if (!response) {
-        LOG(ERR) << "Failed to sync shared state: Failed to receive M2CPacketSyncSharedState response from master";
-        return false;
-    }
-
     // inside this block, we are guaranteed in the shared state distribution phase
     {
-        // as long as we are inside this block, client_state.isSyncingSharedState() will return true
+        // As long as we are inside this block, client_state.isSyncingSharedState() will return true
+
+        // ATTENTION: We create this guard even before we vote to enter the shared state sync state on the server side.
+        // So on the client side this phase either means that we have already successfully voted to enter the shared state sync phase
+        // or that we would want to be in the shared state sync phase.
+        // This is necessary because we check this state of being in the shared state sync phase during shared state distribution.
+        // We turn down requests that come in while we are not in the shared state sync phase.
+        // However, if we were to start the shared state sync phase AFTER sending the shared state sync vote packet,
+        // not all clients receive the confirmation packet from the master after a successful vote at the same time.
+        // If you are unlucky, this discrepancy can be so bad that some clients even handle this packet and send a shared
+        // state request to a shared state distributor that is not yet aware that the shared state sync phase has started.
+        // It will then respond with state SHARED_STATE_NOT_DISTRIBUTED.
+        // Because we are basically only using this phase state for this purpose anyway, this is a good solution to
+        // avoid yet another vote that would only really solve a conceptual problem, not a problem introduced by data dependencies.
         guard_utils::phase_guard guard([this, &shared_state] { client_state.beginSyncSharedStatePhase(shared_state); },
                                        [this] { client_state.endSyncSharedStatePhase(); });
+
+        // vote for shared state sync
+        C2MPacketSyncSharedState packet{};
+        packet.shared_state_revision = shared_state.revision;
+        packet.shared_state_hashes = shared_state_hashes;
+        if (!client_socket.sendPacket<C2MPacketSyncSharedState>(packet)) {
+            LOG(ERR) << "Failed to sync shared state: Failed to send C2MPacketSyncSharedState to master";
+            return false;
+        }
+        // wait for confirmation from master that all peers have voted to sync the shared state
+        const auto response = client_socket.receivePacket<M2CPacketSyncSharedState>();
+        if (!response) {
+            LOG(ERR) << "Failed to sync shared state: Failed to receive M2CPacketSyncSharedState response from master";
+            return false;
+        }
 
         if (response->is_outdated) {
             // if shared state is outdated, request shared state from master
@@ -411,6 +424,8 @@ void ccoip::CCoIPClientHandler::handleSharedStateRequest(const ccoip_socket_addr
 
     // check if we are in shared state sync phase
     if (!client_state.isSyncingSharedState()) {
+        LOG(WARN) << "Received shared state request from " << ccoip_sockaddr_to_str(client_address) <<
+                " while not in shared state sync phase; Responding with status=SHARED_STATE_NOT_DISTRIBUTED";
         response.status = SHARED_STATE_NOT_DISTRIBUTED;
         goto end;
     }

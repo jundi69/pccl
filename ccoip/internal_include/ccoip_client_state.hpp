@@ -35,7 +35,10 @@ namespace ccoip {
         /// Called to unregister a peer with the client state
         [[nodiscard]] bool unregisterPeer(const ccoip_socket_address_t &address);
 
-        /// Begins the shared state synchronization phase
+        /// Begins the shared state synchronization phase.
+        /// On the client side, this means that we are either already in the shared state sync phase after
+        /// a successful vote or that we would want to be in the shared state sync phase.
+        /// The reason for this is documented in ccoip::CCoIPClientHandler::syncSharedState()
         void beginSyncSharedStatePhase(const ccoip_shared_state_t &shared_state);
 
         /// Ends the shared state synchronization phase
