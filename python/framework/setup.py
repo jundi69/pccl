@@ -39,7 +39,6 @@ class CMakeBuildExecutor(build_ext):
         output_dir = os.path.abspath(os.path.join(self.build_lib, "pccl"))
 
         cmake_args = [
-            f'-DCMAKE_RUNTIME_OUTPUT_DIRECTORY={output_dir}',
             '-DCMAKE_BUILD_TYPE=Release',  # Specify the build type
         ]
 
@@ -76,12 +75,19 @@ class CMakeBuildExecutor(build_ext):
             f'-DCMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG={output_dir}',
         ]
 
+        # For non-multi-config generators like Unix Makefiles
+        single_config_generator_args = [
+            f'-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={output_dir}',
+        ]
+
         # Get the cmake generator
         cmake_generator = get_cmake_generator(self.build_temp)
         print(f"Detected CMake generator: {cmake_generator}")
 
         if is_multi_config_generator(cmake_generator):
             cmake_args += multi_config_generator_args
+        else:
+            cmake_args += single_config_generator_args
 
         # Configure the project
         print("Configuring the project with CMake arguments:")
