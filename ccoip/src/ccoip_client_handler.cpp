@@ -2,6 +2,7 @@
 #include "ccoip_types.hpp"
 #include <pccl_log.hpp>
 #include <ccoip.h>
+#include <future>
 #include <hash_utils.hpp>
 
 #include "ccoip_inet_utils.hpp"
@@ -9,15 +10,19 @@
 #include <thread_guard.hpp>
 #include <guard_utils.hpp>
 
-ccoip::CCoIPClientHandler::CCoIPClientHandler(const ccoip_socket_address_t &address, uint32_t peer_group) : client_socket(address),
-    // Both p2p_socket and shared_state_socket listen to the first free port above the specified port number
-    // as the constructor with inet_addr and above_port is called, which will bump on failure to bind.
-    // this is by design and the chosen ports will be communicated to the master, which will then distribute
-    // this information to clients to then correctly establish connections. The protocol does not assert these
-    // ports to be static; The only asserted static port is the master listening port.
-    p2p_socket({address.inet.protocol, {}, {}}, CCOIP_PROTOCOL_PORT_P2P),
-    shared_state_socket({address.inet.protocol, {}, {}}, CCOIP_PROTOCOL_PORT_SHARED_STATE),
-    peer_group(peer_group) {
+ccoip::CCoIPClientHandler::CCoIPClientHandler(const ccoip_socket_address_t &address,
+                                              uint32_t peer_group) : master_socket(address),
+                                                                     // Both p2p_socket and shared_state_socket listen to the first free port above the specified port number
+                                                                     // as the constructor with inet_addr and above_port is called, which will bump on failure to bind.
+                                                                     // this is by design and the chosen ports will be communicated to the master, which will then distribute
+                                                                     // this information to clients to then correctly establish connections. The protocol does not assert these
+                                                                     // ports to be static; The only asserted static port is the master listening port.
+                                                                     p2p_socket({address.inet.protocol, {}, {}},
+                                                                         CCOIP_PROTOCOL_PORT_P2P),
+                                                                     shared_state_socket(
+                                                                         {address.inet.protocol, {}, {}},
+                                                                         CCOIP_PROTOCOL_PORT_SHARED_STATE),
+                                                                     peer_group(peer_group) {
 }
 
 bool ccoip::CCoIPClientHandler::connect() {
@@ -60,7 +65,7 @@ bool ccoip::CCoIPClientHandler::connect() {
         LOG(INFO) << "Shared state socket listening on port " << shared_state_socket.getListenPort() << "...";
     }
 
-    if (!client_socket.establishConnection()) {
+    if (!master_socket.establishConnection()) {
         return false;
     }
 
@@ -70,12 +75,12 @@ bool ccoip::CCoIPClientHandler::connect() {
     join_request.shared_state_listen_port = shared_state_socket.getListenPort();
     join_request.peer_group = peer_group;
 
-    if (!client_socket.sendPacket<C2MPacketRequestSessionRegistration>(join_request)) {
+    if (!master_socket.sendPacket<C2MPacketRequestSessionRegistration>(join_request)) {
         return false;
     }
 
     // receive join response packet from master
-    const auto response = client_socket.receivePacket<M2CPacketSessionRegistrationResponse>();
+    const auto response = master_socket.receivePacket<M2CPacketSessionRegistrationResponse>();
     if (!response) {
         return false;
     }
@@ -109,13 +114,13 @@ bool ccoip::CCoIPClientHandler::acceptNewPeers() {
         return false;
     }
 
-    if (!client_socket.isOpen()) {
+    if (!master_socket.isOpen()) {
         LOG(ERR) <<
                 "Failed to sync shared state: Client socket has been closed; This may mean the client was kicked by the master";
         return false;
     }
 
-    if (!client_socket.sendPacket<C2MPacketAcceptNewPeers>({})) {
+    if (!master_socket.sendPacket<C2MPacketAcceptNewPeers>({})) {
         return false;
     }
 
@@ -134,7 +139,7 @@ bool ccoip::CCoIPClientHandler::syncSharedState(ccoip_shared_state_t &shared_sta
         return false;
     }
 
-    if (!client_socket.isOpen()) {
+    if (!master_socket.isOpen()) {
         LOG(ERR) <<
                 "Failed to sync shared state: Client socket has been closed; This may mean the client was kicked by the master";
         return false;
@@ -177,12 +182,12 @@ bool ccoip::CCoIPClientHandler::syncSharedState(ccoip_shared_state_t &shared_sta
         C2MPacketSyncSharedState packet{};
         packet.shared_state_revision = shared_state.revision;
         packet.shared_state_hashes = shared_state_hashes;
-        if (!client_socket.sendPacket<C2MPacketSyncSharedState>(packet)) {
+        if (!master_socket.sendPacket<C2MPacketSyncSharedState>(packet)) {
             LOG(ERR) << "Failed to sync shared state: Failed to send C2MPacketSyncSharedState to master";
             return false;
         }
         // wait for confirmation from master that all peers have voted to sync the shared state
-        const auto response = client_socket.receivePacket<M2CPacketSyncSharedState>();
+        const auto response = master_socket.receivePacket<M2CPacketSyncSharedState>();
         if (!response) {
             LOG(ERR) << "Failed to sync shared state: Failed to receive M2CPacketSyncSharedState response from master";
             return false;
@@ -253,13 +258,13 @@ bool ccoip::CCoIPClientHandler::syncSharedState(ccoip_shared_state_t &shared_sta
             }
         }
         // indicate to master that shared state distribution is complete
-        if (!client_socket.sendPacket<C2MPacketDistSharedStateComplete>({})) {
+        if (!master_socket.sendPacket<C2MPacketDistSharedStateComplete>({})) {
             LOG(ERR) << "Failed to sync shared state: Failed to send C2MPacketSyncSharedStateComplete to master";
             return false;
         }
 
         // wait for confirmation from master that all peers have synced the shared state
-        if (const auto sync_response = client_socket.receivePacket<M2CPacketSyncSharedStateComplete>(); !
+        if (const auto sync_response = master_socket.receivePacket<M2CPacketSyncSharedStateComplete>(); !
             sync_response) {
             LOG(ERR) <<
                     "Failed to sync shared state: Failed to receive M2CPacketSyncSharedStateComplete response from master";
@@ -285,7 +290,7 @@ bool ccoip::CCoIPClientHandler::interrupt() {
     if (!shared_state_socket.interrupt()) [[unlikely]] {
         return false;
     }
-    if (!client_socket.closeConnection()) [[unlikely]] {
+    if (!master_socket.closeConnection()) [[unlikely]] {
         return false;
     }
     interrupted = true;
@@ -306,7 +311,7 @@ ccoip::CCoIPClientHandler::~CCoIPClientHandler() = default;
 
 bool ccoip::CCoIPClientHandler::establishP2PConnections() {
     // wait for new peers packet
-    const auto new_peers = client_socket.receivePacket<M2CPacketNewPeers>();
+    const auto new_peers = master_socket.receivePacket<M2CPacketNewPeers>();
     if (!new_peers) {
         LOG(ERR) << "Failed to receive new peers packet";
         return false;
@@ -340,14 +345,14 @@ bool ccoip::CCoIPClientHandler::establishP2PConnections() {
     }
 
     // send packet to this peer has established its p2p connections
-    if (!client_socket.sendPacket<C2MPacketP2PConnectionsEstablished>({})) {
+    if (!master_socket.sendPacket<C2MPacketP2PConnectionsEstablished>({})) {
         LOG(ERR) << "Failed to send P2P connections established packet";
         return false;
     }
 
     // wait for response from master, indicating ALL peers have established their
     // respective p2p connections
-    if (const auto response = client_socket.receivePacket<M2CPacketP2PConnectionsEstablished>(); !response) {
+    if (const auto response = master_socket.receivePacket<M2CPacketP2PConnectionsEstablished>(); !response) {
         LOG(ERR) << "Failed to receive P2P connections established response";
         return false;
     }
@@ -477,4 +482,68 @@ void ccoip::CCoIPClientHandler::onSharedStateClientRead(const ccoip_socket_addre
             LOG(ERR) << "Failed to close connection with " << ccoip_sockaddr_to_str(client_address);
         }
     }
+}
+
+
+bool ccoip::CCoIPClientHandler::allReduceAsync(const void *sendbuff, void *recvbuff, const size_t count,
+                                               const ccoip_data_type_t datatype, const ccoip_reduce_op_t op,
+                                               const uint64_t tag) {
+    if (client_state.isCollectiveComsOpRunning(tag)) {
+        // can't start a new collective coms op while one is already running
+        return false;
+    }
+
+    if (!client_state.startCollectiveComsOp(tag)) [[unlikely]] {
+        return false;
+    }
+
+    if (!client_state.launchAsyncCollectiveOp(
+        tag, [this, sendbuff, recvbuff, count, datatype, op, tag](std::promise<bool> &promise) {
+            C2MPacketAllReduceInitiate packet{};
+            packet.tag = tag;
+            packet.count = count;
+            packet.data_type = datatype;
+            packet.op = op;
+            if (master_socket.sendPacket<C2MPacketAllReduceInitiate>(packet)) {
+                promise.set_value(false); // failure
+                return;
+            }
+
+            // TODO: FIX THE FACT THAT THIS RESPONSE COULD BE FOR A DIFFERENT CONCURRENT ALL REDUCE AND NOT THE ONE WE JUST SENT
+            const auto response = master_socket.receivePacket<M2CPacketAllReduceCommence>();
+            if (!response) {
+                promise.set_value(false); // failure
+                return;
+            }
+
+            // TODO: Implement all reduce
+
+            promise.set_value(true); // success
+        })) [[unlikely]] {
+        return false;
+    }
+
+    // TODO: FIX THE FACT THAT SUBSEQUENT PCCL CALLS E.G. TO SHARED STATE SYNC MIGHT INTERFERE WITH MASTER COMMUNICATION!
+    //  THESE CALLS NEED TO BLOCK IF THERE IS AN ALL REDUCE GOING ON!
+
+    return true;
+}
+
+bool ccoip::CCoIPClientHandler::joinAsyncReduce(const uint64_t tag) {
+    if (!client_state.joinAsyncReduce(tag)) [[unlikely]] {
+        return false;
+    }
+    const auto failure_opt = client_state.hasCollectiveComsOpFailed(tag);
+    if (!failure_opt) [[unlikely]] {
+        LOG(WARN) << "Collective coms op with tag " << tag << " was either not started or has not yet finished";
+        return false;
+    }
+    if (*failure_opt) {
+        return false;
+    }
+    return true;
+}
+
+bool ccoip::CCoIPClientHandler::getAsyncReduceInfo(const uint64_t tag, std::optional<ccoip_reduce_info_t> &info_out) {
+    return true;
 }

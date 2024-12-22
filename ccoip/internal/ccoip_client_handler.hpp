@@ -1,5 +1,6 @@
 #pragma once
 
+#include <ccoip_client.hpp>
 #include <ccoip_client_state.hpp>
 #include <ccoip_shared_state.hpp>
 #include <ccoip_packets.hpp>
@@ -9,7 +10,7 @@
 namespace ccoip {
     class CCoIPClientHandler {
         /// Blocking socket for connection to master node
-        tinysockets::BlockingIOSocket client_socket;
+        tinysockets::BlockingIOSocket master_socket;
 
         /// All state of the client is encapsulated in this object
         CCoIPClientState client_state;
@@ -43,7 +44,8 @@ namespace ccoip {
 
         [[nodiscard]] bool acceptNewPeers();
 
-        [[nodiscard]] bool syncSharedState(ccoip_shared_state_t &shared_state, ccoip_shared_state_sync_info_t &info_out);
+        [[nodiscard]] bool syncSharedState(ccoip_shared_state_t &shared_state,
+                                           ccoip_shared_state_sync_info_t &info_out);
 
         [[nodiscard]] bool interrupt();
 
@@ -54,6 +56,13 @@ namespace ccoip {
         [[nodiscard]] bool isInterrupted() const;
 
         ~CCoIPClientHandler();
+
+        [[nodiscard]] bool allReduceAsync(const void *sendbuff, void *recvbuff, size_t count, ccoip_data_type_t datatype,
+                                          ccoip_reduce_op_t op, uint64_t tag);
+
+        [[nodiscard]] bool joinAsyncReduce(uint64_t tag);
+
+        [[nodiscard]] bool getAsyncReduceInfo(uint64_t tag, std::optional<ccoip_reduce_info_t> &info_out);
 
     private:
         [[nodiscard]] bool establishP2PConnections();

@@ -72,6 +72,24 @@ ccoip::packetId_t ccoip::C2MPacketDistSharedStateComplete::packet_id = C2M_PACKE
 ccoip::packetId_t ccoip::M2CPacketSessionRegistrationResponse::packet_id = M2C_PACKET_SESSION_REGISTRATION_RESPONSE_ID;
 
 
+// C2MPacketAllReduceInitiate
+ccoip::packetId_t ccoip::C2MPacketAllReduceInitiate::packet_id = C2M_PACKET_ALL_REDUCE_INITIATE_ID;
+
+void ccoip::C2MPacketAllReduceInitiate::serialize(PacketWriteBuffer &buffer) const {
+    buffer.write<uint64_t>(tag);
+    buffer.write<uint64_t>(count);
+    buffer.write<uint8_t>(static_cast<uint8_t>(data_type));
+    buffer.write<uint8_t>(static_cast<uint8_t>(op));
+}
+
+bool ccoip::C2MPacketAllReduceInitiate::deserialize(PacketReadBuffer &buffer) {
+    tag = buffer.read<uint64_t>();
+    count = buffer.read<uint64_t>();
+    data_type = static_cast<ccoip_data_type_t>(buffer.read<uint8_t>());
+    op = static_cast<ccoip_reduce_op_t>(buffer.read<uint8_t>());
+    return true;
+}
+
 void ccoip::M2CPacketSessionRegistrationResponse::serialize(PacketWriteBuffer &buffer) const {
     buffer.write<boolean>(accepted);
     buffer.writeFixedArray(assigned_uuid.data);
@@ -179,6 +197,18 @@ bool ccoip::M2CPacketSyncSharedState::deserialize(PacketReadBuffer &buffer) {
     for (size_t i = 0; i < n_keys; i++) {
         expected_hashes.push_back(buffer.read<uint64_t>());
     }
+    return true;
+}
+
+// M2CPacketAllReduceCommence
+ccoip::packetId_t ccoip::M2CPacketAllReduceCommence::packet_id = M2C_PACKET_ALL_REDUCE_COMMENCE_ID;
+
+void ccoip::M2CPacketAllReduceCommence::serialize(PacketWriteBuffer &buffer) const {
+    buffer.write<uint64_t>(tag);
+}
+
+bool ccoip::M2CPacketAllReduceCommence::deserialize(PacketReadBuffer &buffer) {
+    tag = buffer.read<uint64_t>();
     return true;
 }
 

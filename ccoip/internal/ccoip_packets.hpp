@@ -26,6 +26,7 @@ namespace ccoip {
 #define C2M_PACKET_P2P_CONNECTIONS_ESTABLISHED_ID 3
 #define C2M_PACKET_SYNC_SHARED_STATE_ID 4
 #define C2M_PACKET_DIST_SHARED_STATE_COMPLETE_ID 5
+#define C2M_PACKET_ALL_REDUCE_INITIATE_ID 6
 
     // M2C packets:
 #define M2C_PACKET_SESSION_REGISTRATION_RESPONSE_ID 1
@@ -33,6 +34,7 @@ namespace ccoip {
 #define M2C_PACKET_P2P_CONNECTIONS_ESTABLISHED_ID 3
 #define M2C_PACKET_SYNC_SHARED_STATE_ID 4
 #define M2C_PACKET_SYNC_SHARED_STATE_COMPLETE_ID 5
+#define M2C_PACKET_ALL_REDUCE_COMMENCE_ID 6
 
     // P2P packets:
 #define P2P_PACKET_HELLO_ID 1
@@ -96,6 +98,21 @@ namespace ccoip {
         static packetId_t packet_id;
     };
 
+    // C2MPacketAllReduceInitiate
+    class C2MPacketAllReduceInitiate final : public Packet {
+    public:
+        static packetId_t packet_id;
+
+        uint64_t tag;
+        ccoip_data_type_t data_type;
+        uint64_t count;
+        ccoip_reduce_op_t op;
+
+        void serialize(PacketWriteBuffer &buffer) const override;
+
+        bool deserialize(PacketReadBuffer &buffer) override;
+    };
+
     // M2CPacketSessionRegistrationResponse
     class M2CPacketSessionRegistrationResponse final : public Packet {
     public:
@@ -152,6 +169,18 @@ namespace ccoip {
     class M2CPacketSyncSharedStateComplete final : public EmptyPacket {
     public:
         static packetId_t packet_id;
+    };
+
+    // M2CPacketAllReduceCommence
+    class M2CPacketAllReduceCommence final : public Packet {
+    public:
+        static packetId_t packet_id;
+
+        uint64_t tag;
+
+        void serialize(PacketWriteBuffer &buffer) const override;
+
+        bool deserialize(PacketReadBuffer &buffer) override;
     };
 
     // P2PPacketHello

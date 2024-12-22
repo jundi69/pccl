@@ -8,6 +8,9 @@
 #include <functional>
 #include <thread>
 #include <span>
+#include <vector>
+
+#include <pccl/common/cast_utils.hpp>
 
 #ifdef WIN32
 typedef long long int ssize_t;
@@ -155,6 +158,13 @@ namespace tinysockets {
         int socket_fd;
         ccoip_socket_address_t connect_sockaddr;
 
+        std::mutex send_mutex;
+        std::mutex recv_mutex;
+
+        std::mutex unmatched_packets_mutex;
+        std::vector<std::unique_ptr<ccoip::Packet> > unmatched_packets{};
+        std::condition_variable cv_packets_published{};
+
     public:
         explicit BlockingIOSocket(const ccoip_socket_address_t &address);
 
@@ -176,6 +186,7 @@ namespace tinysockets {
 
         template<typename T> requires std::is_base_of_v<ccoip::Packet, T>
         [[nodiscard]] bool sendPacket(const T &packet) {
+            std::lock_guard guard{send_mutex};
             const ccoip::packetId_t id = T::packet_id;
             PacketWriteBuffer buffer{};
             packet.serialize(buffer);
@@ -184,8 +195,84 @@ namespace tinysockets {
 
         template<typename T> requires std::is_base_of_v<ccoip::Packet, T>
         [[nodiscard]] std::optional<T> receivePacket() {
+            std::lock_guard guard{recv_mutex};
             const ccoip::packetId_t id = T::packet_id;
             return receiveLtvPacket<T>(id);
+        }
+
+        /// Returns the next received packet that matches the given predicate.
+        /// This function is thread-safe.
+        /// If two threads are waiting for packets, one thread will read while the other thread waits.
+        /// After receiving the packet, the thread that has received the packet will check the predicate.
+        /// If this predicate matches, the packet is returned. Otherwise, a new packet is read.
+        /// In case a packet is received that does not match the predicate and a different thread's predicate matches,
+        /// the other thread will obtain and return this packet.
+        template<typename T> requires std::is_base_of_v<ccoip::Packet, T>
+        [[nodiscard]] std::optional<T> receiveMatchingPacket(const std::function<bool(const T &)> &predicate) {
+            bool may_read = false;
+            while (true) {
+                std::unique_lock u_guard{unmatched_packets_mutex};
+
+                // first check if there are any unmatched packets
+                if (unmatched_packets.empty()) {
+                    // if no, try to acquire the read mutex and become the reading thread
+                    may_read = recv_mutex.try_lock();
+                    if (may_read) {
+                        break;
+                    }
+                    // if that fails, wait until the reading thread notifies us of a published packet
+                    cv_packets_published.wait(u_guard);
+                }
+
+                // protect against spurious wake-ups and check if there are any unmatched packets
+                if (!unmatched_packets.empty()) {
+                    // if there are, check if any of them match the predicate
+                    for (auto it = unmatched_packets.begin(); it != unmatched_packets.end();) {
+                        auto cast_packet = dynamic_unique_ptr_cast<T>(*it);
+                        if (cast_packet != nullptr && predicate(*cast_packet)) {
+                            // if cast succeeds and predicate matches, return it and remove it from the unmatched packets list
+                            auto packet = std::move(*cast_packet); // move before erase
+                            unmatched_packets.erase(it);
+                            return packet;
+                        }
+                        // if the packet does not match, keep it in the unmatched packets list
+                        ++it;
+                    }
+                }
+            }
+
+            // this thread has permission to exclusively read from the socket
+            {
+                std::unique_lock guard{recv_mutex, std::adopt_lock}; // mutex already acquired, only guard safe release
+                const ccoip::packetId_t id = T::packet_id;
+                while (true) {
+                    auto packet_opt = receiveLtvPacket<T>(id);
+                    if (!packet_opt) {
+                        // wake up one of the waiting threads
+                        {
+                            std::unique_lock u_guard{unmatched_packets_mutex};
+                            cv_packets_published.notify_all();
+                        }
+                        return std::nullopt;
+                    }
+                    auto &packet = *packet_opt;
+                    if (predicate(packet)) {
+                        // wake up one of the waiting threads
+                        {
+                            std::unique_lock u_guard{unmatched_packets_mutex};
+                            cv_packets_published.notify_all();
+                        }
+                        return std::move(packet);
+                    }
+
+                    // publish unmatched packet to other threads
+                    {
+                        std::unique_lock u_guard{unmatched_packets_mutex};
+                        unmatched_packets.push_back(std::make_unique<T>(std::move(packet)));
+                        cv_packets_published.notify_all();
+                    }
+                }
+            }
         }
 
     private:

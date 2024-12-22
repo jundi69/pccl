@@ -33,6 +33,54 @@ bool ccoip::CCoIPClientState::isSyncingSharedState() const {
     return is_syncing_shared_state;
 }
 
+bool ccoip::CCoIPClientState::isCollectiveComsOpRunning(const uint64_t tag) const {
+    return running_collective_coms_ops_tags.contains(tag);
+}
+
+bool ccoip::CCoIPClientState::startCollectiveComsOp(const uint64_t tag) {
+    if (running_collective_coms_ops_tags.contains(tag)) {
+        return false;
+    }
+    running_collective_coms_ops_tags.insert(tag);
+    return true;
+}
+
+bool ccoip::CCoIPClientState::endCollectiveComsOp(const uint64_t tag) {
+    if (const auto n = running_collective_coms_ops_tags.erase(tag); n == 0) {
+        return false;
+    }
+    return true;
+}
+
+bool ccoip::CCoIPClientState::launchAsyncCollectiveOp(const uint64_t tag, std::function<void(std::promise<bool> &)> &&task) {
+    running_reduce_tasks[tag] = std::move(std::thread([this, tag, task = std::move(task)]() {
+        std::promise<bool> &promise = running_reduce_tasks_promises[tag];
+        task(promise);
+    }));
+    return true;
+}
+
+bool ccoip::CCoIPClientState::joinAsyncReduce(const uint64_t tag) {
+    if (const auto it = running_reduce_tasks.find(tag); it != running_reduce_tasks.end()) {
+        it->second.join();
+        running_reduce_tasks.erase(it);
+        return true;
+    }
+    return false;
+}
+
+std::optional<bool> ccoip::CCoIPClientState::hasCollectiveComsOpFailed(const uint64_t tag) {
+    if (const auto it = running_reduce_tasks_promises.find(tag); it != running_reduce_tasks_promises.end()) {
+        auto &promise = it->second;
+        auto future = promise.get_future();
+        if (future.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+            return !future.get();
+        }
+    }
+    return std::nullopt;
+}
+
+
 size_t ccoip::CCoIPClientState::getSharedStateSyncTxBytes() const {
     return shared_state_sync_tx_bytes;
 }

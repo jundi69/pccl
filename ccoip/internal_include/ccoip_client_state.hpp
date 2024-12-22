@@ -1,8 +1,12 @@
 #pragma once
+
 #include <ccoip_inet.h>
 #include <ccoip_inet_utils.hpp>
 #include <ccoip_shared_state.hpp>
 #include <ccoip_types.hpp>
+#include <future>
+#include <unordered_set>
+#include <thread>
 
 namespace ccoip {
     class CCoIPClientState {
@@ -28,6 +32,17 @@ namespace ccoip {
         /// Reset by @code resetSharedStateSyncTxBytes()@endcode
         size_t shared_state_sync_tx_bytes = 0;
 
+        /// Tags of all running collective communications operations
+        std::unordered_set<uint64_t> running_collective_coms_ops_tags{};
+
+        /// Maps tags of running collective operation tasks to their respective threads
+        std::unordered_map<uint64_t, std::thread> running_reduce_tasks{};
+
+        /// Maps tags of running collective operation tasks to their respective promises;
+        /// These promises are used to signal the completion of the collective operation task
+        /// and indicate whether the operation was successful or not.
+        std::unordered_map<uint64_t, std::promise<bool>> running_reduce_tasks_promises{};
+
     public:
         /// Called to register a peer with the client state
         [[nodiscard]] bool registerPeer(const ccoip_socket_address_t &address, ccoip_uuid_t uuid);
@@ -47,6 +62,28 @@ namespace ccoip {
         /// Returns true if the client is currently syncing shared state
         [[nodiscard]] bool isSyncingSharedState() const;
 
+        /// Returns true if there is a collective communications operation running with the specified tag
+        [[nodiscard]] bool isCollectiveComsOpRunning(uint64_t tag) const;
+
+        /// Declares a collective communications operation with the specified tag started.
+        /// Returns false if a collective communications operation with the same tag is already running.
+        [[nodiscard]] bool startCollectiveComsOp(uint64_t tag);
+
+        /// Declares a collective communications operation with the specified tag ended
+        /// Returns false if no collective communications operation with the specified tag is running.
+        [[nodiscard]] bool endCollectiveComsOp(uint64_t tag);
+
+        /// Launches an asynchronous all reduce operation
+        [[nodiscard]] bool launchAsyncCollectiveOp(uint64_t tag, std::function<void(std::promise<bool> &)> &&task);
+
+        /// Join the collective communications operation with the specified tag
+        /// Returns false if no collective communications operation with the specified tag is running
+        [[nodiscard]] bool joinAsyncReduce(uint64_t tag);
+
+        /// Returns true if the collective communications operation with the specified tag failed;
+        /// Returns std::nullopt if the tag is not found or the operation has not completed
+        [[nodiscard]] std::optional<bool> hasCollectiveComsOpFailed(uint64_t tag);
+
         /// Returns the currently synced shared state
         [[nodiscard]] const ccoip_shared_state_t &getCurrentSharedState() const {
             return current_shared_state;
@@ -60,5 +97,6 @@ namespace ccoip {
 
         /// Resets the number of bytes sent during the shared state sync phase
         void resetSharedStateSyncTxBytes();
+
     };
 };

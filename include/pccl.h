@@ -260,7 +260,6 @@ PCCL_EXPORT pcclResult_t pcclAllReduce(const void *sendbuff, void *recvbuff, siz
 * @param op The reduction operation to perform.
 * @param tag The tag to identify the operation.
 * @param communicator The communicator to perform the operation on.
-* @param reduce_info_out The reduce info to be filled with information about the operation.
 * @param reduce_handle_out The reduce op handle to be filled with an async handle to the operation.
 *
 * @return @code pcclSuccess@endcode if the all reduce operation was successful.
@@ -271,18 +270,18 @@ PCCL_EXPORT pcclResult_t pcclAllReduce(const void *sendbuff, void *recvbuff, siz
 */
 PCCL_EXPORT pcclResult_t pcclAllReduceAsync(const void *sendbuff, void *recvbuff, size_t count, pcclDataType_t datatype,
                                             pcclRedOp_t op, uint64_t tag, const pcclComm_t *communicator,
-                                            pcclReduceInfo_t *PCCL_NULLABLE reduce_info_out,
                                             pcclAsyncReduceOp_t *reduce_handle_out);
 
 /**
  * Awaits the completion of an async reduce operation. Blocks until the operation is complete.
  *
  * @param reduce_handle The handle to the async reduce operation.
+ * @param reduce_info_out The reduce info to be filled with information about the operation.
  *
  * @return @code pcclSuccess@endcode if the async reduce operation was successful.
  * @return @code pcclInvalidArgument@endcode if the reduce handle is null or invalid.
  */
-PCCL_EXPORT pcclResult_t pcclAwaitAsyncReduce(const pcclAsyncReduceOp_t *reduce_handle);
+PCCL_EXPORT pcclResult_t pcclAwaitAsyncReduce(const pcclAsyncReduceOp_t *reduce_handle, pcclReduceInfo_t *PCCL_NULLABLE reduce_info_out);
 
 /**
  * Synchronizes the shared state between all peers that are currently accepted.

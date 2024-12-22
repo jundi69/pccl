@@ -3,19 +3,7 @@
 #include <string>
 #include <span>
 #include <vector>
-
-enum ccoip_data_type_t {
-    ccoipUint8 = 0,
-    ccoipInt8 = 1,
-    ccoipUint16 = 2,
-    ccoipUint32 = 3,
-    ccoipInt16 = 4,
-    ccoipInt32 = 5,
-    ccoipUint64 = 6,
-    ccoipInt64 = 7,
-    ccoipFloat = 8,
-    ccoipDouble = 9,
-};
+#include <ccoip_types.hpp>
 
 struct ccoip_shared_state_entry_t {
     /// Key of the shared state entry
