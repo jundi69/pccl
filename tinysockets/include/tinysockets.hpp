@@ -9,6 +9,8 @@
 #include <thread>
 #include <span>
 #include <vector>
+#include <mutex>
+#include <condition_variable>
 
 #include <pccl/common/cast_utils.hpp>
 
