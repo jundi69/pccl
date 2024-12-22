@@ -10,7 +10,7 @@ struct ccoip_shared_state_entry_t {
     std::string key;
 
     /// Data type of the shared state entry
-    ccoip_data_type_t data_type;
+    ccoip::ccoip_data_type_t data_type;
 
     /// References memory for the shared state content.
     /// This memory is owned by the user of the library and will be read or written to

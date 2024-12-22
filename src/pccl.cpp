@@ -93,29 +93,29 @@ pcclResult_t pcclConnect(pcclComm_t *communicator) {
     return pcclSuccess;
 }
 
-static std::optional<ccoip_data_type_t> getCCoIPDataType(const pcclDataType_t datatype) {
+static std::optional<ccoip::ccoip_data_type_t> getCCoIPDataType(const pcclDataType_t datatype) {
     switch (datatype) {
-        case pcclUint8: return ccoipUint8;
-        case pcclUint16: return ccoipUint16;
-        case pcclUint32: return ccoipUint32;
-        case pcclUint64: return ccoipUint64;
-        case pcclInt8: return ccoipInt8;
-        case pcclInt16: return ccoipInt16;
-        case pcclInt32: return ccoipInt32;
-        case pcclInt64: return ccoipInt64;
-        case pcclFloat: return ccoipFloat;
-        case pcclDouble: return ccoipDouble;
+        case pcclUint8: return ccoip::ccoipUint8;
+        case pcclUint16: return ccoip::ccoipUint16;
+        case pcclUint32: return ccoip::ccoipUint32;
+        case pcclUint64: return ccoip::ccoipUint64;
+        case pcclInt8: return ccoip::ccoipInt8;
+        case pcclInt16: return ccoip::ccoipInt16;
+        case pcclInt32: return ccoip::ccoipInt32;
+        case pcclInt64: return ccoip::ccoipInt64;
+        case pcclFloat: return ccoip::ccoipFloat;
+        case pcclDouble: return ccoip::ccoipDouble;
     }
     return std::nullopt;
 }
 
 static std::optional<ccoip::ccoip_reduce_op_t> getCCoIPReduceOp(const pcclRedOp_t op) {
     switch (op) {
-        case pcclSum: return ccoip::CCOIP_REDUCE_OP_SUM;
-        case pcclAvg: return ccoip::CCOIP_REDUCE_OP_AVG;
-        case pcclProd: return ccoip::CCOIP_REDUCE_OP_PROD;
-        case pcclMax: return ccoip::CCOIP_REDUCE_OP_MAX;
-        case pcclMin: return ccoip::CCOIP_REDUCE_OP_MIN;
+        case pcclSum: return ccoip::ccoip_reduce_op_t::ccoipOpSum;
+        case pcclAvg: return ccoip::ccoip_reduce_op_t::ccoipOpAvg;
+        case pcclProd: return ccoip::ccoip_reduce_op_t::ccoipOpProd;
+        case pcclMax: return ccoip::ccoip_reduce_op_t::ccoipOpMax;
+        case pcclMin: return ccoip::ccoip_reduce_op_t::ccoipOpMin;
     }
     return std::nullopt;
 }

@@ -4,46 +4,50 @@
 #include <array>
 #include <string>
 
-enum ccoip_data_type_t {
-    ccoipUint8 = 0,
-    ccoipInt8 = 1,
-    ccoipUint16 = 2,
-    ccoipUint32 = 3,
-    ccoipInt16 = 4,
-    ccoipInt32 = 5,
-    ccoipUint64 = 6,
-    ccoipInt64 = 7,
-    ccoipFloat = 8,
-    ccoipDouble = 9,
-};
+namespace ccoip {
+    enum ccoip_data_type_t {
+        ccoipUint8 = 0,
+        ccoipInt8 = 1,
+        ccoipUint16 = 2,
+        ccoipUint32 = 3,
+        ccoipInt16 = 4,
+        ccoipInt32 = 5,
+        ccoipUint64 = 6,
+        ccoipInt64 = 7,
+        ccoipFloat = 8,
+        ccoipDouble = 9,
+    };
 
-enum ccoip_reduce_op_t {
-    ccoipOpSum = 0,
-    ccoipOpAvg = 1,
-    ccoipOpProd = 2,
-    ccoipOpMax = 3,
-    ccoipOpMin = 4
-};
+    enum ccoip_reduce_op_t {
+        ccoipOpSum = 0,
+        ccoipOpAvg = 1,
+        ccoipOpProd = 2,
+        ccoipOpMax = 3,
+        ccoipOpMin = 4
+    };
 
-inline size_t ccoip_data_type_size(const ccoip_data_type_t datatype) {
-    switch (datatype) {
-        case ccoipUint8:
-        case ccoipInt8:
-            return 1;
-        case ccoipUint16:
-        case ccoipInt16:
-            return 2;
-        case ccoipUint32:
-        case ccoipInt32:
-        case ccoipFloat:
-            return 4;
-        case ccoipUint64:
-        case ccoipInt64:
-        case ccoipDouble:
-            return 8;
+
+    inline size_t ccoip_data_type_size(const ccoip_data_type_t datatype) {
+        switch (datatype) {
+            case ccoipUint8:
+            case ccoipInt8:
+                return 1;
+            case ccoipUint16:
+            case ccoipInt16:
+                return 2;
+            case ccoipUint32:
+            case ccoipInt32:
+            case ccoipFloat:
+                return 4;
+            case ccoipUint64:
+            case ccoipInt64:
+            case ccoipDouble:
+                return 8;
+        }
+        return 0;
     }
-    return 0;
-}
+};
+
 
 constexpr std::size_t CCOIP_UUID_N_BYTES = 16;
 using ccoip_uuid = std::array<uint8_t, CCOIP_UUID_N_BYTES>;
