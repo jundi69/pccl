@@ -72,8 +72,8 @@ int main() {
         fill_uniform(gradients, n_peers);
         pcclAsyncReduceOp_t async_op{};
         do {
-            pcclAllReduceAsync(gradients, weights, n_peers, pcclFloat, pcclSum, 0, communicator, nullptr, &async_op);
-        } while (pcclAwaitAsyncReduce(&async_op) != pcclSuccess);
+            pcclAllReduceAsync(gradients, weights, n_peers, pcclFloat, pcclSum, 0, communicator, &async_op);
+        } while (pcclAwaitAsyncReduce(&async_op, nullptr) != pcclSuccess);
 
         shared_state.revision++;
     }
