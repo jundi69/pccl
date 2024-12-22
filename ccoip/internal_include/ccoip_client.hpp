@@ -3,6 +3,8 @@
 #include <ccoip_inet.h>
 #include <ccoip_shared_state.hpp>
 
+#include <optional>
+
 namespace ccoip {
     class CCoIPClientHandler;
 

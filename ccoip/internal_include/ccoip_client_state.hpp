@@ -5,7 +5,9 @@
 #include <ccoip_shared_state.hpp>
 #include <ccoip_types.hpp>
 #include <future>
+#include <optional>
 #include <unordered_set>
+#include <unordered_map>
 #include <thread>
 
 namespace ccoip {
@@ -41,7 +43,7 @@ namespace ccoip {
         /// Maps tags of running collective operation tasks to their respective promises;
         /// These promises are used to signal the completion of the collective operation task
         /// and indicate whether the operation was successful or not.
-        std::unordered_map<uint64_t, std::promise<bool>> running_reduce_tasks_promises{};
+        std::unordered_map<uint64_t, std::promise<bool> > running_reduce_tasks_promises{};
 
     public:
         /// Called to register a peer with the client state
@@ -97,6 +99,5 @@ namespace ccoip {
 
         /// Resets the number of bytes sent during the shared state sync phase
         void resetSharedStateSyncTxBytes();
-
     };
 };
