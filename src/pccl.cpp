@@ -163,7 +163,7 @@ pcclResult_t pcclAllReduceAsync(const void *sendbuff, void *recvbuff, const size
     if (!ccoip_op) {
         return pcclInvalidArgument;
     }
-    if (communicator->ccoip_client->allReduceAsync(sendbuff, recvbuff, count, *ccoip_data_type, *ccoip_op, tag)) {
+    if (!communicator->ccoip_client->allReduceAsync(sendbuff, recvbuff, count, *ccoip_data_type, *ccoip_op, tag)) {
         return pcclInvalidUsage;
     }
 
