@@ -56,6 +56,4 @@ jobs:
 
       - name: Test
         working-directory: ${{ steps.strings.outputs.build-output-dir }}
-        env:
-          PCCL_LOG_LEVEL: DEBUG
         run: ctest --verbose --build-config ${{ matrix.build_type }} --output-on-failure
