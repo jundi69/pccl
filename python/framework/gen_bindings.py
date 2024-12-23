@@ -37,6 +37,7 @@ for file in HEADERS:
     data = [line.strip() for line in full_src.splitlines()]  # remove empty lines
     data = [line for line in data if keep_line(line)]  # remove empty lines
     data = [line.replace('PCCL_EXPORT', '') for line in data]
+    data = [line.replace('PCCL_NULLABLE', '') for line in data]
     for line in reversed(data):
         if line == '}':
             data.remove(line)

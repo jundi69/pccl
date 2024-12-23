@@ -21,8 +21,8 @@ def test_reduce():
     ])
 
     # Create a communicator and connect to the master node
-    communicator: Communicator = Communicator()
-    communicator.connect(HOST)
+    communicator: Communicator = Communicator(HOST, 0)
+    communicator.connect()
 
     while True:
         communicator.update_topology()
@@ -37,8 +37,9 @@ def test_reduce():
         # Create gradients tensors
         grad: torch.Tensor = torch.rand(PEERS, dtype=torch.float32)
         while True:
-            info, handle = communicator.all_reduce_async(grad, weights, numel=PEERS, op=ReduceOp.SUM)
-            if handle.wait():
+            handle = communicator.all_reduce_async(grad, weights, numel=PEERS, op=ReduceOp.SUM)
+            success, info = handle.wait()
+            if success:
                 print(f"Reduce completed RX: {info.rx_bytes}, TX: {info.tx_bytes}")
                 break
 

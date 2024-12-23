@@ -15,6 +15,6 @@ def test_master_node_run():
 def test_communicator():
     m = MasterNode(listen_address='127.0.0.1:48148')
     m.run()
-    c = Communicator()
-    c.connect('127.0.0.1:48148')
+    c = Communicator('127.0.0.1:48148', 0)
+    c.connect()
     m.interrupt()

@@ -1,4 +1,4 @@
-# Autogenered by /home/mario/Documents/projects/pccl-refactor/python/framework/gen_bindings.py 2024-12-20 21:26:01.114936, do NOT edit!
+# Autogenered by /Users/mariosieg/Documents/projects/pccl-refactor/python/framework/gen_bindings.py 2024-12-23 18:40:01.229152, do NOT edit!
 
 __PCCL_CDECLS: str = '''
 
@@ -35,6 +35,7 @@ pcclMasterConnectionFailed = 9,
 pcclRankConnectionFailed = 10,
 pcclRankConnectionLost = 11,
 pcclNoSharedStateAvailable = 12,
+pcclPendingAsyncOps = 13
 } pcclResult_t;
 typedef enum pcclDataType_t {
 pcclUint8 = 0,
@@ -59,6 +60,10 @@ pcclMin
 typedef enum pcclAttribute_t {
 PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE = 1
 } pcclAttribute_t;
+typedef struct pcclCommCreateParams_t {
+ccoip_socket_address_t master_address;
+uint32_t peer_group;
+} pcclCommCreateParams_t;
 typedef struct pcclComm_t pcclComm_t;
 typedef struct pcclRankInfo_t pcclRankInfo_t;
 typedef struct pcclReduceInfo_t {
@@ -91,25 +96,25 @@ uint64_t rx_bytes;
 } pcclSharedStateSyncInfo_t;
 typedef struct pcclMasterInstanceState_t pcclMasterInstance_t;
  pcclResult_t pcclInit();
- pcclResult_t pcclCreateCommunicator(pcclComm_t **comm_out);
+ pcclResult_t pcclCreateCommunicator(const pcclCommCreateParams_t *params,
+pcclComm_t **comm_out);
  pcclResult_t pcclGetAttribute(const pcclComm_t *communicator, pcclAttribute_t attribute,
 int *p_attribute_out);
  pcclResult_t pcclTopologySaveGraph(const pcclComm_t *communicator, const char *filename);
  pcclResult_t pcclSaveReducePlan(const pcclComm_t *communicator, const char *filename);
  pcclResult_t pcclDestroyCommunicator(pcclComm_t *communicator);
- pcclResult_t pcclConnect(pcclComm_t *communicator, ccoip_socket_address_t socket_address);
+ pcclResult_t pcclConnect(pcclComm_t *communicator);
  pcclResult_t pcclUpdateTopology(pcclComm_t *communicator);
  pcclResult_t pcclAllReduce(const void *sendbuff, void *recvbuff, size_t count, pcclDataType_t datatype,
 pcclRedOp_t op, uint64_t tag, const pcclComm_t *communicator,
-pcclReduceInfo_t *reduce_info_out);
+pcclReduceInfo_t * reduce_info_out);
  pcclResult_t pcclAllReduceAsync(const void *sendbuff, void *recvbuff, size_t count, pcclDataType_t datatype,
 pcclRedOp_t op, uint64_t tag, const pcclComm_t *communicator,
-pcclReduceInfo_t *reduce_info_out,
 pcclAsyncReduceOp_t *reduce_handle_out);
- pcclResult_t pcclAwaitAsyncReduce(const pcclAsyncReduceOp_t *reduce_handle);
+ pcclResult_t pcclAwaitAsyncReduce(const pcclAsyncReduceOp_t *reduce_handle, pcclReduceInfo_t * reduce_info_out);
  pcclResult_t pcclSynchronizeSharedState(const pcclComm_t *communicator,
 pcclSharedState_t *shared_state,
-pcclSharedStateSyncInfo_t *sync_info_out);
+pcclSharedStateSyncInfo_t * sync_info_out);
  pcclResult_t pcclCreateMaster(ccoip_socket_address_t listen_address,
 pcclMasterInstance_t **p_master_handle_out);
  pcclResult_t pcclRunMaster(pcclMasterInstance_t *master_instance);

@@ -59,7 +59,7 @@ class DataType(Enum):
 
     def to_torch_dtype(self):
         """Converts a DataType to the corresponding PyTorch dtype."""
-        MAP = {
+        map = {
             DataType.UINT8: torch.uint8,
             DataType.INT8: torch.int8,
             DataType.UINT16: torch.uint16,
@@ -70,13 +70,13 @@ class DataType(Enum):
             DataType.FLOAT: torch.float32,
             DataType.DOUBLE: torch.float64,
         }
-        assert self in MAP, f'Unsupported DataType: {self}'
-        return MAP[self]
+        assert self in map, f'Unsupported DataType: {self}'
+        return map[self]
 
-    @staticmethod
-    def from_torch_dtype(dtype: torch.dtype):
+    @classmethod
+    def from_torch_dtype(cls, dtype: torch.dtype):
         """Converts a PyTorch dtype to the corresponding DataType."""
-        MAP = {
+        map = {
             torch.uint8: DataType.UINT8,
             torch.int8: DataType.INT8,
             torch.uint16: DataType.UINT16,
@@ -87,8 +87,8 @@ class DataType(Enum):
             torch.float32: DataType.FLOAT,
             torch.float64: DataType.DOUBLE,
         }
-        assert dtype in MAP, f'Unsupported dtype: {dtype}'
-        return MAP[dtype]
+        assert dtype in map, f'Unsupported dtype: {dtype}'
+        return map[dtype]
 
 class TensorInfo:
     def __init__(self, name: str, data_ptr: int, *, numel: int, dtype: DataType, allow_content_inequality: bool):
@@ -98,15 +98,15 @@ class TensorInfo:
         self.dtype = dtype
         self.allow_content_inequality = allow_content_inequality
 
-    @staticmethod
-    def from_torch(tensor: Tensor, name: str, *, allow_content_inequality: bool=False):
+    @classmethod
+    def from_torch(cls, tensor: Tensor, name: str, *, allow_content_inequality: bool=False):
         """Creates a TensorInfo from a PyTorch tensor."""
         assert tensor.is_contiguous(), 'Input tensor must be contiguous'
         assert tensor.device.type == 'cpu', 'Only CPU tensors are supported'
         numel: int = tensor.numel()
         data_ptr: int = tensor.data_ptr()
         dtype: DataType = DataType.from_torch_dtype(tensor.dtype)
-        return TensorInfo(name, data_ptr, numel=numel, dtype=dtype, allow_content_inequality=allow_content_inequality)
+        return cls(name, data_ptr, numel=numel, dtype=dtype, allow_content_inequality=allow_content_inequality)
 
 class SharedState:
     def __init__(self, tensor_infos: list[TensorInfo]):
@@ -162,9 +162,11 @@ class AsyncReduceHandle:
     def __init__(self, handle: ffi.CData):
         self._handle = handle
 
-    def wait(self) -> bool:
+    def wait(self) -> (bool, ReduceInfo):
         """Awaits the completion of an async reduce operation. Blocks until the operation is complete."""
-        return C.pcclAwaitAsyncReduce(self._handle) == Result.SUCCESS.value
+        info: ffi.CData = ffi.new('pcclReduceInfo_t*')
+        status: bool = C.pcclAwaitAsyncReduce(self._handle, info) == Result.SUCCESS.value
+        return status, ReduceInfo(info.world_size, info.tx_bytes, info.rx_bytes)
 
 # Init PCCL
 PCCLError.check(C.pcclInit())
@@ -190,9 +192,15 @@ def _create_ccoip_socket_address(address: IPv4Address | IPv6Address, port: int) 
 class Communicator:
     """PCCL communicator."""
 
-    def __init__(self):
+    def __init__(self, address: str, peer_group: int):
+        assert ":" in address, f'Invalid address: {address}, expected format: ip:port'
+        params: ffi.CData = ffi.new('pcclCommCreateParams_t*')
+        ip, port = address.split(":")
+        ip = ip_address(ip)
+        params.master_address = _create_ccoip_socket_address(ip, int(port))[0]
+        params.peer_group =  ffi.cast('uint32_t', peer_group)
         self._comm = ffi.new('pcclComm_t**')
-        PCCLError.check(C.pcclCreateCommunicator(self._comm))
+        PCCLError.check(C.pcclCreateCommunicator(params, self._comm))
 
     def __del__(self):
         C.pcclDestroyCommunicator(self._comm[0])
@@ -213,16 +221,12 @@ class Communicator:
         assert filename and filename.endswith('.dot')
         PCCLError.check(C.pcclSaveReducePlan(self._comm[0], bytes(filename, 'utf-8')))
 
-    def connect(self, address: str):
+    def connect(self):
         """
         Establishes a connection to a master node.
         This function must be called on a communicator for the communicator to be usable.
         """
-        assert ":" in address, f'Invalid address: {address}, expected format: ip:port'
-        ip, port = address.split(":")
-        ip = ip_address(ip)
-        ccoip_address = _create_ccoip_socket_address(ip, int(port))
-        PCCLError.check(C.pcclConnect(self._comm[0], ccoip_address[0]))
+        PCCLError.check(C.pcclConnect(self._comm[0]))
 
     def all_reduce(self, send: Tensor, recv: Tensor, *, op: ReduceOp, tag: int=0) -> ReduceInfo:
         """Performs an all reduce operation on a communicator. Blocks until the all reduce is complete."""
@@ -240,7 +244,7 @@ class Communicator:
         return ReduceInfo(info.world_size, info.tx_bytes, info.rx_bytes)
 
 
-    def all_reduce_async(self, send: Tensor, recv: Tensor, *, numel: int, op: ReduceOp, tag: int=0) -> (ReduceInfo, AsyncReduceHandle):
+    def all_reduce_async(self, send: Tensor, recv: Tensor, *, numel: int, op: ReduceOp, tag: int=0) -> AsyncReduceHandle:
         """Performs an all reduce operation on a communicator. Async version of all_reduce."""
         assert send.is_contiguous(), 'Input tensor must be contiguous'
         assert recv.is_contiguous(), 'Output tensor must be contiguous'
@@ -249,11 +253,10 @@ class Communicator:
         assert send.device.type == 'cpu', 'Only CPU tensors are supported'
         sendbuff: ffi.CData = ffi.cast('void*', send.data_ptr())
         recvbuff: ffi.CData = ffi.cast('void*', recv.data_ptr())
-        info: ffi.CData = ffi.new('pcclReduceInfo_t*')
         handle: ffi.CData = ffi.new('pcclAsyncReduceOp_t*')
         dtype: int =  DataType.from_torch_dtype(send.dtype).value
-        PCCLError.check(C.pcclAllReduceAsync(sendbuff, recvbuff, numel, dtype, op.value, tag, self._comm[0], info, handle))
-        return ReduceInfo(info.world_size, info.tx_bytes, info.rx_bytes), AsyncReduceHandle(handle)
+        PCCLError.check(C.pcclAllReduceAsync(sendbuff, recvbuff, numel, dtype, op.value, tag, self._comm[0], handle))
+        return AsyncReduceHandle(handle)
 
     def update_topology(self):
         """
