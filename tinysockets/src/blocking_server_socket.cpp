@@ -1,8 +1,6 @@
 #include <ccoip_inet_utils.hpp>
 #include <ccoip_utils.hpp>
 #include <win_sock_bridge.h>
-#include <netinet/in.h>
-#include <sys/socket.h>
 
 #include "tinysockets.hpp"
 
