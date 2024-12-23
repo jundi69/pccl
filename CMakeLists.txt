@@ -24,6 +24,7 @@ enable_testing()
 include(cmake/testing.cmake)
 
 # add internal libraries
+add_subdirectory(common_utils)
 add_subdirectory(log)
 add_subdirectory(ccoip)
 add_subdirectory(ccoip_master)

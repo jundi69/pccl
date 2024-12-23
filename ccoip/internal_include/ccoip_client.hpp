@@ -3,14 +3,23 @@
 #include <ccoip_inet.h>
 #include <ccoip_shared_state.hpp>
 
+#include <optional>
+
 namespace ccoip {
     class CCoIPClientHandler;
+
+    struct ccoip_reduce_info_t {
+        uint64_t tag;
+        uint32_t world_size;
+        uint64_t tx_bytes;
+        uint64_t rx_bytes;
+    };
 
     class CCoIPClient {
         CCoIPClientHandler *client;
 
     public:
-        explicit CCoIPClient(const ccoip_socket_address_t &master_socket_address);
+        explicit CCoIPClient(const ccoip_socket_address_t &master_socket_address, uint32_t peer_group);
 
         CCoIPClient(const CCoIPClient &other) = delete;
 
@@ -38,11 +47,26 @@ namespace ccoip {
         /// Performs a topology update if required
         [[nodiscard]] bool updateTopology() const;
 
+        /// Launches an asynchronous all reduce operation
+        [[nodiscard]] bool allReduceAsync(const void *sendbuff, void *recvbuff, size_t count,
+                                          ccoip_data_type_t datatype,
+                                          ccoip_reduce_op_t op, uint64_t tag) const;
+
+        /// Awaits the completion of an async reduce operation
+        [[nodiscard]] bool joinAsyncReduce(uint64_t tag) const;
+
+        /// Gets the reduce info for the async op with the given tag
+        /// Outputs std::nullopt if the tag is not found or the operation has not completed
+        [[nodiscard]] bool getAsyncReduceInfo(uint64_t tag, std::optional<ccoip_reduce_info_t> &info_out) const;
+
         /// Wait for the client to gracefully terminate after interruption
         [[nodiscard]] bool join() const;
 
         /// Returns true if the client has been interrupted
         [[nodiscard]] bool isInterrupted() const;
+
+        /// Returns true if there is any collective communications operation running
+        [[nodiscard]] bool isAnyCollectiveComsOpRunning() const;
 
         ~CCoIPClient();
     };

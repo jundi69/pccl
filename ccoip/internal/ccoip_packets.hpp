@@ -24,19 +24,26 @@ namespace ccoip {
 #define C2M_PACKET_REQUEST_SESSION_REGISTRATION_ID 1
 #define C2M_PACKET_ACCEPT_NEW_PEERS_ID 2
 #define C2M_PACKET_P2P_CONNECTIONS_ESTABLISHED_ID 3
-#define C2M_PACKET_SYNC_SHARED_STATE_ID 4
-#define C2M_PACKET_DIST_SHARED_STATE_COMPLETE_ID 5
+#define C2M_PACKET_GET_TOPOLOGY_REQUEST_ID 4
+#define C2M_PACKET_SYNC_SHARED_STATE_ID 5
+#define C2M_PACKET_DIST_SHARED_STATE_COMPLETE_ID 6
+#define C2M_PACKET_COLLECTIVE_COMMS_INITIATE_ID 7
+#define C2M_PACKET_COLLECTIVE_COMMS_COMPLETE_ID 8
 
     // M2C packets:
 #define M2C_PACKET_SESSION_REGISTRATION_RESPONSE_ID 1
 #define M2C_PACKET_NEW_PEERS_ID 2
 #define M2C_PACKET_P2P_CONNECTIONS_ESTABLISHED_ID 3
-#define M2C_PACKET_SYNC_SHARED_STATE_ID 4
-#define M2C_PACKET_SYNC_SHARED_STATE_COMPLETE_ID 5
+#define M2C_PACKET_GET_TOPOLOGY_RESPONSE_ID 4
+#define M2C_PACKET_SYNC_SHARED_STATE_ID 5
+#define M2C_PACKET_SYNC_SHARED_STATE_COMPLETE_ID 6
+#define M2C_PACKET_COLLECTIVE_COMMS_COMMENCE_ID 7
+#define M2C_PACKET_COLLECTIVE_COMMS_COMPLETE_ID 8
 
     // P2P packets:
 #define P2P_PACKET_HELLO_ID 1
 #define P2P_PACKET_HELLO_ACK_ID 2
+#define P2P_PACKET_REDUCE_TERM_ID 3
 
     // C2S packets:
 #define C2S_PACKET_REQUEST_SHARED_STATE_ID 1
@@ -50,6 +57,7 @@ namespace ccoip {
         static packetId_t packet_id;
         uint16_t p2p_listen_port;
         uint16_t shared_state_listen_port;
+        uint32_t peer_group;
 
         void serialize(PacketWriteBuffer &buffer) const override;
 
@@ -64,6 +72,12 @@ namespace ccoip {
 
     // C2MPacketP2PConnectionsEstablished
     class C2MPacketP2PConnectionsEstablished final : public EmptyPacket {
+    public:
+        static packetId_t packet_id;
+    };
+
+    // C2MPacketGetTopologyRequest
+    class C2MPacketGetTopologyRequest final : public EmptyPacket {
     public:
         static packetId_t packet_id;
     };
@@ -93,6 +107,33 @@ namespace ccoip {
     class C2MPacketDistSharedStateComplete final : public EmptyPacket {
     public:
         static packetId_t packet_id;
+    };
+
+    // C2MPacketCollectiveCommsInitiate
+    class C2MPacketCollectiveCommsInitiate final : public Packet {
+    public:
+        static packetId_t packet_id;
+
+        uint64_t tag;
+        ccoip_data_type_t data_type;
+        uint64_t count;
+        ccoip_reduce_op_t op;
+
+        void serialize(PacketWriteBuffer &buffer) const override;
+
+        [[nodiscard]] bool deserialize(PacketReadBuffer &buffer) override;
+    };
+
+    // C2MPacketCollectiveCommsComplete
+    class C2MPacketCollectiveCommsComplete final : public Packet {
+    public:
+        static packetId_t packet_id;
+
+        uint64_t tag;
+
+        void serialize(PacketWriteBuffer &buffer) const override;
+
+        [[nodiscard]] bool deserialize(PacketReadBuffer &buffer) override;
     };
 
     // M2CPacketSessionRegistrationResponse
@@ -133,6 +174,23 @@ namespace ccoip {
         static packetId_t packet_id;
     };
 
+    // M2CPacketGetTopologyResponse
+    class M2CPacketGetTopologyResponse final : public Packet {
+    public:
+        static packetId_t packet_id;
+
+        // NOTE: THIS STRUCTURE IS SUBJECT TO CHANGE ONCE GENERALIZED ALL REDUCE TOPOLOGY IS IMPLEMENTED
+
+        // TODO: Hardcode assume ring reduce for now...
+        //  last element is the peer that will receive the final result and distribute it to all peers
+        //  (this ring reduce impl is also temporary and known not optimal)
+        std::vector<ccoip_uuid_t> ring_reduce_order{};
+
+        void serialize(PacketWriteBuffer &buffer) const override;
+
+        [[nodiscard]] bool deserialize(PacketReadBuffer &buffer) override;
+    };
+
     // M2CPacketSyncSharedState
     class M2CPacketSyncSharedState final : public Packet {
     public:
@@ -153,16 +211,60 @@ namespace ccoip {
         static packetId_t packet_id;
     };
 
-    // P2PPacketHello
-    class P2PPacketHello final : public EmptyPacket {
+    // M2CPacketCollectiveCommsCommence
+    class M2CPacketCollectiveCommsCommence final : public Packet {
     public:
         static packetId_t packet_id;
+
+        uint64_t tag;
+
+        void serialize(PacketWriteBuffer &buffer) const override;
+
+        [[nodiscard]] bool deserialize(PacketReadBuffer &buffer) override;
+    };
+
+    // M2CPacketCollectiveCommsComplete
+    class M2CPacketCollectiveCommsComplete final : public Packet {
+    public:
+        static packetId_t packet_id;
+
+        uint64_t tag;
+
+        void serialize(PacketWriteBuffer &buffer) const override;
+
+        [[nodiscard]] bool deserialize(PacketReadBuffer &buffer) override;
+    };
+
+    // P2PPacketHello
+    class P2PPacketHello final : public Packet {
+    public:
+        static packetId_t packet_id;
+        ccoip_uuid_t peer_uuid;
+
+        void serialize(PacketWriteBuffer &buffer) const override;
+
+        [[nodiscard]] bool deserialize(PacketReadBuffer &buffer) override;
     };
 
     // P2PPacketHelloAck
     class P2PPacketHelloAck final : public EmptyPacket {
     public:
         static packetId_t packet_id;
+    };
+
+    // P2PPacketReduceTerm
+    class P2PPacketReduceTerm final : public Packet {
+    public:
+        static packetId_t packet_id;
+
+        uint64_t tag;
+        bool is_reduce;
+        std::span<const std::byte> data;
+        std::unique_ptr<std::byte[]> dst_ptr;
+
+        void serialize(PacketWriteBuffer &buffer) const override;
+
+        [[nodiscard]] bool deserialize(PacketReadBuffer &buffer) override;
     };
 
     // C2SPacketRequestSharedState

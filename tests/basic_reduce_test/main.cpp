@@ -1,3 +1,4 @@
+#include <ccoip.h>
 #include <iostream>
 #include <pccl.h>
 #include <random>
@@ -17,17 +18,21 @@ void fill_uniform(float *data, const size_t count) {
 #define MAX_STEPS 100
 
 int main() {
-    pcclInit();
+    PCCL_CHECK(pcclInit());
 
     pcclComm_t *communicator{};
-    PCCL_CHECK(pcclCreateCommunicator(&communicator));
-
-    ccoip_socket_address_t connect_address{};
-    connect_address.inet.protocol = inetIPv4;
-    connect_address.inet.ipv4 = {127, 0, 0, 1};
-    connect_address.port = 48148;
-
-    PCCL_CHECK(pcclConnect(communicator, connect_address));
+    constexpr pcclCommCreateParams_t params{
+        .master_address = {
+            .inet = {
+                .protocol = inetIPv4,
+                .ipv4 = {127, 0, 0, 1}
+            },
+            .port = CCOIP_PROTOCOL_PORT_MASTER
+        },
+        .peer_group = 0
+    };
+    PCCL_CHECK(pcclCreateCommunicator(&params, &communicator));
+    PCCL_CHECK(pcclConnect(communicator));
 
     int world_size{};
     pcclGetAttribute(communicator, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size);
@@ -55,7 +60,10 @@ int main() {
 
         pcclGetAttribute(communicator, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size);
 
-
+        if (world_size < 2) {
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+            continue;
+        }
 
         if (shared_state.revision >= MAX_STEPS) {
             break;
@@ -64,11 +72,8 @@ int main() {
         fill_uniform(gradients, n_peers);
         pcclAsyncReduceOp_t async_op{};
         do {
-            pcclReduceInfo_t reduce_info{};
-            pcclAllReduceAsync(gradients, weights, n_peers, pcclFloat, pcclSum, 0, communicator, &reduce_info, &async_op);
-
-            std::cout << "Waiting for async reduce to complete..." << std::endl;
-        } while (pcclAwaitAsyncReduce(&async_op) != pcclSuccess);
+            pcclAllReduceAsync(gradients, weights, n_peers, pcclFloat, pcclSum, 0, communicator, &async_op);
+        } while (pcclAwaitAsyncReduce(&async_op, nullptr) != pcclSuccess);
 
         shared_state.revision++;
     }

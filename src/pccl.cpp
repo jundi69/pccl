@@ -14,26 +14,6 @@ static pcclResult_t internalPcclInit() {
     return pcclSuccess;
 }
 
-size_t pcclDataTypeSize(const pcclDataType_t datatype) {
-    switch (datatype) {
-    case pcclUint8:
-    case pcclInt8:
-        return 1;
-    case pcclUint16:
-        return 2;
-    case pcclUint32:
-    case pcclInt32:
-    case pcclFloat:
-        return 4;
-    case pcclUint64:
-    case pcclInt64:
-    case pcclDouble:
-        return 8;
-    default:
-        return 0;
-    }
-}
-
 pcclResult_t pcclInit() {
     if (pccl_initialized) {
         return pcclSuccess;
@@ -43,15 +23,15 @@ pcclResult_t pcclInit() {
     return pcclSuccess;
 }
 
-pcclResult_t pcclCreateCommunicator(pcclComm_t **comm_out) {
+pcclResult_t pcclCreateCommunicator(const pcclCommCreateParams_t *params, pcclComm_t **comm_out) {
     PCCL_VALIDATE_INITIALIZED();
     PCCL_VALIDATE(comm_out != nullptr, pcclInvalidArgument);
-    *comm_out = new pcclComm_t();
+    *comm_out = new pcclComm_t(*params);
     return pcclSuccess;
 }
 
 pcclResult_t pcclGetAttribute(const pcclComm_t *communicator,
-                              pcclAttribute_t attribute,
+                              const pcclAttribute_t attribute,
                               int *p_attribute_out) {
     PCCL_VALIDATE_INITIALIZED();
     PCCL_VALIDATE(communicator != nullptr, pcclInvalidArgument);
@@ -95,12 +75,13 @@ pcclResult_t pcclDestroyCommunicator(pcclComm_t *communicator) {
     return pcclSuccess;
 }
 
-pcclResult_t pcclConnect(pcclComm_t *communicator, ccoip_socket_address_t socket_address) {
+pcclResult_t pcclConnect(pcclComm_t *communicator) {
     PCCL_VALIDATE_INITIALIZED();
     PCCL_VALIDATE(communicator != nullptr, pcclInvalidArgument);
     PCCL_VALIDATE(communicator->ccoip_client == nullptr, pcclInvalidUsage);
-    communicator->ccoip_client = std::make_unique<ccoip::CCoIPClient>(socket_address);
-    if (!communicator->ccoip_client->connect()) [[unlikely]] {
+    communicator->ccoip_client = std::make_unique<ccoip::CCoIPClient>(communicator->params.master_address,
+                                                                      communicator->params.peer_group);
+    if (!communicator->ccoip_client->connect()) {
         if (!communicator->ccoip_client->interrupt()) [[unlikely]] {
             return pcclInternalError;
         }
@@ -109,7 +90,37 @@ pcclResult_t pcclConnect(pcclComm_t *communicator, ccoip_socket_address_t socket
         }
         return pcclInvalidUsage;
     }
+    if (!communicator->ccoip_client->updateTopology()) [[unlikely]] {
+        return pcclMasterConnectionFailed;
+    }
     return pcclSuccess;
+}
+
+static std::optional<ccoip::ccoip_data_type_t> getCCoIPDataType(const pcclDataType_t datatype) {
+    switch (datatype) {
+        case pcclUint8: return ccoip::ccoipUint8;
+        case pcclUint16: return ccoip::ccoipUint16;
+        case pcclUint32: return ccoip::ccoipUint32;
+        case pcclUint64: return ccoip::ccoipUint64;
+        case pcclInt8: return ccoip::ccoipInt8;
+        case pcclInt16: return ccoip::ccoipInt16;
+        case pcclInt32: return ccoip::ccoipInt32;
+        case pcclInt64: return ccoip::ccoipInt64;
+        case pcclFloat: return ccoip::ccoipFloat;
+        case pcclDouble: return ccoip::ccoipDouble;
+    }
+    return std::nullopt;
+}
+
+static std::optional<ccoip::ccoip_reduce_op_t> getCCoIPReduceOp(const pcclRedOp_t op) {
+    switch (op) {
+        case pcclSum: return ccoip::ccoip_reduce_op_t::ccoipOpSum;
+        case pcclAvg: return ccoip::ccoip_reduce_op_t::ccoipOpAvg;
+        case pcclProd: return ccoip::ccoip_reduce_op_t::ccoipOpProd;
+        case pcclMax: return ccoip::ccoip_reduce_op_t::ccoipOpMax;
+        case pcclMin: return ccoip::ccoip_reduce_op_t::ccoipOpMin;
+    }
+    return std::nullopt;
 }
 
 // ReSharper disable once CppParameterMayBeConstPtrOrRef
@@ -118,8 +129,13 @@ pcclResult_t pcclUpdateTopology(pcclComm_t *communicator) {
     PCCL_VALIDATE(communicator != nullptr, pcclInvalidArgument);
     PCCL_VALIDATE(communicator->ccoip_client != nullptr, pcclInvalidUsage);
 
+    // if there are any async collective operations running, we cannot update the topology
+    if (communicator->ccoip_client->isAnyCollectiveComsOpRunning()) {
+        return pcclPendingAsyncOps;
+    }
+
     // accept new peers; this will block until we have a valid connection to each peer
-    if (!communicator->ccoip_client->acceptNewPeers()) [[unlikely]] {
+    if (!communicator->ccoip_client->acceptNewPeers()) {
         return pcclInvalidUsage;
     }
 
@@ -131,55 +147,85 @@ pcclResult_t pcclUpdateTopology(pcclComm_t *communicator) {
     return pcclSuccess;
 }
 
-pcclResult_t pcclAllReduceAsync(const void *sendbuff, void *recvbuff, size_t count, pcclDataType_t datatype,
-                                pcclRedOp_t op, uint64_t tag, const pcclComm_t *communicator,
-                                pcclReduceInfo_t *reduce_info_out,
+pcclResult_t pcclAllReduceAsync(const void *sendbuff, void *recvbuff, const size_t count, const pcclDataType_t datatype,
+                                const pcclRedOp_t op, const uint64_t tag, const pcclComm_t *communicator,
                                 pcclAsyncReduceOp_t *reduce_handle_out) {
     PCCL_VALIDATE_INITIALIZED();
     PCCL_VALIDATE(communicator != nullptr, pcclInvalidArgument);
     PCCL_VALIDATE(communicator->ccoip_client != nullptr, pcclInvalidUsage);
     PCCL_VALIDATE(reduce_handle_out != nullptr, pcclInvalidArgument);
+
+    auto ccoip_data_type = getCCoIPDataType(datatype);
+    if (!ccoip_data_type) {
+        return pcclInvalidArgument;
+    }
+    auto ccoip_op = getCCoIPReduceOp(op);
+    if (!ccoip_op) {
+        return pcclInvalidArgument;
+    }
+    if (communicator->ccoip_client->allReduceAsync(sendbuff, recvbuff, count, *ccoip_data_type, *ccoip_op, tag)) {
+        return pcclInvalidUsage;
+    }
+
+    *reduce_handle_out = pcclAsyncReduceOp_t{
+        .comm = const_cast<pcclComm_t *>(communicator),
+        .tag = tag,
+    };
     return pcclSuccess;
 }
 
 pcclResult_t pcclAllReduce(const void *sendbuff, void *recvbuff, size_t count, pcclDataType_t datatype,
                            pcclRedOp_t op, uint64_t tag, const pcclComm_t *communicator,
-                           pcclReduceInfo_t *reduce_info_out) {
+                           pcclReduceInfo_t *PCCL_NULLABLE reduce_info_out) {
     PCCL_VALIDATE_INITIALIZED();
     PCCL_VALIDATE(communicator != nullptr, pcclInvalidArgument);
     PCCL_VALIDATE(communicator->ccoip_client != nullptr, pcclInvalidUsage);
     pcclAsyncReduceOp_t reduce_handle{};
-    pcclAllReduceAsync(sendbuff, recvbuff, count, datatype, op, tag, communicator, reduce_info_out, &reduce_handle);
-    pcclAwaitAsyncReduce(&reduce_handle);
+    pcclAllReduceAsync(sendbuff, recvbuff, count, datatype, op, tag, communicator, &reduce_handle);
+    pcclAwaitAsyncReduce(&reduce_handle, reduce_info_out);
     return pcclSuccess;
 }
 
-pcclResult_t pcclAwaitAsyncReduce(const pcclAsyncReduceOp_t *reduce_handle) {
+
+pcclResult_t pcclAwaitAsyncReduce(const pcclAsyncReduceOp_t *reduce_handle,
+                                  pcclReduceInfo_t *PCCL_NULLABLE reduce_info_out) {
     PCCL_VALIDATE_INITIALIZED();
-    return pcclSuccess;
-}
+    PCCL_VALIDATE(reduce_handle != nullptr, pcclInvalidArgument);
+    PCCL_VALIDATE(reduce_handle->comm != nullptr, pcclInvalidArgument);
+    PCCL_VALIDATE(reduce_handle->comm->ccoip_client != nullptr, pcclInvalidUsage);
 
-static std::optional<ccoip_data_type_t> getCCoIPDataType(const pcclDataType_t datatype) {
-    switch (datatype) {
-        case pcclUint8: return ccoipUint8;
-        case pcclUint16: return ccoipUint16;
-        case pcclUint32: return ccoipUint32;
-        case pcclUint64: return ccoipUint64;
-        case pcclInt8: return ccoipInt8;
-        case pcclInt16: return ccoipInt16;
-        case pcclInt32: return ccoipInt32;
-        case pcclInt64: return ccoipInt64;
-        case pcclFloat: return ccoipFloat;
-        case pcclDouble: return ccoipDouble;
+    if (!reduce_handle->comm->ccoip_client->joinAsyncReduce(reduce_handle->tag)) {
+        return pcclInvalidUsage;
     }
-    return std::nullopt;
+
+    if (reduce_info_out != nullptr) {
+        std::optional<ccoip::ccoip_reduce_info_t> info{};
+        if (!reduce_handle->comm->ccoip_client->getAsyncReduceInfo(reduce_handle->tag, info)) [[unlikely]] {
+            return pcclInvalidUsage;
+        }
+
+        if (!info) [[unlikely]] {
+            return pcclInternalError;
+        }
+
+        reduce_info_out->world_size = info->world_size;
+        reduce_info_out->tx_bytes = info->tx_bytes;
+        reduce_info_out->rx_bytes = info->rx_bytes;
+    }
+
+    return pcclSuccess;
 }
 
 pcclResult_t pcclSynchronizeSharedState(const pcclComm_t *communicator, pcclSharedState_t *shared_state,
-                                        pcclSharedStateSyncInfo_t *sync_info_out) {
+                                        pcclSharedStateSyncInfo_t *PCCL_NULLABLE sync_info_out) {
     PCCL_VALIDATE_INITIALIZED();
     PCCL_VALIDATE(communicator != nullptr, pcclInvalidArgument);
     PCCL_VALIDATE(communicator->ccoip_client != nullptr, pcclInvalidUsage);
+
+    // if there are any async collective operations running, we cannot sync the shared state
+    if (communicator->ccoip_client->isAnyCollectiveComsOpRunning()) {
+        return pcclPendingAsyncOps;
+    }
 
     // sync shared state
     ccoip_shared_state_t shared_state_internal{};
@@ -208,10 +254,6 @@ pcclResult_t pcclSynchronizeSharedState(const pcclComm_t *communicator, pcclShar
             .rx_bytes = info.rx_bytes,
         };
     }
-    return pcclSuccess;
-}
-
-pcclResult_t pcclPollSharedState(const pcclComm_t *comm, pcclSharedState_t *shared_state) {
     return pcclSuccess;
 }
 

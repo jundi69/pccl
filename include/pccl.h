@@ -33,6 +33,7 @@ typedef enum pcclResult_t {
     pcclRankConnectionFailed = 10,
     pcclRankConnectionLost = 11,
     pcclNoSharedStateAvailable = 12,
+    pcclPendingAsyncOps = 13
 } pcclResult_t;
 
 typedef enum pcclDataType_t {
@@ -48,7 +49,25 @@ typedef enum pcclDataType_t {
     pcclDouble = 9
 } pcclDataType_t;
 
-size_t pcclDataTypeSize(pcclDataType_t datatype);
+inline size_t pcclDataTypeSize(const pcclDataType_t datatype) {
+    switch (datatype) {
+        case pcclUint8:
+        case pcclInt8:
+            return 1;
+        case pcclUint16:
+            return 2;
+        case pcclUint32:
+        case pcclInt32:
+        case pcclFloat:
+            return 4;
+        case pcclUint64:
+        case pcclInt64:
+        case pcclDouble:
+            return 8;
+        default:
+            return 0;
+    }
+}
 
 typedef enum pcclRedOp_t {
     pcclSum,
@@ -61,6 +80,21 @@ typedef enum pcclRedOp_t {
 typedef enum pcclAttribute_t {
     PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE = 1
 } pcclAttribute_t;
+
+typedef struct pcclCommCreateParams_t {
+    /**
+     * The address of the master node to connect to.
+     */
+    ccoip_socket_address_t master_address;
+
+    /**
+     * The world is split into peer groups, where each peer group is a set of peers that can communicate with each other.
+     * Shared state distribution and collective communications operations will span only across peers in the same peer group.
+     * To allow all peers to communicate with each other, all peers must be in the same peer group, e.g. by setting this to 0.
+     * The peer group is a 32-bit unsigned integer whose identity determines the peer group the client is part of.
+     */
+    uint32_t peer_group;
+} pcclCommCreateParams_t;
 
 typedef struct pcclComm_t pcclComm_t;
 
@@ -106,6 +140,8 @@ typedef struct pcclSharedStateSyncInfo_t {
 
 typedef struct pcclMasterInstanceState_t pcclMasterInstance_t;
 
+#define PCCL_NULLABLE /* nothing */
+
 /**
  * Initializes the pccl library.
  * Must be called before pccl library functions are used.
@@ -114,11 +150,13 @@ PCCL_EXPORT pcclResult_t pcclInit();
 
 /**
  * Creates a new communicator.
+ * @param params Parameters to create the communicator with.
  * @param comm_out Pointer to the communicator to be created.
  * @return @code pcclSuccess@endcode if the communicator was created successfully.
  * @return @code pcclNotInitialized@endcode if @code pcclInit@endcode has not been called yet.
  */
-PCCL_EXPORT pcclResult_t pcclCreateCommunicator(pcclComm_t **comm_out);
+PCCL_EXPORT pcclResult_t pcclCreateCommunicator(const pcclCommCreateParams_t *params,
+                                                pcclComm_t **comm_out);
 
 /**
  * Gets an attribute of a communicator.
@@ -168,13 +206,12 @@ PCCL_EXPORT pcclResult_t pcclDestroyCommunicator(pcclComm_t *communicator);
  * This function must be called on a communicator for the communicator to be usable.
  *
  * @param communicator The communicator to connect to the master node.
- * @param socket_address The address of the master node to connect to.
  *
  * @return @code pcclSuccess@endcode if the connection was established successfully.
  * @return @code pcclInvalidArgument@endcode if the communicator is null.
  * @return @code pcclInvalidUsage@endcode if the communicator is already connected to a master node.
  */
-PCCL_EXPORT pcclResult_t pcclConnect(pcclComm_t *communicator, ccoip_socket_address_t socket_address);
+PCCL_EXPORT pcclResult_t pcclConnect(pcclComm_t *communicator);
 
 /**
  * Update the topology of a communicator if required.
@@ -211,7 +248,7 @@ PCCL_EXPORT pcclResult_t pcclUpdateTopology(pcclComm_t *communicator);
  */
 PCCL_EXPORT pcclResult_t pcclAllReduce(const void *sendbuff, void *recvbuff, size_t count, pcclDataType_t datatype,
                                        pcclRedOp_t op, uint64_t tag, const pcclComm_t *communicator,
-                                       pcclReduceInfo_t *reduce_info_out);
+                                       pcclReduceInfo_t *PCCL_NULLABLE reduce_info_out);
 
 /**
 * Performs an all reduce operation on a communicator. Async version of @code pcclAllReduce@endcode.
@@ -223,7 +260,6 @@ PCCL_EXPORT pcclResult_t pcclAllReduce(const void *sendbuff, void *recvbuff, siz
 * @param op The reduction operation to perform.
 * @param tag The tag to identify the operation.
 * @param communicator The communicator to perform the operation on.
-* @param reduce_info_out The reduce info to be filled with information about the operation.
 * @param reduce_handle_out The reduce op handle to be filled with an async handle to the operation.
 *
 * @return @code pcclSuccess@endcode if the all reduce operation was successful.
@@ -234,18 +270,18 @@ PCCL_EXPORT pcclResult_t pcclAllReduce(const void *sendbuff, void *recvbuff, siz
 */
 PCCL_EXPORT pcclResult_t pcclAllReduceAsync(const void *sendbuff, void *recvbuff, size_t count, pcclDataType_t datatype,
                                             pcclRedOp_t op, uint64_t tag, const pcclComm_t *communicator,
-                                            pcclReduceInfo_t *reduce_info_out,
                                             pcclAsyncReduceOp_t *reduce_handle_out);
 
 /**
  * Awaits the completion of an async reduce operation. Blocks until the operation is complete.
  *
  * @param reduce_handle The handle to the async reduce operation.
+ * @param reduce_info_out The reduce info to be filled with information about the operation.
  *
  * @return @code pcclSuccess@endcode if the async reduce operation was successful.
  * @return @code pcclInvalidArgument@endcode if the reduce handle is null or invalid.
  */
-PCCL_EXPORT pcclResult_t pcclAwaitAsyncReduce(const pcclAsyncReduceOp_t *reduce_handle);
+PCCL_EXPORT pcclResult_t pcclAwaitAsyncReduce(const pcclAsyncReduceOp_t *reduce_handle, pcclReduceInfo_t *PCCL_NULLABLE reduce_info_out);
 
 /**
  * Synchronizes the shared state between all peers that are currently accepted.
@@ -257,7 +293,7 @@ PCCL_EXPORT pcclResult_t pcclAwaitAsyncReduce(const pcclAsyncReduceOp_t *reduce_
  */
 PCCL_EXPORT pcclResult_t pcclSynchronizeSharedState(const pcclComm_t *communicator,
                                                     pcclSharedState_t *shared_state,
-                                                    pcclSharedStateSyncInfo_t *sync_info_out);
+                                                    pcclSharedStateSyncInfo_t *PCCL_NULLABLE sync_info_out);
 
 /**
  * Creates a master node handle.

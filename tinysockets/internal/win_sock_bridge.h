@@ -16,6 +16,8 @@
 
 #define MSG_NOSIGNAL 0
 
+typedef long long int ssize_t;
+
 inline uint64_t net_u64_to_host(const uint64_t net_long)
 {
     return ntohll(net_long);

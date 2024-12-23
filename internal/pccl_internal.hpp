@@ -24,4 +24,9 @@ struct pcclRankInfo_t {
 
 struct pcclComm_t {
     std::unique_ptr<ccoip::CCoIPClient> ccoip_client;
+
+    pcclCommCreateParams_t params;
+
+    explicit pcclComm_t(const pcclCommCreateParams_t &params) : params(params) {
+    }
 };

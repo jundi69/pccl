@@ -60,8 +60,11 @@ tinysockets::BlockingIOSocket::BlockingIOSocket(const ccoip_socket_address_t &ad
     connect_sockaddr(address) {
 }
 
+tinysockets::BlockingIOSocket::BlockingIOSocket(const int socket_fd) : socket_fd(socket_fd), connect_sockaddr() {
+}
+
 bool tinysockets::BlockingIOSocket::establishConnection() {
-    if (socket_fd != 0) [[unlikely]] {
+    if (socket_fd != 0) {
         return false;
     }
     socket_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -120,7 +123,7 @@ bool tinysockets::BlockingIOSocket::establishConnection() {
 }
 
 bool tinysockets::BlockingIOSocket::closeConnection() {
-    if (socket_fd == 0) [[unlikely]] {
+    if (socket_fd == 0) {
         return false;
     }
     closesocket(socket_fd);
