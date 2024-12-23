@@ -10,7 +10,9 @@
 #include <span>
 #include <vector>
 #include <mutex>
+#include <atomic>
 #include <condition_variable>
+#include <netinet/in.h>
 
 #include <pccl/common/cast_utils.hpp>
 
@@ -156,7 +158,6 @@ namespace tinysockets {
                                          const PacketWriteBuffer &buffer);
     };
 
-
     class BlockingIOSocket final {
         int socket_fd;
         ccoip_socket_address_t connect_sockaddr;
@@ -177,6 +178,8 @@ namespace tinysockets {
 
     public:
         explicit BlockingIOSocket(const ccoip_socket_address_t &address);
+
+        explicit BlockingIOSocket(int socket_fd);
 
         BlockingIOSocket(const BlockingIOSocket &other) = delete;
 
@@ -374,5 +377,59 @@ namespace tinysockets {
             }
             return packet;
         }
+    };
+
+    using BlockingServerSocketJoinCallback = std::function<void(const ccoip_socket_address_t &, std::unique_ptr<BlockingIOSocket> &)>;
+
+    class BlockingIOServerSocket final {
+    private:
+        ccoip_socket_address_t listen_address;
+        bool bump_port_on_failure;
+        std::thread server_thread;
+
+        bool bound = false;
+        bool interrupted = false;
+        std::atomic<bool> running{false};
+
+        int socket_fd;
+
+        BlockingServerSocketJoinCallback join_callback = nullptr;
+
+    public:
+        /// binds to the specified socket address
+        explicit BlockingIOServerSocket(const ccoip_socket_address_t &listen_address);
+
+        /// bind to any free port above the given port
+        explicit BlockingIOServerSocket(const ccoip_inet_address_t &inet_address, uint16_t above_port);
+
+        BlockingIOServerSocket(const BlockingIOServerSocket &other) = delete;
+
+        BlockingIOServerSocket(BlockingIOServerSocket &&other) = delete;
+
+        BlockingIOServerSocket &operator=(const BlockingIOServerSocket &other) = delete;
+
+        BlockingIOServerSocket &operator=(BlockingIOServerSocket &&other) = delete;
+
+        /// Returns false if already bound or if listen_address is invalid
+        [[nodiscard]] bool listen();
+
+        /// Returns false if already running
+        [[nodiscard]] bool runAsync();
+
+        /// Returns false if not running
+        [[nodiscard]] bool interrupt();
+
+        /// Wait for the server thread to exit
+        void join();
+
+        /// Sets the callback to be called when a client joins
+        void setJoinCallback(const BlockingServerSocketJoinCallback &callback);
+
+        /// Returns the port the server is listening on; returns 0 if not listening
+        [[nodiscard]] uint16_t getListenPort() const;
+
+    private:
+        /// Called when a new connection is established
+        void onNewConnection(int client_socket, sockaddr_in sockaddr_in) const;
     };
 };

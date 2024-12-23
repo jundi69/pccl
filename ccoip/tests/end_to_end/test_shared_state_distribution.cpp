@@ -18,6 +18,7 @@ static void establishConnections(const std::vector<const ccoip::CCoIPClient *> &
             ++clients_connected;
             while (clients_connected < n_clients) {
                 ASSERT_TRUE(client->acceptNewPeers());
+                ASSERT_TRUE(client->updateTopology());
                 std::this_thread::sleep_for(std::chrono::milliseconds(150));
             }
         });

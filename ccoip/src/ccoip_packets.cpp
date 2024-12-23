@@ -34,6 +34,9 @@ ccoip::packetId_t ccoip::C2MPacketAcceptNewPeers::packet_id = C2M_PACKET_ACCEPT_
 // C2MPacketP2PConnectionsEstablished
 ccoip::packetId_t ccoip::C2MPacketP2PConnectionsEstablished::packet_id = C2M_PACKET_P2P_CONNECTIONS_ESTABLISHED_ID;
 
+// C2MPacketGetTopologyRequest
+ccoip::packetId_t ccoip::C2MPacketGetTopologyRequest::packet_id = C2M_PACKET_GET_TOPOLOGY_REQUEST_ID;
+
 // C2MPacketSyncSharedState
 ccoip::packetId_t ccoip::C2MPacketSyncSharedState::packet_id = C2M_PACKET_SYNC_SHARED_STATE_ID;
 
@@ -182,6 +185,27 @@ bool ccoip::M2CPacketNewPeers::deserialize(PacketReadBuffer &buffer) {
     return true;
 }
 
+// M2CPacketGetTopologyResponse
+ccoip::packetId_t ccoip::M2CPacketGetTopologyResponse::packet_id = M2C_PACKET_GET_TOPOLOGY_RESPONSE_ID;
+
+void ccoip::M2CPacketGetTopologyResponse::serialize(PacketWriteBuffer &buffer) const {
+    buffer.write<uint64_t>(ring_reduce_order.size());
+    for (const auto &uuid: ring_reduce_order) {
+        buffer.writeFixedArray(uuid.data);
+    }
+}
+
+bool ccoip::M2CPacketGetTopologyResponse::deserialize(PacketReadBuffer &buffer) {
+    const auto n_peers = buffer.read<uint64_t>();
+    ring_reduce_order.reserve(n_peers);
+    for (size_t i = 0; i < n_peers; i++) {
+        ccoip_uuid_t uuid{};
+        uuid.data = buffer.readFixedArray<uint8_t, CCOIP_UUID_N_BYTES>();
+        ring_reduce_order.push_back(uuid);
+    }
+    return true;
+}
+
 // M2CPacketSyncSharedState
 ccoip::packetId_t ccoip::M2CPacketSyncSharedState::packet_id = M2C_PACKET_SYNC_SHARED_STATE_ID;
 
@@ -236,9 +260,43 @@ bool ccoip::M2CPacketCollectiveCommsComplete::deserialize(PacketReadBuffer &buff
     return true;
 }
 
+// P2PPacketHello
+ccoip::packetId_t ccoip::P2PPacketHello::packet_id = P2P_PACKET_HELLO_ID;
+
+void ccoip::P2PPacketHello::serialize(PacketWriteBuffer &buffer) const {
+    buffer.writeFixedArray(peer_uuid.data);
+}
+
+bool ccoip::P2PPacketHello::deserialize(PacketReadBuffer &buffer) {
+    peer_uuid.data = buffer.readFixedArray<uint8_t, CCOIP_UUID_N_BYTES>();
+    return true;
+}
+
 // M2CPacketSyncSharedStateComplete
 ccoip::packetId_t ccoip::M2CPacketSyncSharedStateComplete::packet_id = M2C_PACKET_SYNC_SHARED_STATE_COMPLETE_ID;
 
+// P2PPacketReduceTerm
+ccoip::packetId_t ccoip::P2PPacketReduceTerm::packet_id = P2P_PACKET_REDUCE_TERM_ID;
+
+void ccoip::P2PPacketReduceTerm::serialize(PacketWriteBuffer &buffer) const {
+    buffer.write<uint64_t>(tag);
+    buffer.write<boolean>(is_reduce);
+    buffer.write<uint64_t>(data.size_bytes());
+    buffer.writeContents(reinterpret_cast<const uint8_t *>(data.data()), data.size_bytes());
+}
+
+bool ccoip::P2PPacketReduceTerm::deserialize(PacketReadBuffer &buffer) {
+    tag = buffer.read<uint64_t>();
+    is_reduce = buffer.read<boolean>();
+    const auto length = buffer.read<uint64_t>();
+    if (length > buffer.remaining()) {
+        return false;
+    }
+    dst_ptr = std::unique_ptr<std::byte[]>(new std::byte[length]);
+    data = std::span(dst_ptr.get(), length);
+    buffer.readContents(reinterpret_cast<uint8_t *>(dst_ptr.get()), length);
+    return true;
+}
 
 // C2SPacketRequestSharedState
 void ccoip::C2SPacketRequestSharedState::serialize(PacketWriteBuffer &buffer) const {
@@ -305,9 +363,6 @@ ccoip::packetId_t ccoip::M2CPacketNewPeers::packet_id = M2C_PACKET_NEW_PEERS_ID;
 
 // M2CPacketP2PConnectionsEstablished
 ccoip::packetId_t ccoip::M2CPacketP2PConnectionsEstablished::packet_id = M2C_PACKET_P2P_CONNECTIONS_ESTABLISHED_ID;
-
-// P2PPacketHello
-ccoip::packetId_t ccoip::P2PPacketHello::packet_id = P2P_PACKET_HELLO_ID;
 
 // P2PPacketHelloAck
 ccoip::packetId_t ccoip::P2PPacketHelloAck::packet_id = P2P_PACKET_HELLO_ACK_ID;

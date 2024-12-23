@@ -27,6 +27,7 @@ TEST(AcceptNewPeers, TestBasic) {
     std::thread client1_thread([&client1] {
         while (!client1.isInterrupted()) {
             ASSERT_TRUE(client1.acceptNewPeers());
+            ASSERT_TRUE(client1.updateTopology());
             std::this_thread::sleep_for(std::chrono::seconds(1));
         }
     });

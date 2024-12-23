@@ -81,6 +81,10 @@ void ccoip::CCoIPMasterHandler::onClientRead(const ccoip_socket_address_t &clien
         C2MPacketP2PConnectionsEstablished packet{};
         packet.deserialize(buffer);
         handleP2PConnectionsEstablished(client_address, packet);
+    } else if (packet_type == C2MPacketGetTopologyRequest::packet_id) {
+        C2MPacketGetTopologyRequest packet{};
+        packet.deserialize(buffer);
+        handleGetTopologyRequest(client_address, packet);
     } else if (packet_type == C2MPacketSyncSharedState::packet_id) {
         C2MPacketSyncSharedState packet{};
         if (!packet.deserialize(buffer)) {
@@ -449,6 +453,35 @@ void ccoip::CCoIPMasterHandler::handleP2PConnectionsEstablished(const ccoip_sock
     }
 
     checkP2PConnectionsEstablished();
+}
+
+void ccoip::CCoIPMasterHandler::handleGetTopologyRequest(const ccoip_socket_address_t &client_address,
+                                                         const C2MPacketGetTopologyRequest &) {
+    THREAD_GUARD(server_thread_id);
+    LOG(DEBUG) << "Received C2MPacketGetTopologyRequest from " << ccoip_sockaddr_to_str(client_address);
+
+    // TODO: implement real topology optimization,
+    //  for now we assert ring reduce and return the ring order to be ascending order of client uuids
+    std::vector<ccoip_uuid_t> topology{};
+    for (const auto &[peer_uuid, _]: server_state.getClientEntrySet()) {
+        topology.push_back(peer_uuid);
+    }
+    std::ranges::sort(topology, [](const ccoip_uuid_t &a, const ccoip_uuid_t &b) {
+        int cmp = 0;
+        for (size_t i = 0; i < CCOIP_UUID_N_BYTES; i++) {
+            cmp = a.data[i] - b.data[i];
+            if (cmp != 0) {
+                return cmp < 0;
+            }
+        }
+        return false;
+    });
+
+    M2CPacketGetTopologyResponse response{};
+    response.ring_reduce_order = topology;
+    if (!server_socket.sendPacket<M2CPacketGetTopologyResponse>(client_address, response)) {
+        LOG(ERR) << "Failed to send M2CPacketTopologyResponse to " << ccoip_sockaddr_to_str(client_address);
+    }
 }
 
 void ccoip::CCoIPMasterHandler::handleSyncSharedState(const ccoip_socket_address_t &client_address,

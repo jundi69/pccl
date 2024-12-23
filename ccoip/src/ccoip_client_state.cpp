@@ -19,6 +19,14 @@ bool ccoip::CCoIPClientState::unregisterPeer(const ccoip_socket_address_t &addre
     return true;
 }
 
+void ccoip::CCoIPClientState::setAssignedUUID(const ccoip_uuid_t &new_assigned_uuid) {
+    assigned_uuid = new_assigned_uuid;
+}
+
+const ccoip_uuid_t & ccoip::CCoIPClientState::getAssignedUUID() const {
+    return assigned_uuid;
+}
+
 void ccoip::CCoIPClientState::beginSyncSharedStatePhase(const ccoip_shared_state_t &shared_state) {
     current_shared_state = shared_state;
     is_syncing_shared_state = true;
@@ -86,6 +94,10 @@ std::optional<bool> ccoip::CCoIPClientState::hasCollectiveComsOpFailed(const uin
     return std::nullopt;
 }
 
+const ccoip_shared_state_t & ccoip::CCoIPClientState::getCurrentSharedState() const {
+    return current_shared_state;
+}
+
 
 size_t ccoip::CCoIPClientState::getSharedStateSyncTxBytes() const {
     return shared_state_sync_tx_bytes;
@@ -97,4 +109,8 @@ void ccoip::CCoIPClientState::trackSharedStateTxBytes(const size_t tx_bytes) {
 
 void ccoip::CCoIPClientState::resetSharedStateSyncTxBytes() {
     shared_state_sync_tx_bytes = 0;
+}
+
+void ccoip::CCoIPClientState::updateTopology(const std::vector<ccoip_uuid_t> &new_ring_order) {
+    ring_order = new_ring_order;
 }

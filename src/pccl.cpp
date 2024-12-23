@@ -81,7 +81,7 @@ pcclResult_t pcclConnect(pcclComm_t *communicator) {
     PCCL_VALIDATE(communicator->ccoip_client == nullptr, pcclInvalidUsage);
     communicator->ccoip_client = std::make_unique<ccoip::CCoIPClient>(communicator->params.master_address,
                                                                       communicator->params.peer_group);
-    if (!communicator->ccoip_client->connect()) [[unlikely]] {
+    if (!communicator->ccoip_client->connect()) {
         if (!communicator->ccoip_client->interrupt()) [[unlikely]] {
             return pcclInternalError;
         }
@@ -89,6 +89,9 @@ pcclResult_t pcclConnect(pcclComm_t *communicator) {
             return pcclInternalError;
         }
         return pcclInvalidUsage;
+    }
+    if (!communicator->ccoip_client->updateTopology()) [[unlikely]] {
+        return pcclMasterConnectionFailed;
     }
     return pcclSuccess;
 }

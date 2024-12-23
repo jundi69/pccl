@@ -2,6 +2,7 @@
 
 #include <ccoip_inet.h>
 #include <ccoip_inet_utils.hpp>
+#include <ccoip_packets.hpp>
 #include <ccoip_shared_state.hpp>
 #include <ccoip_types.hpp>
 #include <future>
@@ -12,6 +13,9 @@
 
 namespace ccoip {
     class CCoIPClientState {
+        /// UUID assigned to this client by the master
+        ccoip_uuid_t assigned_uuid{};
+
         /// Maps p2p listen socket addresses of respective clients to their UUID assigned by the master.
         /// Populated by @code registerPeer()@endcode when this peer establishes a p2p connection to said p2p listen socket address.
         /// Cleared by @code unregisterPeer()@endcode when a client is no longer needed due to topology changes.
@@ -46,12 +50,22 @@ namespace ccoip {
         /// true=success, false=failure
         std::unordered_map<uint64_t, std::promise<bool> > running_reduce_tasks_promises{};
 
+        // TODO: THIS IS SUBJECT TO CHANGE AND A TEMPORARY HACK!!
+        //  FOR NOW ASSERT THE TOPOLOGY TO BE A SIMPLE RING REDUCE WITH A NON-PIPELINED ORDER
+        std::vector<ccoip_uuid_t> ring_order;
+
     public:
         /// Called to register a peer with the client state
         [[nodiscard]] bool registerPeer(const ccoip_socket_address_t &address, ccoip_uuid_t uuid);
 
         /// Called to unregister a peer with the client state
         [[nodiscard]] bool unregisterPeer(const ccoip_socket_address_t &address);
+
+        /// Sets the uuid assigned to this client by the master
+        void setAssignedUUID(const ccoip_uuid_t &new_assigned_uuid);
+
+        /// Returns the uuid assigned to this client by the master
+        [[nodiscard]] const ccoip_uuid_t &getAssignedUUID() const;
 
         /// Begins the shared state synchronization phase.
         /// On the client side, this means that we are either already in the shared state sync phase after
@@ -91,9 +105,7 @@ namespace ccoip {
         [[nodiscard]] std::optional<bool> hasCollectiveComsOpFailed(uint64_t tag);
 
         /// Returns the currently synced shared state
-        [[nodiscard]] const ccoip_shared_state_t &getCurrentSharedState() const {
-            return current_shared_state;
-        }
+        [[nodiscard]] const ccoip_shared_state_t &getCurrentSharedState() const;
 
         /// Returns the number of bytes sent during the shared state sync phase
         [[nodiscard]] size_t getSharedStateSyncTxBytes() const;
@@ -103,5 +115,13 @@ namespace ccoip {
 
         /// Resets the number of bytes sent during the shared state sync phase
         void resetSharedStateSyncTxBytes();
+
+        // TODO: THIS IS SUBJECT TO CHANGE, FOR NOW ASSERT THE TOPOLOGY TO BE A SIMPLE RING REDUCE WITH A NON-PIPELINED ORDER
+        void updateTopology(const std::vector<ccoip_uuid_t> &new_ring_order);
+
+        // TODO: THIS IS SUBJECT TO CHANGE, FOR NOW ASSERT THE TOPOLOGY TO BE A SIMPLE RING REDUCE WITH A NON-PIPELINED ORDER
+        [[nodiscard]] const std::vector<ccoip_uuid_t> &getRingOrder() const {
+            return ring_order;
+        }
     };
 };

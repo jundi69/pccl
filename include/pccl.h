@@ -206,7 +206,6 @@ PCCL_EXPORT pcclResult_t pcclDestroyCommunicator(pcclComm_t *communicator);
  * This function must be called on a communicator for the communicator to be usable.
  *
  * @param communicator The communicator to connect to the master node.
- * @param socket_address The address of the master node to connect to.
  *
  * @return @code pcclSuccess@endcode if the connection was established successfully.
  * @return @code pcclInvalidArgument@endcode if the communicator is null.

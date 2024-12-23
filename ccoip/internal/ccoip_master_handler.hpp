@@ -64,6 +64,9 @@ namespace ccoip {
         void handleP2PConnectionsEstablished(const ccoip_socket_address_t &client_address,
                                              const C2MPacketP2PConnectionsEstablished &packet);
 
+        void handleGetTopologyRequest(const ccoip_socket_address_t &client_address,
+                                      const C2MPacketGetTopologyRequest &packet);
+
         void handleSyncSharedState(const ccoip_socket_address_t &client_address,
                                    const C2MPacketSyncSharedState &packet);
 
