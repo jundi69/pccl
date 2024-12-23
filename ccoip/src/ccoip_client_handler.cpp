@@ -12,7 +12,7 @@
 #include <reduce_kernels.hpp>
 
 ccoip::CCoIPClientHandler::CCoIPClientHandler(const ccoip_socket_address_t &address,
-                                              uint32_t peer_group) : master_socket(address),
+                                              const uint32_t peer_group) : master_socket(address),
                                                                      // Both p2p_socket and shared_state_socket listen to the first free port above the specified port number
                                                                      // as the constructor with inet_addr and above_port is called, which will bump on failure to bind.
                                                                      // this is by design and the chosen ports will be communicated to the master, which will then distribute

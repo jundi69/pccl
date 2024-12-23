@@ -411,6 +411,8 @@ namespace tinysockets {
 
         BlockingIOServerSocket &operator=(BlockingIOServerSocket &&other) = delete;
 
+        ~BlockingIOServerSocket();
+
         /// Returns false if already bound or if listen_address is invalid
         [[nodiscard]] bool listen();
 

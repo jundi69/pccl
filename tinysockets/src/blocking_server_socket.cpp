@@ -17,6 +17,17 @@ tinysockets::BlockingIOServerSocket::BlockingIOServerSocket(const ccoip_inet_add
       socket_fd(0) {
 }
 
+tinysockets::BlockingIOServerSocket::~BlockingIOServerSocket() {
+    if (running) {
+        if (!interrupt()) [[unlikely]] {
+            LOG(ERR) << "Failed to interrupt BlockingIOServerSocket from destructor";
+        }
+        join();
+    } else if (bound && socket_fd != 0) {
+        closesocket(socket_fd);
+    }
+}
+
 bool tinysockets::BlockingIOServerSocket::listen() {
     if (bound) {
         return false;
@@ -109,6 +120,7 @@ bool tinysockets::BlockingIOServerSocket::interrupt() {
 
     // Closing the socket will unblock the accept() call
     closesocket(socket_fd);
+    socket_fd = 0;
     return true;
 }
 
