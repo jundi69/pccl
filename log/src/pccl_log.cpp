@@ -25,7 +25,6 @@ const char *ToString(const LogLevel level) {
 
 static LogLevel readReportingLevel() {
     const char *logLevel = getenv("PCCL_LOG_LEVEL");
-    return DEBUG;
 
     if (logLevel == nullptr) {
         return NONE;
