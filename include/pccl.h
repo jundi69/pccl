@@ -33,6 +33,7 @@ typedef enum pcclResult_t {
     pcclRankConnectionFailed = 10,
     pcclRankConnectionLost = 11,
     pcclNoSharedStateAvailable = 12,
+    pcclPendingAsyncOps = 13
 } pcclResult_t;
 
 typedef enum pcclDataType_t {

@@ -126,6 +126,11 @@ pcclResult_t pcclUpdateTopology(pcclComm_t *communicator) {
     PCCL_VALIDATE(communicator != nullptr, pcclInvalidArgument);
     PCCL_VALIDATE(communicator->ccoip_client != nullptr, pcclInvalidUsage);
 
+    // if there are any async collective operations running, we cannot update the topology
+    if (communicator->ccoip_client->isAnyCollectiveComsOpRunning()) {
+        return pcclPendingAsyncOps;
+    }
+
     // accept new peers; this will block until we have a valid connection to each peer
     if (!communicator->ccoip_client->acceptNewPeers()) {
         return pcclInvalidUsage;
@@ -214,6 +219,11 @@ pcclResult_t pcclSynchronizeSharedState(const pcclComm_t *communicator, pcclShar
     PCCL_VALIDATE(communicator != nullptr, pcclInvalidArgument);
     PCCL_VALIDATE(communicator->ccoip_client != nullptr, pcclInvalidUsage);
 
+    // if there are any async collective operations running, we cannot sync the shared state
+    if (communicator->ccoip_client->isAnyCollectiveComsOpRunning()) {
+        return pcclPendingAsyncOps;
+    }
+
     // sync shared state
     ccoip_shared_state_t shared_state_internal{};
     shared_state_internal.revision = shared_state->revision;
@@ -241,10 +251,6 @@ pcclResult_t pcclSynchronizeSharedState(const pcclComm_t *communicator, pcclShar
             .rx_bytes = info.rx_bytes,
         };
     }
-    return pcclSuccess;
-}
-
-pcclResult_t pcclPollSharedState(const pcclComm_t *comm, pcclSharedState_t *shared_state) {
     return pcclSuccess;
 }
 

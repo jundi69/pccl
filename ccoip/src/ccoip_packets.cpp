@@ -72,21 +72,33 @@ ccoip::packetId_t ccoip::C2MPacketDistSharedStateComplete::packet_id = C2M_PACKE
 ccoip::packetId_t ccoip::M2CPacketSessionRegistrationResponse::packet_id = M2C_PACKET_SESSION_REGISTRATION_RESPONSE_ID;
 
 
-// C2MPacketAllReduceInitiate
-ccoip::packetId_t ccoip::C2MPacketAllReduceInitiate::packet_id = C2M_PACKET_ALL_REDUCE_INITIATE_ID;
+// C2MPacketCollectiveCommsInitiate
+ccoip::packetId_t ccoip::C2MPacketCollectiveCommsInitiate::packet_id = C2M_PACKET_COLLECTIVE_COMMS_INITIATE_ID;
 
-void ccoip::C2MPacketAllReduceInitiate::serialize(PacketWriteBuffer &buffer) const {
+void ccoip::C2MPacketCollectiveCommsInitiate::serialize(PacketWriteBuffer &buffer) const {
     buffer.write<uint64_t>(tag);
     buffer.write<uint64_t>(count);
     buffer.write<uint8_t>(static_cast<uint8_t>(data_type));
     buffer.write<uint8_t>(static_cast<uint8_t>(op));
 }
 
-bool ccoip::C2MPacketAllReduceInitiate::deserialize(PacketReadBuffer &buffer) {
+bool ccoip::C2MPacketCollectiveCommsInitiate::deserialize(PacketReadBuffer &buffer) {
     tag = buffer.read<uint64_t>();
     count = buffer.read<uint64_t>();
     data_type = static_cast<ccoip_data_type_t>(buffer.read<uint8_t>());
     op = static_cast<ccoip_reduce_op_t>(buffer.read<uint8_t>());
+    return true;
+}
+
+// C2MPacketCollectiveCommsComplete
+ccoip::packetId_t ccoip::C2MPacketCollectiveCommsComplete::packet_id = C2M_PACKET_COLLECTIVE_COMMS_COMPLETE_ID;
+
+void ccoip::C2MPacketCollectiveCommsComplete::serialize(PacketWriteBuffer &buffer) const {
+    buffer.write<uint64_t>(tag);
+}
+
+bool ccoip::C2MPacketCollectiveCommsComplete::deserialize(PacketReadBuffer &buffer) {
+    tag = buffer.read<uint64_t>();
     return true;
 }
 
@@ -200,14 +212,26 @@ bool ccoip::M2CPacketSyncSharedState::deserialize(PacketReadBuffer &buffer) {
     return true;
 }
 
-// M2CPacketAllReduceCommence
-ccoip::packetId_t ccoip::M2CPacketAllReduceCommence::packet_id = M2C_PACKET_ALL_REDUCE_COMMENCE_ID;
+// M2CPacketCollectiveCommsCommence
+ccoip::packetId_t ccoip::M2CPacketCollectiveCommsCommence::packet_id = M2C_PACKET_COLLECTIVE_COMMS_COMMENCE_ID;
 
-void ccoip::M2CPacketAllReduceCommence::serialize(PacketWriteBuffer &buffer) const {
+void ccoip::M2CPacketCollectiveCommsCommence::serialize(PacketWriteBuffer &buffer) const {
     buffer.write<uint64_t>(tag);
 }
 
-bool ccoip::M2CPacketAllReduceCommence::deserialize(PacketReadBuffer &buffer) {
+bool ccoip::M2CPacketCollectiveCommsCommence::deserialize(PacketReadBuffer &buffer) {
+    tag = buffer.read<uint64_t>();
+    return true;
+}
+
+// M2CPacketCollectiveCommsComplete
+ccoip::packetId_t ccoip::M2CPacketCollectiveCommsComplete::packet_id = M2C_PACKET_COLLECTIVE_COMMS_COMPLETE_ID;
+
+void ccoip::M2CPacketCollectiveCommsComplete::serialize(PacketWriteBuffer &buffer) const {
+    buffer.write<uint64_t>(tag);
+}
+
+bool ccoip::M2CPacketCollectiveCommsComplete::deserialize(PacketReadBuffer &buffer) {
     tag = buffer.read<uint64_t>();
     return true;
 }

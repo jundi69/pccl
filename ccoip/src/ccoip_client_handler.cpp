@@ -97,16 +97,6 @@ bool ccoip::CCoIPClientHandler::connect() {
     return true;
 }
 
-// establishP2PConnection:
-// establish socket connection
-// send hello packet
-// expect hello ack
-// mark connection as tx side open (tx side = our connection to the other listening party)
-
-// on p2p listen socket, on accept, wait for hello packet and reply hello ack
-// the uuid it is transmitted in the hello, we verify the ip against what the master told
-// us the ip of the peer is, and then we mark the connection as rx side open (rx side = their connection to us listening)
-
 bool ccoip::CCoIPClientHandler::acceptNewPeers() {
     if (!connected) {
         LOG(WARN) <<
@@ -117,6 +107,10 @@ bool ccoip::CCoIPClientHandler::acceptNewPeers() {
     if (!master_socket.isOpen()) {
         LOG(ERR) <<
                 "Failed to sync shared state: Client socket has been closed; This may mean the client was kicked by the master";
+        return false;
+    }
+
+    if (client_state.isAnyCollectiveComsOpRunning()) {
         return false;
     }
 
@@ -142,6 +136,10 @@ bool ccoip::CCoIPClientHandler::syncSharedState(ccoip_shared_state_t &shared_sta
     if (!master_socket.isOpen()) {
         LOG(ERR) <<
                 "Failed to sync shared state: Client socket has been closed; This may mean the client was kicked by the master";
+        return false;
+    }
+
+    if (client_state.isAnyCollectiveComsOpRunning()) {
         return false;
     }
 
@@ -499,32 +497,52 @@ bool ccoip::CCoIPClientHandler::allReduceAsync(const void *sendbuff, void *recvb
 
     if (!client_state.launchAsyncCollectiveOp(
         tag, [this, sendbuff, recvbuff, count, datatype, op, tag](std::promise<bool> &promise) {
-            C2MPacketAllReduceInitiate packet{};
-            packet.tag = tag;
-            packet.count = count;
-            packet.data_type = datatype;
-            packet.op = op;
-            if (master_socket.sendPacket<C2MPacketAllReduceInitiate>(packet)) {
-                promise.set_value(false); // failure
-                return;
-            }
+            // vote commence collective comms operation and await consensus
+            {
+                C2MPacketCollectiveCommsInitiate initiate_packet{};
+                initiate_packet.tag = tag;
+                initiate_packet.count = count;
+                initiate_packet.data_type = datatype;
+                initiate_packet.op = op;
+                if (!master_socket.sendPacket<C2MPacketCollectiveCommsInitiate>(initiate_packet)) {
+                    promise.set_value(false); // failure
+                    return;
+                }
+                const auto response = master_socket.receiveMatchingPacket<M2CPacketCollectiveCommsCommence>(
+                    [tag](const M2CPacketCollectiveCommsCommence &packet) {
+                        return packet.tag == tag;
+                    });
 
-            // TODO: FIX THE FACT THAT THIS RESPONSE COULD BE FOR A DIFFERENT CONCURRENT ALL REDUCE AND NOT THE ONE WE JUST SENT
-            const auto response = master_socket.receivePacket<M2CPacketAllReduceCommence>();
-            if (!response) {
-                promise.set_value(false); // failure
-                return;
+                if (!response) {
+                    promise.set_value(false); // failure
+                    return;
+                }
             }
 
             // TODO: Implement all reduce
 
+            // vote collective comms operation complete and await consensus
+            {
+                C2MPacketCollectiveCommsComplete complete_packet{};
+                complete_packet.tag = tag;
+                if (!master_socket.sendPacket<C2MPacketCollectiveCommsComplete>(complete_packet)) {
+                    promise.set_value(false); // failure
+                    return;
+                }
+                const auto response = master_socket.receiveMatchingPacket<M2CPacketCollectiveCommsComplete>(
+                    [tag](const M2CPacketCollectiveCommsComplete &packet) {
+                        return packet.tag == tag;
+                    });
+
+                if (!response) {
+                    promise.set_value(false); // failure
+                    return;
+                }
+            }
             promise.set_value(true); // success
         })) [[unlikely]] {
         return false;
     }
-
-    // TODO: FIX THE FACT THAT SUBSEQUENT PCCL CALLS E.G. TO SHARED STATE SYNC MIGHT INTERFERE WITH MASTER COMMUNICATION!
-    //  THESE CALLS NEED TO BLOCK IF THERE IS AN ALL REDUCE GOING ON!
 
     return true;
 }
@@ -546,4 +564,8 @@ bool ccoip::CCoIPClientHandler::joinAsyncReduce(const uint64_t tag) {
 
 bool ccoip::CCoIPClientHandler::getAsyncReduceInfo(const uint64_t tag, std::optional<ccoip_reduce_info_t> &info_out) {
     return true;
+}
+
+bool ccoip::CCoIPClientHandler::isAnyCollectiveComsOpRunning() const {
+    return client_state.isAnyCollectiveComsOpRunning();
 }

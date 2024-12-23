@@ -49,6 +49,10 @@ bool ccoip::CCoIPClient::isInterrupted() const {
     return client->isInterrupted();
 }
 
+bool ccoip::CCoIPClient::isAnyCollectiveComsOpRunning() const {
+    return client->isAnyCollectiveComsOpRunning();
+}
+
 ccoip::CCoIPClient::~CCoIPClient() {
     delete client;
 }

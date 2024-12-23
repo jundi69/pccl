@@ -43,6 +43,7 @@ namespace ccoip {
         /// Maps tags of running collective operation tasks to their respective promises;
         /// These promises are used to signal the completion of the collective operation task
         /// and indicate whether the operation was successful or not.
+        /// true=success, false=failure
         std::unordered_map<uint64_t, std::promise<bool> > running_reduce_tasks_promises{};
 
     public:
@@ -66,6 +67,9 @@ namespace ccoip {
 
         /// Returns true if there is a collective communications operation running with the specified tag
         [[nodiscard]] bool isCollectiveComsOpRunning(uint64_t tag) const;
+
+        /// Returns true if there is any collective communications operation running
+        [[nodiscard]] bool isAnyCollectiveComsOpRunning() const;
 
         /// Declares a collective communications operation with the specified tag started.
         /// Returns false if a collective communications operation with the same tag is already running.

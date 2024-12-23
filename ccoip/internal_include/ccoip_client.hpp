@@ -65,6 +65,9 @@ namespace ccoip {
         /// Returns true if the client has been interrupted
         [[nodiscard]] bool isInterrupted() const;
 
+        /// Returns true if there is any collective communications operation running
+        [[nodiscard]] bool isAnyCollectiveComsOpRunning() const;
+
         ~CCoIPClient();
     };
 };

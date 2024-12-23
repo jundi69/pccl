@@ -5,3 +5,7 @@ target_link_libraries(test_accept_new_peers PRIVATE ccoip_private)
 # test shared state distribution
 add_sanitized_gtest(test_shared_state_distribution test_shared_state_distribution.cpp)
 target_link_libraries(test_shared_state_distribution PRIVATE ccoip_private)
+
+# test all reduce
+add_sanitized_gtest(test_all_reduce test_all_reduce.cpp)
+target_link_libraries(test_all_reduce PRIVATE ccoip_private)

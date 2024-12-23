@@ -37,6 +37,10 @@ bool ccoip::CCoIPClientState::isCollectiveComsOpRunning(const uint64_t tag) cons
     return running_collective_coms_ops_tags.contains(tag);
 }
 
+bool ccoip::CCoIPClientState::isAnyCollectiveComsOpRunning() const {
+    return !running_collective_coms_ops_tags.empty();
+}
+
 bool ccoip::CCoIPClientState::startCollectiveComsOp(const uint64_t tag) {
     if (running_collective_coms_ops_tags.contains(tag)) {
         return false;
@@ -52,7 +56,8 @@ bool ccoip::CCoIPClientState::endCollectiveComsOp(const uint64_t tag) {
     return true;
 }
 
-bool ccoip::CCoIPClientState::launchAsyncCollectiveOp(const uint64_t tag, std::function<void(std::promise<bool> &)> &&task) {
+bool ccoip::CCoIPClientState::launchAsyncCollectiveOp(const uint64_t tag,
+                                                      std::function<void(std::promise<bool> &)> &&task) {
     running_reduce_tasks[tag] = std::move(std::thread([this, tag, task = std::move(task)]() {
         std::promise<bool> &promise = running_reduce_tasks_promises[tag];
         task(promise);
@@ -74,7 +79,8 @@ std::optional<bool> ccoip::CCoIPClientState::hasCollectiveComsOpFailed(const uin
         auto &promise = it->second;
         auto future = promise.get_future();
         if (future.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
-            return !future.get();
+            const bool success = future.get();
+            return success == false;
         }
     }
     return std::nullopt;

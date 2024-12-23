@@ -82,7 +82,44 @@ namespace ccoip {
         /// imply that these clients progress to the next phase! They will wait, as intended for all clients to vote to complete the shared state distribution phase
         /// and while doing so process incoming shared state distribution requests.
         /// After the shared state synchronization phase ends, clients return to the @code IDLE@endcode state.
-        VOTE_COMPLETE_SHARED_STATE_SYNC
+        VOTE_COMPLETE_SHARED_STATE_SYNC,
+
+        /// Because a client can launch multiple concurrent collective communications operations, it is not possible to keep
+        /// track of voting states for each collective communications operation as ConnectionStates, as these are not "per connection",
+        /// but "per tag".
+        /// Tags correspond to exactly one currently active collective communications operation, where active shall mean
+        /// either in the process of voting or in the process of being performed.
+        /// Thus, this state is used to indicate that the client has voted to initiate at least one collective communications operation and
+        /// may or may not be currently in the process of performing one or more collective communications operations after a successful vote.
+        /// As long as there is at least one collective communications operations running, the client will remain in this state.
+        /// New collective communications operation votes can be started when in this state, and votes can be finalized in this state.
+        /// However, in this state, the client cannot transition to any other state until all collective communications operations have completed.
+        /// Because more fine-grained state tracking is required for collective communications operations, the @code CollectiveCommunicationState@endcode enum is used
+        /// to indicate the state of each collective communications operation per tag.
+        COLLECTIVE_COMMUNICATIONS_RUNNING
+    };
+
+    enum CollectiveCommunicationState {
+        /// The client has voted to initiate a collective communications operation with a particular tag.
+        /// In this state, the client waits for all peers to vote to initiate a collective communications operation for this tag.
+        /// After each client has voted to initiate a collective communications operation for this tag, the client will enter the
+        /// @code PERFORM_ALL_REDUCE@endcode state for this tag.
+        /// A client can be in multiple @code AllReduceState@endcode states per tag, one for each collective communications operation.
+        VOTE_INITIATE_COLLECTIVE_COMMS,
+
+        /// When all peers have voted to initiate a collective communications operation for a particular tag, the client will enter the
+        /// @code PERFORM_ALL_REDUCE@endcode state for this tag.
+        /// In this state, clients will perform p2p communication to perform the collective communications operation according to the
+        /// topology defined by the master node.
+        PERFORM_COLLECTIVE_COMMS,
+
+        /// After a peer has performed the work necessary to complete the collective communication operation for itself,
+        /// it will vote to complete the collective communications operation.
+        /// Once all peers have voted to complete the collective communications operation, the collective communications operation
+        /// is considered complete and fully performed by all peers.
+        /// Once all peers have voted to complete the collective communications operation,
+        /// there will be no collective communications state associated with this tag until a new collective communications operation is initiated.
+        VOTE_COMPLETE_COLLECTIVE_COMMS
     };
 
     struct CCoIPClientVariablePorts {
@@ -97,6 +134,8 @@ namespace ccoip {
         ccoip_uuid_t client_uuid{};
         ConnectionPhase connection_phase = PEER_REGISTERED;
         ConnectionState connection_state = IDLE;
+        std::unordered_map<uint64_t, CollectiveCommunicationState> collective_coms_states{};
+
         ccoip_socket_address_t socket_address{};
         CCoIPClientVariablePorts variable_ports{};
         uint32_t peer_group{};
@@ -134,11 +173,11 @@ namespace ccoip {
 
         /// set of all uuids that have voted to synchronize shared state for each peer group.
         /// peer group bin is cleared once shared state distribution consensus is reached.
-        std::unordered_map<uint32_t, std::unordered_set<ccoip_uuid_t>> votes_sync_shared_state{};
+        std::unordered_map<uint32_t, std::unordered_set<ccoip_uuid_t> > votes_sync_shared_state{};
 
         /// set of all uuids that have voted to complete shared state distribution for each peer group.
         /// peer group bin cleared once the shared state distribution phase ends.
-        std::unordered_map<uint32_t, std::unordered_set<ccoip_uuid_t>> votes_sync_shared_state_complete{};
+        std::unordered_map<uint32_t, std::unordered_set<ccoip_uuid_t> > votes_sync_shared_state_complete{};
 
         /// Flag to indicate if the peer list has changed
         /// See @code hasPeerListChanged@endcode
@@ -151,12 +190,12 @@ namespace ccoip {
         /// Mismatch of a hash results will result in the client being notified to re-request the shared state entry
         /// whose hash does not match.
         /// peer group bin cleared once the shared state distribution phase ends.
-        std::unordered_map<uint32_t, std::vector<SharedStateHashEntry>> shared_state_mask{};
+        std::unordered_map<uint32_t, std::vector<SharedStateHashEntry> > shared_state_mask{};
 
         /// Cache of the shared state hashes for all entries in the shared state mask for each peer group.
         /// by their key string.
         /// peer group bin cleared when the shared state distribution phase ends.
-        std::unordered_map<uint32_t, std::unordered_map<std::string, uint64_t>> shared_state_hashes{};
+        std::unordered_map<uint32_t, std::unordered_map<std::string, uint64_t> > shared_state_hashes{};
 
         /// The revision of the current shared state.
         /// If a client requests to sync a shared state with a revision smaller than this,
@@ -173,16 +212,17 @@ namespace ccoip {
         /// Maps the client UUID to the shared state mismatch status populated by the last invocation of @code sharedStateMatches@endcode.
         /// Grouped by peer group.
         /// peer group bin cleared when the shared state distribution phase ends.
-        std::unordered_map<uint32_t, std::unordered_map<ccoip_uuid_t, SharedStateMismatchStatus>> shared_state_statuses{};
+        std::unordered_map<uint32_t, std::unordered_map<ccoip_uuid_t, SharedStateMismatchStatus> >
+        shared_state_statuses{};
 
         /// Maps the client UUID to the set of shared state keys that have dirty content, meaning
         /// that the hash of the shared state entry does not match the hash in the shared state mask.
         /// Grouped by peer group.
         /// peer group bin cleared when the shared state distribution phase ends.
-        std::unordered_map<uint32_t, std::unordered_map<ccoip_uuid_t, std::vector<std::string>>> shared_state_dirty_keys{};
+        std::unordered_map<uint32_t, std::unordered_map<ccoip_uuid_t, std::vector<std::string> > >
+        shared_state_dirty_keys{};
 
     public:
-
         /// Registers a client
         [[nodiscard]] auto registerClient(const ccoip_socket_address_t &client_address,
                                           const CCoIPClientVariablePorts &variable_ports,
@@ -197,11 +237,11 @@ namespace ccoip {
 
         /// Called when a client votes to accept new peers.
         /// All clients must vote to accept new peers before all clients start the p2p establishment phase.
-        [[nodiscard]] bool voteAcceptNewPeers(const ccoip_socket_address_t &client_address);
+        [[nodiscard]] bool voteAcceptNewPeers(const ccoip_uuid_t &peer_uuid);
 
         /// Called when a client votes to synchronize shared state.
         /// All clients must vote to synchronize shared state before shared state distribution can begin.
-        [[nodiscard]] bool voteSyncSharedState(const ccoip_socket_address_t &client_address);
+        [[nodiscard]] bool voteSyncSharedState(const ccoip_uuid_t &peer_uuid);
 
         /// Called when a client votes to complete the shared state distribution phase.
         /// This indicates that it has completed receiving the subset of shared state that was outdated.
@@ -209,7 +249,20 @@ namespace ccoip {
         /// With the shared state distribution ending, the shared state synchronization phase also ends.
         /// When consensus is reached, @code endSharedStateDistributionPhase()@endcode will be called.
         /// All clients here shall mean the subset of clients that are in the @code PEER_ACCEPTED@endcode phase.
-        [[nodiscard]] bool voteDistSharedStateComplete(const ccoip_socket_address_t &client_address);
+        [[nodiscard]] bool voteDistSharedStateComplete(const ccoip_uuid_t &peer_uuid);
+
+        /// Called when a client votes to initiate a collective communications operation with a particular tag.
+        /// @param peer_uuid the uuid of the client that is initiating the collective communications operation. The peer group of said client determines what peers will participate in the collective communications operation.
+        /// @param tag the tag associated with the collective communications operation.
+        /// All clients must vote to initiate a collective communications operation before the operation can begin.
+        /// Clients can concurrently vote to initiate and perform multiple collective communications operations.
+        [[nodiscard]] bool voteCollectiveCommsInitiate(const ccoip_uuid_t &peer_uuid, uint64_t tag);
+
+        /// Called when a client votes to complete a collective communications operation with a particular tag.
+        /// @param peer_uuid the uuid of the client that is completing the collective communications operation. The peer group of said client determines what peers will participate in the collective communications operation.
+        /// @param tag the tag associated with the collective communications operation.
+        /// All clients must vote to complete a collective communications operation before the operation can end.
+        [[nodiscard]] bool voteCollectiveCommsComplete(const ccoip_uuid_t &peer_uuid, uint64_t tag);
 
         /// Returns true if all peers of the peer group have voted to synchronize the shared state
         /// All clients here shall mean the subset of clients that are in the @code PEER_ACCEPTED@endcode phase.
@@ -228,7 +281,7 @@ namespace ccoip {
         ///
         /// Once all peers have declared that they have established p2p connections,
         /// clients return back to the @code IDLE@endcode state.
-        [[nodiscard]] bool markP2PConnectionsEstablished(const ccoip_socket_address_t &client_address);
+        [[nodiscard]] bool markP2PConnectionsEstablished(const ccoip_uuid_t &peer_uuid);
 
         /// Transition to the p2p connections established phase
         /// Triggered after all clients have declared that they have established p2p connections.
@@ -251,6 +304,22 @@ namespace ccoip {
 
         /// Returns true if all peers of the peer group have voted to complete the shared state distribution phase
         [[nodiscard]] bool syncSharedStateCompleteConsensus(uint32_t peer_group);
+
+        /// Returns true if all peers of the peer group have voted to initiate a collective communications operation for this tag
+        [[nodiscard]] bool collectiveCommsInitiateConsensus(uint32_t peer_group, uint64_t tag);
+
+        /// Returns true if all peers of the peer group have voted to complete a collective communications operation for this tag
+        [[nodiscard]] bool collectiveCommsCompleteConsensus(uint32_t peer_group, uint64_t tag);
+
+        /// Transition all clients of the given peer group to the phase of performing the collective communications operation with the given tag/
+        /// Returns false if the client is not in the @code COLLECTIVE_COMMUNICATIONS_RUNNING@endcode state or if
+        /// not in the @code VOTE_INITIATE_COLLECTIVE_COMMS@endcode state for the specified tag.
+        [[nodiscard]] bool transitionToPerformCollectiveCommsPhase(uint32_t peer_group, uint64_t tag);
+
+        /// Transition all clients of the given peer group to the phase of completing the collective communications operation with the given tag.
+        /// Returns false if the client is not in the @code COLLECTIVE_COMMUNICATIONS_RUNNING@endcode state or if
+        /// not in the @code VOTE_COMPLETE_COLLECTIVE_COMMS@endcode state for the specified tag.
+        [[nodiscard]] bool transitionToCollectiveCommsCompletePhase(uint32_t peer_group, uint64_t tag);
 
         /// Returns true if the shared state entries provided match the current "mask".
         /// A "mask" is defined by the identity of the set of shared state key strings and their corresponding hashes.
@@ -287,9 +356,8 @@ namespace ccoip {
         /// Finds the client UUID from the client address; returns std::nullopt if not found
         [[nodiscard]] std::optional<ccoip_uuid_t> findClientUUID(const ccoip_socket_address_t &client_address);
 
-        /// Returns the client info for a particular client address; returns std::nullopt if not found
-        [[nodiscard]] std::optional<std::reference_wrapper<ClientInfo> > getClientInfo(
-            const ccoip_socket_address_t &client_address);
+        /// Returns the client info for a particular client uuid; returns std::nullopt if not found
+        [[nodiscard]] std::optional<std::reference_wrapper<ClientInfo> > getClientInfo(const ccoip_uuid_t &client_uuid);
 
         /// Returns the current shared state revision. This represents the current maximum revision of the shared state
         /// that all clients have agreed upon to be the current shared state revision.
