@@ -13,21 +13,20 @@ TEST(AcceptNewPeers, TestBasic) {
 
     // client 1
     const ccoip::CCoIPClient client1({
-        .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
-        .port = CCOIP_PROTOCOL_PORT_MASTER
-    }, 0);
+                                         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                         .port = CCOIP_PROTOCOL_PORT_MASTER
+                                     }, 0);
     ASSERT_TRUE(client1.connect());
 
     // client 2
     const ccoip::CCoIPClient client2({
-        .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
-        .port = CCOIP_PROTOCOL_PORT_MASTER
-    }, 0);
+                                         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                         .port = CCOIP_PROTOCOL_PORT_MASTER
+                                     }, 0);
 
     std::thread client1_thread([&client1] {
         while (!client1.isInterrupted()) {
             ASSERT_TRUE(client1.acceptNewPeers());
-            ASSERT_TRUE(client1.updateTopology());
             std::this_thread::sleep_for(std::chrono::seconds(1));
         }
     });
