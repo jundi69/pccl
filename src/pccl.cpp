@@ -216,6 +216,26 @@ pcclResult_t pcclAwaitAsyncReduce(const pcclAsyncReduceOp_t *reduce_handle,
     return pcclSuccess;
 }
 
+inline size_t pcclDataTypeSize(const pcclDataType_t datatype) {
+    switch (datatype) {
+        case pcclUint8:
+        case pcclInt8:
+            return 1;
+        case pcclUint16:
+            return 2;
+        case pcclUint32:
+        case pcclInt32:
+        case pcclFloat:
+            return 4;
+        case pcclUint64:
+        case pcclInt64:
+        case pcclDouble:
+            return 8;
+        default:
+            return 0;
+    }
+}
+
 pcclResult_t pcclSynchronizeSharedState(const pcclComm_t *communicator, pcclSharedState_t *shared_state,
                                         pcclSharedStateSyncInfo_t *PCCL_NULLABLE sync_info_out) {
     PCCL_VALIDATE_INITIALIZED();
