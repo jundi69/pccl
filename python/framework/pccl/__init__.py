@@ -192,7 +192,7 @@ def _create_ccoip_socket_address(address: IPv4Address | IPv6Address, port: int) 
 class Communicator:
     """PCCL communicator."""
 
-    def __init__(self, address: str, peer_group: int):
+    def __init__(self, address: str, peer_group: int=0):
         assert ":" in address, f'Invalid address: {address}, expected format: ip:port'
         params: ffi.CData = ffi.new('pcclCommCreateParams_t*')
         ip, port = address.split(":")
