@@ -12,14 +12,15 @@
 #include <mutex>
 #include <atomic>
 #include <condition_variable>
-#include <netinet/in.h>
 
 #include <pccl/common/cast_utils.hpp>
 
 #ifdef WIN32
 typedef long long int ssize_t;
+struct sockaddr_in;
 #else
 #include <sys/types.h>
+#include <netinet/in.h>
 #endif
 
 struct uv_server_stream_t;
