@@ -49,26 +49,6 @@ typedef enum pcclDataType_t {
     pcclDouble = 9
 } pcclDataType_t;
 
-inline size_t pcclDataTypeSize(const pcclDataType_t datatype) {
-    switch (datatype) {
-        case pcclUint8:
-        case pcclInt8:
-            return 1;
-        case pcclUint16:
-            return 2;
-        case pcclUint32:
-        case pcclInt32:
-        case pcclFloat:
-            return 4;
-        case pcclUint64:
-        case pcclInt64:
-        case pcclDouble:
-            return 8;
-        default:
-            return 0;
-    }
-}
-
 typedef enum pcclRedOp_t {
     pcclSum,
     pcclAvg,
