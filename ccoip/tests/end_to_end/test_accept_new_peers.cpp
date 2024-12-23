@@ -31,6 +31,8 @@ TEST(AcceptNewPeers, TestBasic) {
         }
     });
 
+    std::this_thread::sleep_for(std::chrono::milliseconds(150));
+
     std::thread client2_thread([&client2] {
         ASSERT_TRUE(client2.connect());
     });
