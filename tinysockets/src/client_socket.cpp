@@ -33,16 +33,6 @@ static bool configure_socket_fd(const int socket_fd) {
         return false;
     }
 
-    // enable SO_REUSEADDR if available
-#ifdef SO_REUSEADDR
-    if (setsockoptvp(socket_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) [[
-        unlikely]] {
-        LOG(ERR) << "Failed to set SO_REUSEADDR option on server socket";
-        closesocket(socket_fd);
-        return false;
-    }
-#endif
-
     // enable SO_BUSY_POLL if available
 #ifdef SO_BUSY_POLL
     setsockoptvp(socket_fd, SOL_SOCKET, SO_BUSY_POLL, &opt, sizeof(opt));
@@ -72,6 +62,7 @@ bool tinysockets::BlockingIOSocket::establishConnection() {
         LOG(ERR) << "Failed to create socket";
         return false;
     }
+
     if (!configure_socket_fd(socket_fd)) [[unlikely]] {
         return false;
     }

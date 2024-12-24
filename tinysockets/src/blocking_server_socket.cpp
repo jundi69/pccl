@@ -28,6 +28,54 @@ tinysockets::BlockingIOServerSocket::~BlockingIOServerSocket() {
     }
 }
 
+static bool configure_socket_fd(const int socket_fd) {
+    constexpr int opt = 1;
+
+    // enable TCP_NODELAY
+    if (setsockoptvp(socket_fd, IPPROTO_TCP, TCP_NODELAY, &opt, sizeof(opt)) < 0) [[
+        unlikely]] {
+        LOG(ERR) << "Failed to set TCP_NODELAY option on server socket";
+        closesocket(socket_fd);
+        return false;
+    }
+
+    // set send and recvvp buf
+    constexpr int buffer_size = 1 << 20; // 1 MiB
+    if (setsockoptvp(socket_fd, SOL_SOCKET, SO_SNDBUF, &buffer_size,
+                     sizeof(buffer_size)) < 0) [[unlikely]] {
+        LOG(ERR) << "Failed to set SO_SNDBUF option on server socket";
+        closesocket(socket_fd);
+        return false;
+    }
+    if (setsockoptvp(socket_fd, SOL_SOCKET, SO_RCVBUF, &buffer_size,
+                     sizeof(buffer_size)) < 0) [[unlikely]] {
+        LOG(ERR) << "Failed to set SO_RCVBUF option on server socket";
+        closesocket(socket_fd);
+        return false;
+    }
+
+    // enable SO_REUSEADDR if available
+#ifdef SO_REUSEADDR
+    if (setsockoptvp(socket_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) [[
+        unlikely]] {
+        LOG(ERR) << "Failed to set SO_REUSEADDR option on server socket";
+        closesocket(socket_fd);
+        return false;
+    }
+#endif
+
+    // enable SO_BUSY_POLL if available
+#ifdef SO_BUSY_POLL
+    setsockoptvp(socket_fd, SOL_SOCKET, SO_BUSY_POLL, &opt, sizeof(opt));
+#endif
+
+    // enable TCP_QUICKACK if available
+#ifdef TCP_QUICKACK
+    setsockoptvp(socket_fd, IPPROTO_TCP, TCP_QUICKACK, &opt, sizeof(opt));
+#endif
+    return true;
+}
+
 bool tinysockets::BlockingIOServerSocket::listen() {
     if (bound) {
         return false;
@@ -38,6 +86,10 @@ bool tinysockets::BlockingIOServerSocket::listen() {
 
     socket_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (socket_fd == -1) {
+        return false;
+    }
+
+    if (!configure_socket_fd(socket_fd)) {
         return false;
     }
 
@@ -82,7 +134,8 @@ bool tinysockets::BlockingIOServerSocket::listen() {
         const int listen_result = ::listen(socket_fd, SOMAXCONN);
         failure = listen_result != 0;
         if (failure) {
-            LOG(ERR) << "Failed to listen on port " << listen_address.port << " with error: " << std::strerror(errno) << " (" << errno << ")";
+            LOG(ERR) << "Failed to listen on port " << listen_address.port << " with error: " << std::strerror(errno) <<
+                    " (" << errno << ")";
         }
     } while (bump_port_on_failure && failure);
 
