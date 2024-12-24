@@ -183,15 +183,24 @@ void ccoip::CCoIPMasterHandler::checkP2PConnectionsEstablished() {
     // send establish new peers packets to all clients
     if (server_state.p2pConnectionsEstablishConsensus()) {
         // send confirmation packets to all clients
-        for (auto &peer_address: server_state.getClientSocketAddresses()) {
+        if (!server_state.transitionToP2PConnectionsEstablishedPhase()) [[unlikely]] {
+            LOG(BUG) << "Failed to transition to P2P connections established phase; This is a bug";
+        }
+
+        for (auto &[peer_uuid, peer_address]: server_state.getClientEntrySet()) {
+            const auto peer_info_opt = server_state.getClientInfo(peer_uuid);
+            if (!peer_info_opt) [[unlikely]] {
+                LOG(BUG) << "Client " << ccoip_sockaddr_to_str(peer_address) << " not found";
+                continue;
+            }
+            if (const auto &peer_info = peer_info_opt->get(); peer_info.connection_phase != PEER_ACCEPTED) {
+                continue;
+            }
             if (!server_socket.sendPacket<C2MPacketP2PConnectionsEstablished>(peer_address, {})) {
                 LOG(ERR) << "Failed to send M2CPacketP2PConnectionsEstablished to " << ccoip_sockaddr_to_str(
                     peer_address
                 );
             }
-        }
-        if (!server_state.transitionToP2PConnectionsEstablishedPhase()) [[unlikely]] {
-            LOG(BUG) << "Failed to transition to P2P connections established phase; This is a bug";
         }
     }
 }
@@ -699,12 +708,22 @@ void ccoip::CCoIPMasterHandler::sendP2PConnectionInformation() {
     const bool unchanged = !server_state.hasPeerListChanged();
 
     // send establish new peers packets to all clients
-    for (auto &client_address: server_state.getClientSocketAddresses()) {
+    for (auto &[peer_uuid, peer_address]: server_state.getClientEntrySet()) {
+        const auto peer_info_opt = server_state.getClientInfo(peer_uuid);
+        if (!peer_info_opt) [[unlikely]] {
+            LOG(BUG) << "Client " << ccoip_sockaddr_to_str(peer_address) << " not found";
+            continue;
+        }
+        const auto &peer_info = peer_info_opt->get();
+        if (peer_info.connection_state != CONNECTING_TO_PEERS) {
+            continue;
+        }
+
         // for all connected clients
         M2CPacketNewPeers new_peers{};
         new_peers.unchanged = unchanged;
 
-        auto peers = server_state.getPeersForClient(client_address); // get the peers for the client
+        auto peers = server_state.getPeersForClient(peer_address); // get the peers for the client
         new_peers.new_peers.reserve(peers.size());
         for (const auto &client_info: peers) {
             // construct a new peers packet
@@ -717,8 +736,8 @@ void ccoip::CCoIPMasterHandler::sendP2PConnectionInformation() {
             });
         }
 
-        if (!server_socket.sendPacket(client_address, new_peers)) {
-            LOG(ERR) << "Failed to send M2CPacketNewPeers to " << ccoip_sockaddr_to_str(client_address);
+        if (!server_socket.sendPacket(peer_address, new_peers)) {
+            LOG(ERR) << "Failed to send M2CPacketNewPeers to " << ccoip_sockaddr_to_str(peer_address);
         }
     }
 }

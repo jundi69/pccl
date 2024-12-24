@@ -300,6 +300,8 @@ namespace ccoip {
         [[nodiscard]] bool endSharedStateSyncPhase(uint32_t peer_group);
 
         /// Returns true if all clients have declared that they have established p2p connections
+        /// Note: that "all clients" here means the subset of clients that are joining in the current acceptNewPeers phase.
+        /// E.g. if a peer joins the session after consensus has been reached to accept new peers, it will not be included in this check.
         [[nodiscard]] bool p2pConnectionsEstablishConsensus() const;
 
         /// Returns true if all peers of the peer group have voted to complete the shared state distribution phase
