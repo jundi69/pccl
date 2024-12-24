@@ -55,6 +55,7 @@ static bool configure_socket_fd(const int socket_fd) {
     }
 
     // enable SO_REUSEADDR if available
+#ifndef WIN32
 #ifdef SO_REUSEADDR
     if (setsockoptvp(socket_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) [[
         unlikely]] {
@@ -62,6 +63,7 @@ static bool configure_socket_fd(const int socket_fd) {
         closesocket(socket_fd);
         return false;
     }
+#endif
 #endif
 
     // enable SO_BUSY_POLL if available
