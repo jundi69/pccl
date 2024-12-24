@@ -53,6 +53,10 @@ bool ccoip::CCoIPClient::isAnyCollectiveComsOpRunning() const {
     return client->isAnyCollectiveComsOpRunning();
 }
 
+size_t ccoip::CCoIPClient::getWorldSize() const {
+    return client->getWorldSize();
+}
+
 ccoip::CCoIPClient::~CCoIPClient() {
     delete client;
 }

@@ -68,6 +68,10 @@ namespace ccoip {
         /// Returns true if there is any collective communications operation running
         [[nodiscard]] bool isAnyCollectiveComsOpRunning() const;
 
+        /// Returns the current world size; World size shall mean the number of peers in the peer group that this client is part of;
+        /// Includes the client itself
+        [[nodiscard]] size_t getWorldSize() const;
+
         ~CCoIPClient();
     };
 };
