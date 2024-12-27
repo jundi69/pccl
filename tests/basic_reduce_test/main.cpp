@@ -54,14 +54,18 @@ int main() {
     constexpr size_t n_peers = 1;
     const auto gradients = new float[n_peers];
 
+    size_t i = 0;
     while (true) {
-        PCCL_CHECK(pcclUpdateTopology(communicator));
+        if (i > 0 || world_size == 1) {
+            PCCL_CHECK(pcclUpdateTopology(communicator));
+        }
         PCCL_CHECK(pcclSynchronizeSharedState(communicator, &shared_state, nullptr));
 
         pcclGetAttribute(communicator, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size);
 
         if (world_size < 2) {
             std::this_thread::sleep_for(std::chrono::seconds(1));
+            i++;
             continue;
         }
 
@@ -76,6 +80,7 @@ int main() {
         } while (pcclAwaitAsyncReduce(&async_op, nullptr) != pcclSuccess);
 
         shared_state.revision++;
+        i++;
     }
 
     PCCL_CHECK(pcclDestroyCommunicator(communicator));

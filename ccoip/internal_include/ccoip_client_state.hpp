@@ -85,14 +85,6 @@ namespace ccoip {
         /// Returns true if there is any collective communications operation running
         [[nodiscard]] bool isAnyCollectiveComsOpRunning() const;
 
-        /// Declares a collective communications operation with the specified tag started.
-        /// Returns false if a collective communications operation with the same tag is already running.
-        [[nodiscard]] bool startCollectiveComsOp(uint64_t tag);
-
-        /// Declares a collective communications operation with the specified tag ended
-        /// Returns false if no collective communications operation with the specified tag is running.
-        [[nodiscard]] bool endCollectiveComsOp(uint64_t tag);
-
         /// Launches an asynchronous all reduce operation
         [[nodiscard]] bool launchAsyncCollectiveOp(uint64_t tag, std::function<void(std::promise<bool> &)> &&task);
 
@@ -128,5 +120,14 @@ namespace ccoip {
         [[nodiscard]] size_t getWorldSize() const {
             return ring_order.size();
         }
+
+    private:
+        /// Declares a collective communications operation with the specified tag started.
+        /// Returns false if a collective communications operation with the same tag is already running.
+        [[nodiscard]] bool startCollectiveComsOp(uint64_t tag);
+
+        /// Declares a collective communications operation with the specified tag ended
+        /// Returns false if no collective communications operation with the specified tag is running.
+        [[nodiscard]] bool endCollectiveComsOp(uint64_t tag);
     };
 };
