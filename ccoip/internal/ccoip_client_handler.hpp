@@ -67,6 +67,8 @@ namespace ccoip {
 
         [[nodiscard]] bool isAnyCollectiveComsOpRunning() const;
 
+        [[nodiscard]] size_t getWorldSize() const;
+
     private:
         [[nodiscard]] bool establishP2PConnections();
 

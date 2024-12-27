@@ -28,6 +28,41 @@ tinysockets::BlockingIOServerSocket::~BlockingIOServerSocket() {
     }
 }
 
+static bool configure_socket_fd(const int socket_fd) {
+    constexpr int opt = 1;
+
+    // enable TCP_NODELAY
+    if (setsockoptvp(socket_fd, IPPROTO_TCP, TCP_NODELAY, &opt, sizeof(opt)) < 0) [[
+        unlikely]] {
+        LOG(ERR) << "Failed to set TCP_NODELAY option on server socket";
+        closesocket(socket_fd);
+        return false;
+    }
+
+    // enable SO_REUSEADDR if available
+#ifndef WIN32
+#ifdef SO_REUSEADDR
+    if (setsockoptvp(socket_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) [[
+        unlikely]] {
+        LOG(ERR) << "Failed to set SO_REUSEADDR option on server socket";
+        closesocket(socket_fd);
+        return false;
+    }
+#endif
+#endif
+
+    // enable SO_BUSY_POLL if available
+#ifdef SO_BUSY_POLL
+    setsockoptvp(socket_fd, SOL_SOCKET, SO_BUSY_POLL, &opt, sizeof(opt));
+#endif
+
+    // enable TCP_QUICKACK if available
+#ifdef TCP_QUICKACK
+    setsockoptvp(socket_fd, IPPROTO_TCP, TCP_QUICKACK, &opt, sizeof(opt));
+#endif
+    return true;
+}
+
 bool tinysockets::BlockingIOServerSocket::listen() {
     if (bound) {
         return false;
@@ -38,6 +73,10 @@ bool tinysockets::BlockingIOServerSocket::listen() {
 
     socket_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (socket_fd == -1) {
+        return false;
+    }
+
+    if (!configure_socket_fd(socket_fd)) {
         return false;
     }
 
@@ -81,6 +120,10 @@ bool tinysockets::BlockingIOServerSocket::listen() {
         }
         const int listen_result = ::listen(socket_fd, SOMAXCONN);
         failure = listen_result != 0;
+        if (failure) {
+            LOG(ERR) << "Failed to listen on port " << listen_address.port << " with error: " << std::strerror(errno) <<
+                    " (" << errno << ")";
+        }
     } while (bump_port_on_failure && failure);
 
     bound = true;
@@ -98,13 +141,10 @@ bool tinysockets::BlockingIOServerSocket::runAsync() {
             socklen_t client_address_len = sizeof(client_address);
             const int client_socket = accept(socket_fd, reinterpret_cast<sockaddr *>(&client_address),
                                              &client_address_len);
-            if (client_socket == -1) {
-                if (running.load()) {
-                    // Log the error if needed
-                    continue;
+            if (client_socket == 0 || client_socket == -1) {
+                if (!running.load() || socket_fd == 0) {
+                    break; // Interrupted
                 }
-                // accept() was interrupted by interrupt()
-                break;
             }
             onNewConnection(client_socket, client_address);
         }
@@ -118,8 +158,10 @@ bool tinysockets::BlockingIOServerSocket::interrupt() {
     }
     running.store(false);
 
-    // Closing the socket will unblock the accept() call
+    // this should interrupt the accept() call
+    shutdown(socket_fd, SHUT_RDWR);
     closesocket(socket_fd);
+
     socket_fd = 0;
     return true;
 }

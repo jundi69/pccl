@@ -123,5 +123,10 @@ namespace ccoip {
         [[nodiscard]] const std::vector<ccoip_uuid_t> &getRingOrder() const {
             return ring_order;
         }
+
+        /// Returns the world size. World size shall mean the number of peers participating in the peer group that this client is a part of.
+        [[nodiscard]] size_t getWorldSize() const {
+            return ring_order.size();
+        }
     };
 };

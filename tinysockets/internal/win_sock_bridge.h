@@ -15,6 +15,8 @@
 #ifdef WIN32
 
 #define MSG_NOSIGNAL 0
+#define SHUT_WR SD_SEND
+#define SHUT_RDWR SD_BOTH
 
 typedef long long int ssize_t;
 

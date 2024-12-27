@@ -18,6 +18,7 @@ bool ccoip::CCoIPMasterState::registerClient(const ccoip_socket_address_t &clien
     client_info[uuid] = ClientInfo{
         .client_uuid = uuid,
         .connection_phase = PEER_REGISTERED,
+        .connection_state = IDLE,
         .socket_address = client_address,
         .variable_ports = variable_ports,
         .peer_group = peer_group
@@ -301,6 +302,10 @@ bool ccoip::CCoIPMasterState::markP2PConnectionsEstablished(const ccoip_uuid_t &
 
 bool ccoip::CCoIPMasterState::transitionToP2PConnectionsEstablishedPhase() {
     for (auto &[_, info]: client_info) {
+        if (info.connection_phase == PEER_REGISTERED && info.connection_state == IDLE) {
+            // ignore clients that have not made the cut for the current peer acceptance phase
+            continue;
+        }
         if (info.connection_state == WAITING_FOR_OTHER_PEERS) {
             info.connection_state = IDLE;
             if (info.connection_phase == PEER_REGISTERED) {
@@ -343,7 +348,17 @@ bool ccoip::CCoIPMasterState::endSharedStateSyncPhase(const uint32_t peer_group)
 }
 
 bool ccoip::CCoIPMasterState::p2pConnectionsEstablishConsensus() const {
-    return votes_p2p_connections_established.size() == client_uuids.size();
+    size_t num_connecting_peers = 0;
+    std::unordered_set<ccoip_uuid_t> voting_peers{};
+    for (const auto &[_, info]: client_info) {
+        if (info.connection_state == WAITING_FOR_OTHER_PEERS) {
+            voting_peers.insert(info.client_uuid);
+        }
+        if (info.connection_state == WAITING_FOR_OTHER_PEERS || info.connection_state == CONNECTING_TO_PEERS) {
+            num_connecting_peers++;
+        }
+    }
+    return voting_peers.size() == num_connecting_peers;
 }
 
 bool ccoip::CCoIPMasterState::syncSharedStateCompleteConsensus(const uint32_t peer_group) {
@@ -502,7 +517,6 @@ void ccoip::CCoIPMasterState::transitionToP2PEstablishmentPhase() {
     for (auto &[_, info]: client_info) {
         info.connection_state = CONNECTING_TO_PEERS;
     }
-
     // clear all votes to accept new peers
     votes_accept_new_peers.clear();
 }

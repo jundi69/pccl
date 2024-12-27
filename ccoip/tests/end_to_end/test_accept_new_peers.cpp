@@ -2,6 +2,7 @@
 #include <ccoip_client.hpp>
 #include <ccoip_master.hpp>
 #include <thread>
+#include <atomic>
 #include <gtest/gtest.h>
 
 TEST(AcceptNewPeers, TestBasic) {
@@ -27,18 +28,22 @@ TEST(AcceptNewPeers, TestBasic) {
     std::thread client1_thread([&client1] {
         while (!client1.isInterrupted()) {
             ASSERT_TRUE(client1.acceptNewPeers());
-            std::this_thread::sleep_for(std::chrono::seconds(1));
+            ASSERT_TRUE(client1.updateTopology());
+            const auto world_size = client1.getWorldSize();
+            ASSERT_LT(world_size, 3);
+            if (world_size == 2) {
+                break;
+            }
         }
     });
-
     std::thread client2_thread([&client2] {
         ASSERT_TRUE(client2.connect());
     });
 
+    client1_thread.join();
     client2_thread.join();
     ASSERT_TRUE(client2.interrupt());
     ASSERT_TRUE(client1.interrupt());
-    client1_thread.join();
 
     ASSERT_TRUE(client1.join());
     ASSERT_TRUE(client2.join());

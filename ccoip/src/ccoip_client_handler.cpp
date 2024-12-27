@@ -342,6 +342,7 @@ bool ccoip::CCoIPClientHandler::establishP2PConnections() {
         LOG(ERR) << "Failed to receive new peers packet";
         return false;
     }
+    LOG(DEBUG) << "Received M2CPacketNewPeers from master";
     if (!new_peers->unchanged) {
         // establish p2p connections
         for (auto &peer: new_peers->new_peers) {
@@ -702,4 +703,8 @@ bool ccoip::CCoIPClientHandler::getAsyncReduceInfo(const uint64_t tag, std::opti
 
 bool ccoip::CCoIPClientHandler::isAnyCollectiveComsOpRunning() const {
     return client_state.isAnyCollectiveComsOpRunning();
+}
+
+size_t ccoip::CCoIPClientHandler::getWorldSize() const {
+    return client_state.getWorldSize();
 }
