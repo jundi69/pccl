@@ -498,10 +498,6 @@ bool ccoip::CCoIPClientHandler::allReduceAsync(const void *sendbuff, void *recvb
         return false;
     }
 
-    if (!client_state.startCollectiveComsOp(tag)) [[unlikely]] {
-        return false;
-    }
-
     if (!client_state.launchAsyncCollectiveOp(
         tag, [this, sendbuff, recvbuff, count, datatype, op, tag](std::promise<bool> &promise) {
             // vote commence collective comms operation and await consensus

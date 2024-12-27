@@ -1,6 +1,7 @@
 #include "ccoip_client_state.hpp"
 
 #include <ccoip_inet_utils.hpp>
+#include <pccl_log.hpp>
 
 bool ccoip::CCoIPClientState::registerPeer(const ccoip_socket_address_t &address, const ccoip_uuid_t uuid) {
     const auto internal_address = ccoip_socket_to_internal(address);
@@ -23,7 +24,7 @@ void ccoip::CCoIPClientState::setAssignedUUID(const ccoip_uuid_t &new_assigned_u
     assigned_uuid = new_assigned_uuid;
 }
 
-const ccoip_uuid_t & ccoip::CCoIPClientState::getAssignedUUID() const {
+const ccoip_uuid_t &ccoip::CCoIPClientState::getAssignedUUID() const {
     return assigned_uuid;
 }
 
@@ -66,9 +67,16 @@ bool ccoip::CCoIPClientState::endCollectiveComsOp(const uint64_t tag) {
 
 bool ccoip::CCoIPClientState::launchAsyncCollectiveOp(const uint64_t tag,
                                                       std::function<void(std::promise<bool> &)> &&task) {
-    running_reduce_tasks[tag] = std::move(std::thread([this, tag, task = std::move(task)]() {
+    if (!startCollectiveComsOp(tag)) [[unlikely]] {
+        return false;
+    }
+    running_reduce_tasks_promises[tag] = std::promise<bool>{};
+    running_reduce_tasks[tag] = std::move(std::thread([this, tag, task = std::move(task)] {
         std::promise<bool> &promise = running_reduce_tasks_promises[tag];
         task(promise);
+        if (!endCollectiveComsOp(tag)) [[unlikely]] {
+            LOG(BUG) << "Collective comms op with tag " << tag << " was not started but is being ended";
+        }
     }));
     return true;
 }
@@ -94,7 +102,7 @@ std::optional<bool> ccoip::CCoIPClientState::hasCollectiveComsOpFailed(const uin
     return std::nullopt;
 }
 
-const ccoip_shared_state_t & ccoip::CCoIPClientState::getCurrentSharedState() const {
+const ccoip_shared_state_t &ccoip::CCoIPClientState::getCurrentSharedState() const {
     return current_shared_state;
 }
 
