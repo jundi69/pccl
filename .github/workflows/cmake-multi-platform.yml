@@ -74,5 +74,4 @@ jobs:
         run: pip3 install pytest
 
       - name: Test Python
-        if: runner.os != 'Windows'
         run: python -m pytest ${{ github.workspace }}/python/tests
