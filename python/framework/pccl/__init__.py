@@ -1,17 +1,24 @@
-import faulthandler
 import torch
+
+from typing import Union
 
 from ipaddress import ip_address, IPv4Address, IPv6Address
 from enum import Enum
 from torch import Tensor
 from pccl._loader import load_native_module
 
+
 # To debug Python to C FFI calls:
 # $ cp examples/any.py tmp.py && gdb -ex r --args python3 tmp.py
 # See also https://wiki.python.org/moin/DebuggingWithGdb
 
 # Enable faulthandler for debugging
-faulthandler.enable()
+PY_PCCL_DEBUG = False
+
+if PY_PCCL_DEBUG:
+    import faulthandler
+    faulthandler.enable()
+
 ffi, C = load_native_module()  # Load native module
 
 class Result(Enum): # Keep in sync with pccl_status.h.
@@ -171,7 +178,7 @@ class AsyncReduceHandle:
 # Init PCCL
 PCCLError.check(C.pcclInit())
 
-def _create_ccoip_socket_address(address: IPv4Address | IPv6Address, port: int) -> ffi.CData:
+def _create_ccoip_socket_address(address: Union[IPv4Address, IPv6Address], port: int) -> ffi.CData:
     """Create a ccoip_socket_address_t."""
     socket_addr = ffi.new("ccoip_socket_address_t*")
     if isinstance(address, IPv4Address):
