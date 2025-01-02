@@ -69,4 +69,8 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except (Exception, AssertionError) as e:
+        print(f"(RANK={RANK}) failed with: {e}")
+        raise e
