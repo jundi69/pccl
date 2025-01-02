@@ -51,11 +51,11 @@ def test_basic_reduce():
     print("debug")
     if os.name == 'nt':
         print("Windows")
-        p = subprocess.run(["netstat", "-abn"])
+        p = subprocess.run(["netstat", "-abn"], capture_output=True)
         print(p.stdout)
     elif os.name == 'posix':
         print("Linux")
-        p = subprocess.run(["lsof", "-i", "-P", "-n"])
+        p = subprocess.run(["lsof", "-i", "-P", "-n"], capture_output=True)
         print(p.stdout)
 
     # print own pid
