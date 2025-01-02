@@ -2,6 +2,7 @@
 #include "pccl_internal.hpp"
 #include <optional>
 #include <ccoip_master.hpp>
+#include <pccl_log.hpp>
 
 static constinit bool pccl_initialized = false;
 
@@ -84,11 +85,14 @@ pcclResult_t pcclConnect(pcclComm_t *communicator) {
 
     pcclResult_t status = pcclSuccess;
     if (!communicator->ccoip_client->connect()) {
+        LOG(ERR) << "Failed to establish connection to master";
         if (!communicator->ccoip_client->interrupt()) [[unlikely]] {
+            LOG(ERR) << "Failed to interrupt client after connection failure";
             status = pcclInternalError;
             goto failure;
         }
         if (!communicator->ccoip_client->join()) [[unlikely]] {
+            LOG(ERR) << "Failed to join client after connection failure";
             status = pcclInternalError;
             goto failure;
         }
@@ -96,6 +100,7 @@ pcclResult_t pcclConnect(pcclComm_t *communicator) {
         goto failure;
     }
     if (!communicator->ccoip_client->updateTopology()) [[unlikely]] {
+        LOG(ERR) << "Failed to update topology after connecting to master";
         status = pcclMasterConnectionFailed;
         goto failure;
     }

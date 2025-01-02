@@ -62,6 +62,7 @@ bool ccoip::CCoIPClientHandler::connect() {
             return false;
         }
         if (!p2p_socket.runAsync()) [[unlikely]] {
+            LOG(ERR) << "Failed to start P2P socket thread";
             return false;
         }
         LOG(INFO) << "P2P socket listening on port " << p2p_socket.getListenPort() << "...";
@@ -78,6 +79,7 @@ bool ccoip::CCoIPClientHandler::connect() {
             return false;
         }
         if (!shared_state_socket.runAsync()) [[unlikely]] {
+            LOG(ERR) << "Failed to start shared state socket thread";
             return false;
         }
         shared_state_server_thread_id = shared_state_socket.getServerThreadId();
@@ -85,6 +87,7 @@ bool ccoip::CCoIPClientHandler::connect() {
     }
 
     if (!master_socket.establishConnection()) {
+        LOG(ERR) << "Failed to establish master socket connection";
         return false;
     }
 
@@ -95,12 +98,14 @@ bool ccoip::CCoIPClientHandler::connect() {
     join_request.peer_group = peer_group;
 
     if (!master_socket.sendPacket<C2MPacketRequestSessionRegistration>(join_request)) {
+        LOG(ERR) << "Failed to send C2MPacketRequestSessionJoin to master";
         return false;
     }
 
     // receive join response packet from master
     const auto response = master_socket.receivePacket<M2CPacketSessionRegistrationResponse>();
     if (!response) {
+        LOG(ERR) << "Failed to receive M2CPacketSessionJoinResponse from master";
         return false;
     }
     if (!response->accepted) {
