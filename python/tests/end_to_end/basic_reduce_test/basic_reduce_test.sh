@@ -1,18 +1,20 @@
 #!/bin/bash
 
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+
 export PCCL_LOG_LEVEL=DEBUG
 
-python master.py &
+python $SCRIPT_DIR/master.py &
 MASTER_PID=$!
 echo "Started master.py with PID $MASTER_PID"
 
 sleep 5
 
-python peer.py &
+python $SCRIPT_DIR/peer.py &
 PEER1_PID=$!
 echo "Started first peer.py with PID $PEER1_PID"
 
-python peer.py &
+python $SCRIPT_DIR/peer.py &
 PEER2_PID=$!
 echo "Started second peer.py with PID $PEER2_PID"
 
