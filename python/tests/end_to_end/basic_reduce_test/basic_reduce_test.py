@@ -2,7 +2,6 @@ import os
 import subprocess
 import sys
 import time
-import socket
 from typing import List, Optional, Dict, Union, IO
 
 
@@ -45,7 +44,6 @@ def test_basic_reduce():
     process_list = []
     for _ in range(2):
         process_list.append(launch_py_process(peer_script_path, [], {'PCCL_LOG_LEVEL': 'DEBUG'}, forward_stdout=True))
-        time.sleep(2)
 
     # wait for all processes to finish
     for process in process_list:
