@@ -7,7 +7,6 @@ from enum import Enum
 from torch import Tensor
 from pccl._loader import load_native_module
 
-
 # To debug Python to C FFI calls:
 # $ cp examples/any.py tmp.py && gdb -ex r --args python3 tmp.py
 # See also https://wiki.python.org/moin/DebuggingWithGdb
@@ -17,11 +16,13 @@ PY_PCCL_DEBUG = False
 
 if PY_PCCL_DEBUG:
     import faulthandler
+
     faulthandler.enable()
 
 ffi, C = load_native_module()  # Load native module
 
-class Result(Enum): # Keep in sync with pccl_status.h.
+
+class Result(Enum):  # Keep in sync with pccl_status.h.
     """PCCL result codes."""
     SUCCESS = C.pcclSuccess
     NOT_INITIALIZED = C.pcclNotInitialized
@@ -37,8 +38,10 @@ class Result(Enum): # Keep in sync with pccl_status.h.
     RANK_CONNECTION_LOST = C.pcclRankConnectionLost
     NO_SHARED_STATE_AVAILABLE = C.pcclNoSharedStateAvailable
 
+
 class PCCLError(Exception):
     """PCCL specific exception."""
+
     def __init__(self, result: Result):
         super().__init__(f'PCCL error: {result}')
         self.result = result
@@ -51,6 +54,7 @@ class PCCLError(Exception):
         """Check the result and raise an exception if necessary."""
         if result != Result.SUCCESS.value:
             raise PCCLError(Result(result))
+
 
 class DataType(Enum):
     """PCCL primitive data types."""
@@ -97,6 +101,7 @@ class DataType(Enum):
         assert dtype in map, f'Unsupported dtype: {dtype}'
         return map[dtype]
 
+
 class TensorInfo:
     def __init__(self, name: str, data_ptr: int, *, numel: int, dtype: DataType, allow_content_inequality: bool):
         self.name = name
@@ -106,7 +111,7 @@ class TensorInfo:
         self.allow_content_inequality = allow_content_inequality
 
     @classmethod
-    def from_torch(cls, tensor: Tensor, name: str, *, allow_content_inequality: bool=False):
+    def from_torch(cls, tensor: Tensor, name: str, *, allow_content_inequality: bool = False):
         """Creates a TensorInfo from a PyTorch tensor."""
         assert tensor.is_contiguous(), 'Input tensor must be contiguous'
         assert tensor.device.type == 'cpu', 'Only CPU tensors are supported'
@@ -114,6 +119,7 @@ class TensorInfo:
         data_ptr: int = tensor.data_ptr()
         dtype: DataType = DataType.from_torch_dtype(tensor.dtype)
         return cls(name, data_ptr, numel=numel, dtype=dtype, allow_content_inequality=allow_content_inequality)
+
 
 class SharedState:
     def __init__(self, tensor_infos: list[TensorInfo]):
@@ -142,6 +148,7 @@ class SharedState:
     def push_revision(self):
         self._state[0].revision += 1
 
+
 class ReduceOp(Enum):
     """PCCL reduction operations."""
     SUM = C.pcclSum
@@ -150,9 +157,11 @@ class ReduceOp(Enum):
     MAX = C.pcclMax
     MIN = C.pcclMin
 
+
 class Attribute(Enum):
     """PCCL attributes."""
     CURRENT_WORLD_SIZE = C.PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE
+
 
 class ReduceInfo:
     def __init__(self, world_size: int, tx_bytes: int, rx_bytes: int):
@@ -160,23 +169,34 @@ class ReduceInfo:
         self.tx_bytes = tx_bytes
         self.rx_bytes = rx_bytes
 
+
 class SharedStateSyncInfo:
     def __init__(self, tx_bytes: int, rx_bytes: int):
         self.tx_bytes = tx_bytes
         self.rx_bytes = rx_bytes
 
+
 class AsyncReduceHandle:
     def __init__(self, handle: ffi.CData):
         self._handle = handle
+        self._info: Optional[Tuple[bool, int, ReduceInfo]] = None
 
-    def wait(self) -> (bool, ReduceInfo):
+    def wait(self) -> (bool, int, ReduceInfo):
         """Awaits the completion of an async reduce operation. Blocks until the operation is complete."""
+
+        if self._info is not None:  # guard native await function because it will fail on the second invocation
+            return self._info
+
         info: ffi.CData = ffi.new('pcclReduceInfo_t*')
-        status: bool = C.pcclAwaitAsyncReduce(self._handle, info) == Result.SUCCESS.value
-        return status, ReduceInfo(info.world_size, info.tx_bytes, info.rx_bytes)
+        status = C.pcclAwaitAsyncReduce(self._handle, info)
+        is_success: bool = status == Result.SUCCESS.value
+        self._info = (is_success, status, ReduceInfo(info.world_size, info.tx_bytes, info.rx_bytes))
+        return self._info
+
 
 # Init PCCL
 PCCLError.check(C.pcclInit())
+
 
 def _create_ccoip_socket_address(address: Union[IPv4Address, IPv6Address], port: int) -> ffi.CData:
     """Create a ccoip_socket_address_t."""
@@ -196,16 +216,17 @@ def _create_ccoip_socket_address(address: Union[IPv4Address, IPv6Address], port:
     socket_addr.port = port & 0xffff
     return socket_addr
 
+
 class Communicator:
     """PCCL communicator."""
 
-    def __init__(self, address: str, peer_group: int=0):
+    def __init__(self, address: str, peer_group: int = 0):
         assert ":" in address, f'Invalid address: {address}, expected format: ip:port'
         params: ffi.CData = ffi.new('pcclCommCreateParams_t*')
         ip, port = address.split(":")
         ip = ip_address(ip)
         params.master_address = _create_ccoip_socket_address(ip, int(port))[0]
-        params.peer_group =  ffi.cast('uint32_t', peer_group)
+        params.peer_group = ffi.cast('uint32_t', peer_group)
         self._comm = ffi.new('pcclComm_t**')
         PCCLError.check(C.pcclCreateCommunicator(params, self._comm))
 
@@ -235,7 +256,7 @@ class Communicator:
         """
         PCCLError.check(C.pcclConnect(self._comm[0]))
 
-    def all_reduce(self, send: Tensor, recv: Tensor, *, op: ReduceOp, tag: int=0) -> ReduceInfo:
+    def all_reduce(self, send: Tensor, recv: Tensor, *, op: ReduceOp, tag: int = 0) -> ReduceInfo:
         """Performs an all reduce operation on a communicator. Blocks until the all reduce is complete."""
         assert send.is_contiguous(), 'Input tensor must be contiguous'
         assert recv.is_contiguous(), 'Output tensor must be contiguous'
@@ -246,12 +267,12 @@ class Communicator:
         recvbuff: ffi.CData = ffi.cast('void*', recv.data_ptr())
         numel: int = send.numel()
         info: ffi.CData = ffi.new('pcclReduceInfo_t*')
-        dtype: int =  DataType.from_torch_dtype(send.dtype).value
+        dtype: int = DataType.from_torch_dtype(send.dtype).value
         PCCLError.check(C.pcclAllReduce(sendbuff, recvbuff, numel, dtype, op.value, tag, self._comm[0], info))
         return ReduceInfo(info.world_size, info.tx_bytes, info.rx_bytes)
 
-
-    def all_reduce_async(self, send: Tensor, recv: Tensor, *, numel: int, op: ReduceOp, tag: int=0) -> AsyncReduceHandle:
+    def all_reduce_async(self, send: Tensor, recv: Tensor, *, numel: int, op: ReduceOp,
+                         tag: int = 0) -> AsyncReduceHandle:
         """Performs an all reduce operation on a communicator. Async version of all_reduce."""
         assert send.is_contiguous(), 'Input tensor must be contiguous'
         assert recv.is_contiguous(), 'Output tensor must be contiguous'
@@ -261,7 +282,7 @@ class Communicator:
         sendbuff: ffi.CData = ffi.cast('void*', send.data_ptr())
         recvbuff: ffi.CData = ffi.cast('void*', recv.data_ptr())
         handle: ffi.CData = ffi.new('pcclAsyncReduceOp_t*')
-        dtype: int =  DataType.from_torch_dtype(send.dtype).value
+        dtype: int = DataType.from_torch_dtype(send.dtype).value
         PCCLError.check(C.pcclAllReduceAsync(sendbuff, recvbuff, numel, dtype, op.value, tag, self._comm[0], handle))
         return AsyncReduceHandle(handle)
 
@@ -284,6 +305,7 @@ class Communicator:
         sync_info: ffi.CData = ffi.new('pcclSharedStateSyncInfo_t*')
         PCCLError.check(C.pcclSynchronizeSharedState(self._comm[0], shared_state._state, sync_info))
         return SharedStateSyncInfo(sync_info.tx_bytes, sync_info.rx_bytes)
+
 
 class MasterNode:
     def __init__(self, listen_address: str):

@@ -74,7 +74,7 @@ jobs:
         run: pip3 install pytest
 
       - name: Python Unit Tests
-        run: python -m pytest ${{ github.workspace }}/python/tests/unit_tests
+        run: python -m pytest -s ${{ github.workspace }}/python/tests/unit_tests
 
       - name: Python End-to-End Tests
-        run: python -m pytest ${{ github.workspace }}/python/tests/end_to_end
+        run: python -m pytest -s ${{ github.workspace }}/python/tests/end_to_end

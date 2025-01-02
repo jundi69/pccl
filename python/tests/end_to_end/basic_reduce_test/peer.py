@@ -1,11 +1,12 @@
 from time import sleep
-
+import os
 from pccl import *
 
 HOST: str = '127.0.0.1:48148'
 STEPS: int = 100
 WEIGHT_N: int = 1024
 PEERS: int = 1
+NUM_ELEMENTS: int = 1024
 
 print(f"Starting peer node on {HOST}")
 
@@ -23,7 +24,9 @@ communicator.connect()
 
 world_size: int = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
 
-for i in range(STEPS):
+n_performed_steps = 0
+i = 0
+while n_performed_steps < STEPS:
     if i > 0 or world_size == 1:
         communicator.update_topology()
     communicator.sync_shared_state(shared_state)
@@ -37,12 +40,14 @@ for i in range(STEPS):
         break
 
     # Create gradients tensors
-    grad: torch.Tensor = torch.rand(PEERS, dtype=torch.float32)
+    grad: torch.Tensor = torch.rand(NUM_ELEMENTS, dtype=torch.float32)
     while True:
-        handle = communicator.all_reduce_async(grad, weights, numel=PEERS, op=ReduceOp.SUM)
-        success, info = handle.wait()
-        if success:
-            print(f"Reduce completed RX: {info.rx_bytes}, TX: {info.tx_bytes}")
-            break
+        handle = communicator.all_reduce_async(grad, weights, numel=NUM_ELEMENTS, op=ReduceOp.SUM)
+        is_success, status, info = handle.wait()
+        assert is_success == True, f"All reduce failed with stats: {status}"
+        assert info is not None
+        print(f"(pid={os.getpid()}) Reduce completed RX: {info.rx_bytes}, TX: {info.tx_bytes}")
+        break
 
     shared_state.revision += 1
+    i += 1
