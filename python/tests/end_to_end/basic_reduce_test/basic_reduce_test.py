@@ -56,6 +56,7 @@ def test_basic_reduce():
         time.sleep(0.1)
 
     print("Master was started successfully")
+    time.sleep(1)
 
     # launch 2 peers
     process_list = []

@@ -88,7 +88,7 @@ pcclResult_t pcclConnect(pcclComm_t *communicator) {
         if (!communicator->ccoip_client->join()) [[unlikely]] {
             return pcclInternalError;
         }
-        return pcclInvalidUsage;
+        return pcclMasterConnectionFailed;
     }
     if (!communicator->ccoip_client->updateTopology()) [[unlikely]] {
         return pcclMasterConnectionFailed;
