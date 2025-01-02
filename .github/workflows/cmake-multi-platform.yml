@@ -78,4 +78,4 @@ jobs:
 
       - name: Python End-to-End Tests Unix
         if : runner.os == 'Linux'
-        run: ${{ github.workspace }}/python/tests/end_to_end/basic_reduce_test/basic_reduce_test.sh
+        run: bash ${{ github.workspace }}/python/tests/end_to_end/basic_reduce_test/basic_reduce_test.sh
