@@ -38,7 +38,7 @@ def test_basic_reduce():
     print(f"Launched master node; PID: {master_process.pid}")
 
     # wait for master node to start
-    time.sleep(10)
+    time.sleep(5)
 
     # print listening ports
     print("debug")
@@ -53,6 +53,8 @@ def test_basic_reduce():
 
     # print own pid
     print("Own PID: ", os.getpid())
+
+    time.sleep(5)
 
     # launch 2 peers
     process_list = []
