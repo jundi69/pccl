@@ -11,12 +11,6 @@ def main():
     master: MasterNode = MasterNode(listen_address=HOST)
     master.run()
 
-    time.sleep(1)
-    print(f"Master node started.")
-
-    p = subprocess.run(["lsof", "-i", "-P", "-n"], capture_output=True)
-    print(p.stdout.decode())
-
 
 if __name__ == '__main__':
     main()
