@@ -99,7 +99,6 @@ pcclResult_t pcclConnect(pcclComm_t *communicator) {
         status = pcclMasterConnectionFailed;
         goto failure;
     }
-success:
     return status;
 failure:
     communicator->ccoip_client = nullptr;
