@@ -333,6 +333,5 @@ class MasterNode:
         PCCLError.check(C.pcclInterruptMaster(self._master[0]))
 
     def __del__(self):
-        print("MasterNode.__del__() called")
         PCCLError.check(C.pcclMasterAwaitTermination(self._master[0]))
         PCCLError.check(C.pcclDestroyMaster(self._master[0]))

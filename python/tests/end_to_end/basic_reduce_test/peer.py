@@ -1,7 +1,6 @@
 from time import sleep
 import os
 import logging
-import subprocess
 from pccl import *
 
 HOST: str = '127.0.0.1:48148'
@@ -33,9 +32,6 @@ def main():
             break
         except PCCLError as e:
             logging.error(f"(RANK={RANK}) Failed to connect to the master node: {e}; (Attempt {attempt + 1}/{n_attempts})")
-
-            p = subprocess.run(["lsof", "-i", "-P", "-n"], capture_output=True)
-            print(p.stdout.decode())
 
             sleep(1)
     else:
