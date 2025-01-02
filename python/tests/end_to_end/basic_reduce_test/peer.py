@@ -1,5 +1,6 @@
 from time import sleep
 import os
+import logging
 from pccl import *
 
 HOST: str = '127.0.0.1:48148'
@@ -11,7 +12,7 @@ RANK: int = int(os.getenv('RANK', "0"))
 
 
 def main():
-    print(f"(RANK={RANK}) Starting peer node connecting to {HOST}")
+    logging.info(f"(RANK={RANK}) Starting peer node connecting to {HOST}")
 
     # Create a weight tensor
     weights: torch.Tensor = torch.rand(WEIGHT_N, dtype=torch.float32)
@@ -30,10 +31,11 @@ def main():
             communicator.connect()
             break
         except PCCLError as e:
-            print(f"(RANK={RANK}) Failed to connect to the master node: {e}; (Attempt {attempt + 1}/{n_attempts})")
+            logging.error(f"(RANK={RANK}) Failed to connect to the master node: {e}; (Attempt {attempt + 1}/{n_attempts})")
             sleep(1)
     else:
         assert False, f"(RANK={RANK}) Failed to connect to the master node"
+    logging.info(f"(RANK={RANK}) Connected to the master node")
 
     world_size: int = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
 
@@ -41,7 +43,9 @@ def main():
     i = 0
     while n_performed_steps < STEPS:
         if i > 0 or world_size == 1:
+            logging.info(f"(RANK={RANK}, it={i}) update_topology()")
             communicator.update_topology()
+        logging.info(f"(RANK={RANK}, it={i}) sync_shared_state()")
         communicator.sync_shared_state(shared_state)
         world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
 
@@ -55,17 +59,18 @@ def main():
         # Create gradients tensors
         grad: torch.Tensor = torch.rand(NUM_ELEMENTS, dtype=torch.float32)
         while True:
+            logging.info(f"(RANK={RANK}, it={i}) all_reduce_async()")
             handle = communicator.all_reduce_async(grad, weights, numel=NUM_ELEMENTS, op=ReduceOp.SUM)
             is_success, status, info = handle.wait()
             assert is_success == True, f"All reduce failed with stats: {status}"
             assert info is not None
-            print(f"(RANK={RANK}) Reduce completed RX: {info.rx_bytes}, TX: {info.tx_bytes}")
+            logging.info(f"((RANK={RANK}, it={i}) Reduce completed RX: {info.rx_bytes}, TX: {info.tx_bytes}")
             break
 
         shared_state.revision += 1
         i += 1
 
-    print(f"(RANK={RANK}) Finished")
+    logging.info(f"(RANK={RANK}) Finished")
 
 
 if __name__ == '__main__':
