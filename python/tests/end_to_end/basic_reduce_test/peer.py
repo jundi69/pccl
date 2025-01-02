@@ -32,6 +32,10 @@ def main():
             break
         except PCCLError as e:
             logging.error(f"(RANK={RANK}) Failed to connect to the master node: {e}; (Attempt {attempt + 1}/{n_attempts})")
+
+            p = subprocess.run(["lsof", "-i", "-P", "-n"], capture_output=True)
+            print(p.stdout.decode())
+
             sleep(1)
     else:
         assert False, f"(RANK={RANK}) Failed to connect to the master node"
