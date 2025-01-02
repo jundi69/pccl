@@ -21,6 +21,7 @@ bool ccoip::CCoIPMasterHandler::run() {
     if (!server_socket.listen()) {
         return false;
     }
+    LOG(DEBUG) << "CCoIPMasterHandler listening on port " << server_socket.getListenPort();
     if (!server_socket.runAsync()) {
         return false;
     }

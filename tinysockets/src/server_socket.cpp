@@ -158,6 +158,9 @@ bool tinysockets::ServerSocket::listen() {
                 this_ptr->onAsyncSignal();
             }
         ));
+    if (failure) {
+        return false;
+    }
 
     bound = true;
     return true;

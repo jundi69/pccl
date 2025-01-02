@@ -67,7 +67,7 @@ TEST(TestServerSocket, test_bind_already_bound) {
     EXPECT_TRUE(server_socket1.listen());
 
     tinysockets::ServerSocket server_socket2(listen_address);
-    EXPECT_TRUE(server_socket2.listen());
+    EXPECT_FALSE(server_socket2.listen());
 }
 
 // Test listening on a bound socket
