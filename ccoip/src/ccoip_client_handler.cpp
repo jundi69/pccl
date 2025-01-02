@@ -13,17 +13,17 @@
 
 ccoip::CCoIPClientHandler::CCoIPClientHandler(const ccoip_socket_address_t &address,
                                               const uint32_t peer_group) : master_socket(address),
-                                                                     // Both p2p_socket and shared_state_socket listen to the first free port above the specified port number
-                                                                     // as the constructor with inet_addr and above_port is called, which will bump on failure to bind.
-                                                                     // this is by design and the chosen ports will be communicated to the master, which will then distribute
-                                                                     // this information to clients to then correctly establish connections. The protocol does not assert these
-                                                                     // ports to be static; The only asserted static port is the master listening port.
-                                                                     p2p_socket({address.inet.protocol, {}, {}},
-                                                                         CCOIP_PROTOCOL_PORT_P2P),
-                                                                     shared_state_socket(
-                                                                         {address.inet.protocol, {}, {}},
-                                                                         CCOIP_PROTOCOL_PORT_SHARED_STATE),
-                                                                     peer_group(peer_group) {
+                                                                           // Both p2p_socket and shared_state_socket listen to the first free port above the specified port number
+                                                                           // as the constructor with inet_addr and above_port is called, which will bump on failure to bind.
+                                                                           // this is by design and the chosen ports will be communicated to the master, which will then distribute
+                                                                           // this information to clients to then correctly establish connections. The protocol does not assert these
+                                                                           // ports to be static; The only asserted static port is the master listening port.
+                                                                           p2p_socket({address.inet.protocol, {}, {}},
+                                                                               CCOIP_PROTOCOL_PORT_P2P),
+                                                                           shared_state_socket(
+                                                                               {address.inet.protocol, {}, {}},
+                                                                               CCOIP_PROTOCOL_PORT_SHARED_STATE),
+                                                                           peer_group(peer_group) {
 }
 
 bool ccoip::CCoIPClientHandler::connect() {
@@ -44,7 +44,7 @@ bool ccoip::CCoIPClientHandler::connect() {
                 }
                 return;
             }
-            const auto& hello_packet = hello_packet_opt.value();
+            const auto &hello_packet = hello_packet_opt.value();
 
             p2p_connections_rx[hello_packet.peer_uuid] = std::move(socket);
             if (!p2p_connections_rx[hello_packet.peer_uuid]->sendPacket<P2PPacketHelloAck>({})) {
@@ -387,7 +387,9 @@ bool ccoip::CCoIPClientHandler::establishP2PConnections() {
 }
 
 bool ccoip::CCoIPClientHandler::establishP2PConnection(const M2CPacketNewPeerInfo &peer) {
-    auto [it, inserted] = p2p_connections_tx.emplace(peer.peer_uuid, std::make_unique<tinysockets::BlockingIOSocket>(peer.p2p_listen_addr));
+    auto [it, inserted] = p2p_connections_tx.emplace(peer.peer_uuid,
+                                                     std::make_unique<tinysockets::BlockingIOSocket>(
+                                                         peer.p2p_listen_addr));
     if (!inserted) {
         LOG(ERR) << "P2P connection with peer " << uuid_to_string(peer.peer_uuid) << " already exists";
         return false;
@@ -581,6 +583,7 @@ bool ccoip::CCoIPClientHandler::allReduceAsync(const void *sendbuff, void *recvb
                     promise.set_value(false); // failure
                     return;
                 }
+                client_state.trackCollectiveComsRxBytes(tag, rx_packet->data.size());
 
                 // perform reduction
                 performReduction(recv_span, rx_packet->data, datatype, op);
@@ -606,6 +609,7 @@ bool ccoip::CCoIPClientHandler::allReduceAsync(const void *sendbuff, void *recvb
                         promise.set_value(false); // failure
                         return;
                     }
+                    client_state.trackCollectiveComsTxBytes(tag, byte_size);
                 }
             }
 
@@ -630,6 +634,7 @@ bool ccoip::CCoIPClientHandler::allReduceAsync(const void *sendbuff, void *recvb
                         promise.set_value(false); // failure
                         return;
                     }
+                    client_state.trackCollectiveComsTxBytes(tag, byte_size);
                 }
             } else {
                 // is not last
@@ -648,6 +653,8 @@ bool ccoip::CCoIPClientHandler::allReduceAsync(const void *sendbuff, void *recvb
                     promise.set_value(false); // failure
                     return;
                 }
+                client_state.trackCollectiveComsRxBytes(tag, byte_size);
+
                 std::memcpy(recv_span.data(), final_rx_packet->data.data(), final_rx_packet->data.size());
                 // set content to final result
             }
@@ -693,7 +700,27 @@ bool ccoip::CCoIPClientHandler::joinAsyncReduce(const uint64_t tag) {
     return true;
 }
 
-bool ccoip::CCoIPClientHandler::getAsyncReduceInfo(const uint64_t tag, std::optional<ccoip_reduce_info_t> &info_out) {
+bool ccoip::CCoIPClientHandler::getAsyncReduceInfo(const uint64_t tag,
+                                                   std::optional<ccoip_reduce_info_t> &info_out) {
+    const auto world_size_opt = client_state.getCollectiveComsWorldSize(tag);
+    const auto tx_bytes_opt = client_state.getCollectiveComsTxBytes(tag);
+    const auto rx_bytes_opt = client_state.getCollectiveComsRxBytes(tag);
+
+    // NOTE: TX bytes may be std::nullopt
+    if (!world_size_opt) {
+        // world_size_opt is a good indicator of whether this is the second invocation of getAsyncReduceInfo
+        return false;
+    }
+    const auto world_size = *world_size_opt;
+    const auto tx_bytes = *tx_bytes_opt;
+    const auto rx_bytes = *rx_bytes_opt;
+    info_out = ccoip_reduce_info_t{.tag = tag, .world_size = world_size, .tx_bytes = tx_bytes, .rx_bytes = rx_bytes};
+
+    // we have to clear this information right here because otherwise it would just keep piling up in the hash maps
+    // if the user uses new tag numbers for every collective comms operation.
+    client_state.resetCollectiveComsWorldSize(tag);
+    client_state.resetCollectiveComsTxBytes(tag);
+    client_state.resetCollectiveComsRxBytes(tag);
     return true;
 }
 
