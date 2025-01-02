@@ -34,29 +34,12 @@ def launch_py_process(
     )
 
 
-def is_port_open(host: str, port: int) -> bool:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.settimeout(1)  # Set a timeout to avoid long waits
-        try:
-            s.connect((host, port))
-            return True
-        except (socket.timeout, ConnectionRefusedError):
-            return False
-
-
 def test_basic_reduce():
     peer_script_path = os.path.join(os.path.dirname(__file__), 'peer.py')
     master_script_path = os.path.join(os.path.dirname(__file__), 'master.py')
 
     # launch master node
     master_process = launch_py_process(master_script_path, [], {'PCCL_LOG_LEVEL': 'DEBUG'}, forward_stdout=True)
-
-    # wait for something to bind to master port
-    while not is_port_open('127.0.0.1', 48148):
-        time.sleep(0.1)
-
-    print("Master was started successfully")
-    time.sleep(1)
 
     # launch 2 peers
     process_list = []

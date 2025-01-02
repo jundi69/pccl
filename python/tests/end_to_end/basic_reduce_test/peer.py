@@ -8,6 +8,7 @@ WEIGHT_N: int = 1024
 PEERS: int = 1
 NUM_ELEMENTS: int = 1024
 
+
 def main():
     print(f"Starting peer node connecting to {HOST}")
 
@@ -21,7 +22,7 @@ def main():
 
     # Create a communicator and connect to the master node
     communicator: Communicator = Communicator(HOST, 0)
-    
+
     n_attempts = 5
     for attempt in range(n_attempts):
         try:
@@ -30,6 +31,8 @@ def main():
         except PCCLError as e:
             print(f"Failed to connect to the master node: {e}; (Attempt {attempt + 1}/{n_attempts})")
             sleep(1)
+    else:
+        assert False, "Failed to connect to the master node"
 
     world_size: int = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
 
