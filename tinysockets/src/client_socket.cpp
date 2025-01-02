@@ -76,17 +76,17 @@ bool tinysockets::BlockingIOSocket::establishConnection() {
 
     // connect to the server based on protocol
     if (connect_sockaddr.inet.protocol == inetIPv4) {
-        if (connect(socket_fd, reinterpret_cast<sockaddr *>(&server_address_ipv4), sizeof(server_address_ipv4)) < 0) [[
-            unlikely]]
-        {
-            LOG(ERR) << "Failed to connect to server";
+        if (connect(socket_fd, reinterpret_cast<sockaddr *>(&server_address_ipv4), sizeof(server_address_ipv4)) < 0) {
+            const std::string error_message = std::strerror(errno);
+            LOG(ERR) << "Failed to connect to server; connect() failed with " << error_message;
             closesocket(socket_fd);
             return false;
         }
     } else if (connect_sockaddr.inet.protocol == inetIPv6) {
         if (connect(socket_fd, reinterpret_cast<const sockaddr *>(&server_address_ipv6),
-                    sizeof(server_address_ipv6)) < 0) [[unlikely]] {
-            LOG(ERR) << "Failed to connect to server";
+                    sizeof(server_address_ipv6)) < 0) {
+            const std::string error_message = std::strerror(errno);
+            LOG(ERR) << "Failed to connect to server; connect() failed with " << error_message;
             closesocket(socket_fd);
             return false;
         }
@@ -204,8 +204,11 @@ std::optional<size_t> tinysockets::BlockingIOSocket::receivePacketLength() const
     size_t n_received = 0;
     do {
         const ssize_t i = recvvp(socket_fd, &length, sizeof(length), 0);
-        if (i == 0 || i == -1) {
-            const std::string error_message = std::strerror(errno);
+        if (i == -1 || i == 0) {
+            std::string error_message = std::strerror(errno);
+            if (!isOpen()) {
+                error_message = "Connection closed";
+            }
             LOG(INFO) << "Failed to receive packet length with error: " << error_message;
             return std::nullopt;
         }

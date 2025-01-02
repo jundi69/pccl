@@ -56,7 +56,8 @@ namespace ccoip {
         [[nodiscard]] bool joinAsyncReduce(uint64_t tag) const;
 
         /// Gets the reduce info for the async op with the given tag
-        /// Outputs std::nullopt if the tag is not found or the operation has not completed
+        /// Outputs std::nullopt if the tag is not found or the operation has not completed;
+        /// Note that this function can only be called once for a particular tag; Subsequent calls will return false
         [[nodiscard]] bool getAsyncReduceInfo(uint64_t tag, std::optional<ccoip_reduce_info_t> &info_out) const;
 
         /// Wait for the client to gracefully terminate after interruption

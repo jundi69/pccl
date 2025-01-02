@@ -1,5 +1,6 @@
 #pragma once
 
+#include <ccoip_client.hpp>
 #include <ccoip_inet.h>
 #include <ccoip_inet_utils.hpp>
 #include <ccoip_packets.hpp>
@@ -37,6 +38,22 @@ namespace ccoip {
         /// Accessible by @code getSharedStateSyncTxBytes()@endcode
         /// Reset by @code resetSharedStateSyncTxBytes()@endcode
         size_t shared_state_sync_tx_bytes = 0;
+
+        /// The number of bytes sent during ongoing collective communications operations
+        /// Accessible by @code getCollectiveComsTxBytes(uint32_t tag)@endcode
+        /// Reset by @code resetCollectiveComsRxBytes(uint32_t tag)@endcode
+        std::unordered_map<uint64_t, size_t> collective_coms_tx_bytes{};
+
+        /// The number of bytes received during ongoing collective communications operations
+        /// Accessible by @code trackCollectiveComsRxBytes(uint32_t tag)@endcode
+        /// Cleared by @code resetCollectiveComsRxBytes(uint32_t tag)@endcode
+        std::unordered_map<uint64_t, size_t> collective_coms_rx_bytes{};
+
+        /// Maps tags of running collective communications operations to their respective world size
+        /// that was valid at the time of the operation;
+        /// Accessible by @code getCollectiveComsWorldSize(uint32_t tag)@endcode
+        /// Cleared by @code resetCollectiveComsRxBytes(uint32_t tag)@endcode
+        std::unordered_map<uint64_t, uint32_t> running_collective_coms_ops_world_size{};
 
         /// Tags of all running collective communications operations
         std::unordered_set<uint64_t> running_collective_coms_ops_tags{};
@@ -107,6 +124,35 @@ namespace ccoip {
 
         /// Resets the number of bytes sent during the shared state sync phase
         void resetSharedStateSyncTxBytes();
+
+        /// Called to track additional bytes received during ongoing collective communications operations
+        void trackCollectiveComsRxBytes(uint64_t tag, size_t rx_bytes);
+
+        /// Resets the number of bytes received during ongoing collective communications operations
+        /// @code getCollectiveComsRxBytes()@endcode will return std::nullopt after this call
+        void resetCollectiveComsRxBytes(uint64_t tag);
+
+        /// Returns the number of bytes sent during ongoing collective communications operations;
+        /// Returns std::nullopt if the tag is not found
+        [[nodiscard]] std::optional<size_t> getCollectiveComsRxBytes(uint64_t tag) const;
+
+        /// Called to track additional bytes sent during ongoing collective communications operations
+        void trackCollectiveComsTxBytes(uint64_t tag, size_t tx_bytes);
+
+        /// Resets the number of bytes sent during ongoing collective communications operations
+        /// @code getCollectiveComsTxBytes()@endcode will return std::nullopt after this call
+        void resetCollectiveComsTxBytes(uint64_t tag);
+
+        /// Returns the number of bytes sent during ongoing collective communications operations
+        /// Returns std::nullopt if the tag is not found
+        [[nodiscard]] std::optional<size_t> getCollectiveComsTxBytes(uint64_t tag) const;
+
+        /// Returns the world size of the collective communications operation with the specified tag
+        /// Returns std::nullopt if the tag is not found
+        [[nodiscard]] std::optional<uint32_t> getCollectiveComsWorldSize(uint64_t tag) const;
+
+        /// Resets the world size of the collective communications operation with the specified tag
+        void resetCollectiveComsWorldSize(uint64_t tag);
 
         // TODO: THIS IS SUBJECT TO CHANGE, FOR NOW ASSERT THE TOPOLOGY TO BE A SIMPLE RING REDUCE WITH A NON-PIPELINED ORDER
         void updateTopology(const std::vector<ccoip_uuid_t> &new_ring_order);
