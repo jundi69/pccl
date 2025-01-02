@@ -35,22 +35,6 @@ def launch_py_process(
     )
 
 
-def debug():
-    print("debug")
-
-    if os.name == 'nt':
-        print("Windows")
-
-        p = subprocess.run(["netstat", "-abn"])
-        print(p.stdout)
-    elif os.name == 'posix':
-        print("Linux")
-        p = subprocess.run(["lsof", "-i", "-P", "-n"])
-        print(p.stdout)
-
-    # print own pid
-    print("Own PID: ", os.getpid())
-
 
 def test_basic_reduce():
     peer_script_path = os.path.join(os.path.dirname(__file__), 'peer.py')
@@ -63,7 +47,19 @@ def test_basic_reduce():
     # wait for master node to start
     time.sleep(10)
 
-    debug()
+    # print listening ports
+    print("debug")
+    if os.name == 'nt':
+        print("Windows")
+        p = subprocess.run(["netstat", "-abn"])
+        print(p.stdout)
+    elif os.name == 'posix':
+        print("Linux")
+        p = subprocess.run(["lsof", "-i", "-P", "-n"])
+        print(p.stdout)
+
+    # print own pid
+    print("Own PID: ", os.getpid())
 
     # launch 2 peers
     process_list = []
