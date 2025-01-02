@@ -1,7 +1,6 @@
 import os
 import subprocess
 import sys
-import time
 from typing import List, Optional, Dict, Union, IO
 
 
@@ -36,25 +35,6 @@ def test_basic_reduce():
     # launch master node
     master_process = launch_py_process(master_script_path, [], {'PCCL_LOG_LEVEL': 'DEBUG'})
     print(f"Launched master node; PID: {master_process.pid}")
-
-    # wait for master node to start
-    time.sleep(5)
-
-    # print listening ports
-    print("debug")
-    if os.name == 'nt':
-        print("Windows")
-        p = subprocess.run(["netstat", "-abn"], capture_output=True)
-        print(p.stdout.decode())
-    elif os.name == 'posix':
-        print("Linux")
-        p = subprocess.run(["lsof", "-i", "-P", "-n"], capture_output=True)
-        print(p.stdout.decode())
-
-    # print own pid
-    print("Own PID: ", os.getpid())
-
-    time.sleep(5)
 
     # launch 2 peers
     process_list = []
