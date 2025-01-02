@@ -1,6 +1,6 @@
 from pccl import *
 
-HOST: str = '127.0.0.1:48148'
+HOST: str = '0.0.0.0:48148'
 
 print(f"Starting master node on {HOST}")
 
