@@ -24,13 +24,32 @@ def launch_py_process(
     env = {**dict(os.environ), **(env_vars or {})}
 
     # Set stdout based on the forward_stdout flag
-    stdout: Union[IO, None] = sys.stdout if forward_stdout else None
+    stdout: Union[IO, None] = subprocess.PIPE if forward_stdout else None
+    stderr: Union[IO, None] = subprocess.PIPE if forward_stdout else None
 
     return subprocess.Popen(
         [sys.executable, script_path] + args,
         env=env,
-        stdout=stdout
+        stdout=stdout,
+        stderr=stderr
     )
+
+
+def debug():
+    print("debug")
+
+    if os.name == 'nt':
+        print("Windows")
+
+        p = subprocess.run(["netstat", "-ano"])
+        print(p.stdout)
+    elif os.name == 'posix':
+        print("Linux")
+        p = subprocess.run(["lsof", "-i"])
+        print(p.stdout)
+
+    # print own pid
+    print("Own PID: ", os.getpid())
 
 
 def test_basic_reduce():
@@ -40,10 +59,16 @@ def test_basic_reduce():
     # launch master node
     master_process = launch_py_process(master_script_path, [], {'PCCL_LOG_LEVEL': 'DEBUG'}, forward_stdout=True)
 
+    # wait for master node to start
+    time.sleep(10)
+
+    debug()
+
     # launch 2 peers
     process_list = []
     for rank in range(2):
-        process_list.append(launch_py_process(peer_script_path, [], {'PCCL_LOG_LEVEL': 'DEBUG', 'RANK': str(rank)}, forward_stdout=True))
+        process_list.append(launch_py_process(peer_script_path, [], {'PCCL_LOG_LEVEL': 'DEBUG', 'RANK': str(rank)},
+                                              forward_stdout=True))
 
     # wait for all processes to finish
     for process in process_list:
@@ -54,6 +79,6 @@ def test_basic_reduce():
     master_process.kill()
     master_process.wait()
 
+
 if __name__ == "__main__":
     test_basic_reduce()
-
