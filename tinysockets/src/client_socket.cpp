@@ -76,17 +76,17 @@ bool tinysockets::BlockingIOSocket::establishConnection() {
 
     // connect to the server based on protocol
     if (connect_sockaddr.inet.protocol == inetIPv4) {
-        if (connect(socket_fd, reinterpret_cast<sockaddr *>(&server_address_ipv4), sizeof(server_address_ipv4)) < 0) [[
-            unlikely]]
-        {
-            LOG(ERR) << "Failed to connect to server";
+        if (connect(socket_fd, reinterpret_cast<sockaddr *>(&server_address_ipv4), sizeof(server_address_ipv4)) < 0) {
+            const std::string error_message = std::strerror(errno);
+            LOG(ERR) << "Failed to connect to server; connect() failed with " << error_message;
             closesocket(socket_fd);
             return false;
         }
     } else if (connect_sockaddr.inet.protocol == inetIPv6) {
         if (connect(socket_fd, reinterpret_cast<const sockaddr *>(&server_address_ipv6),
-                    sizeof(server_address_ipv6)) < 0) [[unlikely]] {
-            LOG(ERR) << "Failed to connect to server";
+                    sizeof(server_address_ipv6)) < 0) {
+            const std::string error_message = std::strerror(errno);
+            LOG(ERR) << "Failed to connect to server; connect() failed with " << error_message;
             closesocket(socket_fd);
             return false;
         }
