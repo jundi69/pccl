@@ -7,10 +7,11 @@ STEPS: int = 100
 WEIGHT_N: int = 1024
 PEERS: int = 1
 NUM_ELEMENTS: int = 1024
+RANK: int = int(os.getenv('RANK', "0"))
 
 
 def main():
-    print(f"Starting peer node connecting to {HOST}")
+    print(f"(RANK={RANK}) Starting peer node connecting to {HOST}")
 
     # Create a weight tensor
     weights: torch.Tensor = torch.rand(WEIGHT_N, dtype=torch.float32)
@@ -29,10 +30,10 @@ def main():
             communicator.connect()
             break
         except PCCLError as e:
-            print(f"Failed to connect to the master node: {e}; (Attempt {attempt + 1}/{n_attempts})")
+            print(f"(RANK={RANK}) Failed to connect to the master node: {e}; (Attempt {attempt + 1}/{n_attempts})")
             sleep(1)
     else:
-        assert False, "Failed to connect to the master node"
+        assert False, f"(RANK={RANK}) Failed to connect to the master node"
 
     world_size: int = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
 
@@ -58,11 +59,13 @@ def main():
             is_success, status, info = handle.wait()
             assert is_success == True, f"All reduce failed with stats: {status}"
             assert info is not None
-            print(f"(pid={os.getpid()}) Reduce completed RX: {info.rx_bytes}, TX: {info.tx_bytes}")
+            print(f"(RANK={RANK}) Reduce completed RX: {info.rx_bytes}, TX: {info.tx_bytes}")
             break
 
         shared_state.revision += 1
         i += 1
+
+    print(f"(RANK={RANK}) Finished")
 
 
 if __name__ == '__main__':

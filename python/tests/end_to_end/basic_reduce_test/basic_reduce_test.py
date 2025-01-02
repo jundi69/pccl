@@ -42,8 +42,8 @@ def test_basic_reduce():
 
     # launch 2 peers
     process_list = []
-    for _ in range(2):
-        process_list.append(launch_py_process(peer_script_path, [], {'PCCL_LOG_LEVEL': 'DEBUG'}, forward_stdout=True))
+    for rank in range(2):
+        process_list.append(launch_py_process(peer_script_path, [], {'PCCL_LOG_LEVEL': 'DEBUG', 'RANK': str(rank)}, forward_stdout=True))
 
     # wait for all processes to finish
     for process in process_list:

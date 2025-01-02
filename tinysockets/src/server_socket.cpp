@@ -139,14 +139,14 @@ bool tinysockets::ServerSocket::listen() {
             continue;
         }
 
-        const int listen_result = uv_listen(reinterpret_cast<uv_stream_t*>(server_socket_state->tcp_server.get()), 128,
+        const int listen_result = uv_listen(reinterpret_cast<uv_stream_t*>(server_socket_state->tcp_server.get()), SOMAXCONN,
             [](uv_stream_t *server, const int status) {
                 auto *this_ptr = static_cast<ServerSocket *>(server->data);
                 this_ptr->onNewConnection(reinterpret_cast<uv_server_stream_t *>(server), status);
             });
         failure = (listen_result != 0);
         if (failure) {
-            LOG(ERR) << "uv_listen failed with error: " << uv_strerror(listen_result) << " (" << listen_result << ")";
+            LOG(ERR) << "uv_listen(port=" << listen_address.port << ", backlog=" << SOMAXCONN << ") failed with error: " << uv_strerror(listen_result) << " (" << listen_result << ")";
         }
     } while (bump_port_on_failure && failure);
 
