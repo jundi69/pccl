@@ -205,6 +205,9 @@ std::optional<size_t> tinysockets::BlockingIOSocket::receivePacketLength() const
     do {
         const ssize_t i = recvvp(socket_fd, &length, sizeof(length), 0);
         if (i == -1) {
+            if (errno == 0) {
+                continue; // No data available yet, try again
+            }
             const std::string error_message = std::strerror(errno);
             LOG(INFO) << "Failed to receive packet length with error: " << error_message;
             return std::nullopt;
