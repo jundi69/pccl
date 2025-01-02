@@ -712,8 +712,8 @@ bool ccoip::CCoIPClientHandler::getAsyncReduceInfo(const uint64_t tag,
         return false;
     }
     const auto world_size = *world_size_opt;
-    const auto tx_bytes = *tx_bytes_opt;
-    const auto rx_bytes = *rx_bytes_opt;
+    const auto tx_bytes = tx_bytes_opt.has_value() ? *tx_bytes_opt : 0;
+    const auto rx_bytes = rx_bytes_opt.has_value() ? *rx_bytes_opt : 0;
     info_out = ccoip_reduce_info_t{.tag = tag, .world_size = world_size, .tx_bytes = tx_bytes, .rx_bytes = rx_bytes};
 
     // we have to clear this information right here because otherwise it would just keep piling up in the hash maps

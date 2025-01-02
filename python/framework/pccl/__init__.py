@@ -125,8 +125,15 @@ class SharedState:
     def __init__(self, tensor_infos: list[TensorInfo]):
         assert tensor_infos, 'At least one tensor info must be provided'
         self._infos = ffi.new('pcclTensorInfo_t[]', len(tensor_infos))
+        self._name_strings = []
         for i, info in enumerate(tensor_infos):
-            self._infos[i].name = ffi.new('char[]', bytes(info.name, 'utf-8'))
+            name_bytes = info.name.encode('utf-8')
+            name_cstr = ffi.new('char[]', name_bytes)
+            self._infos[i].name = name_cstr
+
+            # Keep a reference to prevent the string from being freed; tie it to lifetime of SharedState python object
+            self._name_strings.append(name_cstr)
+
             self._infos[i].data = ffi.cast('void*', info.data_ptr)
             self._infos[i].count = ffi.cast('size_t', info.numel)
             self._infos[i].datatype = ffi.cast('pcclDataType_t', info.dtype.value)
