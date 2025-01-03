@@ -148,7 +148,8 @@ namespace ccoip {
             SUCCESSFUL_MATCH,
             KEY_SET_MISMATCH,
             CONTENT_HASH_MISMATCH,
-            REVISION_MISMATCH
+            REVISION_OUTDATED,
+            REVISION_INCREMENT_VIOLATION
         };
 
     private:
@@ -197,23 +198,27 @@ namespace ccoip {
         /// peer group bin cleared when the shared state distribution phase ends.
         std::unordered_map<uint32_t, std::unordered_map<std::string, uint64_t> > shared_state_hashes{};
 
-        /// The revision of the current shared state.
+        /// The next shared state revision that is expected from peers synchronizing shared state, intending to distribute.
+        /// Shared state revisions that do not match this value will either be considered outdated or a violation of the
+        /// one-increment-only rule.
+        /// This value is stored per peer group. Each peer group maintains their own shared state, and thus their own revision.
+        ///
         /// If a client requests to sync a shared state with a revision smaller than this,
-        /// this means that the client has an outdated shared state that needs to be updated.
-        /// If a client requests a shared state with a revision larger than this, the client
-        /// has advanced the state of the revision and the master's account needs to be updated
-        /// to reflect the new maximum revision; It is expected that clients will either
+        /// this means that the client has an outdated shared state that is outdated and needs to be updated.
+        /// If a client requests a shared state with a revision larger than this, the client has violated the
+        /// one-increment-only rule.
+        /// It is expected that clients will either
         /// a) independently advance their shared state and remain in sync implicitly or
         /// b) request the shared state from the master node to synchronize.
-        /// A new maximum revision must only ever be one greater than the previous maximum revision; Deviation will
-        /// result in a kick.
-        uint64_t shared_state_revision = 0;
+        ///
+        /// After the completion of a shared state voting phase, this value is incremented by the master
+        /// and ANTICIPATES that clients will increment their shared state revision by one.
+        std::unordered_map<uint32_t, uint64_t> next_shared_state_revision{};
 
         /// Maps the client UUID to the shared state mismatch status populated by the last invocation of @code sharedStateMatches@endcode.
         /// Grouped by peer group.
         /// peer group bin cleared when the shared state distribution phase ends.
-        std::unordered_map<uint32_t, std::unordered_map<ccoip_uuid_t, SharedStateMismatchStatus> >
-        shared_state_statuses{};
+        std::unordered_map<uint32_t, std::unordered_map<ccoip_uuid_t, SharedStateMismatchStatus> > shared_state_statuses{};
 
         /// Maps the client UUID to the set of shared state keys that have dirty content, meaning
         /// that the hash of the shared state entry does not match the hash in the shared state mask.
@@ -361,9 +366,9 @@ namespace ccoip {
         /// Returns the client info for a particular client uuid; returns std::nullopt if not found
         [[nodiscard]] std::optional<std::reference_wrapper<ClientInfo> > getClientInfo(const ccoip_uuid_t &client_uuid);
 
-        /// Returns the current shared state revision. This represents the current maximum revision of the shared state
+        /// Returns the current shared state revision for the given peer group. This represents the current maximum revision of the shared state
         /// that all clients have agreed upon to be the current shared state revision.
-        [[nodiscard]] uint64_t getSharedStateRevision() const;
+        [[nodiscard]] uint64_t getSharedStateRevision(uint32_t peer_group);
 
         /// Returns the set of shared state keys of a particular peer that have dirty content, meaning that the hash of the shared state entry
         /// does not match the hash in the shared state mask.

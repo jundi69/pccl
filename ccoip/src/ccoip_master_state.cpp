@@ -570,6 +570,7 @@ ccoip::CCoIPMasterState::SharedStateMismatchStatus ccoip::CCoIPMasterState::shar
 
     const auto info_it = client_info.find(peer_uuid);
     uint32_t peer_group{};
+    uint64_t next_shared_state_revision{};
 
     if (info_it == client_info.end()) {
         LOG(WARN) << "Client " << uuid_to_string(peer_uuid) << " not found";
@@ -577,14 +578,17 @@ ccoip::CCoIPMasterState::SharedStateMismatchStatus ccoip::CCoIPMasterState::shar
         goto end;
     }
     peer_group = info_it->second.peer_group;
+    next_shared_state_revision = this->next_shared_state_revision[peer_group];
 
-    if (revision == shared_state_revision + 1) {
-        shared_state_revision = revision;
-    } else if (revision != shared_state_revision) {
-        status = REVISION_MISMATCH;
+    if (revision < next_shared_state_revision) {
+        status = REVISION_OUTDATED;
         goto end;
     }
 
+    if (revision > next_shared_state_revision) {
+        status = REVISION_INCREMENT_VIOLATION;
+        goto end;
+    }
 
     if (shared_state_mask[peer_group].empty()) {
         // set shared_state_mask
@@ -660,7 +664,6 @@ std::optional<ccoip::CCoIPMasterState::SharedStateMismatchStatus> ccoip::CCoIPMa
 }
 
 bool ccoip::CCoIPMasterState::transitionToSharedStateSyncPhase(const uint32_t peer_group) {
-    // all clients should
     for (auto &[_, info]: client_info) {
         if (info.peer_group != peer_group) {
             continue;
@@ -686,6 +689,7 @@ bool ccoip::CCoIPMasterState::transitionToSharedStateSyncPhase(const uint32_t pe
         }
     }
     votes_sync_shared_state[peer_group].clear();
+    next_shared_state_revision[peer_group]++;
     return true;
 }
 
@@ -718,8 +722,8 @@ std::optional<std::reference_wrapper<ccoip::ClientInfo> > ccoip::CCoIPMasterStat
     return it->second;
 }
 
-uint64_t ccoip::CCoIPMasterState::getSharedStateRevision() const {
-    return shared_state_revision;
+uint64_t ccoip::CCoIPMasterState::getSharedStateRevision(const uint32_t peer_group) {
+    return next_shared_state_revision[peer_group];
 }
 
 std::vector<std::string> ccoip::CCoIPMasterState::getOutdatedSharedStateKeys(const ccoip_uuid_t peer_uuid) {

@@ -26,7 +26,7 @@ device = torch.device("cpu")
 # Define hyperparameters
 input_size = 28 * 28  # MNIST images are 28x28
 # hidden_sizes = [1024, 4096, 4096, 4096, 4096, 1024]
-hidden_sizes = [1024, 1024]
+hidden_sizes = [256, 128]
 num_classes = 10  # Digits 0-9
 batch_size = 64
 learning_rate = 0.001
@@ -62,6 +62,18 @@ class NeuralNet(nn.Module):
         return x
 
 
+LOG_DEBUG = False
+
+
+def log_debug(msg: str):
+    if LOG_DEBUG:
+        print(msg)
+
+
+def log_info(msg: str):
+    print(msg)
+
+
 HOST: str = '127.0.0.1:48148'
 RANK: int = int(os.getenv('RANK', "0"))
 
@@ -87,7 +99,7 @@ def main():
             sleep(1)
     else:
         assert False, f"(RANK={RANK}) Failed to connect to the master node"
-    print(f"(RANK={RANK}) Connected to the master node")
+    log_info(f"(RANK={RANK}) Connected to the master node")
 
     # poll shared state for model parameters
     shared_state_dict = {}
@@ -99,60 +111,74 @@ def main():
     ])
 
     # Training loop
+    train_it = enumerate(train_loader)
     try:
         i = 0
-        while shared_state.revision < max_steps:
+        while True:
             i += 1
             if i > 1:
-                print(f"(RANK={RANK}, it={i}) update_topology()")
+                log_debug(f"(RANK={RANK}, it={i}) update_topology()")
                 communicator.update_topology()
-            print(f"(RANK={RANK}, it={i}) sync_shared_state()")
-            communicator.sync_shared_state(shared_state)
+
             world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
 
             if world_size < 2:
-                sleep(0.1)
+                sleep(1)
                 continue
 
-            for batch_idx, (images, labels) in enumerate(train_loader):
-                images, labels = images.to(device), labels.to(device)
+            log_debug(f"(RANK={RANK}, it={i}) sync_shared_state()")
+            communicator.sync_shared_state(shared_state)
+            log_debug(f"(RANK={RANK}, it={i}) shared_state.revision: {shared_state.revision}")
+            if shared_state.revision >= max_steps:
+                log_debug(f"(RANK={RANK}, it={i}) Training completed")
+                break
 
-                # Forward pass
-                outputs = model(images)
-                loss = criterion(outputs, labels)
+            try:
+                batch_idx, (images, labels) = next(train_it)
+            except StopIteration:
+                log_debug(f"(RANK={RANK}, it={i}) End of epoch")
+                train_it = enumerate(train_loader)
+                batch_idx, (images, labels) = next(train_it)
 
-                # Backward pass and optimization
-                optimizer.zero_grad(set_to_none=False)
-                loss.backward()
+            images, labels = images.to(device), labels.to(device)
 
-                # collect gradients in one contiguous tensor
-                grads = torch.cat([p.grad.view(-1) for p in model.parameters() if p.grad is not None])
+            # Forward pass
+            outputs = model(images)
+            loss = criterion(outputs, labels)
 
-                while True:
-                    print(f"(RANK={RANK}, it={i}) all_reduce_async()")
-                    handle = communicator.all_reduce_async(grads, grads, numel=grads.numel(), op=ReduceOp.SUM)
-                    is_success, status, info = handle.wait()
-                    assert is_success == True, f"All reduce failed with stats: {status}"
-                    assert info is not None
-                    print(f"((RANK={RANK}, it={i}) Reduce completed RX: {info.rx_bytes}, TX: {info.tx_bytes}")
-                    break
+            # Backward pass and optimization
+            optimizer.zero_grad(set_to_none=False)
+            loss.backward()
 
-                # scatter gradients back to model parameters
-                offset = 0
-                for p in model.parameters():
-                    if p.grad is None:
-                        continue
-                    numel = p.numel()
-                    p.grad.data.copy_(grads[offset:offset + numel].view_as(p.grad))
-                    offset += numel
+            # collect gradients in one contiguous tensor
+            grads = torch.cat([p.grad.view(-1) for p in model.parameters() if p.grad is not None])
 
-                # Update parameters
-                optimizer.step()
-                shared_state.revision += 1
-                if shared_state.revision >= max_steps:
-                    break
+            while True:
+                log_debug(f"(RANK={RANK}, it={i}) all_reduce_async()")
+                handle = communicator.all_reduce_async(grads, grads, numel=grads.numel(), op=ReduceOp.SUM)
+                is_success, status, info = handle.wait()
+                assert is_success == True, f"All reduce failed with stats: {status}"
+                assert info is not None
+                log_debug(f"((RANK={RANK}, it={i}) Reduce completed RX: {info.rx_bytes}, TX: {info.tx_bytes}")
+                break
 
-                print(f"(RANK={RANK}, it={i}) loss: {loss.item()}, revision: {shared_state.revision}")
+            # scatter gradients back to model parameters
+            offset = 0
+            for p in model.parameters():
+                if p.grad is None:
+                    continue
+                numel = p.numel()
+                p.grad.data.copy_(grads[offset:offset + numel].view_as(p.grad))
+                offset += numel
+
+            # Update parameters
+            optimizer.step()
+            shared_state.revision += 1
+
+            log_debug(f"(RANK={RANK}, it={i}) loss: {loss.item()}, revision: {shared_state.revision}")
+
+            if i % 100 == 0:
+                log_info(f"(RANK={RANK}, it={i}) loss: {loss.item()}, revision: {shared_state.revision}")
     except Exception as e:
         print(f"Training aborted with exception: {e}")
         exit(1)
@@ -169,11 +195,11 @@ def main():
             total += labels.size(0)
             correct += (predicted == labels).sum().item()
 
-        print(f"Test Accuracy: {100 * correct / total:.2f}%")
+        log_info(f"Test Accuracy: {100 * correct / total:.2f}%")
 
     # Save the model
     torch.save(model.state_dict(), "mnist_model.pth")
-    print("Model saved to mnist_model.pth")
+    log_info("Model saved to mnist_model.pth")
 
 
 if __name__ == '__main__':

@@ -282,6 +282,10 @@ pcclResult_t pcclSynchronizeSharedState(const pcclComm_t *communicator, pcclShar
     if (!communicator->ccoip_client->syncSharedState(shared_state_internal, info)) [[unlikely]] {
         return pcclInvalidUsage;
     }
+
+    // revision may change after sync
+    shared_state->revision = shared_state_internal.revision;
+
     if (sync_info_out != nullptr) {
         *sync_info_out = pcclSharedStateSyncInfo_t{
             .tx_bytes = info.tx_bytes,

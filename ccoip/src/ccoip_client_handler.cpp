@@ -217,6 +217,19 @@ bool ccoip::CCoIPClientHandler::syncSharedState(ccoip_shared_state_t &shared_sta
         }
 
         if (response->is_outdated) {
+
+            // check if distributor address is empty
+            if (response->distributor_address.port == 0 &&
+                response->distributor_address.inet.protocol == inetIPv4 &&
+                response->distributor_address.inet.ipv4.data[0] == 0 &&
+                response->distributor_address.inet.ipv4.data[1] == 0 &&
+                response->distributor_address.inet.ipv4.data[2] == 0 &&
+                response->distributor_address.inet.ipv4.data[3] == 0
+            ) {
+                LOG(ERR) << "Failed to sync shared state: Shared state distributor address is empty";
+                return false;
+            }
+
             // if shared state is outdated, request shared state from master
             tinysockets::BlockingIOSocket req_socket(response->distributor_address);
             if (!req_socket.establishConnection()) {
@@ -452,6 +465,7 @@ void ccoip::CCoIPClientHandler::handleSharedStateRequest(const ccoip_socket_addr
     {
         response.status = SUCCESS;
         const auto &shared_state = client_state.getCurrentSharedState();
+        response.revision = shared_state.revision;
         for (const auto &requested_key: packet.requested_keys) {
             const auto it = std::ranges::find_if(shared_state.entries,
                                                  [&requested_key](const ccoip_shared_state_entry_t &entry) {

@@ -67,7 +67,7 @@ TEST(SharedStateDistribution, TestBasic) {
             .value = std::span(reinterpret_cast<std::byte *>(value1.get()), value_size),
             .allow_content_inequality = false
         });
-        shared_state.revision = 1;
+        shared_state.revision = 0;
 
         ccoip_shared_state_sync_info_t info{};
         ASSERT_TRUE(client1.syncSharedState(shared_state, info));
@@ -151,7 +151,7 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedState) {
             .value = std::span(reinterpret_cast<std::byte *>(value1.get()), value_size),
             .allow_content_inequality = false
         });
-        shared_state.revision = 1;
+        shared_state.revision = 0;
 
         ccoip_shared_state_sync_info_t info{};
         ASSERT_TRUE(client1.syncSharedState(shared_state, info));
@@ -174,7 +174,7 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedState) {
             .value = std::span(reinterpret_cast<std::byte *>(value2.get()), value_size),
             .allow_content_inequality = false
         });
-        shared_state.revision = 1;
+        shared_state.revision = 0;
 
         ccoip_shared_state_sync_info_t info{};
         ASSERT_TRUE(client2.syncSharedState(shared_state, info));
@@ -254,7 +254,7 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedStateMultiplePeerGroups) 
                 .value = std::span(reinterpret_cast<std::byte *>(value1.get()), value_size),
                 .allow_content_inequality = false
             });
-            shared_state.revision = 1;
+            shared_state.revision = 0;
 
             ccoip_shared_state_sync_info_t info{};
             ASSERT_TRUE(client1.syncSharedState(shared_state, info));
@@ -276,7 +276,7 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedStateMultiplePeerGroups) 
                 .value = std::span(reinterpret_cast<std::byte *>(value2.get()), value_size),
                 .allow_content_inequality = false
             });
-            shared_state.revision = 1;
+            shared_state.revision = 0;
 
             ccoip_shared_state_sync_info_t info{};
             ASSERT_TRUE(client2.syncSharedState(shared_state, info));
@@ -360,7 +360,7 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedStateMultiplePeerGroupsDi
                 .value = std::span(reinterpret_cast<std::byte *>(value1.get()), value_size),
                 .allow_content_inequality = false
             });
-            shared_state.revision = 1;
+            shared_state.revision = 0;
 
             ccoip_shared_state_sync_info_t info{};
             ASSERT_TRUE(client1.syncSharedState(shared_state, info));
@@ -382,7 +382,7 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedStateMultiplePeerGroupsDi
                 .value = std::span(reinterpret_cast<std::byte *>(value2.get()), value_size),
                 .allow_content_inequality = false
             });
-            shared_state.revision = 1;
+            shared_state.revision = 0;
 
             ccoip_shared_state_sync_info_t info{};
             ASSERT_TRUE(client2.syncSharedState(shared_state, info));
@@ -471,7 +471,7 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedStateMultiplePeerGroupsDi
                         .value = std::span(reinterpret_cast<std::byte *>(value1_g1.get()), value_size),
                         .allow_content_inequality = false
                     });
-                    shared_state.revision = 1;
+                    shared_state.revision = 0;
                     ccoip_shared_state_sync_info_t info{};
                     ++client1_sync_ctr;
                     ASSERT_TRUE(g1client1.syncSharedState(shared_state, info));
@@ -490,7 +490,7 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedStateMultiplePeerGroupsDi
                         .value = std::span(reinterpret_cast<std::byte *>(value1_g2.get()), value_size),
                         .allow_content_inequality = false
                     });
-                    shared_state.revision = 1;
+                    shared_state.revision = 0;
                     ccoip_shared_state_sync_info_t info{};
                     ++client1_sync_ctr;
                     ASSERT_TRUE(g2client1.syncSharedState(shared_state, info));
@@ -519,7 +519,7 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedStateMultiplePeerGroupsDi
                     .value = std::span(reinterpret_cast<std::byte *>(value1_g1.get()), value_size),
                     .allow_content_inequality = false
                 });
-                shared_state.revision = 1;
+                shared_state.revision = 0;
                 ccoip_shared_state_sync_info_t info{};
                 ASSERT_TRUE(g1client2.syncSharedState(shared_state, info));
 
@@ -537,7 +537,7 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedStateMultiplePeerGroupsDi
                     .value = std::span(reinterpret_cast<std::byte *>(value1_g2.get()), value_size),
                     .allow_content_inequality = false
                 });
-                shared_state.revision = 1;
+                shared_state.revision = 0;
                 ccoip_shared_state_sync_info_t info{};
                 ASSERT_TRUE(g2client2.syncSharedState(shared_state, info));
 
@@ -614,8 +614,7 @@ TEST(SharedStateDistribution, TestMultiStepAdvancement) {
             .allow_content_inequality = false
         });
         shared_state.revision = 0;
-
-        for (int step = 1; step <= num_steps; ++step) {
+        for (int step = 0; step < num_steps; ++step) {
             // Independently update shared state identically
             std::fill_n(value, value_size, static_cast<uint8_t>(42 + step));
             shared_state.revision = step;
@@ -696,17 +695,17 @@ TEST(SharedStateDistribution, TestDragAlongClient) {
         });
         shared_state.revision = 0;
 
-        for (int step = 1; step <= num_steps; ++step) {
+        for (int step = 0; step < num_steps; ++step) {
             // Update value
             std::fill_n(value1.get(), value_size, static_cast<uint8_t>(42 + step));
             shared_state.revision = step;
 
             ccoip_shared_state_sync_info_t info{};
-            ASSERT_TRUE(client1.syncSharedState(shared_state, info));
+            EXPECT_TRUE(client1.syncSharedState(shared_state, info));
 
             // Client 1 should send data to client 2
-            ASSERT_EQ(info.tx_bytes, value_size);
-            ASSERT_EQ(info.rx_bytes, 0);
+            EXPECT_EQ(info.tx_bytes, value_size);
+            EXPECT_EQ(info.rx_bytes, 0);
         }
     });
 
@@ -724,20 +723,204 @@ TEST(SharedStateDistribution, TestDragAlongClient) {
         shared_state.revision = 0; // Client 2 does not update revision
 
         const std::unique_ptr<uint8_t[]> value1_inferred(new uint8_t[value_size]);
-        for (int step = 1; step <= num_steps; ++step) {
+        for (int step = 0; step < num_steps; ++step) {
             ccoip_shared_state_sync_info_t info{};
-            ASSERT_TRUE(client2.syncSharedState(shared_state, info));
+            EXPECT_TRUE(client2.syncSharedState(shared_state, info));
+
+            // revision should be updated
+            EXPECT_EQ(shared_state.revision, step);
 
             // Client 2 should receive data from client 1
-            ASSERT_EQ(info.tx_bytes, 0);
-            ASSERT_EQ(info.rx_bytes, value_size);
+            EXPECT_EQ(info.tx_bytes, 0);
+            EXPECT_EQ(info.rx_bytes, value_size);
 
             // infer value1 from step
             std::fill_n(value1_inferred.get(), value_size, static_cast<uint8_t>(42 + step));
 
             // Value2 should now be updated to match value1
-            ASSERT_EQ(std::memcmp(value1_inferred.get(), value2.get(), value_size), 0);
+            EXPECT_EQ(std::memcmp(value1_inferred.get(), value2.get(), value_size), 0);
         }
+    });
+
+    // Wait for both clients to finish
+    client1_main_thread.join();
+    client2_main_thread.join();
+
+    // Clean shutdown
+    ASSERT_TRUE(client2.interrupt());
+    ASSERT_TRUE(client1.interrupt());
+
+    ASSERT_TRUE(client1.join());
+    ASSERT_TRUE(client2.join());
+
+    ASSERT_TRUE(master.interrupt());
+    ASSERT_TRUE(master.join());
+};
+
+// Test violation of the one-increment rule
+// Clients must increment their shared state by exactly one before starting the next shared state synchronization
+TEST(SharedStateDistribution, TestOneIncrementRuleViolationSimple) {
+    ccoip::CCoIPMaster master({
+        .inet = {.protocol = inetIPv4, .ipv4 = {.data = {0, 0, 0, 0}}},
+        .port = CCOIP_PROTOCOL_PORT_MASTER
+    });
+    ASSERT_TRUE(master.launch());
+
+    // Client 1
+    const ccoip::CCoIPClient client1({
+                                         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                         .port = CCOIP_PROTOCOL_PORT_MASTER
+                                     }, 0);
+    // Client 2
+    const ccoip::CCoIPClient client2({
+                                         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                         .port = CCOIP_PROTOCOL_PORT_MASTER
+                                     }, 0);
+
+    establishConnections({&client1, &client2});
+
+    constexpr size_t value_size = 1024;
+    constexpr int num_steps = 2; // Only two steps, client will be kicked after the second step and no further steps
+
+    const std::unique_ptr<uint8_t[]> value1(new uint8_t[value_size]);
+    const std::unique_ptr<uint8_t[]> value2(new uint8_t[value_size]);
+
+    std::fill_n(value1.get(), value_size, 42);
+    std::fill_n(value2.get(), value_size, 0);
+
+    // Client 1 continuously updates shared state, but violates the one-increment rule
+    std::thread client1_main_thread([&client1, &value1, value_size, num_steps] {
+        ccoip_shared_state_t shared_state{};
+        shared_state.entries.push_back(ccoip_shared_state_entry_t{
+            .key = "key1",
+            .data_type = ccoip::ccoipUint8,
+            .value = std::span(reinterpret_cast<std::byte *>(value1.get()), value_size),
+            .allow_content_inequality = false
+        });
+        shared_state.revision = 0;
+
+        for (int step = 0; step < num_steps; ++step) {
+            // Update value
+            std::fill_n(value1.get(), value_size, static_cast<uint8_t>(42 + step));
+            shared_state.revision = step * 2; // increments by two each time; Illegal!
+
+            ccoip_shared_state_sync_info_t info{};
+            bool success = client1.syncSharedState(shared_state, info);
+            if (step == 0) {
+                // First step should succeed because revision is 0
+                ASSERT_TRUE(success);
+            } else {
+                // Subsequent steps should fail
+                ASSERT_FALSE(success);
+            }
+        }
+    });
+
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+
+    // Client 2 does not update its own shared state but calls syncSharedState
+    std::thread client2_main_thread([&client2, &value2, value_size, num_steps] {
+        ccoip_shared_state_t shared_state{};
+        shared_state.entries.push_back(ccoip_shared_state_entry_t{
+            .key = "key1",
+            .data_type = ccoip::ccoipUint8,
+            .value = std::span(reinterpret_cast<std::byte *>(value2.get()), value_size),
+            .allow_content_inequality = false
+        });
+        shared_state.revision = 0; // Client 2 does not update revision
+
+        const std::unique_ptr<uint8_t[]> value1_inferred(new uint8_t[value_size]);
+        for (int step = 0; step < num_steps; ++step) {
+            ccoip_shared_state_sync_info_t info{};
+            bool success = client2.syncSharedState(shared_state, info);
+            if (step == 0) {
+                // First step should succeed because revision is 0
+                ASSERT_TRUE(success);
+            } else {
+                // Subsequent steps should fail
+                ASSERT_FALSE(success);
+            }
+        }
+    });
+
+    // Wait for both clients to finish
+    client1_main_thread.join();
+    client2_main_thread.join();
+
+    // Clean shutdown
+    ASSERT_TRUE(client2.interrupt());
+    ASSERT_TRUE(client1.interrupt());
+
+    ASSERT_TRUE(client1.join());
+    ASSERT_TRUE(client2.join());
+
+    ASSERT_TRUE(master.interrupt());
+    ASSERT_TRUE(master.join());
+};
+
+// Calling the first ever sync shared state with revision 1 also violates the one-increment rule
+TEST(SharedStateDistribution, TestOneIncrementRuleViolationFirstStepRev1) {
+    ccoip::CCoIPMaster master({
+        .inet = {.protocol = inetIPv4, .ipv4 = {.data = {0, 0, 0, 0}}},
+        .port = CCOIP_PROTOCOL_PORT_MASTER
+    });
+    ASSERT_TRUE(master.launch());
+
+    // Client 1
+    const ccoip::CCoIPClient client1({
+                                         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                         .port = CCOIP_PROTOCOL_PORT_MASTER
+                                     }, 0);
+    // Client 2
+    const ccoip::CCoIPClient client2({
+                                         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                         .port = CCOIP_PROTOCOL_PORT_MASTER
+                                     }, 0);
+
+    establishConnections({&client1, &client2});
+
+    constexpr size_t value_size = 1024;
+
+    const std::unique_ptr<uint8_t[]> value1(new uint8_t[value_size]);
+    const std::unique_ptr<uint8_t[]> value2(new uint8_t[value_size]);
+
+    std::fill_n(value1.get(), value_size, 42);
+    std::fill_n(value2.get(), value_size, 0);
+
+    // Client 1 violates the one-increment rule by starting at revision 1
+    std::thread client1_main_thread([&client1, &value1, value_size] {
+        ccoip_shared_state_t shared_state{};
+        shared_state.entries.push_back(ccoip_shared_state_entry_t{
+            .key = "key1",
+            .data_type = ccoip::ccoipUint8,
+            .value = std::span(reinterpret_cast<std::byte *>(value1.get()), value_size),
+            .allow_content_inequality = false
+        });
+
+        // Update value
+        std::fill_n(value1.get(), value_size, static_cast<uint8_t>(42));
+        shared_state.revision = 1;
+
+        ccoip_shared_state_sync_info_t info{};
+        ASSERT_FALSE(client1.syncSharedState(shared_state, info));
+    });
+
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+
+    // Client 2 does not violate the one-increment rule by starting at revision 0
+    std::thread client2_main_thread([&client2, &value2, value_size] {
+        ccoip_shared_state_t shared_state{};
+        shared_state.entries.push_back(ccoip_shared_state_entry_t{
+            .key = "key1",
+            .data_type = ccoip::ccoipUint8,
+            .value = std::span(reinterpret_cast<std::byte *>(value2.get()), value_size),
+            .allow_content_inequality = false
+        });
+        shared_state.revision = 0; // Client 2 does not update revision
+
+        const std::unique_ptr<uint8_t[]> value1_inferred(new uint8_t[value_size]);
+        ccoip_shared_state_sync_info_t info{};
+        ASSERT_TRUE(client2.syncSharedState(shared_state, info)); // this one should succeed because it uses revision 0
     });
 
     // Wait for both clients to finish
@@ -794,7 +977,7 @@ TEST(SharedStateDistribution, TestSharedStateMismatchKick) {
             .value = std::span(reinterpret_cast<std::byte *>(value1.get()), value_size),
             .allow_content_inequality = false
         });
-        shared_state.revision = 1;
+        shared_state.revision = 0;
 
         ccoip_shared_state_sync_info_t info{};
         ASSERT_TRUE(client1.syncSharedState(shared_state, info));
@@ -811,7 +994,7 @@ TEST(SharedStateDistribution, TestSharedStateMismatchKick) {
             .value = std::span(reinterpret_cast<std::byte *>(value2.get()), value_size),
             .allow_content_inequality = false
         });
-        shared_state.revision = 1; // Same revision, but keyset is different
+        shared_state.revision = 0; // Same revision, but keyset is different
 
         ccoip_shared_state_sync_info_t info{};
 
@@ -878,7 +1061,7 @@ TEST(SharedStateDistribution, TestConcurrentAdvancementWithinPeerGroups) {
         });
         shared_state.revision = 0;
 
-        for (int step = 1; step <= num_steps; ++step) {
+        for (int step = 0; step < num_steps; ++step) {
             // Independently update shared state identically within peer group
             std::fill_n(value, value_size, static_cast<uint8_t>(42 + step));
             shared_state.revision = step;
@@ -1010,7 +1193,7 @@ TEST(SharedStateDistribution, TestConcurrentDragAlongAcrossPeerGroups) {
             });
             shared_state.revision = 0;
 
-            for (int step = 1; step <= num_steps; ++step) {
+            for (int step = 0; step < num_steps; ++step) {
                 // Update leader's shared state
                 std::fill_n(leader_value.get(), value_size, static_cast<uint8_t>(90 + group + step));
                 shared_state.revision = step;
@@ -1040,7 +1223,7 @@ TEST(SharedStateDistribution, TestConcurrentDragAlongAcrossPeerGroups) {
             });
             shared_state.revision = 0; // Does not update its own revision
 
-            for (int step = 1; step <= num_steps; ++step) {
+            for (int step = 0; step < num_steps; ++step) {
                 ccoip_shared_state_sync_info_t info{};
                 ASSERT_TRUE(follower->syncSharedState(shared_state, info));
 
@@ -1147,7 +1330,7 @@ TEST(SharedStateDistribution, TestConflictOverlappingKeysAcrossPeerGroups) {
                 .value = std::span(reinterpret_cast<std::byte *>(value1.get()), value_size),
                 .allow_content_inequality = false
             });
-            shared_state.revision = 1;
+            shared_state.revision = 0;
 
             ccoip_shared_state_sync_info_t info{};
             ASSERT_TRUE(client1->syncSharedState(shared_state, info));
@@ -1169,7 +1352,7 @@ TEST(SharedStateDistribution, TestConflictOverlappingKeysAcrossPeerGroups) {
                 .value = std::span(reinterpret_cast<std::byte *>(value2.get()), value_size),
                 .allow_content_inequality = false
             });
-            shared_state.revision = 1;
+            shared_state.revision = 0;
 
             ccoip_shared_state_sync_info_t info{};
             ASSERT_TRUE(client2->syncSharedState(shared_state, info));
@@ -1257,7 +1440,7 @@ TEST(SharedStateDistribution, TestChangingPeerGroupMembershipBetweenSynchronizat
     std::thread client1_thread([&group_clients, &value1, value_size, num_steps, group, &client3_joined] {
         const std::unique_ptr<ccoip::CCoIPClient> &client1 = group_clients[0];
 
-        for (int step = 1; step <= num_steps; ++step) {
+        for (int step = 0; step < num_steps; ++step) {
             // Update shared state
             std::fill_n(value1.get(), value_size, static_cast<uint8_t>(160 + step));
 
@@ -1304,7 +1487,7 @@ TEST(SharedStateDistribution, TestChangingPeerGroupMembershipBetweenSynchronizat
 
     // Client 2 performs synchronization steps
     std::thread client2_thread([&group_clients, &value2, value_size, num_steps] {
-        for (int step = 1; step <= num_steps; ++step) {
+        for (int step = 0; step < num_steps; ++step) {
             const std::unique_ptr<ccoip::CCoIPClient> &client2 = group_clients[1];
 
             // Update local shared state
@@ -1342,7 +1525,7 @@ TEST(SharedStateDistribution, TestChangingPeerGroupMembershipBetweenSynchronizat
     std::thread client3_thread([&group_clients, &value2, value_size, num_steps] {
         const std::unique_ptr<ccoip::CCoIPClient> &client3 = group_clients[2];
 
-        for (int step = 3; step <= num_steps; ++step) {
+        for (int step = 3; step < num_steps; ++step) {
             // Update local shared state
             std::fill_n(value2.get(), value_size, static_cast<uint8_t>(160 + step));
 

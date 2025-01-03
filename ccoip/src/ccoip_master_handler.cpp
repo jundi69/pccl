@@ -282,24 +282,23 @@ void ccoip::CCoIPMasterHandler::checkSyncSharedStateConsensus(const uint32_t pee
             const bool needs_update = peer_info.connection_state == REQUEST_SHARED_STATE;
             response.is_outdated = needs_update;
             if (needs_update) {
-                auto best_peer_opt = findBestSharedStateTxPeer(peer_uuid);
-                if (!best_peer_opt) [[unlikely]] {
-                    LOG(BUG) << "No peer found to distribute shared state to " << ccoip_sockaddr_to_str(peer_address) <<
-                            " while peers is marked to request shared state. This is a bug!";
-                    continue;
-                }
-                response.distributor_address = *best_peer_opt;
-                auto outdated_keys = server_state.getOutdatedSharedStateKeys(peer_uuid);
-                if (outdated_keys.empty()) {
-                    outdated_keys = server_state.getSharedStateKeys(peer_group);
-                }
-                response.outdated_keys = outdated_keys;
+                if (auto best_peer_opt = findBestSharedStateTxPeer(peer_uuid)) {
+                    response.distributor_address = *best_peer_opt;
 
-                for (const auto &key: outdated_keys) {
-                    response.expected_hashes.push_back(server_state.getSharedStateEntryHash(peer_group, key));
+                    auto outdated_keys = server_state.getOutdatedSharedStateKeys(peer_uuid);
+                    if (outdated_keys.empty()) {
+                        outdated_keys = server_state.getSharedStateKeys(peer_group);
+                    }
+                    response.outdated_keys = outdated_keys;
+
+                    for (const auto &key: outdated_keys) {
+                        response.expected_hashes.push_back(server_state.getSharedStateEntryHash(peer_group, key));
+                    }
+                } else {
+                    LOG(ERR) << "No peer found to distribute shared state to " << ccoip_sockaddr_to_str(peer_address) <<
+                            " while peers is marked to request shared state.";
                 }
             }
-
             if (!server_socket.sendPacket<M2CPacketSyncSharedState>(peer_address, response)) {
                 LOG(ERR) << "Failed to send M2CPacketSyncSharedState to " << ccoip_sockaddr_to_str(peer_address);
             }
@@ -549,6 +548,15 @@ void ccoip::CCoIPMasterHandler::handleSyncSharedState(const ccoip_socket_address
     // "mask" for the other clients.
     const CCoIPMasterState::SharedStateMismatchStatus status = server_state
             .sharedStateMatches(client_uuid, packet.shared_state_revision, packet.shared_state_hashes);
+
+    if (status == CCoIPMasterState::REVISION_INCREMENT_VIOLATION) {
+        LOG(WARN) << "Shared state revision increment violation for " << ccoip_sockaddr_to_str(client_address) <<
+                ". Please make sure all clients increment the shared state revision by exactly 1 each time before synchronizing shared state; Client will be kicked.";
+        if (!kickClient(client_address)) [[unlikely]] {
+            LOG(ERR) << "Failed to kick client " << ccoip_sockaddr_to_str(client_address);
+        }
+        return;
+    }
 
     if (status == CCoIPMasterState::KEY_SET_MISMATCH) {
         LOG(WARN) << "Shared state key set mismatch for " << ccoip_sockaddr_to_str(client_address) <<
