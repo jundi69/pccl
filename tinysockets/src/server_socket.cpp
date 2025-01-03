@@ -377,6 +377,7 @@ void tinysockets::ServerSocket::onNewConnection(uv_server_stream_t *server, cons
             }
             return;
         }
+        LOG(INFO) << "New connection client address: " << ccoip_sockaddr_to_str(*client_addr);
 
         const auto inet_internal = ccoip_socket_to_internal(*client_addr);
         server_socket_state->sockaddr_to_uvstream[inet_internal] = reinterpret_cast<uv_stream_t *>(client);

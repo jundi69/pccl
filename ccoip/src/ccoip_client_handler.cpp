@@ -217,7 +217,6 @@ bool ccoip::CCoIPClientHandler::syncSharedState(ccoip_shared_state_t &shared_sta
         }
 
         if (response->is_outdated) {
-
             // check if distributor address is empty
             if (response->distributor_address.port == 0 &&
                 response->distributor_address.inet.protocol == inetIPv4 &&
@@ -262,32 +261,47 @@ bool ccoip::CCoIPClientHandler::syncSharedState(ccoip_shared_state_t &shared_sta
             shared_state.revision = shared_state_response->revision;
 
             std::unordered_map<std::string, const SharedStateEntry *> new_entries{};
+            std::unordered_map<std::string, const ccoip_shared_state_entry_t *> dst_entries{};
+            for (const auto &entry: shared_state.entries) {
+                dst_entries[entry.key] = &entry;
+            }
             for (const auto &entry: shared_state_response->entries) {
                 new_entries[entry.key] = &entry;
             }
 
-            // copy content buffers of shared state entries to user controlled buffers
-            for (size_t i = 0; i < shared_state.entries.size(); i++) {
-                const auto &entry = shared_state.entries[i];
-                if (new_entries.contains(entry.key)) {
-                    const auto &new_entry = new_entries[entry.key];
-                    if (new_entry->dst_size != entry.value.size_bytes()) {
-                        LOG(ERR) << "Failed to sync shared state: Shared state entry size mismatch for key " << entry.
-                                key;
+            // write new content of outdated shared state entries
+            for (size_t i = 0; i < response->outdated_keys.size(); i++) {
+                const auto &outdated_key_name = response->outdated_keys[i];
+                auto entry_it = dst_entries.find(outdated_key_name);
+                if (entry_it == dst_entries.end()) {
+                    LOG(ERR) << "Failed to sync shared state: Received data for unknown key " << outdated_key_name;
+                    return false;
+                }
+                auto &dst_entry = *entry_it->second;
+
+                if (new_entries.contains(outdated_key_name)) {
+                    const auto &new_entry = new_entries[outdated_key_name];
+                    if (new_entry->dst_size != dst_entry.value.size_bytes()) {
+                        LOG(ERR) << "Failed to sync shared state: Shared state entry size mismatch for key " <<
+                                dst_entry.key;
                         return false;
                     }
-                    std::memcpy(entry.value.data(), new_entry->dst_buffer.get(), new_entry->dst_size);
+                    std::memcpy(dst_entry.value.data(), new_entry->dst_buffer.get(), new_entry->dst_size);
                     info_out.rx_bytes += new_entry->dst_size;
 
+                    // check if hash is correct if allow_content_inequality is False
+                    if (dst_entry.allow_content_inequality) {
+                        continue;
+                    }
                     if (i < response->expected_hashes.size()) {
-                        uint64_t actual_hash = hash_utils::CRC32(entry.value.data(), entry.value.size_bytes());
+                        uint64_t actual_hash = hash_utils::CRC32(dst_entry.value.data(), dst_entry.value.size_bytes());
                         if (uint64_t expected_hash = response->expected_hashes[i]; actual_hash != expected_hash) {
                             LOG(ERR) << "Shared state distributor transmitted incorrect shared state entry for key " <<
-                                    entry.key << ": Expected hash " << expected_hash << " but got " << actual_hash;
+                                    dst_entry.key << ": Expected hash " << expected_hash << " but got " << actual_hash;
                             return false;
                         }
                     } else {
-                        LOG(WARN) << "Master did not transmit expected hash for shared state entry " << entry.key <<
+                        LOG(WARN) << "Master did not transmit expected hash for shared state entry " << dst_entry.key <<
                                 "; Skipping hash check...";
                     }
                 }
@@ -362,12 +376,16 @@ bool ccoip::CCoIPClientHandler::establishP2PConnections() {
     }
     LOG(DEBUG) << "Received M2CPacketNewPeers from master";
     if (!new_peers->unchanged) {
+        LOG(DEBUG) << "New peers list has changed";
+
         // establish p2p connections
         for (auto &peer: new_peers->new_peers) {
             // check if connection already exists
             if (p2p_connections_tx.contains(peer.peer_uuid)) {
+                LOG(DEBUG) << "P2P connection with peer " << uuid_to_string(peer.peer_uuid) << " already exists";
                 continue;
             }
+            LOG(DEBUG) << "Establishing P2P connection with peer " << uuid_to_string(peer.peer_uuid);
             if (!establishP2PConnection(peer)) {
                 LOG(ERR) << "Failed to establish P2P connection with peer " << uuid_to_string(peer.peer_uuid);
                 return false;
@@ -379,6 +397,7 @@ bool ccoip::CCoIPClientHandler::establishP2PConnections() {
                                      [&it](const M2CPacketNewPeerInfo &peer) {
                                          return peer.peer_uuid == it->first;
                                      }) == new_peers->new_peers.end()) {
+                LOG(DEBUG) << "Closing p2p connection with peer " << uuid_to_string(it->first);
                 if (!closeP2PConnection(it->first, *it->second)) {
                     LOG(WARN) << "Failed to close p2p connection with peer " << uuid_to_string(it->first);
                 }
@@ -405,6 +424,7 @@ bool ccoip::CCoIPClientHandler::establishP2PConnections() {
 }
 
 bool ccoip::CCoIPClientHandler::establishP2PConnection(const M2CPacketNewPeerInfo &peer) {
+    LOG(DEBUG) << "Establishing P2P connection with peer " << uuid_to_string(peer.peer_uuid);
     auto [it, inserted] = p2p_connections_tx.emplace(peer.peer_uuid,
                                                      std::make_unique<tinysockets::BlockingIOSocket>(
                                                          peer.p2p_listen_addr));
@@ -450,6 +470,8 @@ void ccoip::CCoIPClientHandler::handleSharedStateRequest(const ccoip_socket_addr
                                                          const C2SPacketRequestSharedState &packet) {
     THREAD_GUARD(shared_state_server_thread_id);
 
+    LOG(DEBUG) << "Received shared state distribution request from " << ccoip_sockaddr_to_str(client_address);
+
     S2CPacketSharedStateResponse response{};
 
     // check if we are in shared state sync phase
@@ -482,7 +504,7 @@ void ccoip::CCoIPClientHandler::handleSharedStateRequest(const ccoip_socket_addr
             client_state.trackSharedStateTxBytes(it->value.size_bytes());
         }
     }
-
+    LOG(DEBUG) << "Distributing shared state revision " << response.revision;
 end:
     if (!shared_state_socket.sendPacket(client_address, response)) {
         LOG(ERR) << "Failed to send shared state response to " << ccoip_sockaddr_to_str(client_address);
@@ -521,6 +543,7 @@ bool ccoip::CCoIPClientHandler::allReduceAsync(const void *sendbuff, void *recvb
 
     if (!client_state.launchAsyncCollectiveOp(
         tag, [this, sendbuff, recvbuff, count, datatype, op, tag](std::promise<bool> &promise) {
+            LOG(DEBUG) << "Vote to commence all reduce operation with tag " << tag;
             // vote commence collective comms operation and await consensus
             {
                 C2MPacketCollectiveCommsInitiate initiate_packet{};
@@ -541,6 +564,8 @@ bool ccoip::CCoIPClientHandler::allReduceAsync(const void *sendbuff, void *recvb
                     promise.set_value(false); // failure
                     return;
                 }
+                LOG(DEBUG) << "Received M2CPacketCollectiveCommsCommence for tag " << tag <<
+                        "; Collective communications consensus reached";
             }
 
             // TODO: THIS IS SUBJECT TO CHANGE AND FOR NOW IS A HARDCODED UNOPTIMIZED NON-PIPELINED RING REDUCE.

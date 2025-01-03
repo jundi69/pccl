@@ -15,7 +15,7 @@ void fill_uniform(float *data, const size_t count) {
     }
 }
 
-#define MAX_STEPS 100
+#define MAX_STEPS 1000
 
 int main() {
     PCCL_CHECK(pcclInit());
@@ -46,7 +46,7 @@ int main() {
         {"weights", weights, n_weights, pcclFloat, false}
     };
     pcclSharedState_t shared_state = {
-        .revision = 1,
+        .revision = 0,
         .count = count,
         .infos = infos,
     };
@@ -71,6 +71,8 @@ int main() {
         if (shared_state.revision >= MAX_STEPS) {
             break;
         }
+
+        std::this_thread::sleep_for(std::chrono::seconds(1));
 
         fill_uniform(gradients, n_elements);
         pcclAsyncReduceOp_t async_op{};

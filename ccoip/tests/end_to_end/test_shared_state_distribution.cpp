@@ -202,6 +202,8 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedState) {
     ASSERT_TRUE(master.join());
 };
 
+
+
 // Test of shared state distribution with multiple peer groups.
 // Shared state synchronization should be local to each peer group.
 // We test with two peer groups, each with two clients, where each client of a given peer group

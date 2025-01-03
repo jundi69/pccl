@@ -261,15 +261,20 @@ PCCL_EXPORT pcclResult_t pcclAllReduceAsync(const void *sendbuff, void *recvbuff
  * @return @code pcclSuccess@endcode if the async reduce operation was successful.
  * @return @code pcclInvalidArgument@endcode if the reduce handle is null or invalid.
  */
-PCCL_EXPORT pcclResult_t pcclAwaitAsyncReduce(const pcclAsyncReduceOp_t *reduce_handle, pcclReduceInfo_t *PCCL_NULLABLE reduce_info_out);
+PCCL_EXPORT pcclResult_t pcclAwaitAsyncReduce(const pcclAsyncReduceOp_t *reduce_handle,
+                                              pcclReduceInfo_t *PCCL_NULLABLE reduce_info_out);
 
 /**
  * Synchronizes the shared state between all peers that are currently accepted.
  * If the shared state revision of this peer is outdated, the shared state will be updated.
  * The function will not unblock until it is confirmed all peers have the same shared state revision.
+ * This function will fail if the world size is less than 2.
  * @param communicator The communicator to synchronize the shared state on.
  * @param shared_state The shared state referencing user-owned data to be synchronized.
  * @param sync_info_out shared state synchronization info.
+ * @return @code pcclSuccess@endcode if the shared state was synchronized successfully.
+ * @return @code pcclInvalidArgument@endcode if the communicator or shared_state is null.
+ * @return @code pcclInvalidUsage@endcode if the communicator is not connected to a master node.
  */
 PCCL_EXPORT pcclResult_t pcclSynchronizeSharedState(const pcclComm_t *communicator,
                                                     pcclSharedState_t *shared_state,

@@ -615,25 +615,32 @@ ccoip::CCoIPMasterState::SharedStateMismatchStatus ccoip::CCoIPMasterState::shar
         }
 
         std::vector<std::string> dirty_content_keys{};
-        for (size_t i = 0; i < state_mask_size; i++) {
-            const auto &mask_entry = group_shared_state_mask[i];
-            if (mask_entry.key != entries[i].key) {
+        for (const auto & entry : entries) {
+            // find matching entry with same key
+            const auto mask_entry_it = std::ranges::find_if(group_shared_state_mask,
+                                                            [&entry](const SharedStateHashEntry &mask_entry) {
+                                                                return mask_entry.key == entry.key;
+                                                            });
+
+            if (mask_entry_it == group_shared_state_mask.end()) {
                 status = KEY_SET_MISMATCH;
                 goto end;
             }
-            if (mask_entry.hash != entries[i].hash) {
+
+            const auto &mask_entry = *mask_entry_it;
+            if (mask_entry.hash != entry.hash) {
                 status = CONTENT_HASH_MISMATCH;
                 dirty_content_keys.push_back(mask_entry.key);
             }
-            if (mask_entry.allow_content_inequality != entries[i].allow_content_inequality) {
+            if (mask_entry.allow_content_inequality != entry.allow_content_inequality) {
                 status = KEY_SET_MISMATCH;
                 goto end;
             }
-            if (mask_entry.data_type != entries[i].data_type) {
+            if (mask_entry.data_type != entry.data_type) {
                 status = KEY_SET_MISMATCH;
                 goto end;
             }
-            if (mask_entry.num_elements != entries[i].num_elements) {
+            if (mask_entry.num_elements != entry.num_elements) {
                 status = KEY_SET_MISMATCH;
                 goto end;
             }

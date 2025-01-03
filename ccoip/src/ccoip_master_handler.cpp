@@ -541,7 +541,7 @@ void ccoip::CCoIPMasterHandler::handleSyncSharedState(const ccoip_socket_address
     }
 
     // check if shared state request follows the right "mask" as in:
-    // 1. requests same keys as the other clients; mismatch will result in a kick
+    // 1. requests same keys, dtype, etc. as the other clients; mismatch will result in a kick
     // 2. hash of the shared state is the same as the hash of the shared state of the other clients; mismatch will
     //    result in the client being notified to re-request the shared state entry whose hash does not match.
     // If the client is the first to sync shared state, then that peer's shared state is the reference

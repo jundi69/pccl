@@ -1,5 +1,7 @@
 import os
 import signal
+import time
+import zlib
 from time import sleep
 from typing import List
 
@@ -20,6 +22,15 @@ def human_readable_bytes(size: int) -> str:
     return f"{size:.2f} {unit}"
 
 
+def compute_crc32(tensor: torch.Tensor) -> int:
+    tensor_cpu = tensor.detach().cpu()
+    tensor_contiguous = tensor_cpu.contiguous()
+    tensor_np = tensor_contiguous.numpy()
+    tensor_bytes = tensor_np.tobytes()
+    checksum = zlib.crc32(tensor_bytes)
+    return checksum
+
+
 # Set device
 device = torch.device("cpu")
 
@@ -30,7 +41,7 @@ hidden_sizes = [256, 128]
 num_classes = 10  # Digits 0-9
 batch_size = 64
 learning_rate = 0.001
-max_steps = 10000
+max_steps = 1000
 
 # MNIST dataset (images and labels)
 train_dataset = datasets.MNIST(root='./data', train=True, transform=transforms.ToTensor(), download=True)
@@ -99,16 +110,37 @@ def main():
             sleep(1)
     else:
         assert False, f"(RANK={RANK}) Failed to connect to the master node"
-    log_info(f"(RANK={RANK}) Connected to the master node")
+    log_info(f"(RANK={RANK}) Connected to the master node; PID={os.getpid()}")
 
-    # poll shared state for model parameters
+    # perform a dummy forward pass to initialize the optimizer state
+    for p in model.parameters():
+        p.grad = torch.zeros_like(p)  # set all gradients to zero
+    optimizer.step()
+    print(f"(RANK={RANK}) Initialized optimizer state")
+
+    # Reference model and optimizer state from shared state struct
     shared_state_dict = {}
     for name, param in model.named_parameters():
         shared_state_dict[name] = param
 
-    shared_state: SharedState = SharedState([
-        TensorInfo.from_torch(param, name) for name, param in shared_state_dict.items()
-    ])
+        # Access optimizer state
+        state = optimizer.state[param]
+        exp_avg = state.get('exp_avg')
+        exp_avg_sq = state.get('exp_avg_sq')
+        step_tensor = state.get('step')
+
+        if exp_avg is None or exp_avg_sq is None or step_tensor is None:
+            raise ValueError(f"Optimizer state for parameter '{name}' is not initialized.")
+
+        # Add optimizer state tensors with associated names
+        shared_state_dict[f"{name}_m1"] = exp_avg
+        shared_state_dict[f"{name}_m2"] = exp_avg_sq
+        shared_state_dict[f"{name}_step"] = step_tensor
+
+    entries = [TensorInfo.from_torch(tensor, name, allow_content_inequality=False) for name, tensor in
+               shared_state_dict.items()]
+    shared_state: SharedState = SharedState(entries)
+    print(f"(RANK={RANK}) Initialized shared state")
 
     # Training loop
     train_it = enumerate(train_loader)
@@ -126,9 +158,10 @@ def main():
                 sleep(1)
                 continue
 
-            log_debug(f"(RANK={RANK}, it={i}) sync_shared_state()")
-            communicator.sync_shared_state(shared_state)
-            log_debug(f"(RANK={RANK}, it={i}) shared_state.revision: {shared_state.revision}")
+            log_debug(f"(RANK={RANK}, it={i}, ws={world_size}) sync_shared_state()")
+            sync_info = communicator.sync_shared_state(shared_state)
+            log_debug(
+                f"(RANK={RANK}, it={i}) shared_state.revision: {shared_state.revision}, sync_info (tx_bytes={sync_info.tx_bytes}, rx_bytes={sync_info.rx_bytes})")
             if shared_state.revision >= max_steps:
                 log_debug(f"(RANK={RANK}, it={i}) Training completed")
                 break
@@ -157,10 +190,13 @@ def main():
                 log_debug(f"(RANK={RANK}, it={i}) all_reduce_async()")
                 handle = communicator.all_reduce_async(grads, grads, numel=grads.numel(), op=ReduceOp.SUM)
                 is_success, status, info = handle.wait()
-                assert is_success == True, f"All reduce failed with stats: {status}"
+                assert is_success == True, f"All reduce failed with status: {status}"
                 assert info is not None
-                log_debug(f"((RANK={RANK}, it={i}) Reduce completed RX: {info.rx_bytes}, TX: {info.tx_bytes}")
+                log_debug(f"(RANK={RANK}, it={i}) Reduce completed RX: {info.rx_bytes}, TX: {info.tx_bytes}")
                 break
+
+            # print hash of the gradients tensor content
+            log_debug(f"(RANK={RANK}, it={i}) grads hash: {compute_crc32(grads)}")
 
             # scatter gradients back to model parameters
             offset = 0
@@ -177,7 +213,7 @@ def main():
 
             log_debug(f"(RANK={RANK}, it={i}) loss: {loss.item()}, revision: {shared_state.revision}")
 
-            if i % 100 == 0:
+            if shared_state.revision % 100 == 0:
                 log_info(f"(RANK={RANK}, it={i}) loss: {loss.item()}, revision: {shared_state.revision}")
     except Exception as e:
         print(f"Training aborted with exception: {e}")
