@@ -33,13 +33,13 @@ def test_basic_reduce():
     master_script_path = os.path.join(os.path.dirname(__file__), 'master.py')
 
     # launch master node
-    master_process = launch_py_process(master_script_path, [], {'PCCL_LOG_LEVEL': 'DEBUG'})
+    master_process = launch_py_process(master_script_path, [], {'PCCL_LOG_LEVEL': 'INFO'})
     print(f"Launched master node; PID: {master_process.pid}")
 
     # launch 2 peers
     process_list = []
     for rank in range(2):
-        process_list.append(launch_py_process(peer_script_path, [], {'PCCL_LOG_LEVEL': 'DEBUG', 'RANK': str(rank)}))
+        process_list.append(launch_py_process(peer_script_path, [], {'PCCL_LOG_LEVEL': 'INFO', 'RANK': str(rank)}))
         print(f"Launched peer {rank}; PID: {process_list[-1].pid}")
 
     # wait for all processes to finish
