@@ -37,7 +37,7 @@ device = torch.device("cpu")
 # Define hyperparameters
 input_size = 28 * 28  # MNIST images are 28x28
 # hidden_sizes = [1024, 4096, 4096, 4096, 4096, 1024]
-hidden_sizes = [256, 128]
+hidden_sizes = [128]
 num_classes = 10  # Digits 0-9
 batch_size = 64
 learning_rate = 0.001
