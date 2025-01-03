@@ -116,6 +116,7 @@ class CMakeBuildExecutor(build_ext):
             '--target', 'pccl',  # Only build the pccl library
             f'-j{NUM_JOBS}',
             '-v',
+            '--parallel',
             '--config', 'Release',
         ]
         print("Building the project with CMake arguments:")

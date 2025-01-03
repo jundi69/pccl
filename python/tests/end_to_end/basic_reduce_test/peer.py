@@ -4,7 +4,7 @@ import logging
 from pccl import *
 
 HOST: str = '127.0.0.1:48148'
-STEPS: int = 1000000000000
+STEPS: int = 10000
 WEIGHT_N: int = 1024
 PEERS: int = 1
 NUM_ELEMENTS: int = 1024
