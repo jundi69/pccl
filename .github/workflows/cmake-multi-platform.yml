@@ -70,8 +70,8 @@ jobs:
         if: runner.os == 'Linux'
         run: pip3 install ${{ github.workspace }}/python/framework/dist/*.whl
 
-      - name: Install Pytest
-        run: pip3 install pytest
+      - name: Install Test dependencies
+        run: pip3 install pytest torchvision
 
       - name: Python Unit Tests
         run: python -m pytest -s ${{ github.workspace }}/python/tests/unit_tests
