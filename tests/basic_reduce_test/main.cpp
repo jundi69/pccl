@@ -59,11 +59,6 @@ int main() {
         if (i > 0 || world_size == 1) {
             PCCL_CHECK(pcclUpdateTopology(communicator));
         }
-        PCCL_CHECK(pcclSynchronizeSharedState(communicator, &shared_state, nullptr));
-        if (shared_state.revision >= MAX_STEPS) {
-            break;
-        }
-
         pcclGetAttribute(communicator, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size);
 
         if (world_size < 2) {
@@ -72,6 +67,10 @@ int main() {
             continue;
         }
 
+        PCCL_CHECK(pcclSynchronizeSharedState(communicator, &shared_state, nullptr));
+        if (shared_state.revision >= MAX_STEPS) {
+            break;
+        }
 
         fill_uniform(gradients, n_elements);
         pcclAsyncReduceOp_t async_op{};
