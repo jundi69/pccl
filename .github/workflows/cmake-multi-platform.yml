@@ -12,11 +12,11 @@ jobs:
     env:
       IS_CI: 1
       LSAN_OPTIONS: suppressions=${{ github.workspace }}/.github/workflows/lsan.supp
-      PCCL_LOG_LEVEL: DEBUG
+      PCCL_LOG_LEVEL: DEBUG  # Global log level set to DEBUG
 
     strategy:
       fail-fast: false
-      
+
       matrix:
         os: [ ubuntu-latest, windows-latest ]
         build_type: [ RelWithDebInfo ]

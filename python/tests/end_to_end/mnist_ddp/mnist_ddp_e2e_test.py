@@ -82,20 +82,20 @@ def test_mnist_ddp_world_size_2_plus_1_late_joiner():
     master_script_path = os.path.join(os.path.dirname(__file__), 'mnist_master.py')
 
     # launch master node
-    master_process = launch_py_process(master_script_path, [], {'PCCL_LOG_LEVEL': 'DEBUG'})
+    master_process = launch_py_process(master_script_path, [], {'PCCL_LOG_LEVEL': 'INFO'})
     print(f"Launched master node; PID: {master_process.pid}")
 
     # launch 2 peers
     process_list = []
     for rank in range(2):
-        process_list.append(launch_py_process(peer_script_path, [], {'PCCL_LOG_LEVEL': 'DEBUG', 'RANK': str(rank)}))
+        process_list.append(launch_py_process(peer_script_path, [], {'PCCL_LOG_LEVEL': 'INFO', 'RANK': str(rank)}))
         print(f"Launched peer {rank}; PID: {process_list[-1].pid}")
 
     time.sleep(1)
 
     # if the other two peers are still running, add the third peer; otherwise, fail the test
     if all(p.poll() is None for p in process_list):
-        process_list.append(launch_py_process(peer_script_path, [], {'PCCL_LOG_LEVEL': 'DEBUG', 'RANK': '2'}))
+        process_list.append(launch_py_process(peer_script_path, [], {'PCCL_LOG_LEVEL': 'INFO', 'RANK': '2'}))
         print(f"Launched peer 2; PID: {process_list[-1].pid}")
     else:
         assert False, "One of the peers exited prematurely"
