@@ -51,8 +51,8 @@ int main() {
         .infos = infos,
     };
 
-    constexpr size_t n_peers = 1;
-    const auto gradients = new float[n_peers];
+    constexpr size_t n_elements = 1024;
+    const auto gradients = new float[n_elements];
 
     size_t i = 0;
     while (true) {
@@ -73,12 +73,13 @@ int main() {
             break;
         }
 
-        fill_uniform(gradients, n_peers);
+        fill_uniform(gradients, n_elements);
         pcclAsyncReduceOp_t async_op{};
+        pcclReduceInfo_t reduce_info{};
         do {
-            pcclAllReduceAsync(gradients, weights, n_peers, pcclFloat, pcclSum, 0, communicator, &async_op);
-        } while (pcclAwaitAsyncReduce(&async_op, nullptr) != pcclSuccess);
-
+            pcclAllReduceAsync(gradients, weights, n_elements, pcclFloat, pcclSum, 0, communicator, &async_op);
+        } while (pcclAwaitAsyncReduce(&async_op, &reduce_info) != pcclSuccess);
+        std::cout << "All reduce finished: " << shared_state.revision << "; Rx-Bytes:" << reduce_info.rx_bytes << "; Tx-Bytes:" << reduce_info.tx_bytes << std::endl;
         shared_state.revision++;
         i++;
     }

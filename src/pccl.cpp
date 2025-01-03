@@ -2,6 +2,7 @@
 #include "pccl_internal.hpp"
 #include <optional>
 #include <ccoip_master.hpp>
+#include <pccl_log.hpp>
 
 static constinit bool pccl_initialized = false;
 
@@ -81,19 +82,32 @@ pcclResult_t pcclConnect(pcclComm_t *communicator) {
     PCCL_VALIDATE(communicator->ccoip_client == nullptr, pcclInvalidUsage);
     communicator->ccoip_client = std::make_unique<ccoip::CCoIPClient>(communicator->params.master_address,
                                                                       communicator->params.peer_group);
+
+    pcclResult_t status = pcclSuccess;
     if (!communicator->ccoip_client->connect()) {
+        LOG(ERR) << "Failed to establish connection to master";
         if (!communicator->ccoip_client->interrupt()) [[unlikely]] {
-            return pcclInternalError;
+            LOG(ERR) << "Failed to interrupt client after connection failure";
+            status = pcclInternalError;
+            goto failure;
         }
         if (!communicator->ccoip_client->join()) [[unlikely]] {
-            return pcclInternalError;
+            LOG(ERR) << "Failed to join client after connection failure";
+            status = pcclInternalError;
+            goto failure;
         }
-        return pcclInvalidUsage;
+        status = pcclMasterConnectionFailed;
+        goto failure;
     }
     if (!communicator->ccoip_client->updateTopology()) [[unlikely]] {
-        return pcclMasterConnectionFailed;
+        LOG(ERR) << "Failed to update topology after connecting to master";
+        status = pcclMasterConnectionFailed;
+        goto failure;
     }
-    return pcclSuccess;
+    return status;
+failure:
+    communicator->ccoip_client = nullptr;
+    return status;
 }
 
 static std::optional<ccoip::ccoip_data_type_t> getCCoIPDataType(const pcclDataType_t datatype) {
@@ -174,8 +188,8 @@ pcclResult_t pcclAllReduceAsync(const void *sendbuff, void *recvbuff, const size
     return pcclSuccess;
 }
 
-pcclResult_t pcclAllReduce(const void *sendbuff, void *recvbuff, size_t count, pcclDataType_t datatype,
-                           pcclRedOp_t op, uint64_t tag, const pcclComm_t *communicator,
+pcclResult_t pcclAllReduce(const void *sendbuff, void *recvbuff, const size_t count, const pcclDataType_t datatype,
+                           const pcclRedOp_t op, const uint64_t tag, const pcclComm_t *communicator,
                            pcclReduceInfo_t *PCCL_NULLABLE reduce_info_out) {
     PCCL_VALIDATE_INITIALIZED();
     PCCL_VALIDATE(communicator != nullptr, pcclInvalidArgument);
