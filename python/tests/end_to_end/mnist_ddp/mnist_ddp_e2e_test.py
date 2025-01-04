@@ -95,9 +95,7 @@ def test_mnist_ddp_world_size_2_plus_1_late_joiner():
                                                                      'CREATE_RANK_0_REV_50': '1'}))
         print(f"Launched peer {rank}; PID: {process_list[-1].pid}")
 
-    # wait for RANK_0_REV_50 file to be created
-    while not os.path.exists(rev50_signal_file):
-        time.sleep(0.05)
+    time.sleep(1)
 
     # if the other two peers are still running, add the third peer; otherwise, fail the test
     if all(p.poll() is None for p in process_list):
