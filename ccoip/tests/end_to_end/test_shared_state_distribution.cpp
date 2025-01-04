@@ -1502,15 +1502,18 @@ TEST(SharedStateDistribution, TestConcurrentDragAlongAcrossPeerGroups) {
         const std::unique_ptr<ccoip::CCoIPClient> &follower = clients[2]; // Follower client
 
         // Initialize shared state values
-        const std::unique_ptr<uint8_t[]> leader_value(new uint8_t[value_size]);
+        const std::unique_ptr<uint8_t[]> leader1_value(new uint8_t[value_size]);
+        const std::unique_ptr<uint8_t[]> leader2_value(new uint8_t[value_size]);
         const std::unique_ptr<uint8_t[]> follower_value(new uint8_t[value_size]);
 
-        std::fill_n(leader_value.get(), value_size, static_cast<uint8_t>(80 + group));
+        std::fill_n(leader1_value.get(), value_size, static_cast<uint8_t>(80 + group));
+        std::fill_n(leader2_value.get(), value_size, static_cast<uint8_t>(85 + group));
         std::fill_n(follower_value.get(), value_size, 0); // Follower does not update
 
         // Leaders perform continuous updates
         std::vector<std::thread> leader_threads;
-        for (const auto &leader: {leader1.get(), leader2.get()}) {
+
+        auto launch_leader_thread = [&](const std::unique_ptr<ccoip::CCoIPClient> &leader, const std::unique_ptr<uint8_t[]> &leader_value) {
             std::thread leader_thread([&leader, &leader_value, value_size, num_steps, group] {
                 ccoip_shared_state_t shared_state{};
                 shared_state.entries.push_back(ccoip_shared_state_entry_t{
@@ -1543,10 +1546,12 @@ TEST(SharedStateDistribution, TestConcurrentDragAlongAcrossPeerGroups) {
                 }
             });
             leader_threads.emplace_back(std::move(leader_thread));
-        }
+        };
+        launch_leader_thread(leader1, leader1_value);
+        launch_leader_thread(leader2, leader2_value);
 
         // Follower requests synchronization without updating its own state
-        std::thread follower_thread([&follower, &leader_value, &follower_value, value_size, num_steps, group] {
+        std::thread follower_thread([&follower, &leader1_value, &follower_value, value_size, num_steps, group] {
             ccoip_shared_state_t shared_state{};
             shared_state.entries.push_back(ccoip_shared_state_entry_t{
                 .key = "drag_key_" + std::to_string(group),
@@ -1565,7 +1570,7 @@ TEST(SharedStateDistribution, TestConcurrentDragAlongAcrossPeerGroups) {
                 EXPECT_EQ(info.rx_bytes, value_size);
 
                 // Verify synchronization
-                EXPECT_EQ(std::memcmp(leader_value.get(), follower_value.get(), value_size), 0);
+                EXPECT_EQ(std::memcmp(leader1_value.get(), follower_value.get(), value_size), 0);
 
                 // Simulate computation delay
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
