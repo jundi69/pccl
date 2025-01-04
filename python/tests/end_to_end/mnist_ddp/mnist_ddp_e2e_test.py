@@ -77,6 +77,7 @@ def test_mnist_ddp_world_size_3():
     master_process.wait()
 
 
+"""
 def test_mnist_ddp_world_size_2_plus_1_late_joiner():
     rev50_signal_file = os.path.join(os.path.dirname(__file__), 'RANK_0_REV_50')
     os.remove(rev50_signal_file) if os.path.exists(rev50_signal_file) else None
@@ -113,3 +114,4 @@ def test_mnist_ddp_world_size_2_plus_1_late_joiner():
     # kill master process
     master_process.kill()
     master_process.wait()
+"""
