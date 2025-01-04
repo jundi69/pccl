@@ -728,22 +728,22 @@ bool ccoip::CCoIPMasterState::checkMaskSharedStateMismatches(const uint32_t peer
             const auto &entry = entries[i];
             SharedStateMismatchStatus status = SUCCESSFUL_MATCH;
             if (mask_entry.key != entry.key) {
-                LOG(WARN) << "Shared state mask mismatch for client " << uuid_to_string(uuid) <<
+                LOG(WARN) << "Shared state mask key mismatch for client " << uuid_to_string(uuid) <<
                         " in peer group " << peer_group;
                 status = KEY_SET_MISMATCH;
             }
             if (mask_entry.allow_content_inequality != entry.allow_content_inequality) {
-                LOG(WARN) << "Shared state mask mismatch for client " << uuid_to_string(uuid) <<
+                LOG(WARN) << "Shared state mask allow_content_inequality mismatch for client " << uuid_to_string(uuid) <<
                         " in peer group " << peer_group;
                 status = KEY_SET_MISMATCH;
             }
             if (mask_entry.data_type != entry.data_type) {
-                LOG(WARN) << "Shared state mask mismatch for client " << uuid_to_string(uuid) <<
+                LOG(WARN) << "Shared state mask data_type mismatch for client " << uuid_to_string(uuid) <<
                         " in peer group " << peer_group;
                 status = KEY_SET_MISMATCH;
             }
             if (status == SUCCESSFUL_MATCH && mask_entry.hash != entry.hash) {
-                LOG(WARN) << "Shared state mask mismatch for client " << uuid_to_string(uuid) <<
+                LOG(WARN) << "Shared state mask content mismatch for client " << uuid_to_string(uuid) <<
                         " in peer group " << peer_group;
                 status = CONTENT_HASH_MISMATCH;
                 shared_state_hashes[peer_group][mask_entry.key] = mask_entry.hash;
