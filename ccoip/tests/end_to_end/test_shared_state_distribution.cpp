@@ -1,9 +1,12 @@
 #include <ccoip.h>
 #include <gtest/gtest.h>
+
 #include <ccoip_client.hpp>
 #include <ccoip_master.hpp>
+
 #include <thread>
 #include <cstring>
+#include <ranges>
 
 // Helper function to establish p2p connection between two clients
 static void establishConnections(const std::vector<const ccoip::CCoIPClient *> &clients) {
