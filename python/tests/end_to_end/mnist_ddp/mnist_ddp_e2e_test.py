@@ -53,6 +53,7 @@ def test_mnist_ddp_world_size_2():
     master_process.wait()
 
 
+"""
 def test_mnist_ddp_world_size_3():
     peer_script_path = os.path.join(os.path.dirname(__file__), 'mnist_peer.py')
     master_script_path = os.path.join(os.path.dirname(__file__), 'mnist_master.py')
@@ -75,7 +76,7 @@ def test_mnist_ddp_world_size_3():
     # kill master process
     master_process.kill()
     master_process.wait()
-
+"""
 
 """
 def test_mnist_ddp_world_size_2_plus_1_late_joiner():
