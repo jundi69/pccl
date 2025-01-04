@@ -451,6 +451,152 @@ TEST(SharedStateDistribution, TestPopularHashPrevelance) {
     EXPECT_TRUE(master.join());
 }
 
+// Test of shared state distribution with many keys
+TEST(SharedStateDistribution, TestPopularHashPrevalenceWithMultipleKeys) {
+    // Initialize the master with IPv4 settings
+    ccoip::CCoIPMaster master({
+        .inet = {.protocol = inetIPv4, .ipv4 = {.data = {0, 0, 0, 0}}},
+        .port = CCOIP_PROTOCOL_PORT_MASTER
+    });
+    EXPECT_TRUE(master.launch()) << "Failed to launch CCoIP master.";
+
+    // Initialize three clients with IPv4 settings pointing to the master
+    const ccoip::CCoIPClient client1({
+                                         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                         .port = CCOIP_PROTOCOL_PORT_MASTER
+                                     }, 0);
+
+    const ccoip::CCoIPClient client2({
+                                         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                         .port = CCOIP_PROTOCOL_PORT_MASTER
+                                     }, 0);
+
+    const ccoip::CCoIPClient client3({
+                                         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                         .port = CCOIP_PROTOCOL_PORT_MASTER
+                                     }, 0);
+
+    // Establish connections between the master and the clients
+    establishConnections({&client1, &client2, &client3});
+
+    constexpr size_t total_keys = 16;
+    constexpr size_t value_size = 1024;
+
+    // Prepare backup data for client1 to verify post-synchronization state
+    std::vector<std::unique_ptr<uint8_t[]> > backup_values;
+    for (size_t i = 0; i < total_keys; ++i) {
+        auto backup = std::make_unique<uint8_t[]>(value_size);
+        std::fill_n(backup.get(), value_size, 42); // Initialize with default value
+        backup_values.push_back(std::move(backup));
+    }
+
+    // Prepare shared state values for all clients
+    // Clients 2 and 3 share the same values for the dirty keys, client1 has different values
+    std::vector<std::unique_ptr<uint8_t[]> > client1_values;
+    std::vector<std::unique_ptr<uint8_t[]> > client2_values;
+    std::vector<std::unique_ptr<uint8_t[]> > client3_values;
+
+    for (size_t i = 0; i < total_keys; ++i) {
+        // Initialize all keys with the same value
+        client1_values.emplace_back(std::make_unique<uint8_t[]>(value_size));
+        client2_values.emplace_back(std::make_unique<uint8_t[]>(value_size));
+        client3_values.emplace_back(std::make_unique<uint8_t[]>(value_size));
+        std::fill_n(client1_values.back().get(), value_size, 42);
+        std::fill_n(client2_values.back().get(), value_size, 42);
+        std::fill_n(client3_values.back().get(), value_size, 42);
+    }
+
+    // Define dirty keys indices (e.g., first 4 keys)
+    std::vector<size_t> dirty_key_indices = {0, 1, 2, 3};
+
+    // Modify dirty keys for client1 to make them different
+    for (size_t idx: dirty_key_indices) {
+        std::fill_n(client1_values[idx].get(), value_size, 50 + idx); // Unique values for client1
+    }
+
+    // Modify dirty keys for client2 and client3 to have the same values
+    for (size_t idx: dirty_key_indices) {
+        std::fill_n(client2_values[idx].get(), value_size, 100 + idx); // Common values for client2 & client3
+        std::fill_n(client3_values[idx].get(), value_size, 100 + idx);
+    }
+
+    // Function to create shared state with multiple keys
+    auto create_shared_state = [&](const std::vector<std::unique_ptr<uint8_t[]> > &values) -> ccoip_shared_state_t {
+        ccoip_shared_state_t shared_state;
+        for (size_t i = 0; i < total_keys; ++i) {
+            shared_state.entries.push_back(ccoip_shared_state_entry_t{
+                .key = "key" + std::to_string(i + 1),
+                .data_type = ccoip::ccoipUint8,
+                .value = std::span(reinterpret_cast<std::byte *>(values[i].get()), value_size),
+                .allow_content_inequality = false
+            });
+        }
+        shared_state.revision = 0;
+        return shared_state;
+    };
+
+    // Launch synchronization threads for each client
+    std::thread client1_sync_thread([&client1, &client1_values, &create_shared_state] {
+        ccoip_shared_state_t shared_state = create_shared_state(client1_values);
+        ccoip_shared_state_sync_info_t info{};
+        EXPECT_TRUE(client1.syncSharedState(shared_state, info)) << "Client1 failed to sync shared state.";
+    });
+
+    // Ensure client1 starts syncing first
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+    std::thread client2_sync_thread([&client2, &client2_values, &create_shared_state] {
+        ccoip_shared_state_t shared_state = create_shared_state(client2_values);
+        ccoip_shared_state_sync_info_t info{};
+        EXPECT_TRUE(client2.syncSharedState(shared_state, info)) << "Client2 failed to sync shared state.";
+    });
+
+    // Slight delay before client3 starts syncing
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+    std::thread client3_sync_thread([&client3, &client3_values, &create_shared_state] {
+        ccoip_shared_state_t shared_state = create_shared_state(client3_values);
+        ccoip_shared_state_sync_info_t info{};
+        EXPECT_TRUE(client3.syncSharedState(shared_state, info)) << "Client3 failed to sync shared state.";
+    });
+
+    // Wait for all synchronization threads to complete
+    client1_sync_thread.join();
+    client2_sync_thread.join();
+    client3_sync_thread.join();
+
+    // Verify that only the dirty keys in client1 have been updated to the popular values
+    for (size_t i = 0; i < total_keys; ++i) {
+        if (std::ranges::find(dirty_key_indices, i) != dirty_key_indices.end()) {
+            // Dirty key: client1 should have the popular value (from client2/client3)
+            EXPECT_EQ(std::memcmp(client1_values[i].get(), client2_values[i].get(), value_size), 0)
+                << "Dirty key " << i + 1 << " was not synchronized correctly.";
+        } else {
+            // Non-dirty key: client1's value should remain unchanged
+            EXPECT_EQ(std::memcmp(backup_values[i].get(), client1_values[i].get(), value_size), 0)
+                << "Non-dirty key " << i + 1 << " was incorrectly modified.";
+        }
+    }
+
+    // Additionally, verify that client2 and client3 have identical shared states
+    for (size_t i = 0; i < total_keys; ++i) {
+        EXPECT_EQ(std::memcmp(client2_values[i].get(), client3_values[i].get(), value_size), 0)
+            << "Client2 and Client3 differ on key " << i + 1 << ".";
+    }
+
+    // Clean shutdown of all clients
+    EXPECT_TRUE(client3.interrupt()) << "Failed to interrupt Client3.";
+    EXPECT_TRUE(client2.interrupt()) << "Failed to interrupt Client2.";
+    EXPECT_TRUE(client1.interrupt()) << "Failed to interrupt Client1.";
+
+    EXPECT_TRUE(client3.join()) << "Failed to join Client3 thread.";
+    EXPECT_TRUE(client2.join()) << "Failed to join Client2 thread.";
+    EXPECT_TRUE(client1.join()) << "Failed to join Client1 thread.";
+
+    // Clean shutdown of the master
+    EXPECT_TRUE(master.interrupt()) << "Failed to interrupt the master.";
+    EXPECT_TRUE(master.join()) << "Failed to join the master thread.";
+}
 
 // Test of shared state distribution with multiple peer groups.
 // Shared state synchronization should be local to each peer group.
@@ -1513,7 +1659,8 @@ TEST(SharedStateDistribution, TestConcurrentDragAlongAcrossPeerGroups) {
         // Leaders perform continuous updates
         std::vector<std::thread> leader_threads;
 
-        auto launch_leader_thread = [&](const std::unique_ptr<ccoip::CCoIPClient> &leader, const std::unique_ptr<uint8_t[]> &leader_value) {
+        auto launch_leader_thread = [&](const std::unique_ptr<ccoip::CCoIPClient> &leader,
+                                        const std::unique_ptr<uint8_t[]> &leader_value) {
             std::thread leader_thread([&leader, &leader_value, value_size, num_steps, group] {
                 ccoip_shared_state_t shared_state{};
                 shared_state.entries.push_back(ccoip_shared_state_entry_t{

@@ -575,7 +575,6 @@ ccoip::CCoIPMasterState::SharedStateMismatchStatus ccoip::CCoIPMasterState::isNe
         LOG(WARN) << "Client " << uuid_to_string(peer_uuid) << " not found";
         status = KEY_SET_MISMATCH;
     }
-
     const uint32_t peer_group = info_it->second.peer_group;
     if (const uint64_t next_shared_state_revision = this->next_shared_state_revision[peer_group];
         revision < next_shared_state_revision) {
@@ -723,34 +722,42 @@ bool ccoip::CCoIPMasterState::checkMaskSharedStateMismatches(const uint32_t peer
             LOG(WARN) << "Shared state mask mismatch for client " << uuid_to_string(uuid) <<
                     " in peer group " << peer_group;
         }
+
+        SharedStateMismatchStatus status = SUCCESSFUL_MATCH;
         for (size_t i = 0; i < mask_entries.size(); i++) {
             const auto &mask_entry = mask_entries[i];
             const auto &entry = entries[i];
-            SharedStateMismatchStatus status = SUCCESSFUL_MATCH;
             if (mask_entry.key != entry.key) {
                 LOG(WARN) << "Shared state mask key mismatch for client " << uuid_to_string(uuid) <<
-                        " in peer group " << peer_group;
+                        " in peer group " << peer_group << " for key " << mask_entry.key;
                 status = KEY_SET_MISMATCH;
             }
             if (mask_entry.allow_content_inequality != entry.allow_content_inequality) {
                 LOG(WARN) << "Shared state mask allow_content_inequality mismatch for client " << uuid_to_string(uuid) <<
-                        " in peer group " << peer_group;
+                        " in peer group " << peer_group << " for key " << mask_entry.key;
                 status = KEY_SET_MISMATCH;
             }
             if (mask_entry.data_type != entry.data_type) {
                 LOG(WARN) << "Shared state mask data_type mismatch for client " << uuid_to_string(uuid) <<
-                        " in peer group " << peer_group;
+                        " in peer group " << peer_group << " for key " << mask_entry.key;
                 status = KEY_SET_MISMATCH;
             }
-            if (status == SUCCESSFUL_MATCH && mask_entry.hash != entry.hash) {
+            if (status != KEY_SET_MISMATCH && mask_entry.hash != entry.hash) {
                 LOG(WARN) << "Shared state mask content mismatch for client " << uuid_to_string(uuid) <<
-                        " in peer group " << peer_group;
+                        " in peer group " << peer_group << " for key " << mask_entry.key;
                 status = CONTENT_HASH_MISMATCH;
+
+                // we actually need to catch & track all mismatches here for content hashes, so we can't break early when content hash mismatch occurs
                 shared_state_hashes[peer_group][mask_entry.key] = mask_entry.hash;
                 shared_state_dirty_keys[peer_group][uuid].push_back(mask_entry.key);
             }
-            shared_state_statuses[peer_group][uuid] = status;
+
+            // no break possible on content hash mismatch
+            if (status == KEY_SET_MISMATCH) {
+                break;
+            }
         }
+        shared_state_statuses[peer_group][uuid] = status;
     }
 
     // identify content hash mismatches
