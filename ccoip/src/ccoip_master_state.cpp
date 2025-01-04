@@ -68,6 +68,7 @@ bool ccoip::CCoIPMasterState::unregisterClient(const ccoip_socket_address_t &cli
         votes_accept_new_peers.erase(it->second);
         votes_p2p_connections_established.erase(it->second);
         votes_sync_shared_state[peer_group].erase(it->second);
+        votes_sync_shared_state_complete[peer_group].erase(it->second);
         client_uuids.erase(it);
 
         peer_list_changed = true;

@@ -166,18 +166,22 @@ namespace ccoip {
 
         /// set of all uuids that have voted to accept new peers.
         /// cleared once accept new peers consensus is reached.
+        /// Removed from on client leave/disconnect.
         std::unordered_set<ccoip_uuid_t> votes_accept_new_peers{};
 
         /// set of all uuids that have established p2p connections.
         /// cleared once all clients have established p2p connections.
+        /// Removed from on client leave/disconnect.
         std::unordered_set<ccoip_uuid_t> votes_p2p_connections_established{};
 
         /// set of all uuids that have voted to synchronize shared state for each peer group.
-        /// peer group bin is cleared once shared state distribution consensus is reached.
+        /// Peer group bin is cleared once shared state distribution consensus is reached.
+        /// Removed from on client leave/disconnect.
         std::unordered_map<uint32_t, std::unordered_set<ccoip_uuid_t> > votes_sync_shared_state{};
 
         /// set of all uuids that have voted to complete shared state distribution for each peer group.
         /// Peer group bin is cleared once the shared state distribution phase ends.
+        /// Removed from on client leave/disconnect.
         std::unordered_map<uint32_t, std::unordered_set<ccoip_uuid_t> > votes_sync_shared_state_complete{};
 
         /// Flag to indicate if the peer list has changed
@@ -198,6 +202,7 @@ namespace ccoip {
         /// Defines the list of candidates for the shared state mask for each peer group.
         /// Most popular candidate is elected as the shared state mask.
         /// Peer group bin is cleared after the shared state distribution phase ends.
+        /// Removed from on client leave/disconnect.
         std::unordered_map<uint32_t, std::vector<std::pair<ccoip_uuid_t, std::vector<SharedStateHashEntry> > > >
         shared_state_mask_candidates{};
 

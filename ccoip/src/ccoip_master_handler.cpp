@@ -281,6 +281,7 @@ void ccoip::CCoIPMasterHandler::checkSyncSharedStateConsensus(const uint32_t pee
                 if (!kickClient(peer_address)) {
                     LOG(ERR) << "Failed to kick client " << ccoip_sockaddr_to_str(peer_address);
                 }
+                return;
             }
         }
 
