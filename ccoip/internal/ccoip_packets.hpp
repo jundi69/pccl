@@ -1,6 +1,8 @@
 #pragma once
 
 #include <memory>
+#include <string>
+#include <vector>
 #include <ccoip_packet.hpp>
 #include <ccoip_inet.h>
 #include <ccoip_packet_buffer.hpp>
@@ -89,6 +91,18 @@ namespace ccoip {
         size_t num_elements;
         ccoip_data_type_t data_type;
         boolean allow_content_inequality;
+
+        friend bool operator==(const SharedStateHashEntry &lhs, const SharedStateHashEntry &rhs) {
+            return lhs.key == rhs.key
+                   && lhs.hash == rhs.hash
+                   && lhs.num_elements == rhs.num_elements
+                   && lhs.data_type == rhs.data_type
+                   && lhs.allow_content_inequality == rhs.allow_content_inequality;
+        }
+
+        friend bool operator!=(const SharedStateHashEntry &lhs, const SharedStateHashEntry &rhs) {
+            return !(lhs == rhs);
+        }
     };
 
     class C2MPacketSyncSharedState final : public Packet {
@@ -332,3 +346,16 @@ namespace ccoip {
         [[nodiscard]] bool deserialize(PacketReadBuffer &buffer) override;
     };
 }
+
+template<>
+struct std::hash<ccoip::SharedStateHashEntry> {
+    std::size_t operator()(const ccoip::SharedStateHashEntry &entry) const noexcept {
+        std::size_t hash_value = 0;
+        hash_value ^= std::hash<std::string>{}(entry.key) << 1;
+        hash_value ^= std::hash<uint64_t>{}(entry.hash) << 1;
+        hash_value ^= std::hash<size_t>{}(entry.num_elements) << 1;
+        hash_value ^= std::hash<ccoip::ccoip_data_type_t>{}(entry.data_type) << 1;
+        hash_value ^= std::hash<boolean>{}(entry.allow_content_inequality) << 1;
+        return hash_value;
+    }
+};

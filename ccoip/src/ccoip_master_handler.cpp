@@ -245,6 +245,45 @@ ccoip::CCoIPMasterHandler::findBestSharedStateTxPeer(const ccoip_uuid_t &peer_uu
 void ccoip::CCoIPMasterHandler::checkSyncSharedStateConsensus(const uint32_t peer_group) {
     // check if all clients have voted to sync shared state
     if (server_state.syncSharedStateConsensus(peer_group)) {
+        // elect mask from candidates
+        if (!server_state.electSharedStateMask(peer_group)) [[unlikely]] {
+            LOG(BUG) <<
+                    "Failed to elect shared state mask; This may indicate no mask candidates were provided, despite the fact that shared state sync consensus was reached. This is a bug!";
+            return;
+        }
+
+        // check for mismatched shared state entries; violating clients will be marked.
+        // the mismatch status can be queried via server_state.getSharedStateMismatchStatus()
+        if (!server_state.checkMaskSharedStateMismatches(peer_group)) {
+            LOG(WARN) << "Failed to check shared state mask mismatch. No current mask set.";
+            return;
+        }
+
+        // kick all clients with mismatched shared state
+        for (auto &[peer_uuid, peer_address]: server_state.getClientEntrySet()) {
+            const auto peer_info_opt = server_state.getClientInfo(peer_uuid);
+            if (!peer_info_opt) [[unlikely]] {
+                LOG(BUG) << "Client " << ccoip_sockaddr_to_str(peer_address) << " not found";
+                continue;
+            }
+            if (const auto &peer_info = peer_info_opt->get(); peer_info.peer_group != peer_group) {
+                continue;
+            }
+            const auto status_opt = server_state.getSharedStateMismatchStatus(peer_uuid);
+            if (!status_opt) {
+                LOG(BUG) << "No shared state mismatch status found for client " << ccoip_sockaddr_to_str(peer_address)
+                        << " after checkMaskSharedStateMismatches was invoked. This is a bug!";
+                return;
+            }
+            if (*status_opt == CCoIPMasterState::KEY_SET_MISMATCH) {
+                LOG(WARN) << "Kicking client " << ccoip_sockaddr_to_str(peer_address) <<
+                        " due to shared state mismatch";
+                if (!kickClient(peer_address)) {
+                    LOG(ERR) << "Failed to kick client " << ccoip_sockaddr_to_str(peer_address);
+                }
+            }
+        }
+
         if (!server_state.transitionToSharedStateSyncPhase(peer_group)) [[unlikely]] {
             LOG(BUG) << "Failed to transition to shared state distribution phase; This is a bug!";
             return;
@@ -547,7 +586,7 @@ void ccoip::CCoIPMasterHandler::handleSyncSharedState(const ccoip_socket_address
     // If the client is the first to sync shared state, then that peer's shared state is the reference
     // "mask" for the other clients.
     const CCoIPMasterState::SharedStateMismatchStatus status = server_state
-            .sharedStateMatches(client_uuid, packet.shared_state_revision, packet.shared_state_hashes);
+            .isNewRevisionLegal(client_uuid, packet.shared_state_revision);
 
     if (status == CCoIPMasterState::REVISION_INCREMENT_VIOLATION) {
         LOG(WARN) << "Shared state revision increment violation for " << ccoip_sockaddr_to_str(client_address) <<
@@ -575,6 +614,8 @@ void ccoip::CCoIPMasterHandler::handleSyncSharedState(const ccoip_socket_address
         }
         return;
     }
+
+    server_state.voteSharedStateMask(client_uuid, packet.shared_state_hashes);
 
     const auto info_opt = server_state.getClientInfo(client_uuid);
     if (!info_opt) {

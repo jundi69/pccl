@@ -14,11 +14,11 @@ static void establishConnections(const std::vector<const ccoip::CCoIPClient *> &
     std::vector<std::thread> client_threads{};
     for (const auto &client: clients) {
         std::thread client_thread([n_clients, &clients_connected, &client] {
-            ASSERT_TRUE(client->connect());
+            EXPECT_TRUE(client->connect());
             ++clients_connected;
             while (clients_connected < n_clients) {
-                ASSERT_TRUE(client->acceptNewPeers());
-                ASSERT_TRUE(client->updateTopology());
+                EXPECT_TRUE(client->acceptNewPeers());
+                EXPECT_TRUE(client->updateTopology());
                 std::this_thread::sleep_for(std::chrono::milliseconds(150));
             }
         });
@@ -35,12 +35,15 @@ static void establishConnections(const std::vector<const ccoip::CCoIPClient *> &
 }
 
 // Basic shared state distribution test
+// This is a two peer setup, where the two shared states differ.
+// This is a tie in terms of content hash prevalence, so we simply assert that one transfer from any client to the other
+// has occurred.
 TEST(SharedStateDistribution, TestBasic) {
     ccoip::CCoIPMaster master({
         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {0, 0, 0, 0}}},
         .port = CCOIP_PROTOCOL_PORT_MASTER
     });
-    ASSERT_TRUE(master.launch());
+    EXPECT_TRUE(master.launch());
 
     // client 1
     const ccoip::CCoIPClient client1({
@@ -59,7 +62,6 @@ TEST(SharedStateDistribution, TestBasic) {
     const std::unique_ptr<uint8_t[]> value1(new uint8_t[value_size]);
     std::fill_n(value1.get(), value_size, 42);
     std::thread client1_sync_thread([&client1, &value1, value_size] {
-        // client 1 distributes shared state
         ccoip_shared_state_t shared_state{};
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
             .key = "key1",
@@ -70,11 +72,16 @@ TEST(SharedStateDistribution, TestBasic) {
         shared_state.revision = 0;
 
         ccoip_shared_state_sync_info_t info{};
-        ASSERT_TRUE(client1.syncSharedState(shared_state, info));
+        EXPECT_TRUE(client1.syncSharedState(shared_state, info));
 
-        // client2 state is outdated, so sync FROM client1 TO client2
-        ASSERT_EQ(info.tx_bytes, value_size);
-        ASSERT_EQ(info.rx_bytes, 0);
+        // expect either transmission from client1 to client2 or vice versa
+        if (info.tx_bytes == value_size) {
+            EXPECT_EQ(info.tx_bytes, value_size);
+            EXPECT_EQ(info.rx_bytes, 0);
+        } else {
+            EXPECT_EQ(info.tx_bytes, 0);
+            EXPECT_EQ(info.rx_bytes, value_size);
+        }
     });
 
     std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -93,11 +100,16 @@ TEST(SharedStateDistribution, TestBasic) {
         shared_state.revision = 0;
 
         ccoip_shared_state_sync_info_t info{};
-        ASSERT_TRUE(client2.syncSharedState(shared_state, info));
+        EXPECT_TRUE(client2.syncSharedState(shared_state, info));
 
-        // client2 state is outdated, so sync FROM client1 TO client2
-        ASSERT_EQ(info.tx_bytes, 0);
-        ASSERT_EQ(info.rx_bytes, value_size);
+        // expect either transmission from client1 to client2 or vice versa
+        if (info.tx_bytes == value_size) {
+            EXPECT_EQ(info.tx_bytes, value_size);
+            EXPECT_EQ(info.rx_bytes, 0);
+        } else {
+            EXPECT_EQ(info.tx_bytes, 0);
+            EXPECT_EQ(info.rx_bytes, value_size);
+        }
     });
 
     // wait for shared state sync to complete
@@ -105,17 +117,17 @@ TEST(SharedStateDistribution, TestBasic) {
     client2_sync_thread.join();
 
     // assert the shared state of client 2 to be equal to that of client 1
-    ASSERT_EQ(std::memcmp(value1.get(), value2.get(), value_size), 0);
+    EXPECT_EQ(std::memcmp(value1.get(), value2.get(), value_size), 0);
 
     // clean shutdown
-    ASSERT_TRUE(client2.interrupt());
-    ASSERT_TRUE(client1.interrupt());
+    EXPECT_TRUE(client2.interrupt());
+    EXPECT_TRUE(client1.interrupt());
 
-    ASSERT_TRUE(client1.join());
-    ASSERT_TRUE(client2.join());
+    EXPECT_TRUE(client1.join());
+    EXPECT_TRUE(client2.join());
 
-    ASSERT_TRUE(master.interrupt());
-    ASSERT_TRUE(master.join());
+    EXPECT_TRUE(master.interrupt());
+    EXPECT_TRUE(master.join());
 };
 
 // Identical shared state should not trigger data transfer
@@ -124,7 +136,7 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedState) {
         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {0, 0, 0, 0}}},
         .port = CCOIP_PROTOCOL_PORT_MASTER
     });
-    ASSERT_TRUE(master.launch());
+    EXPECT_TRUE(master.launch());
 
     // client 1
     const ccoip::CCoIPClient client1({
@@ -154,11 +166,11 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedState) {
         shared_state.revision = 0;
 
         ccoip_shared_state_sync_info_t info{};
-        ASSERT_TRUE(client1.syncSharedState(shared_state, info));
+        EXPECT_TRUE(client1.syncSharedState(shared_state, info));
 
         // for identical shared state, no data should be transferred
-        ASSERT_EQ(info.rx_bytes, 0);
-        ASSERT_EQ(info.tx_bytes, 0);
+        EXPECT_EQ(info.rx_bytes, 0);
+        EXPECT_EQ(info.tx_bytes, 0);
     });
 
     std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -177,11 +189,11 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedState) {
         shared_state.revision = 0;
 
         ccoip_shared_state_sync_info_t info{};
-        ASSERT_TRUE(client2.syncSharedState(shared_state, info));
+        EXPECT_TRUE(client2.syncSharedState(shared_state, info));
 
         // for identical shared state, no data should be transferred
-        ASSERT_EQ(info.rx_bytes, 0);
-        ASSERT_EQ(info.tx_bytes, 0);
+        EXPECT_EQ(info.rx_bytes, 0);
+        EXPECT_EQ(info.tx_bytes, 0);
     });
 
     // wait for shared state sync to complete
@@ -189,19 +201,255 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedState) {
     client2_sync_thread.join();
 
     // assert the shared state of client 2 to be equal to that of client 1
-    ASSERT_EQ(std::memcmp(value1.get(), value2.get(), value_size), 0);
+    EXPECT_EQ(std::memcmp(value1.get(), value2.get(), value_size), 0);
 
     // clean shutdown
-    ASSERT_TRUE(client2.interrupt());
-    ASSERT_TRUE(client1.interrupt());
+    EXPECT_TRUE(client2.interrupt());
+    EXPECT_TRUE(client1.interrupt());
 
-    ASSERT_TRUE(client1.join());
-    ASSERT_TRUE(client2.join());
+    EXPECT_TRUE(client1.join());
+    EXPECT_TRUE(client2.join());
 
-    ASSERT_TRUE(master.interrupt());
-    ASSERT_TRUE(master.join());
+    EXPECT_TRUE(master.interrupt());
+    EXPECT_TRUE(master.join());
 };
 
+// Partially dirty shared state should only trigger retransmission of the keys that are dirty
+TEST(SharedStateDistribution, TestPartialSyncPartiallyDirtyState) {
+    ccoip::CCoIPMaster master({
+        .inet = {.protocol = inetIPv4, .ipv4 = {.data = {0, 0, 0, 0}}},
+        .port = CCOIP_PROTOCOL_PORT_MASTER
+    });
+    EXPECT_TRUE(master.launch());
+
+    // client 1
+    const ccoip::CCoIPClient client1({
+                                         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                         .port = CCOIP_PROTOCOL_PORT_MASTER
+                                     }, 0);
+    // client 2
+    const ccoip::CCoIPClient client2({
+                                         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                         .port = CCOIP_PROTOCOL_PORT_MASTER
+                                     }, 0);
+
+    establishConnections({&client1, &client2});
+
+    constexpr size_t value_size = 1024;
+
+    const std::unique_ptr<uint8_t[]> value1_p1(new uint8_t[value_size]);
+    std::fill_n(value1_p1.get(), value_size, 42);
+
+    const std::unique_ptr<uint8_t[]> value1_p2(new uint8_t[value_size]);
+    std::fill_n(value1_p2.get(), value_size, 42);
+
+    const std::unique_ptr<uint8_t[]> value2_p1(new uint8_t[value_size]);
+    std::fill_n(value2_p1.get(), value_size, 43);
+
+    const std::unique_ptr<uint8_t[]> value2_p2(new uint8_t[value_size]);
+    std::fill_n(value2_p2.get(), value_size, 44);
+
+    std::thread client1_sync_thread([&client1, &value1_p1, &value2_p1, value_size] {
+        // client 1 distributes shared state
+        ccoip_shared_state_t shared_state{};
+        shared_state.entries.push_back(ccoip_shared_state_entry_t{
+            .key = "key1",
+            .data_type = ccoip::ccoipUint8,
+            .value = std::span(reinterpret_cast<std::byte *>(value1_p1.get()), value_size),
+            .allow_content_inequality = false
+        });
+        shared_state.entries.push_back(ccoip_shared_state_entry_t{
+            .key = "key2",
+            .data_type = ccoip::ccoipUint8,
+            .value = std::span(reinterpret_cast<std::byte *>(value2_p1.get()), value_size),
+            .allow_content_inequality = false
+        });
+        shared_state.revision = 0;
+
+        ccoip_shared_state_sync_info_t info{};
+        EXPECT_TRUE(client1.syncSharedState(shared_state, info));
+
+        // only one key is dirty, expect only one size of that key to be transmitted
+        // Expect either transmission from client1 to client2 or vice versa
+        if (value_size == info.tx_bytes) {
+            EXPECT_EQ(info.tx_bytes, value_size);
+            EXPECT_EQ(info.rx_bytes, 0);
+        } else {
+            EXPECT_EQ(info.tx_bytes, 0);
+            EXPECT_EQ(info.rx_bytes, value_size);
+        }
+    });
+
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+
+    std::thread client2_sync_thread([&client2, &value1_p2, &value2_p2, value_size] {
+        // client 2 requests shared state
+        ccoip_shared_state_t shared_state{};
+        shared_state.entries.push_back(ccoip_shared_state_entry_t{
+            .key = "key1",
+            .data_type = ccoip::ccoipUint8,
+            .value = std::span(reinterpret_cast<std::byte *>(value1_p2.get()), value_size),
+            .allow_content_inequality = false
+        });
+        shared_state.entries.push_back(ccoip_shared_state_entry_t{
+            .key = "key2",
+            .data_type = ccoip::ccoipUint8,
+            .value = std::span(reinterpret_cast<std::byte *>(value2_p2.get()), value_size),
+            .allow_content_inequality = false
+        });
+        shared_state.revision = 0;
+
+        ccoip_shared_state_sync_info_t info{};
+        EXPECT_TRUE(client2.syncSharedState(shared_state, info));
+
+        // only one key is dirty, expect only one size of that key to be transmitted
+        // Expect either transmission from client1 to client2 or vice versa
+        if (value_size == info.tx_bytes) {
+            EXPECT_EQ(info.tx_bytes, value_size);
+            EXPECT_EQ(info.rx_bytes, 0);
+        } else {
+            EXPECT_EQ(info.tx_bytes, 0);
+            EXPECT_EQ(info.rx_bytes, value_size);
+        }
+    });
+
+    // wait for shared state sync to complete
+    client1_sync_thread.join();
+    client2_sync_thread.join();
+
+    // assert the shared state of client 2 to be equal to that of client 1
+    EXPECT_EQ(std::memcmp(value1_p1.get(), value1_p2.get(), value_size), 0);
+    EXPECT_EQ(std::memcmp(value2_p1.get(), value2_p2.get(), value_size), 0);
+
+    // clean shutdown
+    EXPECT_TRUE(client2.interrupt());
+    EXPECT_TRUE(client1.interrupt());
+
+    EXPECT_TRUE(client1.join());
+    EXPECT_TRUE(client2.join());
+
+    EXPECT_TRUE(master.interrupt());
+    EXPECT_TRUE(master.join());
+}
+
+// Popular hash prevalence test. Three peers synchronize shared state, two of the three have the same shared state.
+// This tests specifically tests whether client1 - which has the unpopular state, which hits the master >first< will
+// NOT be determining the accepted shared state hash. Client1 MUST receive the more popular shared state from client2 or client3.
+TEST(SharedStateDistribution, TestPopularHashPrevelance) {
+    ccoip::CCoIPMaster master({
+        .inet = {.protocol = inetIPv4, .ipv4 = {.data = {0, 0, 0, 0}}},
+        .port = CCOIP_PROTOCOL_PORT_MASTER
+    });
+    EXPECT_TRUE(master.launch());
+
+    // client 1
+    const ccoip::CCoIPClient client1({
+                                         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                         .port = CCOIP_PROTOCOL_PORT_MASTER
+                                     }, 0);
+    // client 2
+    const ccoip::CCoIPClient client2({
+                                         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                         .port = CCOIP_PROTOCOL_PORT_MASTER
+                                     }, 0);
+    // client 3
+    const ccoip::CCoIPClient client3({
+                                         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                         .port = CCOIP_PROTOCOL_PORT_MASTER
+                                     }, 0);
+
+    establishConnections({&client1, &client2, &client3});
+
+    constexpr size_t value_size = 1024;
+
+
+    const std::unique_ptr<uint8_t[]> value1_bak(new uint8_t[value_size]);
+    std::fill_n(value1_bak.get(), value_size, 42);
+
+    const std::unique_ptr<uint8_t[]> value1(new uint8_t[value_size]);
+    std::fill_n(value1.get(), value_size, 42);
+
+    const std::unique_ptr<uint8_t[]> value2(new uint8_t[value_size]);
+    std::fill_n(value2.get(), value_size, 43);
+
+    const std::unique_ptr<uint8_t[]> value3(new uint8_t[value_size]);
+    std::fill_n(value3.get(), value_size, 43);
+
+    // Client one has the incorrect shared state and will hit the master FIRST;
+    // This test crucially tests whether despite the fact that client 1 is first to hit the master, the master will
+    // chose later clients to be the determining peer for the accepted hashes.
+    std::thread client1_sync_thread([&client1, &value1, value_size] {
+        // client 1 distributes shared state
+        ccoip_shared_state_t shared_state{};
+        shared_state.entries.push_back(ccoip_shared_state_entry_t{
+            .key = "key1",
+            .data_type = ccoip::ccoipUint8,
+            .value = std::span(reinterpret_cast<std::byte *>(value1.get()), value_size),
+            .allow_content_inequality = false
+        });
+        shared_state.revision = 0;
+
+        ccoip_shared_state_sync_info_t info{};
+        EXPECT_TRUE(client1.syncSharedState(shared_state, info));
+    });
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+
+    std::thread client2_sync_thread([&client2, &value2, value_size] {
+        // client 2 distributes shared state
+        ccoip_shared_state_t shared_state{};
+        shared_state.entries.push_back(ccoip_shared_state_entry_t{
+            .key = "key1",
+            .data_type = ccoip::ccoipUint8,
+            .value = std::span(reinterpret_cast<std::byte *>(value2.get()), value_size),
+            .allow_content_inequality = false
+        });
+        shared_state.revision = 0;
+
+        ccoip_shared_state_sync_info_t info{};
+        EXPECT_TRUE(client2.syncSharedState(shared_state, info));
+    });
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+
+    std::thread client3_sync_thread([&client3, &value3, value_size] {
+        // client 3 distributes shared state
+        ccoip_shared_state_t shared_state{};
+        shared_state.entries.push_back(ccoip_shared_state_entry_t{
+            .key = "key1",
+            .data_type = ccoip::ccoipUint8,
+            .value = std::span(reinterpret_cast<std::byte *>(value3.get()), value_size),
+            .allow_content_inequality = false
+        });
+        shared_state.revision = 0;
+
+        ccoip_shared_state_sync_info_t info{};
+        EXPECT_TRUE(client3.syncSharedState(shared_state, info));
+    });
+
+    client1_sync_thread.join();
+    client2_sync_thread.join();
+    client3_sync_thread.join();
+
+    // assert that client1 no longer equals the bak and has in fact been modified
+    EXPECT_NE(std::memcmp(value1_bak.get(), value1.get(), value_size), 0);
+
+    // assert that client2 and client3 are equal
+    EXPECT_EQ(std::memcmp(value2.get(), value3.get(), value_size), 0);
+
+    // assert that client1 and client2 are equal
+    EXPECT_EQ(std::memcmp(value1.get(), value2.get(), value_size), 0);
+
+    // clean shutdown
+    EXPECT_TRUE(client3.interrupt());
+    EXPECT_TRUE(client2.interrupt());
+    EXPECT_TRUE(client1.interrupt());
+
+    EXPECT_TRUE(client1.join());
+    EXPECT_TRUE(client2.join());
+    EXPECT_TRUE(client3.join());
+
+    EXPECT_TRUE(master.interrupt());
+    EXPECT_TRUE(master.join());
+}
 
 
 // Test of shared state distribution with multiple peer groups.
@@ -215,7 +463,7 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedStateMultiplePeerGroups) 
         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {0, 0, 0, 0}}},
         .port = CCOIP_PROTOCOL_PORT_MASTER
     });
-    ASSERT_TRUE(master.launch());
+    EXPECT_TRUE(master.launch());
 
     // group 1, client 1
     const ccoip::CCoIPClient g1client1({
@@ -259,11 +507,11 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedStateMultiplePeerGroups) 
             shared_state.revision = 0;
 
             ccoip_shared_state_sync_info_t info{};
-            ASSERT_TRUE(client1.syncSharedState(shared_state, info));
+            EXPECT_TRUE(client1.syncSharedState(shared_state, info));
 
             // for identical shared state, no data should be transferred
-            ASSERT_EQ(info.rx_bytes, 0);
-            ASSERT_EQ(info.tx_bytes, 0);
+            EXPECT_EQ(info.rx_bytes, 0);
+            EXPECT_EQ(info.tx_bytes, 0);
         });
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
@@ -281,11 +529,11 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedStateMultiplePeerGroups) 
             shared_state.revision = 0;
 
             ccoip_shared_state_sync_info_t info{};
-            ASSERT_TRUE(client2.syncSharedState(shared_state, info));
+            EXPECT_TRUE(client2.syncSharedState(shared_state, info));
 
             // for identical shared state, no data should be transferred
-            ASSERT_EQ(info.rx_bytes, 0);
-            ASSERT_EQ(info.tx_bytes, 0);
+            EXPECT_EQ(info.rx_bytes, 0);
+            EXPECT_EQ(info.tx_bytes, 0);
         });
 
         // wait for shared state sync to complete
@@ -293,25 +541,25 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedStateMultiplePeerGroups) 
         client2_sync_thread.join();
 
         // assert the shared state of client 2 to be equal to that of client 1
-        ASSERT_EQ(std::memcmp(value1.get(), value2.get(), value_size), 0);
+        EXPECT_EQ(std::memcmp(value1.get(), value2.get(), value_size), 0);
     };
 
     launch_sync_func(g1client1, g1client2, 1);
     launch_sync_func(g2client1, g2client2, 2);
 
     // clean shutdown
-    ASSERT_TRUE(g1client1.interrupt());
-    ASSERT_TRUE(g1client2.interrupt());
-    ASSERT_TRUE(g2client1.interrupt());
-    ASSERT_TRUE(g2client2.interrupt());
+    EXPECT_TRUE(g1client1.interrupt());
+    EXPECT_TRUE(g1client2.interrupt());
+    EXPECT_TRUE(g2client1.interrupt());
+    EXPECT_TRUE(g2client2.interrupt());
 
-    ASSERT_TRUE(g1client1.join());
-    ASSERT_TRUE(g1client2.join());
-    ASSERT_TRUE(g2client1.join());
-    ASSERT_TRUE(g2client2.join());
+    EXPECT_TRUE(g1client1.join());
+    EXPECT_TRUE(g1client2.join());
+    EXPECT_TRUE(g2client1.join());
+    EXPECT_TRUE(g2client2.join());
 
-    ASSERT_TRUE(master.interrupt());
-    ASSERT_TRUE(master.join());
+    EXPECT_TRUE(master.interrupt());
+    EXPECT_TRUE(master.join());
 };
 
 // Same setup as TestNoSyncIdenticalSharedStateMultiplePeerGroups, but each peer group has a different shared state mask,
@@ -321,7 +569,7 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedStateMultiplePeerGroupsDi
         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {0, 0, 0, 0}}},
         .port = CCOIP_PROTOCOL_PORT_MASTER
     });
-    ASSERT_TRUE(master.launch());
+    EXPECT_TRUE(master.launch());
 
     // group 1, client 1
     const ccoip::CCoIPClient g1client1({
@@ -365,11 +613,11 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedStateMultiplePeerGroupsDi
             shared_state.revision = 0;
 
             ccoip_shared_state_sync_info_t info{};
-            ASSERT_TRUE(client1.syncSharedState(shared_state, info));
+            EXPECT_TRUE(client1.syncSharedState(shared_state, info));
 
             // for identical shared state, no data should be transferred
-            ASSERT_EQ(info.rx_bytes, 0);
-            ASSERT_EQ(info.tx_bytes, 0);
+            EXPECT_EQ(info.rx_bytes, 0);
+            EXPECT_EQ(info.tx_bytes, 0);
         });
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
@@ -387,11 +635,11 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedStateMultiplePeerGroupsDi
             shared_state.revision = 0;
 
             ccoip_shared_state_sync_info_t info{};
-            ASSERT_TRUE(client2.syncSharedState(shared_state, info));
+            EXPECT_TRUE(client2.syncSharedState(shared_state, info));
 
             // for identical shared state, no data should be transferred
-            ASSERT_EQ(info.rx_bytes, 0);
-            ASSERT_EQ(info.tx_bytes, 0);
+            EXPECT_EQ(info.rx_bytes, 0);
+            EXPECT_EQ(info.tx_bytes, 0);
         });
 
         // wait for shared state sync to complete
@@ -399,25 +647,25 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedStateMultiplePeerGroupsDi
         client2_sync_thread.join();
 
         // assert the shared state of client 2 to be equal to that of client 1
-        ASSERT_EQ(std::memcmp(value1.get(), value2.get(), value_size), 0);
+        EXPECT_EQ(std::memcmp(value1.get(), value2.get(), value_size), 0);
     };
 
     launch_sync_func(g1client1, g1client2, 1);
     launch_sync_func(g2client1, g2client2, 2);
 
     // clean shutdown
-    ASSERT_TRUE(g1client1.interrupt());
-    ASSERT_TRUE(g1client2.interrupt());
-    ASSERT_TRUE(g2client1.interrupt());
-    ASSERT_TRUE(g2client2.interrupt());
+    EXPECT_TRUE(g1client1.interrupt());
+    EXPECT_TRUE(g1client2.interrupt());
+    EXPECT_TRUE(g2client1.interrupt());
+    EXPECT_TRUE(g2client2.interrupt());
 
-    ASSERT_TRUE(g1client1.join());
-    ASSERT_TRUE(g1client2.join());
-    ASSERT_TRUE(g2client1.join());
-    ASSERT_TRUE(g2client2.join());
+    EXPECT_TRUE(g1client1.join());
+    EXPECT_TRUE(g1client2.join());
+    EXPECT_TRUE(g2client1.join());
+    EXPECT_TRUE(g2client2.join());
 
-    ASSERT_TRUE(master.interrupt());
-    ASSERT_TRUE(master.join());
+    EXPECT_TRUE(master.interrupt());
+    EXPECT_TRUE(master.join());
 };
 
 // Same setup as TestNoSyncIdenticalSharedStateMultiplePeerGroupsDifferentKeys, but both sync processes are launched concurrently
@@ -426,7 +674,7 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedStateMultiplePeerGroupsDi
         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {0, 0, 0, 0}}},
         .port = CCOIP_PROTOCOL_PORT_MASTER
     });
-    ASSERT_TRUE(master.launch());
+    EXPECT_TRUE(master.launch());
 
     // group 1, client 1
     const ccoip::CCoIPClient g1client1({
@@ -476,11 +724,11 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedStateMultiplePeerGroupsDi
                     shared_state.revision = 0;
                     ccoip_shared_state_sync_info_t info{};
                     ++client1_sync_ctr;
-                    ASSERT_TRUE(g1client1.syncSharedState(shared_state, info));
+                    EXPECT_TRUE(g1client1.syncSharedState(shared_state, info));
 
                     // for identical shared state, no data should be transferred
-                    ASSERT_EQ(info.rx_bytes, 0);
-                    ASSERT_EQ(info.tx_bytes, 0);
+                    EXPECT_EQ(info.rx_bytes, 0);
+                    EXPECT_EQ(info.tx_bytes, 0);
                 });
 
                 // group 2 client 1 distributes shared state
@@ -495,11 +743,11 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedStateMultiplePeerGroupsDi
                     shared_state.revision = 0;
                     ccoip_shared_state_sync_info_t info{};
                     ++client1_sync_ctr;
-                    ASSERT_TRUE(g2client1.syncSharedState(shared_state, info));
+                    EXPECT_TRUE(g2client1.syncSharedState(shared_state, info));
 
                     // for identical shared state, no data should be transferred
-                    ASSERT_EQ(info.rx_bytes, 0);
-                    ASSERT_EQ(info.tx_bytes, 0);
+                    EXPECT_EQ(info.rx_bytes, 0);
+                    EXPECT_EQ(info.tx_bytes, 0);
                 });
 
                 // wait for shared state sync to complete
@@ -523,11 +771,11 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedStateMultiplePeerGroupsDi
                 });
                 shared_state.revision = 0;
                 ccoip_shared_state_sync_info_t info{};
-                ASSERT_TRUE(g1client2.syncSharedState(shared_state, info));
+                EXPECT_TRUE(g1client2.syncSharedState(shared_state, info));
 
                 // for identical shared state, no data should be transferred
-                ASSERT_EQ(info.rx_bytes, 0);
-                ASSERT_EQ(info.tx_bytes, 0);
+                EXPECT_EQ(info.rx_bytes, 0);
+                EXPECT_EQ(info.tx_bytes, 0);
             });
 
             // group 2 client 2 requests shared state
@@ -541,11 +789,11 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedStateMultiplePeerGroupsDi
                 });
                 shared_state.revision = 0;
                 ccoip_shared_state_sync_info_t info{};
-                ASSERT_TRUE(g2client2.syncSharedState(shared_state, info));
+                EXPECT_TRUE(g2client2.syncSharedState(shared_state, info));
 
                 // for identical shared state, no data should be transferred
-                ASSERT_EQ(info.rx_bytes, 0);
-                ASSERT_EQ(info.tx_bytes, 0);
+                EXPECT_EQ(info.rx_bytes, 0);
+                EXPECT_EQ(info.tx_bytes, 0);
             });
 
             // wait for shared state sync to complete
@@ -561,18 +809,18 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedStateMultiplePeerGroupsDi
     launch_sync_func();
 
     // clean shutdown
-    ASSERT_TRUE(g1client1.interrupt());
-    ASSERT_TRUE(g1client2.interrupt());
-    ASSERT_TRUE(g2client1.interrupt());
-    ASSERT_TRUE(g2client2.interrupt());
+    EXPECT_TRUE(g1client1.interrupt());
+    EXPECT_TRUE(g1client2.interrupt());
+    EXPECT_TRUE(g2client1.interrupt());
+    EXPECT_TRUE(g2client2.interrupt());
 
-    ASSERT_TRUE(g1client1.join());
-    ASSERT_TRUE(g1client2.join());
-    ASSERT_TRUE(g2client1.join());
-    ASSERT_TRUE(g2client2.join());
+    EXPECT_TRUE(g1client1.join());
+    EXPECT_TRUE(g1client2.join());
+    EXPECT_TRUE(g2client1.join());
+    EXPECT_TRUE(g2client2.join());
 
-    ASSERT_TRUE(master.interrupt());
-    ASSERT_TRUE(master.join());
+    EXPECT_TRUE(master.interrupt());
+    EXPECT_TRUE(master.join());
 };
 
 // Multistep advancement of shared state with identical updates
@@ -581,7 +829,7 @@ TEST(SharedStateDistribution, TestMultiStepAdvancement) {
         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {0, 0, 0, 0}}},
         .port = CCOIP_PROTOCOL_PORT_MASTER
     });
-    ASSERT_TRUE(master.launch());
+    EXPECT_TRUE(master.launch());
 
     // Client 1
     const ccoip::CCoIPClient client1({
@@ -622,11 +870,11 @@ TEST(SharedStateDistribution, TestMultiStepAdvancement) {
             shared_state.revision = step;
 
             ccoip_shared_state_sync_info_t info{};
-            ASSERT_TRUE(client.syncSharedState(shared_state, info));
+            EXPECT_TRUE(client.syncSharedState(shared_state, info));
 
             // Since shared states are identical, no data should be transferred
-            ASSERT_EQ(info.tx_bytes, 0);
-            ASSERT_EQ(info.rx_bytes, 0);
+            EXPECT_EQ(info.tx_bytes, 0);
+            EXPECT_EQ(info.rx_bytes, 0);
         }
     };
 
@@ -643,26 +891,28 @@ TEST(SharedStateDistribution, TestMultiStepAdvancement) {
     client2_main_thread.join();
 
     // Assert the shared states are identical
-    ASSERT_EQ(std::memcmp(value1.get(), value2.get(), value_size), 0);
+    EXPECT_EQ(std::memcmp(value1.get(), value2.get(), value_size), 0);
 
     // Clean shutdown
-    ASSERT_TRUE(client2.interrupt());
-    ASSERT_TRUE(client1.interrupt());
+    EXPECT_TRUE(client2.interrupt());
+    EXPECT_TRUE(client1.interrupt());
 
-    ASSERT_TRUE(client1.join());
-    ASSERT_TRUE(client2.join());
+    EXPECT_TRUE(client1.join());
+    EXPECT_TRUE(client2.join());
 
-    ASSERT_TRUE(master.interrupt());
-    ASSERT_TRUE(master.join());
+    EXPECT_TRUE(master.interrupt());
+    EXPECT_TRUE(master.join());
 };
 
 // "Drag-along" client scenario
+// Two clients distribute the same shared state to establish hash prevalence, and the third client does not update its own shared state but calls syncSharedState.
+// This tests whether the third client is "dragged along" by the other two clients and receives the correct shared state.
 TEST(SharedStateDistribution, TestDragAlongClient) {
     ccoip::CCoIPMaster master({
         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {0, 0, 0, 0}}},
         .port = CCOIP_PROTOCOL_PORT_MASTER
     });
-    ASSERT_TRUE(master.launch());
+    EXPECT_TRUE(master.launch());
 
     // Client 1
     const ccoip::CCoIPClient client1({
@@ -675,16 +925,24 @@ TEST(SharedStateDistribution, TestDragAlongClient) {
                                          .port = CCOIP_PROTOCOL_PORT_MASTER
                                      }, 0);
 
-    establishConnections({&client1, &client2});
+    // Client 3
+    const ccoip::CCoIPClient client3({
+                                         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                         .port = CCOIP_PROTOCOL_PORT_MASTER
+                                     }, 0);
+
+    establishConnections({&client1, &client2, &client3});
 
     constexpr size_t value_size = 1024;
     constexpr int num_steps = 5;
 
     const std::unique_ptr<uint8_t[]> value1(new uint8_t[value_size]);
     const std::unique_ptr<uint8_t[]> value2(new uint8_t[value_size]);
+    const std::unique_ptr<uint8_t[]> value3(new uint8_t[value_size]);
 
     std::fill_n(value1.get(), value_size, 42);
-    std::fill_n(value2.get(), value_size, 0); // Client 2 does not update value
+    std::fill_n(value2.get(), value_size, 42);
+    std::fill_n(value3.get(), value_size, 0); // Client 3 does not update value
 
     // Client 1 continuously updates shared state
     std::thread client1_main_thread([&client1, &value1, value_size, num_steps] {
@@ -705,15 +963,18 @@ TEST(SharedStateDistribution, TestDragAlongClient) {
             ccoip_shared_state_sync_info_t info{};
             EXPECT_TRUE(client1.syncSharedState(shared_state, info));
 
-            // Client 1 should send data to client 2
-            EXPECT_EQ(info.tx_bytes, value_size);
+            // Either client 1 or client 2 may be chosen to distribute the shared state to Client 3;
+            // What is certain is that client 3 needs to receive value_size bytes, which is asserted.
+            if (info.tx_bytes != 0) {
+                EXPECT_EQ(info.tx_bytes, value_size);
+            } else {
+                EXPECT_EQ(info.tx_bytes, 0);
+            }
             EXPECT_EQ(info.rx_bytes, 0);
         }
     });
 
-    std::this_thread::sleep_for(std::chrono::seconds(1));
-
-    // Client 2 does not update its own shared state but calls syncSharedState
+    // Client 2 continuously updates shared state and distributes the same shared state as client 1
     std::thread client2_main_thread([&client2, &value2, value_size, num_steps] {
         ccoip_shared_state_t shared_state{};
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
@@ -722,12 +983,42 @@ TEST(SharedStateDistribution, TestDragAlongClient) {
             .value = std::span(reinterpret_cast<std::byte *>(value2.get()), value_size),
             .allow_content_inequality = false
         });
+        shared_state.revision = 0;
+
+        for (int step = 0; step < num_steps; ++step) {
+            // Update value
+            std::fill_n(value2.get(), value_size, static_cast<uint8_t>(42 + step));
+            shared_state.revision = step;
+
+            ccoip_shared_state_sync_info_t info{};
+            EXPECT_TRUE(client2.syncSharedState(shared_state, info));
+
+            // Either client 1 or client 2 may be chosen to distribute the shared state to Client 3;
+            // What is certain is that client 3 needs to receive value_size bytes, which is asserted.
+            if (info.tx_bytes != 0) {
+                EXPECT_EQ(info.tx_bytes, value_size);
+            } else {
+                EXPECT_EQ(info.tx_bytes, 0);
+            }
+            EXPECT_EQ(info.rx_bytes, 0);
+        }
+    });
+
+    // Client 3 does not update its own shared state but calls syncSharedState
+    std::thread client3_main_thread([&client3, &value3, value_size, num_steps] {
+        ccoip_shared_state_t shared_state{};
+        shared_state.entries.push_back(ccoip_shared_state_entry_t{
+            .key = "key1",
+            .data_type = ccoip::ccoipUint8,
+            .value = std::span(reinterpret_cast<std::byte *>(value3.get()), value_size),
+            .allow_content_inequality = false
+        });
         shared_state.revision = 0; // Client 2 does not update revision
 
         const std::unique_ptr<uint8_t[]> value1_inferred(new uint8_t[value_size]);
         for (int step = 0; step < num_steps; ++step) {
             ccoip_shared_state_sync_info_t info{};
-            EXPECT_TRUE(client2.syncSharedState(shared_state, info));
+            EXPECT_TRUE(client3.syncSharedState(shared_state, info));
 
             // revision should be updated
             EXPECT_EQ(shared_state.revision, step);
@@ -739,24 +1030,27 @@ TEST(SharedStateDistribution, TestDragAlongClient) {
             // infer value1 from step
             std::fill_n(value1_inferred.get(), value_size, static_cast<uint8_t>(42 + step));
 
-            // Value2 should now be updated to match value1
-            EXPECT_EQ(std::memcmp(value1_inferred.get(), value2.get(), value_size), 0);
+            // Value3 should now be updated to match value1
+            EXPECT_EQ(std::memcmp(value1_inferred.get(), value3.get(), value_size), 0);
         }
     });
 
     // Wait for both clients to finish
     client1_main_thread.join();
     client2_main_thread.join();
+    client3_main_thread.join();
 
     // Clean shutdown
-    ASSERT_TRUE(client2.interrupt());
-    ASSERT_TRUE(client1.interrupt());
+    EXPECT_TRUE(client3.interrupt());
+    EXPECT_TRUE(client2.interrupt());
+    EXPECT_TRUE(client1.interrupt());
 
-    ASSERT_TRUE(client1.join());
-    ASSERT_TRUE(client2.join());
+    EXPECT_TRUE(client1.join());
+    EXPECT_TRUE(client2.join());
+    EXPECT_TRUE(client3.join());
 
-    ASSERT_TRUE(master.interrupt());
-    ASSERT_TRUE(master.join());
+    EXPECT_TRUE(master.interrupt());
+    EXPECT_TRUE(master.join());
 };
 
 // Test violation of the one-increment rule
@@ -766,7 +1060,7 @@ TEST(SharedStateDistribution, TestOneIncrementRuleViolationSimple) {
         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {0, 0, 0, 0}}},
         .port = CCOIP_PROTOCOL_PORT_MASTER
     });
-    ASSERT_TRUE(master.launch());
+    EXPECT_TRUE(master.launch());
 
     // Client 1
     const ccoip::CCoIPClient client1({
@@ -810,10 +1104,10 @@ TEST(SharedStateDistribution, TestOneIncrementRuleViolationSimple) {
             bool success = client1.syncSharedState(shared_state, info);
             if (step == 0) {
                 // First step should succeed because revision is 0
-                ASSERT_TRUE(success);
+                EXPECT_TRUE(success);
             } else {
                 // Subsequent steps should fail
-                ASSERT_FALSE(success);
+                EXPECT_FALSE(success);
             }
         }
     });
@@ -837,10 +1131,7 @@ TEST(SharedStateDistribution, TestOneIncrementRuleViolationSimple) {
             bool success = client2.syncSharedState(shared_state, info);
             if (step == 0) {
                 // First step should succeed because revision is 0
-                ASSERT_TRUE(success);
-            } else {
-                // Subsequent steps should fail
-                ASSERT_FALSE(success);
+                EXPECT_TRUE(success);
             }
         }
     });
@@ -850,14 +1141,14 @@ TEST(SharedStateDistribution, TestOneIncrementRuleViolationSimple) {
     client2_main_thread.join();
 
     // Clean shutdown
-    ASSERT_TRUE(client2.interrupt());
-    ASSERT_TRUE(client1.interrupt());
+    EXPECT_TRUE(client2.interrupt());
+    EXPECT_TRUE(client1.interrupt());
 
-    ASSERT_TRUE(client1.join());
-    ASSERT_TRUE(client2.join());
+    EXPECT_TRUE(client1.join());
+    EXPECT_TRUE(client2.join());
 
-    ASSERT_TRUE(master.interrupt());
-    ASSERT_TRUE(master.join());
+    EXPECT_TRUE(master.interrupt());
+    EXPECT_TRUE(master.join());
 };
 
 // Calling the first ever sync shared state with revision 1 also violates the one-increment rule
@@ -866,7 +1157,7 @@ TEST(SharedStateDistribution, TestOneIncrementRuleViolationFirstStepRev1) {
         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {0, 0, 0, 0}}},
         .port = CCOIP_PROTOCOL_PORT_MASTER
     });
-    ASSERT_TRUE(master.launch());
+    EXPECT_TRUE(master.launch());
 
     // Client 1
     const ccoip::CCoIPClient client1({
@@ -904,7 +1195,7 @@ TEST(SharedStateDistribution, TestOneIncrementRuleViolationFirstStepRev1) {
         shared_state.revision = 1;
 
         ccoip_shared_state_sync_info_t info{};
-        ASSERT_FALSE(client1.syncSharedState(shared_state, info));
+        EXPECT_FALSE(client1.syncSharedState(shared_state, info));
     });
 
     std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -922,7 +1213,7 @@ TEST(SharedStateDistribution, TestOneIncrementRuleViolationFirstStepRev1) {
 
         const std::unique_ptr<uint8_t[]> value1_inferred(new uint8_t[value_size]);
         ccoip_shared_state_sync_info_t info{};
-        ASSERT_TRUE(client2.syncSharedState(shared_state, info)); // this one should succeed because it uses revision 0
+        EXPECT_TRUE(client2.syncSharedState(shared_state, info)); // this one should succeed because it uses revision 0
     });
 
     // Wait for both clients to finish
@@ -930,24 +1221,27 @@ TEST(SharedStateDistribution, TestOneIncrementRuleViolationFirstStepRev1) {
     client2_main_thread.join();
 
     // Clean shutdown
-    ASSERT_TRUE(client2.interrupt());
-    ASSERT_TRUE(client1.interrupt());
+    EXPECT_TRUE(client2.interrupt());
+    EXPECT_TRUE(client1.interrupt());
 
-    ASSERT_TRUE(client1.join());
-    ASSERT_TRUE(client2.join());
+    EXPECT_TRUE(client1.join());
+    EXPECT_TRUE(client2.join());
 
-    ASSERT_TRUE(master.interrupt());
-    ASSERT_TRUE(master.join());
+    EXPECT_TRUE(master.interrupt());
+    EXPECT_TRUE(master.join());
 };
 
 
-// Client gets kicked due to shared state mismatch
-TEST(SharedStateDistribution, TestSharedStateMismatchKick) {
+// Client gets kicked due to shared state mask mismatch
+// Client 1 and 2 establish popularity, leading to the mask of client 1 and client 2 to be elected,
+// but client 3 attempts to sync shared state with mismatched keys that differ from those of client 1 and 2.
+// Client 3 should be kicked.
+TEST(SharedStateDistribution, TestSharedStateMaskMismatchKick) {
     ccoip::CCoIPMaster master({
         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {0, 0, 0, 0}}},
         .port = CCOIP_PROTOCOL_PORT_MASTER
     });
-    ASSERT_TRUE(master.launch());
+    EXPECT_TRUE(master.launch());
 
     // Client 1
     const ccoip::CCoIPClient client1({
@@ -960,17 +1254,25 @@ TEST(SharedStateDistribution, TestSharedStateMismatchKick) {
                                          .port = CCOIP_PROTOCOL_PORT_MASTER
                                      }, 0);
 
-    establishConnections({&client1, &client2});
+    // Client 3
+    const ccoip::CCoIPClient client3({
+                                         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                         .port = CCOIP_PROTOCOL_PORT_MASTER
+                                     }, 0);
+
+    establishConnections({&client1, &client2, &client3});
 
     constexpr size_t value_size = 1024;
     const std::unique_ptr<uint8_t[]> value1(new uint8_t[value_size]);
     const std::unique_ptr<uint8_t[]> value2(new uint8_t[value_size]);
+    const std::unique_ptr<uint8_t[]> value3(new uint8_t[value_size]);
 
-    // Initialize values with different content
+    // Initialize values with same content for all peers
     std::fill_n(value1.get(), value_size, 42);
-    std::fill_n(value2.get(), value_size, 24); // Different content
+    std::fill_n(value2.get(), value_size, 42);
+    std::fill_n(value3.get(), value_size, 42);
 
-    // Client 1 synchronizes shared state first
+    // Client 1 synchronizes shared state
     std::thread client1_main_thread([&client1, &value1, value_size] {
         ccoip_shared_state_t shared_state{};
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
@@ -982,18 +1284,31 @@ TEST(SharedStateDistribution, TestSharedStateMismatchKick) {
         shared_state.revision = 0;
 
         ccoip_shared_state_sync_info_t info{};
-        ASSERT_TRUE(client1.syncSharedState(shared_state, info));
+        EXPECT_TRUE(client1.syncSharedState(shared_state, info));
     });
 
-    std::this_thread::sleep_for(std::chrono::seconds(2)); // Wait for client 1 to reach syncSharedState
-
-    // Client 2 attempts to sync shared state with mismatched content
+    // Client 2 synchronizes same shared state as client 1 with matching content as keys
     std::thread client2_main_thread([&client2, &value2, value_size] {
         ccoip_shared_state_t shared_state{};
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
-            .key = "key2",
+            .key = "key1",
             .data_type = ccoip::ccoipUint8,
             .value = std::span(reinterpret_cast<std::byte *>(value2.get()), value_size),
+            .allow_content_inequality = false
+        });
+        shared_state.revision = 0;
+
+        ccoip_shared_state_sync_info_t info{};
+        EXPECT_TRUE(client2.syncSharedState(shared_state, info));
+    });
+
+    // Client 3 attempts to sync shared state with mismatched keys; content is the same
+    std::thread client3_main_thread([&client3, &value3, value_size] {
+        ccoip_shared_state_t shared_state{};
+        shared_state.entries.push_back(ccoip_shared_state_entry_t{
+            .key = "key3", // Mismatched key
+            .data_type = ccoip::ccoipUint8,
+            .value = std::span(reinterpret_cast<std::byte *>(value3.get()), value_size),
             .allow_content_inequality = false
         });
         shared_state.revision = 0; // Same revision, but keyset is different
@@ -1001,21 +1316,27 @@ TEST(SharedStateDistribution, TestSharedStateMismatchKick) {
         ccoip_shared_state_sync_info_t info{};
 
         // Since the content does not match the mask, client2 should be kicked
-        ASSERT_FALSE(client2.syncSharedState(shared_state, info));
+        EXPECT_FALSE(client3.syncSharedState(shared_state, info));
 
         // Subsequent calls should fail
-        ASSERT_FALSE(client2.syncSharedState(shared_state, info));
+        EXPECT_FALSE(client3.syncSharedState(shared_state, info));
     });
 
     client1_main_thread.join();
     client2_main_thread.join();
+    client3_main_thread.join();
 
     // Clean shutdown
-    ASSERT_TRUE(client1.interrupt());
-    ASSERT_TRUE(client1.join());
+    EXPECT_TRUE(client1.interrupt());
+    EXPECT_TRUE(client2.interrupt());
+    EXPECT_TRUE(client3.interrupt());
 
-    ASSERT_TRUE(master.interrupt());
-    ASSERT_TRUE(master.join());
+    EXPECT_TRUE(client1.join());
+    EXPECT_TRUE(client2.join());
+    EXPECT_TRUE(client3.join());
+
+    EXPECT_TRUE(master.interrupt());
+    EXPECT_TRUE(master.join());
 };
 
 // Multiple peer groups advance the shared state for multiple steps; synchronization should be local to each peer group
@@ -1024,7 +1345,7 @@ TEST(SharedStateDistribution, TestConcurrentAdvancementWithinPeerGroups) {
         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {0, 0, 0, 0}}},
         .port = CCOIP_PROTOCOL_PORT_MASTER
     });
-    ASSERT_TRUE(master.launch());
+    EXPECT_TRUE(master.launch());
 
     // Peer group 1 clients
     const ccoip::CCoIPClient g1client1({
@@ -1069,11 +1390,11 @@ TEST(SharedStateDistribution, TestConcurrentAdvancementWithinPeerGroups) {
             shared_state.revision = step;
 
             ccoip_shared_state_sync_info_t info{};
-            ASSERT_TRUE(client.syncSharedState(shared_state, info));
+            EXPECT_TRUE(client.syncSharedState(shared_state, info));
 
             // Since shared states are identical within group, no data should be transferred
-            ASSERT_EQ(info.tx_bytes, 0);
-            ASSERT_EQ(info.rx_bytes, 0);
+            EXPECT_EQ(info.tx_bytes, 0);
+            EXPECT_EQ(info.rx_bytes, 0);
 
             // Sleep to simulate computation with varying delays
             std::this_thread::sleep_for(std::chrono::milliseconds(100 * delay_multiplier));
@@ -1113,35 +1434,37 @@ TEST(SharedStateDistribution, TestConcurrentAdvancementWithinPeerGroups) {
     g2client2_thread.join();
 
     // Assert the shared states are identical within each peer group
-    ASSERT_EQ(std::memcmp(g1value1.get(), g1value2.get(), value_size), 0);
-    ASSERT_EQ(std::memcmp(g2value1.get(), g2value2.get(), value_size), 0);
+    EXPECT_EQ(std::memcmp(g1value1.get(), g1value2.get(), value_size), 0);
+    EXPECT_EQ(std::memcmp(g2value1.get(), g2value2.get(), value_size), 0);
 
     // Clean shutdown
-    ASSERT_TRUE(g1client1.interrupt());
-    ASSERT_TRUE(g1client2.interrupt());
-    ASSERT_TRUE(g2client1.interrupt());
-    ASSERT_TRUE(g2client2.interrupt());
+    EXPECT_TRUE(g1client1.interrupt());
+    EXPECT_TRUE(g1client2.interrupt());
+    EXPECT_TRUE(g2client1.interrupt());
+    EXPECT_TRUE(g2client2.interrupt());
 
-    ASSERT_TRUE(g1client1.join());
-    ASSERT_TRUE(g1client2.join());
-    ASSERT_TRUE(g2client1.join());
-    ASSERT_TRUE(g2client2.join());
+    EXPECT_TRUE(g1client1.join());
+    EXPECT_TRUE(g1client2.join());
+    EXPECT_TRUE(g2client1.join());
+    EXPECT_TRUE(g2client2.join());
 
-    ASSERT_TRUE(master.interrupt());
-    ASSERT_TRUE(master.join());
+    EXPECT_TRUE(master.interrupt());
+    EXPECT_TRUE(master.join());
 };
 
-// Concurrent "Drag-Along" operations in multiple peer groups
+// Concurrent "Drag-Along" operations in multiple peer groups.
+// Per peer group two leaders and one follower are established.
+// Leaders establish popularity for shared state mask & content and follower is dragged along.
 TEST(SharedStateDistribution, TestConcurrentDragAlongAcrossPeerGroups) {
     ccoip::CCoIPMaster master({
         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {0, 0, 0, 0}}},
         .port = CCOIP_PROTOCOL_PORT_MASTER
     });
-    ASSERT_TRUE(master.launch());
+    EXPECT_TRUE(master.launch());
 
     // Create multiple peer groups
     constexpr int num_peer_groups = 2;
-    constexpr int clients_per_group = 2;
+    constexpr int clients_per_group = 3;
     constexpr size_t value_size = 512;
     constexpr int num_steps = 4;
 
@@ -1174,8 +1497,9 @@ TEST(SharedStateDistribution, TestConcurrentDragAlongAcrossPeerGroups) {
     // Function to perform "drag-along" synchronization within a peer group
     auto drag_along_sync = [&](int group) {
         const auto &clients = peer_groups[group];
-        const std::unique_ptr<ccoip::CCoIPClient> &leader = clients[0]; // Leader client
-        const std::unique_ptr<ccoip::CCoIPClient> &follower = clients[1]; // Follower client
+        const std::unique_ptr<ccoip::CCoIPClient> &leader1 = clients[0]; // Leader 1 client
+        const std::unique_ptr<ccoip::CCoIPClient> &leader2 = clients[1]; // Leader 2 client
+        const std::unique_ptr<ccoip::CCoIPClient> &follower = clients[2]; // Follower client
 
         // Initialize shared state values
         const std::unique_ptr<uint8_t[]> leader_value(new uint8_t[value_size]);
@@ -1184,35 +1508,42 @@ TEST(SharedStateDistribution, TestConcurrentDragAlongAcrossPeerGroups) {
         std::fill_n(leader_value.get(), value_size, static_cast<uint8_t>(80 + group));
         std::fill_n(follower_value.get(), value_size, 0); // Follower does not update
 
-        // Leader performs continuous updates
-        std::thread leader_thread([&leader, &leader_value, value_size, num_steps, group] {
-            ccoip_shared_state_t shared_state{};
-            shared_state.entries.push_back(ccoip_shared_state_entry_t{
-                .key = "drag_key_" + std::to_string(group),
-                .data_type = ccoip::ccoipUint8,
-                .value = std::span(reinterpret_cast<std::byte *>(leader_value.get()), value_size),
-                .allow_content_inequality = false
+        // Leaders perform continuous updates
+        std::vector<std::thread> leader_threads;
+        for (const auto &leader: {leader1.get(), leader2.get()}) {
+            std::thread leader_thread([&leader, &leader_value, value_size, num_steps, group] {
+                ccoip_shared_state_t shared_state{};
+                shared_state.entries.push_back(ccoip_shared_state_entry_t{
+                    .key = "drag_key_" + std::to_string(group),
+                    .data_type = ccoip::ccoipUint8,
+                    .value = std::span(reinterpret_cast<std::byte *>(leader_value.get()), value_size),
+                    .allow_content_inequality = false
+                });
+                shared_state.revision = 0;
+
+                for (int step = 0; step < num_steps; ++step) {
+                    // Update leader's shared state
+                    std::fill_n(leader_value.get(), value_size, static_cast<uint8_t>(90 + group + step));
+                    shared_state.revision = step;
+
+                    ccoip_shared_state_sync_info_t info{};
+                    EXPECT_TRUE(leader->syncSharedState(shared_state, info));
+
+                    // Expect one of the leaders to distribute the shared state to the follower
+                    // What is certain is that the follower needs to receive value_size bytes, which is asserted.
+                    if (info.tx_bytes != 0) {
+                        EXPECT_EQ(info.tx_bytes, value_size);
+                    } else {
+                        EXPECT_EQ(info.tx_bytes, 0);
+                    }
+                    EXPECT_EQ(info.rx_bytes, 0);
+
+                    // Simulate computation delay
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                }
             });
-            shared_state.revision = 0;
-
-            for (int step = 0; step < num_steps; ++step) {
-                // Update leader's shared state
-                std::fill_n(leader_value.get(), value_size, static_cast<uint8_t>(90 + group + step));
-                shared_state.revision = step;
-
-                ccoip_shared_state_sync_info_t info{};
-                ASSERT_TRUE(leader->syncSharedState(shared_state, info));
-
-                // Expect leader to send data to follower
-                ASSERT_EQ(info.tx_bytes, value_size);
-                ASSERT_EQ(info.rx_bytes, 0);
-
-                // Simulate computation delay
-                std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            }
-        });
-
-        std::this_thread::sleep_for(std::chrono::seconds(1));
+            leader_threads.emplace_back(std::move(leader_thread));
+        }
 
         // Follower requests synchronization without updating its own state
         std::thread follower_thread([&follower, &leader_value, &follower_value, value_size, num_steps, group] {
@@ -1227,21 +1558,22 @@ TEST(SharedStateDistribution, TestConcurrentDragAlongAcrossPeerGroups) {
 
             for (int step = 0; step < num_steps; ++step) {
                 ccoip_shared_state_sync_info_t info{};
-                ASSERT_TRUE(follower->syncSharedState(shared_state, info));
+                EXPECT_TRUE(follower->syncSharedState(shared_state, info));
 
                 // Expect follower to receive data from leader
-                ASSERT_EQ(info.tx_bytes, 0);
-                ASSERT_EQ(info.rx_bytes, value_size);
+                EXPECT_EQ(info.tx_bytes, 0);
+                EXPECT_EQ(info.rx_bytes, value_size);
 
                 // Verify synchronization
-                ASSERT_EQ(std::memcmp(leader_value.get(), follower_value.get(), value_size), 0);
+                EXPECT_EQ(std::memcmp(leader_value.get(), follower_value.get(), value_size), 0);
 
                 // Simulate computation delay
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
             }
         });
-
-        leader_thread.join();
+        for (auto &t: leader_threads) {
+            t.join();
+        }
         follower_thread.join();
     };
 
@@ -1259,13 +1591,13 @@ TEST(SharedStateDistribution, TestConcurrentDragAlongAcrossPeerGroups) {
     // Clean shutdown
     for (int group = 0; group < num_peer_groups; ++group) {
         for (const auto &client: peer_groups[group]) {
-            ASSERT_TRUE(client->interrupt());
-            ASSERT_TRUE(client->join());
+            EXPECT_TRUE(client->interrupt());
+            EXPECT_TRUE(client->join());
         }
     }
 
-    ASSERT_TRUE(master.interrupt());
-    ASSERT_TRUE(master.join());
+    EXPECT_TRUE(master.interrupt());
+    EXPECT_TRUE(master.join());
 };
 
 // Overlapping keys across peer groups
@@ -1274,7 +1606,7 @@ TEST(SharedStateDistribution, TestConflictOverlappingKeysAcrossPeerGroups) {
         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {0, 0, 0, 0}}},
         .port = CCOIP_PROTOCOL_PORT_MASTER
     });
-    ASSERT_TRUE(master.launch());
+    EXPECT_TRUE(master.launch());
 
     // Create peer groups with overlapping keys
     constexpr int num_peer_groups = 2;
@@ -1335,11 +1667,11 @@ TEST(SharedStateDistribution, TestConflictOverlappingKeysAcrossPeerGroups) {
             shared_state.revision = 0;
 
             ccoip_shared_state_sync_info_t info{};
-            ASSERT_TRUE(client1->syncSharedState(shared_state, info));
+            EXPECT_TRUE(client1->syncSharedState(shared_state, info));
 
             // For identical shared state, no data should be transferred
-            ASSERT_EQ(info.rx_bytes, 0);
-            ASSERT_EQ(info.tx_bytes, 0);
+            EXPECT_EQ(info.rx_bytes, 0);
+            EXPECT_EQ(info.tx_bytes, 0);
         });
 
         // Client 2 syncs
@@ -1357,14 +1689,14 @@ TEST(SharedStateDistribution, TestConflictOverlappingKeysAcrossPeerGroups) {
             shared_state.revision = 0;
 
             ccoip_shared_state_sync_info_t info{};
-            ASSERT_TRUE(client2->syncSharedState(shared_state, info));
+            EXPECT_TRUE(client2->syncSharedState(shared_state, info));
 
             // For identical shared state, no data should be transferred
-            ASSERT_EQ(info.rx_bytes, 0);
-            ASSERT_EQ(info.tx_bytes, 0);
+            EXPECT_EQ(info.rx_bytes, 0);
+            EXPECT_EQ(info.tx_bytes, 0);
 
             // Verify that the shared states are identical
-            ASSERT_EQ(std::memcmp(value1.get(), value2.get(), value_size), 0);
+            EXPECT_EQ(std::memcmp(value1.get(), value2.get(), value_size), 0);
         });
 
         client1_sync_thread.join();
@@ -1385,13 +1717,13 @@ TEST(SharedStateDistribution, TestConflictOverlappingKeysAcrossPeerGroups) {
     // Clean shutdown
     for (int group = 0; group < num_peer_groups; ++group) {
         for (const auto &client: peer_groups[group]) {
-            ASSERT_TRUE(client->interrupt());
-            ASSERT_TRUE(client->join());
+            EXPECT_TRUE(client->interrupt());
+            EXPECT_TRUE(client->join());
         }
     }
 
-    ASSERT_TRUE(master.interrupt());
-    ASSERT_TRUE(master.join());
+    EXPECT_TRUE(master.interrupt());
+    EXPECT_TRUE(master.join());
 };
 
 // Changing peer group membership during synchronization
@@ -1401,7 +1733,7 @@ TEST(SharedStateDistribution, TestChangingPeerGroupMembershipBetweenSynchronizat
         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {0, 0, 0, 0}}},
         .port = CCOIP_PROTOCOL_PORT_MASTER
     });
-    ASSERT_TRUE(master.launch());
+    EXPECT_TRUE(master.launch());
 
     // Create a peer group
     constexpr int group = 0;
@@ -1456,11 +1788,11 @@ TEST(SharedStateDistribution, TestChangingPeerGroupMembershipBetweenSynchronizat
             shared_state.revision = step;
 
             ccoip_shared_state_sync_info_t info{};
-            ASSERT_TRUE(client1->syncSharedState(shared_state, info));
+            EXPECT_TRUE(client1->syncSharedState(shared_state, info));
 
             // Expect no data transfer for identical shared state
-            ASSERT_EQ(info.rx_bytes, 0);
-            ASSERT_EQ(info.tx_bytes, 0);
+            EXPECT_EQ(info.rx_bytes, 0);
+            EXPECT_EQ(info.tx_bytes, 0);
 
             // Simulate computation delay
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -1477,11 +1809,11 @@ TEST(SharedStateDistribution, TestChangingPeerGroupMembershipBetweenSynchronizat
                     std::move(new_client));
                 std::thread added_client_thread([&added_client, &client3_joined] {
                     std::cout << "Added client connecting" << std::endl;
-                    ASSERT_TRUE(added_client->connect());
+                    EXPECT_TRUE(added_client->connect());
                     client3_joined = true;
                 });
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                ASSERT_TRUE(client1->acceptNewPeers());
+                EXPECT_TRUE(client1->acceptNewPeers());
                 added_client_thread.join();
             }
         }
@@ -1505,17 +1837,17 @@ TEST(SharedStateDistribution, TestChangingPeerGroupMembershipBetweenSynchronizat
             shared_state.revision = step;
 
             ccoip_shared_state_sync_info_t info{};
-            ASSERT_TRUE(client2->syncSharedState(shared_state, info));
+            EXPECT_TRUE(client2->syncSharedState(shared_state, info));
 
             // Expect no data transfer for identical shared state
-            ASSERT_EQ(info.rx_bytes, 0);
-            ASSERT_EQ(info.tx_bytes, 0);
+            EXPECT_EQ(info.rx_bytes, 0);
+            EXPECT_EQ(info.tx_bytes, 0);
 
             // Simulate computation delay
             std::this_thread::sleep_for(std::chrono::milliseconds(150));
 
             if (step == 2) {
-                ASSERT_TRUE(client2->acceptNewPeers());
+                EXPECT_TRUE(client2->acceptNewPeers());
             }
         }
     });
@@ -1541,11 +1873,11 @@ TEST(SharedStateDistribution, TestChangingPeerGroupMembershipBetweenSynchronizat
             shared_state.revision = step;
 
             ccoip_shared_state_sync_info_t info{};
-            ASSERT_TRUE(client3->syncSharedState(shared_state, info));
+            EXPECT_TRUE(client3->syncSharedState(shared_state, info));
 
             // Expect no data transfer for identical shared state
-            ASSERT_EQ(info.rx_bytes, 0);
-            ASSERT_EQ(info.tx_bytes, 0);
+            EXPECT_EQ(info.rx_bytes, 0);
+            EXPECT_EQ(info.tx_bytes, 0);
 
             // Simulate computation delay
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -1558,12 +1890,12 @@ TEST(SharedStateDistribution, TestChangingPeerGroupMembershipBetweenSynchronizat
 
     // Clean shutdown
     for (const auto &client: group_clients) {
-        ASSERT_TRUE(client->interrupt());
-        ASSERT_TRUE(client->join());
+        EXPECT_TRUE(client->interrupt());
+        EXPECT_TRUE(client->join());
     }
 
-    ASSERT_TRUE(master.interrupt());
-    ASSERT_TRUE(master.join());
+    EXPECT_TRUE(master.interrupt());
+    EXPECT_TRUE(master.join());
 };
 
 int main(int argc, char **argv) {

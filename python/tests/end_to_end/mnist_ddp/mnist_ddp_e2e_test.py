@@ -78,6 +78,9 @@ def test_mnist_ddp_world_size_3():
 
 
 def test_mnist_ddp_world_size_2_plus_1_late_joiner():
+    rev50_signal_file = os.path.join(os.path.dirname(__file__), 'RANK_0_REV_50')
+    os.remove(rev50_signal_file) if os.path.exists(rev50_signal_file) else None
+
     peer_script_path = os.path.join(os.path.dirname(__file__), 'mnist_peer.py')
     master_script_path = os.path.join(os.path.dirname(__file__), 'mnist_master.py')
 
@@ -88,10 +91,12 @@ def test_mnist_ddp_world_size_2_plus_1_late_joiner():
     # launch 2 peers
     process_list = []
     for rank in range(2):
-        process_list.append(launch_py_process(peer_script_path, [], {'PCCL_LOG_LEVEL': 'INFO', 'RANK': str(rank)}))
+        process_list.append(launch_py_process(peer_script_path, [], {'PCCL_LOG_LEVEL': 'INFO', 'RANK': str(rank), 'CREATE_RANK_0_REV_50': '1'}))
         print(f"Launched peer {rank}; PID: {process_list[-1].pid}")
 
-    time.sleep(1)
+    # wait for RANK_0_REV_50 file to be created
+    while not os.path.exists(rev50_signal_file):
+        time.sleep(0.05)
 
     # if the other two peers are still running, add the third peer; otherwise, fail the test
     if all(p.poll() is None for p in process_list):

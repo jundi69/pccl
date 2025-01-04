@@ -340,6 +340,7 @@ bool ccoip::CCoIPMasterState::endSharedStateSyncPhase(const uint32_t peer_group)
         }
     }
     shared_state_mask[peer_group].clear();
+    shared_state_mask_candidates[peer_group].clear();
     shared_state_hashes[peer_group].clear();
     shared_state_statuses[peer_group].clear();
     shared_state_dirty_keys[peer_group].clear();
@@ -562,60 +563,53 @@ bool ccoip::CCoIPMasterState::hasPeerListChanged() {
     return changed;
 }
 
-ccoip::CCoIPMasterState::SharedStateMismatchStatus ccoip::CCoIPMasterState::sharedStateMatches(
-    const ccoip_uuid_t &peer_uuid, const uint64_t revision,
-    const std::vector<SharedStateHashEntry> &entries
+ccoip::CCoIPMasterState::SharedStateMismatchStatus ccoip::CCoIPMasterState::isNewRevisionLegal(
+    const ccoip_uuid_t &peer_uuid,
+    const uint64_t revision
 ) {
     SharedStateMismatchStatus status = SUCCESSFUL_MATCH;
-
     const auto info_it = client_info.find(peer_uuid);
-    uint32_t peer_group{};
-    uint64_t next_shared_state_revision{};
 
     if (info_it == client_info.end()) {
         LOG(WARN) << "Client " << uuid_to_string(peer_uuid) << " not found";
         status = KEY_SET_MISMATCH;
-        goto end;
     }
-    peer_group = info_it->second.peer_group;
-    next_shared_state_revision = this->next_shared_state_revision[peer_group];
 
-    if (revision < next_shared_state_revision) {
+    const uint32_t peer_group = info_it->second.peer_group;
+    if (const uint64_t next_shared_state_revision = this->next_shared_state_revision[peer_group];
+        revision < next_shared_state_revision) {
         status = REVISION_OUTDATED;
-        goto end;
-    }
-
-    if (revision > next_shared_state_revision) {
+    } else if (revision > next_shared_state_revision) {
         status = REVISION_INCREMENT_VIOLATION;
-        goto end;
+    }
+    shared_state_statuses[peer_group][peer_uuid] = status;
+    return status;
+}
+
+ccoip::CCoIPMasterState::SharedStateMismatchStatus ccoip::CCoIPMasterState::sharedStateMatches(
+    const ccoip_uuid_t &peer_uuid, const std::vector<SharedStateHashEntry> &entries
+) {
+    SharedStateMismatchStatus status = SUCCESSFUL_MATCH;
+    const auto info_it = client_info.find(peer_uuid);
+
+    if (info_it == client_info.end()) {
+        LOG(WARN) << "Client " << uuid_to_string(peer_uuid) << " not found";
+        status = KEY_SET_MISMATCH;
     }
 
-    if (shared_state_mask[peer_group].empty()) {
-        // set shared_state_mask
-        shared_state_mask[peer_group] = entries;
-
-        // populate shared_state_hashes
-        auto &group_state_hashes = shared_state_hashes[peer_group];
-        for (auto &entry: entries) {
-            group_state_hashes[entry.key] = entry.hash;
-        }
-
-        status = SUCCESSFUL_MATCH;
-        goto end;
-    }
+    const uint32_t peer_group = info_it->second.peer_group;
 
     // compare the shared state mask with the supplied shared state entries
     {
         const auto &group_shared_state_mask = shared_state_mask[peer_group];
-        const size_t state_mask_size = group_shared_state_mask.size();
 
-        if (state_mask_size != entries.size()) {
+        if (const size_t state_mask_size = group_shared_state_mask.size(); state_mask_size != entries.size()) {
             status = KEY_SET_MISMATCH;
             goto end;
         }
 
         std::vector<std::string> dirty_content_keys{};
-        for (const auto & entry : entries) {
+        for (const auto &entry: entries) {
             // find matching entry with same key
             const auto mask_entry_it = std::ranges::find_if(group_shared_state_mask,
                                                             [&entry](const SharedStateHashEntry &mask_entry) {
@@ -649,11 +643,119 @@ ccoip::CCoIPMasterState::SharedStateMismatchStatus ccoip::CCoIPMasterState::shar
             shared_state_dirty_keys[peer_group][peer_uuid] = dirty_content_keys;
         }
     }
-
 end:
     shared_state_statuses[peer_group][peer_uuid] = status;
     return status;
 }
+
+void ccoip::CCoIPMasterState::voteSharedStateMask(
+    const ccoip_uuid_t &peer_uuid,
+    const std::vector<SharedStateHashEntry> &entries) {
+    const auto info_it = client_info.find(peer_uuid);
+    if (info_it == client_info.end()) {
+        LOG(WARN) << "Client " << uuid_to_string(peer_uuid) << " not found";
+        return;
+    }
+    const uint32_t peer_group = info_it->second.peer_group;
+    shared_state_mask_candidates[peer_group].emplace_back(peer_uuid, entries);
+}
+
+class SharedStateHashEntryList {
+public:
+    std::vector<ccoip::SharedStateHashEntry> entries;
+
+    // Equality operator to compare two SharedStateHashEntryLists
+    bool operator==(const SharedStateHashEntryList &other) const {
+        return entries == other.entries;
+    }
+
+    // Custom hash function for SharedStateHashEntryList
+    [[nodiscard]] size_t hash() const {
+        size_t hash_value = 0;
+        for (const auto &entry: entries) {
+            hash_value ^= std::hash<ccoip::SharedStateHashEntry>{}(entry) << 1;
+        }
+        return hash_value;
+    }
+};
+
+template<>
+struct std::hash<SharedStateHashEntryList> {
+    size_t operator()(const SharedStateHashEntryList &entry_list) const noexcept {
+        return entry_list.hash();
+    }
+};
+
+bool ccoip::CCoIPMasterState::electSharedStateMask(const uint32_t peer_group) {
+    // count the number of votes for each distinct candidate
+    std::unordered_map<SharedStateHashEntryList, size_t> num_votes{};
+    for (const auto &[uuid, entries]: shared_state_mask_candidates[peer_group]) {
+        SharedStateHashEntryList entry_list{.entries = entries};
+        num_votes[entry_list]++;
+    }
+
+    // get the candidate with the most votes
+    SharedStateHashEntryList winning_candidate{};
+    size_t max_votes = 0;
+    for (const auto &[candidate, votes]: num_votes) {
+        if (votes > max_votes) {
+            max_votes = votes;
+            winning_candidate = candidate;
+        }
+    }
+
+    shared_state_mask[peer_group] = winning_candidate.entries;
+    return true;
+}
+
+bool ccoip::CCoIPMasterState::checkMaskSharedStateMismatches(const uint32_t peer_group) {
+    if (shared_state_mask[peer_group].empty()) {
+        LOG(WARN) << "No shared state mask candidates found for peer group " << peer_group;
+        return false;
+    }
+
+    const auto &mask_entries = shared_state_mask[peer_group];
+
+    // check for shared state mask mismatch
+    for (const auto &[uuid, entries]: shared_state_mask_candidates[peer_group]) {
+        if (entries.size() != mask_entries.size()) {
+            LOG(WARN) << "Shared state mask mismatch for client " << uuid_to_string(uuid) <<
+                    " in peer group " << peer_group;
+        }
+        for (size_t i = 0; i < mask_entries.size(); i++) {
+            const auto &mask_entry = mask_entries[i];
+            const auto &entry = entries[i];
+            SharedStateMismatchStatus status = SUCCESSFUL_MATCH;
+            if (mask_entry.key != entry.key) {
+                LOG(WARN) << "Shared state mask mismatch for client " << uuid_to_string(uuid) <<
+                        " in peer group " << peer_group;
+                status = KEY_SET_MISMATCH;
+            }
+            if (mask_entry.allow_content_inequality != entry.allow_content_inequality) {
+                LOG(WARN) << "Shared state mask mismatch for client " << uuid_to_string(uuid) <<
+                        " in peer group " << peer_group;
+                status = KEY_SET_MISMATCH;
+            }
+            if (mask_entry.data_type != entry.data_type) {
+                LOG(WARN) << "Shared state mask mismatch for client " << uuid_to_string(uuid) <<
+                        " in peer group " << peer_group;
+                status = KEY_SET_MISMATCH;
+            }
+            if (status == SUCCESSFUL_MATCH && mask_entry.hash != entry.hash) {
+                LOG(WARN) << "Shared state mask mismatch for client " << uuid_to_string(uuid) <<
+                        " in peer group " << peer_group;
+                status = CONTENT_HASH_MISMATCH;
+                shared_state_hashes[peer_group][mask_entry.key] = mask_entry.hash;
+                shared_state_dirty_keys[peer_group][uuid].push_back(mask_entry.key);
+            }
+            shared_state_statuses[peer_group][uuid] = status;
+        }
+    }
+
+    // identify content hash mismatches
+    return true;
+}
+
 
 std::optional<ccoip::CCoIPMasterState::SharedStateMismatchStatus> ccoip::CCoIPMasterState::getSharedStateMismatchStatus(
     const ccoip_uuid_t &peer_uuid) {

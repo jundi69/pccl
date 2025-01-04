@@ -177,7 +177,7 @@ namespace ccoip {
         std::unordered_map<uint32_t, std::unordered_set<ccoip_uuid_t> > votes_sync_shared_state{};
 
         /// set of all uuids that have voted to complete shared state distribution for each peer group.
-        /// peer group bin cleared once the shared state distribution phase ends.
+        /// Peer group bin is cleared once the shared state distribution phase ends.
         std::unordered_map<uint32_t, std::unordered_set<ccoip_uuid_t> > votes_sync_shared_state_complete{};
 
         /// Flag to indicate if the peer list has changed
@@ -190,12 +190,20 @@ namespace ccoip {
         /// Mismatch of the keys results in the client being kicked.
         /// Mismatch of a hash results will result in the client being notified to re-request the shared state entry
         /// whose hash does not match.
-        /// peer group bin cleared once the shared state distribution phase ends.
+        /// This "mask" is elected by popularity from a set of candidates provided by
+        /// each peer that has voted to synchronize shared state.
+        /// Peer group bin is cleared once the shared state distribution phase ends.
         std::unordered_map<uint32_t, std::vector<SharedStateHashEntry> > shared_state_mask{};
+
+        /// Defines the list of candidates for the shared state mask for each peer group.
+        /// Most popular candidate is elected as the shared state mask.
+        /// Peer group bin is cleared after the shared state distribution phase ends.
+        std::unordered_map<uint32_t, std::vector<std::pair<ccoip_uuid_t, std::vector<SharedStateHashEntry> > > >
+        shared_state_mask_candidates{};
 
         /// Cache of the shared state hashes for all entries in the shared state mask for each peer group.
         /// by their key string.
-        /// peer group bin cleared when the shared state distribution phase ends.
+        /// Peer group bin is cleared when the shared state distribution phase ends.
         std::unordered_map<uint32_t, std::unordered_map<std::string, uint64_t> > shared_state_hashes{};
 
         /// The next shared state revision that is expected from peers synchronizing shared state, intending to distribute.
@@ -217,13 +225,14 @@ namespace ccoip {
 
         /// Maps the client UUID to the shared state mismatch status populated by the last invocation of @code sharedStateMatches@endcode.
         /// Grouped by peer group.
-        /// peer group bin cleared when the shared state distribution phase ends.
-        std::unordered_map<uint32_t, std::unordered_map<ccoip_uuid_t, SharedStateMismatchStatus> > shared_state_statuses{};
+        /// Peer group bin is cleared when the shared state distribution phase ends.
+        std::unordered_map<uint32_t, std::unordered_map<ccoip_uuid_t, SharedStateMismatchStatus> > shared_state_statuses
+                {};
 
         /// Maps the client UUID to the set of shared state keys that have dirty content, meaning
         /// that the hash of the shared state entry does not match the hash in the shared state mask.
         /// Grouped by peer group.
-        /// peer group bin cleared when the shared state distribution phase ends.
+        /// Peer group bin is cleared when the shared state distribution phase ends.
         std::unordered_map<uint32_t, std::unordered_map<ccoip_uuid_t, std::vector<std::string> > >
         shared_state_dirty_keys{};
 
@@ -328,17 +337,33 @@ namespace ccoip {
         /// not in the @code VOTE_COMPLETE_COLLECTIVE_COMMS@endcode state for the specified tag.
         [[nodiscard]] bool transitionToCollectiveCommsCompletePhase(uint32_t peer_group, uint64_t tag);
 
+        /// @returns SharedStateMismatchStatus::SUCCESSFUL_MATCH if the specified revision is legal as the next
+        /// shared state revision for the given peer group.
+        /// @returns @code SharedStateMismatchStatus::REVISION_OUTDATED@endcode if the specified revision is less than the next expected revision.
+        /// @returns @code SharedStateMismatchStatus::REVISION_INCREMENT_VIOLATION@endcode if the specified revision is greater than the next expected revision.
+        /// The next expected shared state revision is always one larger than the previous shared state revision.
+        /// This status will be retained until the shared state voting phase ends and can be queried
+        /// via @code getSharedStateMismatchStatus@endcode.
+        [[nodiscard]] SharedStateMismatchStatus isNewRevisionLegal(
+            const ccoip_uuid_t &peer_uuid,
+            uint64_t revision);
+
         /// Returns true if the shared state entries provided match the current "mask".
         /// A "mask" is defined by the identity of the set of shared state key strings and their corresponding hashes.
         /// If @code ignore_hashes@endcode is true, only the shared state keys are compared.
         /// If this is the first client to sync shared state, then the supplied shared state will define the "mask"
         /// for subsequent checks.
+        /// The "mask" is elected by popularity among peers. The most popular "mask" determines which peers
+        /// are considered to have outdated or illegal shared state.
         /// This status will be retained until the shared state voting phase ends and can be queried
         /// via @code getSharedStateMismatchStatus@endcode.
         [[nodiscard]] SharedStateMismatchStatus sharedStateMatches(
             const ccoip_uuid_t &peer_uuid,
-            uint64_t revision,
             const std::vector<SharedStateHashEntry> &entries);
+
+        /// Votes for a specific shared state mask; Called for each peer that has voted to synchronize shared state.
+        /// After all clients have voted to synchronize shared state, the elected shared state mask will be chosen by popularity.
+        void voteSharedStateMask(const ccoip_uuid_t &peer_uuid, const std::vector<SharedStateHashEntry> &entries);
 
         /// Returns the peers that a particular client should establish p2p connections with
         [[nodiscard]] std::vector<ClientInfo> getPeersForClient(
@@ -359,6 +384,22 @@ namespace ccoip {
         /// this function will return std::nullopt.
         [[nodiscard]] std::optional<SharedStateMismatchStatus> getSharedStateMismatchStatus(
             const ccoip_uuid_t &peer_uuid);
+
+        /// Called to elect the shared state mask for a particular peer group.
+        /// The most popular candidate will be chosen as the shared state mask.
+        /// This function clears the shared state mask candidates for the peer group.
+        /// @returns true if the shared state mask was elected successfully.
+        /// @returns false if the shared state mask could not be elected, e.g. if no candidates were provided.
+        [[nodiscard]] bool electSharedStateMask(uint32_t peer_group);
+
+        /// Called to check if each peer matches the currently elected shared state mask.
+        /// For this function to be invocable, @code electSharedStateMask@endcode must have been called before and
+        /// the shared state mask for this peer group must not have been cleared yet.
+        /// This function will mark each client whose shared state does not match the elected mask.
+        /// This status can be queried via @code getSharedStateMismatchStatus@endcode.
+        /// @returns true if the mismatch check was successful.
+        /// @returns false if the check could not be performed, e.g. the shared state mask is empty.
+        [[nodiscard]] bool checkMaskSharedStateMismatches(uint32_t peer_group);
 
         /// Finds the client UUID from the client address; returns std::nullopt if not found
         [[nodiscard]] std::optional<ccoip_uuid_t> findClientUUID(const ccoip_socket_address_t &client_address);

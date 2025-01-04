@@ -41,7 +41,7 @@ hidden_sizes = [128]
 num_classes = 10  # Digits 0-9
 batch_size = 64
 learning_rate = 0.001
-max_steps = 100
+max_steps = os.getenv('IS_CI', '0') == '1' and 256 or 5000
 
 # MNIST dataset (images and labels)
 train_dataset = datasets.MNIST(root='./data', train=True, transform=transforms.ToTensor(), download=True)
@@ -87,6 +87,7 @@ def log_info(msg: str):
 
 HOST: str = '127.0.0.1:48148'
 RANK: int = int(os.getenv('RANK', "0"))
+CREATE_RANK_0_REV_50: int = int(os.getenv('CREATE_RANK_0_REV_50', "0"))
 
 
 def main():
@@ -213,8 +214,14 @@ def main():
 
             log_debug(f"(RANK={RANK}, it={i}) loss: {loss.item()}, revision: {shared_state.revision}")
 
-            if shared_state.revision % 100 == 0:
+            if shared_state.revision % 5 == 0:
                 log_info(f"(RANK={RANK}, it={i}) loss: {loss.item()}, revision: {shared_state.revision}")
+
+            if RANK == 0 and CREATE_RANK_0_REV_50 == 1 and shared_state.revision == 50:
+                rev50_signal_file = os.path.join(os.path.dirname(__file__), 'RANK_0_REV_50')
+                with open(rev50_signal_file, 'w') as f:
+                    f.write('')
+
     except Exception as e:
         print(f"Training aborted with exception: {e}")
         exit(1)
