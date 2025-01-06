@@ -98,10 +98,12 @@ ccoip::packetId_t ccoip::C2MPacketCollectiveCommsComplete::packet_id = C2M_PACKE
 
 void ccoip::C2MPacketCollectiveCommsComplete::serialize(PacketWriteBuffer &buffer) const {
     buffer.write<uint64_t>(tag);
+    buffer.write<boolean>(was_aborted);
 }
 
 bool ccoip::C2MPacketCollectiveCommsComplete::deserialize(PacketReadBuffer &buffer) {
     tag = buffer.read<uint64_t>();
+    was_aborted = buffer.read<boolean>();
     return true;
 }
 
@@ -253,10 +255,12 @@ ccoip::packetId_t ccoip::M2CPacketCollectiveCommsComplete::packet_id = M2C_PACKE
 
 void ccoip::M2CPacketCollectiveCommsComplete::serialize(PacketWriteBuffer &buffer) const {
     buffer.write<uint64_t>(tag);
+    buffer.write<boolean>(was_aborted);
 }
 
 bool ccoip::M2CPacketCollectiveCommsComplete::deserialize(PacketReadBuffer &buffer) {
     tag = buffer.read<uint64_t>();
+    was_aborted = buffer.read<boolean>();
     return true;
 }
 

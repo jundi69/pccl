@@ -69,12 +69,15 @@ namespace ccoip {
 
         [[nodiscard]] size_t getWorldSize() const;
 
+
     private:
         [[nodiscard]] bool establishP2PConnections();
 
         [[nodiscard]] bool establishP2PConnection(const M2CPacketNewPeerInfo &peer);
 
         [[nodiscard]] bool closeP2PConnection(const ccoip_uuid_t &uuid, tinysockets::BlockingIOSocket &socket);
+
+        [[nodiscard]] bool closeAllP2PConnections();
 
         // shared state packet handlers
         void handleSharedStateRequest(const ccoip_socket_address_t &client_address,

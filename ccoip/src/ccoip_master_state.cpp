@@ -241,7 +241,8 @@ bool ccoip::CCoIPMasterState::voteCollectiveCommsInitiate(const ccoip_uuid_t &pe
     return true;
 }
 
-bool ccoip::CCoIPMasterState::voteCollectiveCommsComplete(const ccoip_uuid_t &peer_uuid, uint64_t tag) {
+bool ccoip::CCoIPMasterState::voteCollectiveCommsComplete(const ccoip_uuid_t &peer_uuid, const uint64_t tag,
+                                                          const bool was_aborted) {
     const auto info_opt = getClientInfo(peer_uuid);
     if (!info_opt) {
         LOG(WARN) << "Cannot vote to complete collective communications operation for unregistered client " <<
@@ -277,6 +278,11 @@ bool ccoip::CCoIPMasterState::voteCollectiveCommsComplete(const ccoip_uuid_t &pe
 
     // set the client state to vote to complete a collective communications operation
     ccomms_state = VOTE_COMPLETE_COLLECTIVE_COMMS;
+
+    // set the client state to indicate if the collective communications operation was aborted
+    if (was_aborted) {
+        info.collective_coms_failure_states[tag] = true;
+    }
     return true;
 }
 
@@ -410,13 +416,19 @@ bool ccoip::CCoIPMasterState::collectiveCommsInitiateConsensus(const uint32_t pe
 bool ccoip::CCoIPMasterState::collectiveCommsCompleteConsensus(const uint32_t peer_group, const uint64_t tag) {
     size_t voting_clients = 0;
     size_t n_accepted_peers = 0;
-    for (const auto &[_, info]: client_info) {
+    for (auto &[_, info]: client_info) {
         if (info.connection_phase != PEER_ACCEPTED) {
             continue;
         }
         if (info.peer_group != peer_group) {
             continue;
         }
+        /*if (info.collective_coms_failure_states[tag]) {
+            LOG(DEBUG) << "Client " << ccoip_sockaddr_to_str(info.socket_address) <<
+                    " has marked the collective communications operation for tag " << tag <<
+                    " as failed; Considering the operation complete";
+            return true;
+        }*/
         auto ccomms_state_it = info.collective_coms_states.find(tag);
         if (ccomms_state_it != info.collective_coms_states.end()) {
             if (ccomms_state_it->second == VOTE_COMPLETE_COLLECTIVE_COMMS) {
@@ -459,7 +471,19 @@ bool ccoip::CCoIPMasterState::transitionToPerformCollectiveCommsPhase(const uint
     return true;
 }
 
-bool ccoip::CCoIPMasterState::transitionToCollectiveCommsCompletePhase(uint32_t peer_group, uint64_t tag) {
+bool ccoip::CCoIPMasterState::transitionToCollectiveCommsCompletePhase(const uint32_t peer_group, const uint64_t tag) {
+    // check if the collective communications operation was aborted by any client
+    bool op_aborted = false;
+    /*for (auto &[_, info]: client_info) {
+        if (info.peer_group != peer_group) {
+            continue;
+        }
+        if (info.collective_coms_failure_states[tag]) {
+            op_aborted = true;
+            break;
+        }
+    }*/
+
     for (auto &[_, info]: client_info) {
         if (info.connection_phase != PEER_ACCEPTED) {
             continue;
@@ -478,12 +502,28 @@ bool ccoip::CCoIPMasterState::transitionToCollectiveCommsCompletePhase(uint32_t 
                     " not found in collective communications states for tag " << tag;
             return false;
         }
-        if (ccomms_state_it->second != VOTE_COMPLETE_COLLECTIVE_COMMS) {
-            LOG(WARN) << "Client " << ccoip_sockaddr_to_str(info.socket_address) <<
-                    " in state " << ccomms_state_it->second <<
-                    " but expected VOTE_COMPLETE_COLLECTIVE_COMMS";
-            return false;
+
+        // if the collective comms operation not aborted, the current state may also be PERFORM_COLLECTIVE_COMMS
+        if (!op_aborted) {
+            if (ccomms_state_it->second != VOTE_COMPLETE_COLLECTIVE_COMMS) {
+                LOG(WARN) << "Client " << ccoip_sockaddr_to_str(info.socket_address) <<
+                        " in state " << ccomms_state_it->second <<
+                        " but expected VOTE_COMPLETE_COLLECTIVE_COMMS";
+                return false;
+            }
+        } else {
+            if (ccomms_state_it->second != VOTE_COMPLETE_COLLECTIVE_COMMS && ccomms_state_it->second !=
+                PERFORM_COLLECTIVE_COMMS) {
+                LOG(WARN) << "Client " << ccoip_sockaddr_to_str(info.socket_address) <<
+                        " in state " << ccomms_state_it->second <<
+                        " but expected VOTE_COMPLETE_COLLECTIVE_COMMS or PERFORM_COLLECTIVE_COMMS (because the collective communications operation was aborted)";
+                return false;
+            }
         }
+
+        LOG(DEBUG) << "Collective communications operation for tag " << tag << " complete for client " <<
+                ccoip_sockaddr_to_str(info.socket_address);
+
         info.collective_coms_states.erase(ccomms_state_it);
         if (info.collective_coms_states.empty()) {
             info.connection_state = IDLE;
@@ -733,7 +773,8 @@ bool ccoip::CCoIPMasterState::checkMaskSharedStateMismatches(const uint32_t peer
                 status = KEY_SET_MISMATCH;
             }
             if (mask_entry.allow_content_inequality != entry.allow_content_inequality) {
-                LOG(WARN) << "Shared state mask allow_content_inequality mismatch for client " << uuid_to_string(uuid) <<
+                LOG(WARN) << "Shared state mask allow_content_inequality mismatch for client " << uuid_to_string(uuid)
+                        <<
                         " in peer group " << peer_group << " for key " << mask_entry.key;
                 status = KEY_SET_MISMATCH;
             }
@@ -870,4 +911,17 @@ std::vector<std::string> ccoip::CCoIPMasterState::getSharedStateKeys(const uint3
         keys.push_back(entry.key);
     }
     return keys;
+}
+
+std::vector<uint64_t> ccoip::CCoIPMasterState::getOngoingCollectiveComsOpTags(const uint32_t peer_group) {
+    std::vector<uint64_t> tags{};
+    for (const auto &[_, info]: client_info) {
+        if (info.peer_group != peer_group) {
+            continue;
+        }
+        for (const auto &[tag, _]: info.collective_coms_states) {
+            tags.push_back(tag);
+        }
+    }
+    return tags;
 }

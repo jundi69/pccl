@@ -185,7 +185,8 @@ void ccoip::CCoIPMasterHandler::checkP2PConnectionsEstablished() {
     if (server_state.p2pConnectionsEstablishConsensus()) {
         // send confirmation packets to all clients
         if (!server_state.transitionToP2PConnectionsEstablishedPhase()) [[unlikely]] {
-            LOG(BUG) << "Failed to transition to P2P connections established phase; This is a bug";
+            LOG(WARN) << "Failed to transition to P2P connections established phase;";
+            return;
         }
 
         for (auto &[peer_uuid, peer_address]: server_state.getClientEntrySet()) {
@@ -266,7 +267,8 @@ void ccoip::CCoIPMasterHandler::checkSyncSharedStateConsensus(const uint32_t pee
                 LOG(BUG) << "Client " << ccoip_sockaddr_to_str(peer_address) << " not found";
                 continue;
             }
-            if (const auto &peer_info = peer_info_opt->get(); peer_info.peer_group != peer_group) {
+            const auto &peer_info = peer_info_opt->get();
+            if (peer_info.peer_group != peer_group || peer_info.connection_phase != PEER_ACCEPTED) {
                 continue;
             }
             const auto status_opt = server_state.getSharedStateMismatchStatus(peer_uuid);
@@ -434,7 +436,7 @@ void ccoip::CCoIPMasterHandler::checkCollectiveCommsInitiateConsensus(const uint
     }
 }
 
-void ccoip::CCoIPMasterHandler::checkCollectiveCommsCompleteConsensus(uint32_t peer_group, uint64_t tag) {
+void ccoip::CCoIPMasterHandler::checkCollectiveCommsCompleteConsensus(const uint32_t peer_group, const uint64_t tag) {
     // check if all clients have voted to complete the collective communications operation
     if (server_state.collectiveCommsCompleteConsensus(peer_group, tag)) {
         if (!server_state.transitionToCollectiveCommsCompletePhase(peer_group, tag)) {
@@ -449,7 +451,7 @@ void ccoip::CCoIPMasterHandler::checkCollectiveCommsCompleteConsensus(uint32_t p
                 LOG(BUG) << "Client " << ccoip_sockaddr_to_str(peer_address) << " not found";
                 continue;
             }
-            const auto &peer_info = peer_info_opt->get();
+            auto &peer_info = peer_info_opt->get();
             if (peer_info.connection_phase != PEER_ACCEPTED) {
                 continue;
             }
@@ -471,10 +473,13 @@ void ccoip::CCoIPMasterHandler::checkCollectiveCommsCompleteConsensus(uint32_t p
             // send confirmation packet
             M2CPacketCollectiveCommsComplete confirm_packet{};
             confirm_packet.tag = tag;
+            confirm_packet.was_aborted = peer_info.collective_coms_failure_states[tag];
             if (!server_socket.sendPacket<M2CPacketCollectiveCommsComplete>(peer_address, confirm_packet)) {
                 LOG(ERR) << "Failed to send M2CPacketCollectiveCommsComplete to " <<
                         ccoip_sockaddr_to_str(peer_address);
             }
+            peer_info.collective_coms_failure_states.erase(tag);
+            peer_info.collective_coms_states.erase(tag);
         }
     }
 }
@@ -704,7 +709,7 @@ void ccoip::CCoIPMasterHandler::handleCollectiveCommsComplete(const ccoip_socket
         return;
     }
     const auto client_uuid = client_uuid_opt.value();
-    if (!server_state.voteCollectiveCommsComplete(client_uuid, packet.tag)) [[unlikely]] {
+    if (!server_state.voteCollectiveCommsComplete(client_uuid, packet.tag, packet.was_aborted)) [[unlikely]] {
         LOG(WARN) << "Failed to vote to complete a collective communications operation from " <<
                 ccoip_sockaddr_to_str(client_address);
         if (!kickClient(client_address)) [[unlikely]] {
@@ -753,8 +758,14 @@ void ccoip::CCoIPMasterHandler::onClientDisconnect(const ccoip_socket_address_t 
     // If the client that left was the only outstanding vote to e.g. accept new peers, then we need to re-check
     // the consensus and send response packets as necessary.
     checkAcceptNewPeersConsensus();
+    checkP2PConnectionsEstablished();
     checkSyncSharedStateConsensus(client_info.peer_group);
     checkSyncSharedStateCompleteConsensus(client_info.peer_group);
+
+    for (const auto &tag: server_state.getOngoingCollectiveComsOpTags(client_info.peer_group)) {
+        checkCollectiveCommsCompleteConsensus(client_info.peer_group, tag);
+        checkCollectiveCommsInitiateConsensus(client_info.peer_group, tag);
+    }
 }
 
 void ccoip::CCoIPMasterHandler::handleAcceptNewPeers(const ccoip_socket_address_t &client_address,

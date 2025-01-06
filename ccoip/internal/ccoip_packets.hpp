@@ -8,6 +8,7 @@
 #include <ccoip_packet_buffer.hpp>
 #include <ccoip_shared_state.hpp>
 #include <ccoip_types.hpp>
+#include <unordered_set>
 
 namespace ccoip {
     // Definitions:
@@ -144,6 +145,7 @@ namespace ccoip {
         static packetId_t packet_id;
 
         uint64_t tag;
+        bool was_aborted;
 
         void serialize(PacketWriteBuffer &buffer) const override;
 
@@ -243,6 +245,7 @@ namespace ccoip {
         static packetId_t packet_id;
 
         uint64_t tag;
+        bool was_aborted;
 
         void serialize(PacketWriteBuffer &buffer) const override;
 

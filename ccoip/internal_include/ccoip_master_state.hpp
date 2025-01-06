@@ -135,6 +135,7 @@ namespace ccoip {
         ConnectionPhase connection_phase = PEER_REGISTERED;
         ConnectionState connection_state = IDLE;
         std::unordered_map<uint64_t, CollectiveCommunicationState> collective_coms_states{};
+        std::unordered_map<uint64_t, bool> collective_coms_failure_states{};
 
         ccoip_socket_address_t socket_address{};
         CCoIPClientVariablePorts variable_ports{};
@@ -280,8 +281,10 @@ namespace ccoip {
         /// Called when a client votes to complete a collective communications operation with a particular tag.
         /// @param peer_uuid the uuid of the client that is completing the collective communications operation. The peer group of said client determines what peers will participate in the collective communications operation.
         /// @param tag the tag associated with the collective communications operation.
-        /// All clients must vote to complete a collective communications operation before the operation can end.
-        [[nodiscard]] bool voteCollectiveCommsComplete(const ccoip_uuid_t &peer_uuid, uint64_t tag);
+        /// @param was_aborted whether the collective communications operation was aborted. Any failure reported from any peer will result in the collective communications operation being considered aborted.
+        /// All clients must vote to complete a collective communications operation before the operation can end
+        /// EXCEPT when @code was_aborted@endcode is true, in which case only one client is required to end the operation.
+        [[nodiscard]] bool voteCollectiveCommsComplete(const ccoip_uuid_t &peer_uuid, uint64_t tag, bool was_aborted);
 
         /// Returns true if all peers of the peer group have voted to synchronize the shared state
         /// All clients here shall mean the subset of clients that are in the @code PEER_ACCEPTED@endcode phase.
@@ -339,7 +342,7 @@ namespace ccoip {
 
         /// Transition all clients of the given peer group to the phase of completing the collective communications operation with the given tag.
         /// Returns false if the client is not in the @code COLLECTIVE_COMMUNICATIONS_RUNNING@endcode state or if
-        /// not in the @code VOTE_COMPLETE_COLLECTIVE_COMMS@endcode state for the specified tag.
+        /// not in the @code VOTE_COMPLETE_COLLECTIVE_COMMS@endcode (or @code PERFORM_COLLECTIVE_COMMS@endcode if the operation was marked aborted by any client) state for the specified tag.
         [[nodiscard]] bool transitionToCollectiveCommsCompletePhase(uint32_t peer_group, uint64_t tag);
 
         /// @returns SharedStateMismatchStatus::SUCCESSFUL_MATCH if the specified revision is legal as the next
@@ -429,5 +432,8 @@ namespace ccoip {
 
         /// Returns the set of shared state keys
         [[nodiscard]] std::vector<std::string> getSharedStateKeys(uint32_t peer_group);
+
+        /// Returns the set of ongoing collective communications operation tags for a particular peer group
+        [[nodiscard]] std::vector<uint64_t> getOngoingCollectiveComsOpTags(uint32_t peer_group);
     };
 }

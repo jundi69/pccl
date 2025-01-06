@@ -73,7 +73,7 @@ class NeuralNet(nn.Module):
         return x
 
 
-LOG_DEBUG = False
+LOG_DEBUG = True
 
 
 def log_debug(msg: str):
@@ -191,9 +191,11 @@ def main():
                 log_debug(f"(RANK={RANK}, it={i}) all_reduce_async()")
                 handle = communicator.all_reduce_async(grads, grads, numel=grads.numel(), op=ReduceOp.SUM)
                 is_success, status, info = handle.wait()
-                assert is_success == True, f"All reduce failed with status: {status}"
+                if not is_success:
+                    log_debug(f"(RANK={RANK}, it={i}) all_reduce_async() failed: {status}; retrying...")
+                    continue
                 assert info is not None
-                log_debug(f"(RANK={RANK}, it={i}) Reduce completed RX: {info.rx_bytes}, TX: {info.tx_bytes}")
+                log_debug(f"(RANK={RANK}, it={i}) Reduce completed RX: {info.rx_bytes}, TX: {info.tx_bytes}; world_size: {info.world_size}")
                 break
 
             # print hash of the gradients tensor content

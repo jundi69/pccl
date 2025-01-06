@@ -199,12 +199,15 @@ bool tinysockets::BlockingIOSocket::sendLtvPacket(const ccoip::packetId_t packet
     return true;
 }
 
-std::optional<size_t> tinysockets::BlockingIOSocket::receivePacketLength() const {
+std::optional<size_t> tinysockets::BlockingIOSocket::receivePacketLength(const bool no_wait) const {
     uint64_t length;
     size_t n_received = 0;
     do {
-        const ssize_t i = recvvp(socket_fd, &length, sizeof(length), 0);
+        const ssize_t i = recvvp(socket_fd, &length, sizeof(length), no_wait ? MSG_DONTWAIT : 0);
         if (i == -1 || i == 0) {
+            if (no_wait && errno == EAGAIN) {
+                return std::nullopt;
+            }
             std::string error_message = std::strerror(errno);
             if (!isOpen()) {
                 error_message = "Connection closed";
