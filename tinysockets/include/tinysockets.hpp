@@ -213,7 +213,7 @@ namespace tinysockets {
         [[nodiscard]] std::optional<T> receivePacket(const bool no_wait = false) {
             std::lock_guard guard{recv_mutex};
             const ccoip::packetId_t id = T::packet_id;
-            return receiveLtvPacket<T>(id, no_wait);
+            return receiveLtvPacket<T>(id);
         }
 
         /// Returns the next received packet that matches the given predicate.
@@ -281,7 +281,7 @@ namespace tinysockets {
                     std::unique_ptr<uint8_t[]> packet_buffer{};
 
                     [this, &packet_buffer, &packet_buffer_size, expected_packet_id] {
-                        const std::optional<size_t> length_opt = receivePacketLength(false);
+                        const std::optional<size_t> length_opt = receivePacketLength();
                         if (!length_opt) {
                             LOG(ERR) << "Failed to receive packet length for packet ID " << expected_packet_id;
                             packet_buffer = nullptr;
@@ -350,13 +350,13 @@ namespace tinysockets {
         // Packet decoding / encoding functions
         [[nodiscard]] bool sendLtvPacket(ccoip::packetId_t packet_id, const PacketWriteBuffer &buffer) const;
 
-        [[nodiscard]] std::optional<size_t> receivePacketLength(bool no_wait) const;
+        [[nodiscard]] std::optional<size_t> receivePacketLength() const;
 
         [[nodiscard]] bool receivePacketData(std::span<std::uint8_t> &dst) const;
 
         template<typename T> requires std::is_base_of_v<ccoip::Packet, T>
-        [[nodiscard]] std::optional<T> receiveLtvPacket(const ccoip::packetId_t packet_id, bool no_wait) {
-            const std::optional<size_t> length_opt = receivePacketLength(no_wait);
+        [[nodiscard]] std::optional<T> receiveLtvPacket(const ccoip::packetId_t packet_id) {
+            const std::optional<size_t> length_opt = receivePacketLength();
             if (!length_opt) {
                 return std::nullopt;
             }
