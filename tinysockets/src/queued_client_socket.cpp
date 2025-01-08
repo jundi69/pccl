@@ -3,14 +3,15 @@
 
 #include "tinysockets.hpp"
 #include "SPSCQueue.h"
-
+#include <cstring> // for std::strerror
+#include <mutex>
+#include <condition_variable>
 
 static bool configure_socket_fd(const int socket_fd) {
     constexpr int opt = 1;
 
     // enable TCP_NODELAY
-    if (setsockoptvp(socket_fd, IPPROTO_TCP, TCP_NODELAY, &opt, sizeof(opt)) < 0) [[
-        unlikely]] {
+    if (setsockoptvp(socket_fd, IPPROTO_TCP, TCP_NODELAY, &opt, sizeof(opt)) < 0) [[unlikely]] {
         LOG(ERR) << "Failed to set TCP_NODELAY option on server socket";
         closesocket(socket_fd);
         return false;
@@ -36,6 +37,8 @@ namespace tinysockets {
 
     struct QueuedSocketInternalState {
         rigtorp::SPSCQueue<ReceivedPacket> recv_queue;
+        mutable std::mutex mutex; // Protects condition variable and access coordination
+        std::condition_variable cond_var;
 
         QueuedSocketInternalState() : recv_queue(1024) {
         }
@@ -61,6 +64,11 @@ tinysockets::QueuedSocket::~QueuedSocket() {
         if (!interrupt()) [[unlikely]] {
             LOG(ERR) << "Failed to interrupt BlockingIOServerSocket from destructor";
         }
+        // Notify all waiting threads to wake up and exit
+        {
+            std::lock_guard lock(internal_state->mutex);
+            internal_state->cond_var.notify_all();
+        }
         // ReSharper disable once CppNoDiscardExpression
         join();
     } else if (socket_fd != 0) {
@@ -69,24 +77,30 @@ tinysockets::QueuedSocket::~QueuedSocket() {
 }
 
 bool tinysockets::QueuedSocket::run() {
+    running = true;
     receive_thread = std::thread([this] {
         while (running && socket_fd != 0) {
             const auto length_opt = receivePacketLength();
             if (!length_opt) {
                 if (running) {
                     LOG(ERR) << "QueuedSocket::run() failed to receive packet length; closing connection";
-                    if (!interrupt()) {
+                    if (!interrupt()) [[unlikely]] {
                         LOG(ERR) << "Failed to interrupt QueuedSocket";
                     }
                 } else {
                     LOG(INFO) << "QueuedSocket::run() interrupted, exiting receive loop...";
+                }
+                // Notify all waiting threads to wake up and exit
+                {
+                    std::lock_guard lock(internal_state->mutex);
+                    internal_state->cond_var.notify_all();
                 }
                 return;
             }
             const size_t length = *length_opt;
             if (length == 0) {
                 LOG(ERR) << "Received packet with length 0; closing connection";
-                if (!interrupt()) {
+                if (!interrupt()) [[unlikely]] {
                     LOG(ERR) << "Failed to interrupt QueuedSocket";
                 }
                 return;
@@ -96,7 +110,7 @@ bool tinysockets::QueuedSocket::run() {
             if (!receivePacketData(data)) {
                 if (running) {
                     LOG(ERR) << "Failed to receive packet data for packet with length " << length;
-                    if (!interrupt()) {
+                    if (!interrupt()) [[unlikely]] {
                         LOG(ERR) << "Failed to interrupt QueuedSocket";
                     }
                 } else {
@@ -106,9 +120,20 @@ bool tinysockets::QueuedSocket::run() {
             }
             ReceivedPacket packet{std::move(data_ptr), data};
             internal_state->recv_queue.push(std::move(packet));
+
+            // Notify one waiting thread that a new packet is available
+            {
+                std::lock_guard lock(internal_state->mutex);
+                internal_state->cond_var.notify_one();
+            }
+        }
+
+        // Notify all waiting threads in case the loop exits naturally
+        {
+            std::lock_guard lock(internal_state->mutex);
+            internal_state->cond_var.notify_all();
         }
     });
-    running = true;
     return true;
 }
 
@@ -122,17 +147,21 @@ bool tinysockets::QueuedSocket::interrupt() {
     if (!running) {
         return false;
     }
+    running = false;
     closesocket(socket_fd);
     socket_fd = 0;
-    running = false;
+
+    // Notify all waiting threads to wake up and handle interruption
+    {
+        std::lock_guard lock(internal_state->mutex);
+        internal_state->cond_var.notify_all();
+    }
     return true;
 }
-
 
 const ccoip_socket_address_t &tinysockets::QueuedSocket::getConnectSockAddr() const {
     return connect_sockaddr;
 }
-
 
 bool tinysockets::QueuedSocket::isOpen() const {
     if (socket_fd == 0) [[unlikely]] {
@@ -187,7 +216,6 @@ bool tinysockets::QueuedSocket::isOpen() const {
     return is_open;
 #endif
 }
-
 
 bool tinysockets::QueuedSocket::establishConnection() {
     if (socket_fd != 0) {
@@ -255,6 +283,13 @@ bool tinysockets::QueuedSocket::closeConnection() {
     }
     closesocket(socket_fd);
     socket_fd = 0;
+
+    // Notify all waiting threads to wake up and handle closure
+    {
+        std::lock_guard lock(internal_state->mutex);
+        internal_state->cond_var.notify_all();
+    }
+
     return true;
 }
 
@@ -267,6 +302,9 @@ std::optional<size_t> tinysockets::QueuedSocket::receivePacketLength() const {
             std::string error_message = std::strerror(errno);
             if (!isOpen()) {
                 error_message = "Connection closed";
+            }
+            if (running) {
+                LOG(ERR) << "Failed to receive packet length with error: " << error_message;
             }
             return std::nullopt;
         }
@@ -287,7 +325,6 @@ bool tinysockets::QueuedSocket::receivePacketData(std::span<std::uint8_t> &dst) 
     } while (n_received < dst.size_bytes());
     return true;
 }
-
 
 bool tinysockets::QueuedSocket::sendLtvPacket(ccoip::packetId_t packet_id, const PacketWriteBuffer &buffer) const {
     PacketWriteBuffer tlv_buffer{};
@@ -328,14 +365,23 @@ tinysockets::QueuedSocket::pollNextPacketBuffer(const bool no_wait) const {
         return std::nullopt;
     }
     auto &packet_queue = internal_state->recv_queue;
-    if (packet_queue.empty()) {
-        if (no_wait) {
+
+    std::unique_lock lock(internal_state->mutex);
+    if (no_wait) {
+        if (packet_queue.empty()) {
             return std::nullopt;
         }
-        while (packet_queue.empty()) {
-            std::this_thread::yield();
+    } else {
+        internal_state->cond_var.wait(lock, [this]() { return !internal_state->recv_queue.empty() || !running; });
+        if (packet_queue.empty()) {
+            return std::nullopt;
         }
     }
+
+    if (packet_queue.empty()) {
+        return std::nullopt;
+    }
+
     ReceivedPacket *packet = packet_queue.front();
     std::span<uint8_t> data = packet->data;
     std::unique_ptr<uint8_t[]> data_ptr = std::move(packet->data_ptr);
@@ -351,40 +397,52 @@ tinysockets::QueuedSocket::pollNextMatchingPacketBuffer(const ccoip::packetId_t 
         return std::nullopt;
     }
     auto &packet_queue = internal_state->recv_queue;
-    if (packet_queue.empty()) {
-        if (no_wait) {
-            return std::nullopt;
-        }
-        while (packet_queue.empty()) {
-            std::this_thread::yield();
-        }
-    }
 
-    // wait for a packet matching the predicate
-    goto entry; {
-    repeat:
-        std::this_thread::yield();
-    entry:
+    std::unique_lock lock(internal_state->mutex);
+
+    while (true) {
         if (packet_queue.empty()) {
-            goto repeat;
+            if (no_wait) {
+                return std::nullopt;
+            }
+            internal_state->cond_var.wait(lock, [this]() { return !internal_state->recv_queue.empty() || !running; });
+            if (packet_queue.empty()) {
+                return std::nullopt;
+            }
         }
-        auto *packet = packet_queue.front();
+
+        if (packet_queue.empty()) {
+            if (no_wait) {
+                return std::nullopt;
+            }
+            continue;
+        }
+
+        ReceivedPacket *packet = packet_queue.front();
         std::span<uint8_t> data = packet->data;
+
         if (data.size_bytes() < sizeof(ccoip::packetId_t)) {
             LOG(FATAL) << "Received packet with insufficient length";
             packet_queue.pop();
-            goto repeat;
+            continue;
         }
-        if (PacketReadBuffer buffer{data.data(), data.size()}; packet_id != buffer.read<ccoip::packetId_t>()) {
+
+        PacketReadBuffer buffer{data.data(), data.size()};
+
+        if (const auto received_packet_id = buffer.read<ccoip::packetId_t>(); packet_id != received_packet_id) {
             packet_queue.pop();
-            goto repeat;
+            continue;
         }
+
         if (predicate(data)) {
             std::unique_ptr<uint8_t[]> data_ptr = std::move(packet->data_ptr);
             packet_queue.pop();
             return std::make_pair(std::move(data_ptr), data);
         }
-    }
 
-    return std::nullopt;
+        // If predicate does not match, continue waiting
+        if (no_wait) {
+            return std::nullopt;
+        }
+    }
 }

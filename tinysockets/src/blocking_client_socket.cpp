@@ -4,7 +4,7 @@
 #include <pccl_log.hpp>
 
 #include "win_sock_bridge.h"
-#include <cstring>
+#include <cstring> // for std::strerror
 
 static bool configure_socket_fd(const int socket_fd) {
     constexpr int opt = 1;

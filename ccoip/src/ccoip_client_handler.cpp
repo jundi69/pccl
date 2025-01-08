@@ -353,8 +353,8 @@ bool ccoip::CCoIPClientHandler::interrupt() {
     if (!shared_state_socket.interrupt()) [[unlikely]] {
         return false;
     }
-    if (!master_socket.interrupt()) [[unlikely]] {
-        return false;
+    if (!master_socket.interrupt()) {
+        // this can happen, if the connection was closed before, e.g. when kicked. We don't care about this case.
     }
     interrupted = true;
     return true;
