@@ -1,10 +1,9 @@
+#include "tinysockets.hpp"
+
 #include <ccoip_utils.hpp>
 #include <pccl_log.hpp>
 
-#include "tinysockets.hpp"
 #include "win_sock_bridge.h"
-#include <cstring>
-
 #include <cstring>
 
 static bool configure_socket_fd(const int socket_fd) {

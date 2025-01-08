@@ -91,6 +91,11 @@ bool ccoip::CCoIPClientHandler::connect() {
         return false;
     }
 
+    if (!master_socket.run()) {
+        LOG(ERR) << "Failed to start master socket thread";
+        return false;
+    }
+
     // send join request packet to master
     C2MPacketRequestSessionRegistration join_request{};
     join_request.p2p_listen_port = p2p_socket.getListenPort();
@@ -348,7 +353,7 @@ bool ccoip::CCoIPClientHandler::interrupt() {
     if (!shared_state_socket.interrupt()) [[unlikely]] {
         return false;
     }
-    if (!master_socket.closeConnection()) [[unlikely]] {
+    if (!master_socket.interrupt()) [[unlikely]] {
         return false;
     }
     interrupted = true;
@@ -358,6 +363,7 @@ bool ccoip::CCoIPClientHandler::interrupt() {
 bool ccoip::CCoIPClientHandler::join() {
     p2p_socket.join();
     shared_state_socket.join();
+    master_socket.join();
     return true;
 }
 
