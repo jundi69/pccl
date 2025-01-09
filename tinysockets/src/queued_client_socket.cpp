@@ -370,7 +370,7 @@ tinysockets::QueuedSocket::pollNextPacketBuffer(const bool no_wait) const {
     }
     std::unique_lock lock(internal_state->mutex);
     while (internal_state->recv_queue.empty()) {
-        if (no_wait) {
+        if (no_wait || !running) {
             return std::nullopt;
         }
         internal_state->cond_var.wait(lock);
@@ -403,7 +403,7 @@ tinysockets::QueuedSocket::pollNextMatchingPacketBuffer(const ccoip::packetId_t 
     size_t idx = 0;
     while (true) {
         if (idx >= packet_queue.size()) {
-            if (no_wait) {
+            if (no_wait || !running) {
                 return std::nullopt;
             }
             idx = 0; // reset index, as .wait() unlocks internal_state->mutex, where recv_queue can be modified again

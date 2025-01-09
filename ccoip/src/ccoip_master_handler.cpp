@@ -181,6 +181,27 @@ void ccoip::CCoIPMasterHandler::handleRequestSessionJoin(const ccoip_socket_addr
 }
 
 void ccoip::CCoIPMasterHandler::checkP2PConnectionsEstablished() {
+    // check if at least one client is waiting for other peers
+    bool any_waiting = false;
+    for (const auto &[peer_uuid, peer_address]: server_state.getClientEntrySet()) {
+        const auto peer_info_opt = server_state.getClientInfo(peer_uuid);
+        if (!peer_info_opt) [[unlikely]] {
+            LOG(BUG) << "Client " << ccoip_sockaddr_to_str(peer_address) << " not found";
+            continue;
+        }
+        const auto &peer_info = peer_info_opt->get();
+        if (peer_info.connection_phase != PEER_ACCEPTED) {
+            continue;
+        }
+        if (peer_info.connection_state == WAITING_FOR_OTHER_PEERS) {
+            any_waiting = true;
+            break;
+        }
+    }
+    if (!any_waiting) {
+        LOG(DEBUG) << "No clients waiting for other peers, skipping checkP2PConnectionsEstablished(). This should only happen on client disconnect.";
+        return;
+    }
     // send establish new peers packets to all clients
     if (server_state.p2pConnectionsEstablishConsensus()) {
         // send confirmation packets to all clients

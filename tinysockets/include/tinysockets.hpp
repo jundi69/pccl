@@ -252,7 +252,7 @@ namespace tinysockets {
         std::mutex send_mutex;
         std::thread receive_thread;
         QueuedSocketInternalState *internal_state;
-        bool running;
+        volatile bool running;
 
     public:
         explicit QueuedSocket(const ccoip_socket_address_t &address);
