@@ -213,6 +213,8 @@ bool tinysockets::QueuedSocket::isOpen() const {
             // Other errors (like WSAECONNRESET) mean the socket is effectively closed.
             is_open = false;
         }
+    } else if (n > 0) {
+        is_open = true;
     }
     // set socket back to blocking mode
     mode = 0;
