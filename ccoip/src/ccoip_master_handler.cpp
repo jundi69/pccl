@@ -180,7 +180,7 @@ void ccoip::CCoIPMasterHandler::handleRequestSessionJoin(const ccoip_socket_addr
     }
 }
 
-void ccoip::CCoIPMasterHandler::checkP2PConnectionsEstablished() {
+bool ccoip::CCoIPMasterHandler::checkP2PConnectionsEstablished() {
     // check if at least one client is waiting for other peers
     bool any_waiting = false;
     for (const auto &[peer_uuid, peer_address]: server_state.getClientEntrySet()) {
@@ -190,25 +190,24 @@ void ccoip::CCoIPMasterHandler::checkP2PConnectionsEstablished() {
             continue;
         }
         const auto &peer_info = peer_info_opt->get();
-        if (peer_info.connection_phase != PEER_ACCEPTED) {
-            continue;
-        }
+
+        // all connection phases are legal (both REGISTERED & ACCEPTED)
+
         if (peer_info.connection_state == WAITING_FOR_OTHER_PEERS) {
             any_waiting = true;
             break;
         }
     }
     if (!any_waiting) {
-        LOG(DEBUG) <<
-                "No clients waiting for other peers, skipping checkP2PConnectionsEstablished(). This should only happen on client disconnect.";
-        return;
+        return false;
     }
+
     // send establish new peers packets to all clients
     if (server_state.p2pConnectionsEstablishConsensus()) {
         // send confirmation packets to all clients
         if (!server_state.transitionToP2PConnectionsEstablishedPhase()) [[unlikely]] {
             LOG(WARN) << "Failed to transition to P2P connections established phase;";
-            return;
+            return false;
         }
 
         for (auto &[peer_uuid, peer_address]: server_state.getClientEntrySet()) {
@@ -227,6 +226,7 @@ void ccoip::CCoIPMasterHandler::checkP2PConnectionsEstablished() {
             }
         }
     }
+    return true;
 }
 
 void ccoip::CCoIPMasterHandler::checkAcceptNewPeersConsensus() {
@@ -265,7 +265,7 @@ ccoip::CCoIPMasterHandler::findBestSharedStateTxPeer(const ccoip_uuid_t &peer_uu
     return std::nullopt;
 }
 
-void ccoip::CCoIPMasterHandler::checkSyncSharedStateConsensus(const uint32_t peer_group) {
+bool ccoip::CCoIPMasterHandler::checkSyncSharedStateConsensus(const uint32_t peer_group) {
     bool any_waiting = false;
     // check if at least one client is waiting for shared state sync
     for (const auto &[peer_uuid, peer_address]: server_state.getClientEntrySet()) {
@@ -284,24 +284,23 @@ void ccoip::CCoIPMasterHandler::checkSyncSharedStateConsensus(const uint32_t pee
         }
     }
     if (!any_waiting) {
-        LOG(DEBUG) <<
-                "No clients waiting for shared state sync, skipping checkSyncSharedStateConsensus(). This should only happen on client disconnect.";
-        return;
+        return false;
     }
+
     // check if all clients have voted to sync shared state
     if (server_state.syncSharedStateConsensus(peer_group)) {
         // elect mask from candidates
         if (!server_state.electSharedStateMask(peer_group)) [[unlikely]] {
             LOG(BUG) <<
                     "Failed to elect shared state mask; This may indicate no mask candidates were provided, despite the fact that shared state sync consensus was reached. This is a bug!";
-            return;
+            return false;
         }
 
         // check for mismatched shared state entries; violating clients will be marked.
         // the mismatch status can be queried via server_state.getSharedStateMismatchStatus()
         if (!server_state.checkMaskSharedStateMismatches(peer_group)) {
             LOG(WARN) << "Failed to check shared state mask mismatch. No current mask set.";
-            return;
+            return false;
         }
 
         // kick all clients with mismatched shared state
@@ -319,7 +318,7 @@ void ccoip::CCoIPMasterHandler::checkSyncSharedStateConsensus(const uint32_t pee
             if (!status_opt) {
                 LOG(BUG) << "No shared state mismatch status found for client " << ccoip_sockaddr_to_str(peer_address)
                         << " after checkMaskSharedStateMismatches was invoked. This is a bug!";
-                return;
+                return false;
             }
             if (*status_opt == CCoIPMasterState::KEY_SET_MISMATCH) {
                 LOG(WARN) << "Kicking client " << ccoip_sockaddr_to_str(peer_address) <<
@@ -327,13 +326,13 @@ void ccoip::CCoIPMasterHandler::checkSyncSharedStateConsensus(const uint32_t pee
                 if (!kickClient(peer_address)) {
                     LOG(ERR) << "Failed to kick client " << ccoip_sockaddr_to_str(peer_address);
                 }
-                return;
+                return false;
             }
         }
 
         if (!server_state.transitionToSharedStateSyncPhase(peer_group)) [[unlikely]] {
             LOG(BUG) << "Failed to transition to shared state distribution phase; This is a bug!";
-            return;
+            return false;
         }
 
         // send confirmation packets to all clients
@@ -390,9 +389,10 @@ void ccoip::CCoIPMasterHandler::checkSyncSharedStateConsensus(const uint32_t pee
             }
         }
     }
+    return true;
 }
 
-void ccoip::CCoIPMasterHandler::checkSyncSharedStateCompleteConsensus(const uint32_t peer_group) {
+bool ccoip::CCoIPMasterHandler::checkSyncSharedStateCompleteConsensus(const uint32_t peer_group) {
     bool any_waiting = false;
     // check if at least one client is waiting for shared state sync completion
     for (const auto &[peer_uuid, peer_address]: server_state.getClientEntrySet()) {
@@ -411,15 +411,13 @@ void ccoip::CCoIPMasterHandler::checkSyncSharedStateCompleteConsensus(const uint
         }
     }
     if (!any_waiting) {
-        LOG(DEBUG) <<
-                "No clients waiting for shared state sync completion, skipping checkSyncSharedStateCompleteConsensus(). This should only happen on client disconnect.";
-        return;
+        return false;
     }
     // check if all clients have voted to distribute shared state complete
     if (server_state.syncSharedStateCompleteConsensus(peer_group)) {
         if (!server_state.endSharedStateSyncPhase(peer_group)) [[unlikely]] {
             LOG(BUG) << "Failed to end shared state distribution phase; This is a bug!";
-            return;
+            return false;
         }
 
         // send confirmation packets to all clients
@@ -454,15 +452,16 @@ void ccoip::CCoIPMasterHandler::checkSyncSharedStateCompleteConsensus(const uint
             }
         }
     }
+    return true;
 }
 
-void ccoip::CCoIPMasterHandler::checkCollectiveCommsInitiateConsensus(const uint32_t peer_group,
+bool ccoip::CCoIPMasterHandler::checkCollectiveCommsInitiateConsensus(const uint32_t peer_group,
                                                                       const uint64_t tag) {
     // check if all clients have voted to initiate the collective communications operation
     if (server_state.collectiveCommsInitiateConsensus(peer_group, tag)) {
         if (!server_state.transitionToPerformCollectiveCommsPhase(peer_group, tag)) {
             LOG(BUG) << "Failed to transition to collective communications initiate phase; This is a bug";
-            return;
+            return false;
         }
 
         // send confirmation packets to all clients
@@ -500,14 +499,15 @@ void ccoip::CCoIPMasterHandler::checkCollectiveCommsInitiateConsensus(const uint
             }
         }
     }
+    return true;
 }
 
-void ccoip::CCoIPMasterHandler::checkCollectiveCommsCompleteConsensus(const uint32_t peer_group, const uint64_t tag) {
+bool ccoip::CCoIPMasterHandler::checkCollectiveCommsCompleteConsensus(const uint32_t peer_group, const uint64_t tag) {
     // check if all clients have voted to complete the collective communications operation
     if (server_state.collectiveCommsCompleteConsensus(peer_group, tag)) {
         if (!server_state.transitionToCollectiveCommsCompletePhase(peer_group, tag)) {
             LOG(BUG) << "Failed to transition to collective communications complete phase; This is a bug";
-            return;
+            return false;
         }
 
         // send confirmation packets to all clients
@@ -548,6 +548,7 @@ void ccoip::CCoIPMasterHandler::checkCollectiveCommsCompleteConsensus(const uint
             peer_info.collective_coms_states.erase(tag);
         }
     }
+    return true;
 }
 
 void ccoip::CCoIPMasterHandler::handleP2PConnectionsEstablished(const ccoip_socket_address_t &client_address,
@@ -694,8 +695,10 @@ void ccoip::CCoIPMasterHandler::handleSyncSharedState(const ccoip_socket_address
         LOG(WARN) << "Client " << ccoip_sockaddr_to_str(client_address) << " not found";
         return;
     }
-    const auto &info = info_opt->get();
-    checkSyncSharedStateConsensus(info.peer_group);
+    if (const auto &info = info_opt->get(); !checkSyncSharedStateConsensus(info.peer_group)) {
+        LOG(BUG) << "checkSyncSharedStateConsensus() failed for " << ccoip_sockaddr_to_str(client_address) <<
+                " when handling shared state sync packet. This should never happen.";
+    }
 }
 
 void ccoip::CCoIPMasterHandler::handleSyncSharedStateComplete(const ccoip_socket_address_t &client_address,
@@ -725,8 +728,10 @@ void ccoip::CCoIPMasterHandler::handleSyncSharedStateComplete(const ccoip_socket
         LOG(WARN) << "Client " << uuid_to_string(client_uuid) << " not found";
         return;
     }
-    const auto &info = info_opt->get();
-    checkSyncSharedStateCompleteConsensus(info.peer_group);
+    if (const auto &info = info_opt->get(); !checkSyncSharedStateCompleteConsensus(info.peer_group)) {
+        LOG(BUG) << "checkSyncSharedStateCompleteConsensus() failed for " << ccoip_sockaddr_to_str(client_address) <<
+                " when handling shared state sync complete packet. This should never happen.";
+    }
 }
 
 void ccoip::CCoIPMasterHandler::handleCollectiveCommsInitiate(const ccoip_socket_address_t &client_address,
@@ -756,8 +761,10 @@ void ccoip::CCoIPMasterHandler::handleCollectiveCommsInitiate(const ccoip_socket
         LOG(WARN) << "Client " << uuid_to_string(client_uuid) << " not found";
         return;
     }
-    const auto &info = info_opt->get();
-    checkCollectiveCommsInitiateConsensus(info.peer_group, packet.tag);
+    if (const auto &info = info_opt->get(); !checkCollectiveCommsInitiateConsensus(info.peer_group, packet.tag)) {
+        LOG(BUG) << "checkCollectiveCommsInitiateConsensus() failed for " << ccoip_sockaddr_to_str(client_address) <<
+                " when handling collective comms initiate packet. This should never happen.";
+    }
 }
 
 void ccoip::CCoIPMasterHandler::handleCollectiveCommsComplete(const ccoip_socket_address_t &client_address,
@@ -788,8 +795,10 @@ void ccoip::CCoIPMasterHandler::handleCollectiveCommsComplete(const ccoip_socket
         LOG(WARN) << "Client " << uuid_to_string(client_uuid) << " not found";
         return;
     }
-    const auto &info = info_opt->get();
-    checkCollectiveCommsCompleteConsensus(info.peer_group, packet.tag);
+    if (const auto &info = info_opt->get(); !checkCollectiveCommsCompleteConsensus(info.peer_group, packet.tag)) {
+        LOG(BUG) << "checkCollectiveCommsCompleteConsensus() failed for " << ccoip_sockaddr_to_str(client_address) <<
+                " when handling collective comms complete packet. This should never happen.";
+    }
 }
 
 void ccoip::CCoIPMasterHandler::onClientDisconnect(const ccoip_socket_address_t &client_address) {
@@ -824,13 +833,28 @@ void ccoip::CCoIPMasterHandler::onClientDisconnect(const ccoip_socket_address_t 
     // If the client that left was the only outstanding vote to e.g. accept new peers, then we need to re-check
     // the consensus and send response packets as necessary.
     checkAcceptNewPeersConsensus();
-    checkP2PConnectionsEstablished();
-    checkSyncSharedStateConsensus(client_info.peer_group);
-    checkSyncSharedStateCompleteConsensus(client_info.peer_group);
+    if (!checkP2PConnectionsEstablished()) {
+        LOG(INFO) <<
+                "checkP2PConnectionsEstablished() returned false; This likely means no clients are waiting for other peers and is expected during disconnects.";
+    }
+    if (!checkSyncSharedStateConsensus(client_info.peer_group)) {
+        LOG(INFO) <<
+                "checkSyncSharedStateConsensus() returned false; This likely means no clients are waiting for shared state sync and is expected during disconnects.";
+    }
+    if (!checkSyncSharedStateCompleteConsensus(client_info.peer_group)) {
+        LOG(INFO) <<
+                "checkSyncSharedStateCompleteConsensus() returned false; This likely means no clients are waiting for shared state sync completion and is expected during disconnects.";
+    }
 
     for (const auto &tag: server_state.getOngoingCollectiveComsOpTags(client_info.peer_group)) {
-        checkCollectiveCommsCompleteConsensus(client_info.peer_group, tag);
-        checkCollectiveCommsInitiateConsensus(client_info.peer_group, tag);
+        if (!checkCollectiveCommsCompleteConsensus(client_info.peer_group, tag)) {
+            LOG(INFO) <<
+                    "checkCollectiveCommsCompleteConsensus() returned false; This likely means no clients are waiting for collective comms completion and is expected during disconnects.";
+        }
+        if (!checkCollectiveCommsInitiateConsensus(client_info.peer_group, tag)) {
+            LOG(INFO) <<
+                    "checkCollectiveCommsInitiateConsensus() returned false; This likely means no clients are waiting for collective comms initiation and is expected during disconnects.";
+        }
     }
 }
 

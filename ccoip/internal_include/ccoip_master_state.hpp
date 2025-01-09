@@ -14,12 +14,16 @@ namespace ccoip {
         /// It does not yet participate in collective communications operations
         /// or shared state distribution.
         /// In this tate, the client is not allowed to request to participate in any of the above.
+        /// While in this state, the only legal state for the client to be in is @code IDLE@endcode, except
+        /// @code CONNECTING_TO_PEERS@endcode and @code WAITING_FOR_OTHER_PEERS@endcode while establishing p2p connections.
+        /// Only after establishment, is the client moved to the @code PEER_ACCEPTED@endcode phase.
         PEER_REGISTERED,
 
         /// Peers have accepted the client.
         /// Peers periodically accept new clients to join the running session.
         /// This is a phase unanimously agreed upon by all peers.
-        /// In this phase, clients will establish p2p connections with new peers.
+        /// New clients once they have established their p2p connections with all peers,
+        /// will be moved to this phase.
         PEER_ACCEPTED
     };
 
@@ -28,7 +32,7 @@ namespace ccoip {
         /// It does not participate in any collective communications operations
         /// or shared state distribution.
         /// When the @code ConnectionPhase@endcode is @code PEER_REGISTERED@endcode,
-        /// this is the only legal state for the client to be in (except @code CONNECTING_TO_PEERS@endcode).
+        /// this is the only legal state for the client to be in (except @code CONNECTING_TO_PEERS@endcode & @code WAITING_FOR_OTHER_PEERS@endcode).
         IDLE,
 
         /// The client has voted to accept new peers.

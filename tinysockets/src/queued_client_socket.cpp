@@ -157,6 +157,7 @@ bool tinysockets::QueuedSocket::interrupt() {
     }
     std::lock_guard lock(internal_state->mutex); // lock while setting running to false
     running = false;
+    shutdown(socket_fd, SHUT_RDWR); // without shutdown, recv() may not get unblocked
     closesocket(socket_fd);
     socket_fd = 0;
 
@@ -287,14 +288,17 @@ bool tinysockets::QueuedSocket::closeConnection() {
     if (socket_fd == 0) {
         return false;
     }
+
+    std::lock_guard lock(internal_state->mutex);
+
+    shutdown(socket_fd, SHUT_RDWR); // without shutdown, recv() may not get unblocked
     closesocket(socket_fd);
     socket_fd = 0;
 
+    running = false;
+
     // Notify all waiting threads to wake up and handle closure
-    {
-        std::lock_guard lock(internal_state->mutex);
-        internal_state->cond_var.notify_all();
-    }
+    internal_state->cond_var.notify_all();
 
     return true;
 }
@@ -304,7 +308,7 @@ std::optional<size_t> tinysockets::QueuedSocket::receivePacketLength() const {
     size_t n_received = 0;
     do {
         const ssize_t i = recvvp(socket_fd, &length, sizeof(length), 0);
-        if (i == -1 || i == 0) {
+        if (i == -1 || i == 0 || !running) {
             std::string error_message = std::strerror(errno);
             if (!isOpen()) {
                 error_message = "Connection closed";
@@ -328,7 +332,7 @@ bool tinysockets::QueuedSocket::receivePacketData(std::span<std::uint8_t> &dst) 
             return false;
         }
         n_received += i;
-    } while (n_received < dst.size_bytes());
+    } while (n_received < dst.size_bytes() && running && socket_fd != 0);
     return true;
 }
 
