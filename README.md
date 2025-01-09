@@ -26,7 +26,6 @@ make
 ```bash
 cd python/framework
 pip install -r requirements.txt
-./build_wheel.sh
 ./install_wheel_local.sh
 ```
 
