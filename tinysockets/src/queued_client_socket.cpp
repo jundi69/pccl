@@ -82,7 +82,11 @@ bool tinysockets::QueuedSocket::run() {
             const auto length_opt = receivePacketLength();
             if (!length_opt) {
                 if (running) {
-                    LOG(ERR) << "QueuedSocket::run() failed to receive packet length; closing connection";
+                    if (isOpen()) {
+                        LOG(ERR) << "Failed to receive packet length; closing connection & exiting receive loop...";
+                    } else {
+                        LOG(ERR) << "Connection was closed; exiting receive loop...";
+                    }
                     if (!interrupt()) [[unlikely]] {
                         LOG(ERR) << "Failed to interrupt QueuedSocket";
                     }

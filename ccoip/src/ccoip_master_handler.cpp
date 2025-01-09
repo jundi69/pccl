@@ -199,7 +199,8 @@ void ccoip::CCoIPMasterHandler::checkP2PConnectionsEstablished() {
         }
     }
     if (!any_waiting) {
-        LOG(DEBUG) << "No clients waiting for other peers, skipping checkP2PConnectionsEstablished(). This should only happen on client disconnect.";
+        LOG(DEBUG) <<
+                "No clients waiting for other peers, skipping checkP2PConnectionsEstablished(). This should only happen on client disconnect.";
         return;
     }
     // send establish new peers packets to all clients
@@ -265,6 +266,28 @@ ccoip::CCoIPMasterHandler::findBestSharedStateTxPeer(const ccoip_uuid_t &peer_uu
 }
 
 void ccoip::CCoIPMasterHandler::checkSyncSharedStateConsensus(const uint32_t peer_group) {
+    bool any_waiting = false;
+    // check if at least one client is waiting for shared state sync
+    for (const auto &[peer_uuid, peer_address]: server_state.getClientEntrySet()) {
+        const auto peer_info_opt = server_state.getClientInfo(peer_uuid);
+        if (!peer_info_opt) [[unlikely]] {
+            LOG(BUG) << "Client " << ccoip_sockaddr_to_str(peer_address) << " not found";
+            continue;
+        }
+        const auto &peer_info = peer_info_opt->get();
+        if (peer_info.peer_group != peer_group || peer_info.connection_phase != PEER_ACCEPTED) {
+            continue;
+        }
+        if (peer_info.connection_state == VOTE_SYNC_SHARED_STATE) {
+            any_waiting = true;
+            break;
+        }
+    }
+    if (!any_waiting) {
+        LOG(DEBUG) <<
+                "No clients waiting for shared state sync, skipping checkSyncSharedStateConsensus(). This should only happen on client disconnect.";
+        return;
+    }
     // check if all clients have voted to sync shared state
     if (server_state.syncSharedStateConsensus(peer_group)) {
         // elect mask from candidates
@@ -370,6 +393,28 @@ void ccoip::CCoIPMasterHandler::checkSyncSharedStateConsensus(const uint32_t pee
 }
 
 void ccoip::CCoIPMasterHandler::checkSyncSharedStateCompleteConsensus(const uint32_t peer_group) {
+    bool any_waiting = false;
+    // check if at least one client is waiting for shared state sync completion
+    for (const auto &[peer_uuid, peer_address]: server_state.getClientEntrySet()) {
+        const auto peer_info_opt = server_state.getClientInfo(peer_uuid);
+        if (!peer_info_opt) [[unlikely]] {
+            LOG(BUG) << "Client " << ccoip_sockaddr_to_str(peer_address) << " not found";
+            continue;
+        }
+        const auto &peer_info = peer_info_opt->get();
+        if (peer_info.peer_group != peer_group || peer_info.connection_phase != PEER_ACCEPTED) {
+            continue;
+        }
+        if (peer_info.connection_state == VOTE_COMPLETE_SHARED_STATE_SYNC) {
+            any_waiting = true;
+            break;
+        }
+    }
+    if (!any_waiting) {
+        LOG(DEBUG) <<
+                "No clients waiting for shared state sync completion, skipping checkSyncSharedStateCompleteConsensus(). This should only happen on client disconnect.";
+        return;
+    }
     // check if all clients have voted to distribute shared state complete
     if (server_state.syncSharedStateCompleteConsensus(peer_group)) {
         if (!server_state.endSharedStateSyncPhase(peer_group)) [[unlikely]] {
