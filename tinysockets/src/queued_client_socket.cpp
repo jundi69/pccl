@@ -151,15 +151,13 @@ bool tinysockets::QueuedSocket::interrupt() {
     if (!running) {
         return false;
     }
+    std::lock_guard lock(internal_state->mutex); // lock while setting running to false
     running = false;
     closesocket(socket_fd);
     socket_fd = 0;
 
     // Notify all waiting threads to wake up and handle interruption
-    {
-        std::lock_guard lock(internal_state->mutex);
-        internal_state->cond_var.notify_all();
-    }
+    internal_state->cond_var.notify_all();
     return true;
 }
 
