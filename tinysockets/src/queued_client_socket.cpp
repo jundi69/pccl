@@ -2,10 +2,9 @@
 #include <win_sock_bridge.h>
 
 #include "tinysockets.hpp"
-#include "SPSCQueue.h"
 #include <cstring> // for std::strerror
-#include <mutex>
 #include <condition_variable>
+#include <shared_mutex>
 
 static bool configure_socket_fd(const int socket_fd) {
     constexpr int opt = 1;
@@ -36,11 +35,11 @@ namespace tinysockets {
     };
 
     struct QueuedSocketInternalState {
-        rigtorp::SPSCQueue<ReceivedPacket> recv_queue;
-        mutable std::mutex mutex; // Protects condition variable and access coordination
+        std::vector<ReceivedPacket> recv_queue;
+        std::mutex mutex; // Protects condition variable and access coordination
         std::condition_variable cond_var;
 
-        QueuedSocketInternalState() : recv_queue(1024) {
+        QueuedSocketInternalState() : recv_queue() {
         }
     };
 }
@@ -118,13 +117,18 @@ bool tinysockets::QueuedSocket::run() {
                 }
                 return;
             }
-            ReceivedPacket packet{std::move(data_ptr), data};
-            internal_state->recv_queue.push(std::move(packet));
 
-            // Notify one waiting thread that a new packet is available
+            // Enqueue the received packet & notify waiting threads.
+            // We lock the mutex during .push() because there is only one producer thread (this one).
+            // Predicate-less consumers will use the thread safety of the MPMCQueue to access the queue.
+            // Consumers with predicates will lock the mutex to access the queue to iterate over the elements
+            // to check for a match.
+            // For this to work, we have to ensure that no other thread is pushing to the queue while this is happening.
             {
+                ReceivedPacket packet{std::move(data_ptr), data};
                 std::lock_guard lock(internal_state->mutex);
-                internal_state->cond_var.notify_one();
+                internal_state->recv_queue.push_back(std::move(packet));
+                internal_state->cond_var.notify_all();
             }
         }
 
@@ -364,29 +368,25 @@ tinysockets::QueuedSocket::pollNextPacketBuffer(const bool no_wait) const {
     if (!running) {
         return std::nullopt;
     }
-    auto &packet_queue = internal_state->recv_queue;
-
     std::unique_lock lock(internal_state->mutex);
-    if (no_wait) {
-        if (packet_queue.empty()) {
+    while (internal_state->recv_queue.empty()) {
+        if (no_wait) {
             return std::nullopt;
         }
-    } else {
-        internal_state->cond_var.wait(lock, [this]() { return !internal_state->recv_queue.empty() || !running; });
-        if (packet_queue.empty()) {
-            return std::nullopt;
-        }
+        internal_state->cond_var.wait(lock);
     }
 
-    if (packet_queue.empty()) {
-        return std::nullopt;
-    }
+    auto &packet_queue = internal_state->recv_queue;
+    auto &packet = packet_queue.front();
 
-    ReceivedPacket *packet = packet_queue.front();
-    std::span<uint8_t> data = packet->data;
-    std::unique_ptr<uint8_t[]> data_ptr = std::move(packet->data_ptr);
-    packet_queue.pop();
-    return std::make_pair(std::move(data_ptr), data);
+    std::span<uint8_t> data = packet.data;
+    std::unique_ptr<uint8_t[]> data_ptr = std::move(packet.data_ptr);
+
+    auto moved_ptr = std::move(data_ptr);
+
+    packet_queue.erase(packet_queue.begin()); // pop the packet from the queue
+
+    return std::make_pair(std::move(moved_ptr), data);
 }
 
 std::optional<std::pair<std::unique_ptr<uint8_t[]>, std::span<uint8_t> > >
@@ -396,53 +396,45 @@ tinysockets::QueuedSocket::pollNextMatchingPacketBuffer(const ccoip::packetId_t 
     if (!running) {
         return std::nullopt;
     }
-    auto &packet_queue = internal_state->recv_queue;
 
     std::unique_lock lock(internal_state->mutex);
+    auto &packet_queue = internal_state->recv_queue;
 
+    size_t idx = 0;
     while (true) {
-        if (packet_queue.empty()) {
+        if (idx >= packet_queue.size()) {
             if (no_wait) {
                 return std::nullopt;
             }
-            internal_state->cond_var.wait(lock, [this]() { return !internal_state->recv_queue.empty() || !running; });
-            if (packet_queue.empty()) {
-                return std::nullopt;
-            }
-        }
-
-        if (packet_queue.empty()) {
-            if (no_wait) {
-                return std::nullopt;
-            }
+            idx = 0; // reset index, as .wait() unlocks internal_state->mutex, where recv_queue can be modified again
+            internal_state->cond_var.wait(lock);
             continue;
         }
+        auto &packet = packet_queue[idx];
 
-        ReceivedPacket *packet = packet_queue.front();
-        std::span<uint8_t> data = packet->data;
+        std::span<uint8_t> data = packet.data;
 
         if (data.size_bytes() < sizeof(ccoip::packetId_t)) {
             LOG(FATAL) << "Received packet with insufficient length";
-            packet_queue.pop();
+            idx++;
             continue;
         }
 
         PacketReadBuffer buffer{data.data(), data.size()};
 
         if (const auto received_packet_id = buffer.read<ccoip::packetId_t>(); packet_id != received_packet_id) {
-            packet_queue.pop();
+            // Predicate did not match, continue to next packet
+            idx++;
             continue;
         }
 
         if (predicate(data)) {
-            std::unique_ptr<uint8_t[]> data_ptr = std::move(packet->data_ptr);
-            packet_queue.pop();
+            std::unique_ptr<uint8_t[]> data_ptr = std::move(packet.data_ptr);
+            packet_queue.erase(packet_queue.begin() + idx);
             return std::make_pair(std::move(data_ptr), data);
         }
 
-        // If predicate does not match, continue waiting
-        if (no_wait) {
-            return std::nullopt;
-        }
+        // Predicate did not match, continue to next packet
+        idx++;
     }
 }
