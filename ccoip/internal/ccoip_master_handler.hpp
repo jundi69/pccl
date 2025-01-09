@@ -76,6 +76,8 @@ namespace ccoip {
         void handleCollectiveCommsInitiate(const ccoip_socket_address_t &client_address,
                                            const C2MPacketCollectiveCommsInitiate &packet);
 
+        void sendCollectiveCommsAbortPackets(uint32_t peer_group, uint64_t tag, bool aborted);
+
         void handleCollectiveCommsComplete(const ccoip_socket_address_t &client_address,
                                            const C2MPacketCollectiveCommsComplete &packet);
 

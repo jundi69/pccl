@@ -139,7 +139,6 @@ namespace ccoip {
         ConnectionPhase connection_phase = PEER_REGISTERED;
         ConnectionState connection_state = IDLE;
         std::unordered_map<uint64_t, CollectiveCommunicationState> collective_coms_states{};
-        std::unordered_map<uint64_t, bool> collective_coms_failure_states{};
 
         ccoip_socket_address_t socket_address{};
         CCoIPClientVariablePorts variable_ports{};
@@ -246,6 +245,11 @@ namespace ccoip {
         std::unordered_map<uint32_t, std::unordered_map<ccoip_uuid_t, std::vector<std::string> > >
         shared_state_dirty_keys{};
 
+        /// Boolean state for each collective communications operation tag in every peer group that indicates if the operation has been aborted or not.
+        /// true = aborted
+        /// false = not aborted
+        std::unordered_map<uint32_t, std::unordered_map<uint64_t, bool> > collective_comms_op_abort_states{};
+
     public:
         /// Registers a client
         [[nodiscard]] auto registerClient(const ccoip_socket_address_t &client_address,
@@ -285,10 +289,8 @@ namespace ccoip {
         /// Called when a client votes to complete a collective communications operation with a particular tag.
         /// @param peer_uuid the uuid of the client that is completing the collective communications operation. The peer group of said client determines what peers will participate in the collective communications operation.
         /// @param tag the tag associated with the collective communications operation.
-        /// @param was_aborted whether the collective communications operation was aborted. Any failure reported from any peer will result in the collective communications operation being considered aborted.
-        /// All clients must vote to complete a collective communications operation before the operation can end
-        /// EXCEPT when @code was_aborted@endcode is true, in which case only one client is required to end the operation.
-        [[nodiscard]] bool voteCollectiveCommsComplete(const ccoip_uuid_t &peer_uuid, uint64_t tag, bool was_aborted);
+        /// All clients must vote to complete a collective communications operation before the operation can end.
+        [[nodiscard]] bool voteCollectiveCommsComplete(const ccoip_uuid_t &peer_uuid, uint64_t tag);
 
         /// Returns true if all peers of the peer group have voted to synchronize the shared state
         /// All clients here shall mean the subset of clients that are in the @code PEER_ACCEPTED@endcode phase.
@@ -346,8 +348,21 @@ namespace ccoip {
 
         /// Transition all clients of the given peer group to the phase of completing the collective communications operation with the given tag.
         /// Returns false if the client is not in the @code COLLECTIVE_COMMUNICATIONS_RUNNING@endcode state or if
-        /// not in the @code VOTE_COMPLETE_COLLECTIVE_COMMS@endcode (or @code PERFORM_COLLECTIVE_COMMS@endcode if the operation was marked aborted by any client) state for the specified tag.
+        /// not in the @code VOTE_COMPLETE_COLLECTIVE_COMMS@endcode state for the specified tag.
         [[nodiscard]] bool transitionToCollectiveCommsCompletePhase(uint32_t peer_group, uint64_t tag);
+
+        /// Aborts the specified collective communications operation with the given tag for the given peer group.
+        /// Only legal to call when all clients are in the @code COLLECTIVE_COMMUNICATIONS_RUNNING@endcode state.
+        /// Abort of a collective communications operation represents separate state from the current state that being @code COLLECTIVE_COMMUNICATIONS_RUNNING@endcode.
+        /// Even when collective communications operations are aborted, clients will remain in the @code COLLECTIVE_COMMUNICATIONS_RUNNING@endcode state
+        /// and vote to complete the collective communications operation once the abort signal was handled and the collective communications operation thus "completes" as per the protocol.
+        /// Returns true if the collective communications operation was not in the abort state before this call.
+        /// Returns false if the collective communications operation was already aborted by a previous call to this function.
+        /// This state is accessible via @code isCollectiveCommsOperationAborted@endcode.
+        [[nodiscard]] bool abortCollectiveCommsOperation(uint32_t peer_group, uint64_t tag);
+
+        /// Returns true if the specified collective communications operation with the given tag for the given peer group has been aborted.
+        [[nodiscard]] bool isCollectiveCommsOperationAborted(uint32_t peer_group, uint64_t tag) const;
 
         /// @returns SharedStateMismatchStatus::SUCCESSFUL_MATCH if the specified revision is legal as the next
         /// shared state revision for the given peer group.

@@ -315,6 +315,7 @@ namespace tinysockets {
         [[nodiscard]] bool receivePacketData(std::span<std::uint8_t> &dst) const;
 
         [[nodiscard]] std::optional<std::pair<std::unique_ptr<uint8_t[]>, std::span<uint8_t> > > pollNextPacketBuffer(
+            ccoip::packetId_t packet_id,
             bool no_wait) const;
 
         [[nodiscard]] std::optional<std::pair<std::unique_ptr<uint8_t[]>, std::span<uint8_t> > >
@@ -324,7 +325,7 @@ namespace tinysockets {
 
         template<typename T> requires std::is_base_of_v<ccoip::Packet, T>
         [[nodiscard]] std::optional<T> pollNextPacket(const ccoip::packetId_t packet_id, const bool no_wait) {
-            const auto pair = pollNextPacketBuffer(no_wait);
+            const auto pair = pollNextPacketBuffer(packet_id, no_wait);
             if (!pair) {
                 return std::nullopt;
             }

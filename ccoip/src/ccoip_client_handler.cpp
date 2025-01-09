@@ -550,6 +550,28 @@ bool ccoip::CCoIPClientHandler::allReduceAsync(const void *sendbuff, void *recvb
     if (!client_state.launchAsyncCollectiveOp(
         tag, [this, sendbuff, recvbuff, count, datatype, op, tag](std::promise<bool> &promise) {
             LOG(DEBUG) << "Vote to commence all reduce operation with tag " << tag;
+
+            bool abort_packet_received = false;
+            bool aborted = false;
+
+            const auto receiveReduceTerm = [this, tag, &abort_packet_received, &aborted
+                    ](tinysockets::BlockingIOSocket &socket) -> std::optional<P2PPacketReduceTerm> {
+                while (true) {
+                    if (auto term_packet = socket.receivePacket<P2PPacketReduceTerm>(true)) {
+                        return term_packet;
+                    }
+                    auto abort_packet = master_socket.receiveMatchingPacket<M2CPacketCollectiveCommsAbort>(
+                        [tag](const M2CPacketCollectiveCommsAbort &packet) {
+                            return packet.tag == tag;
+                        }, true);
+                    if (abort_packet) {
+                        abort_packet_received = true;
+                        aborted = abort_packet->aborted;
+                        return std::nullopt;
+                    }
+                    std::this_thread::yield();
+                }
+            };
             const auto reduce_fun = [&] {
                 // vote commence collective comms operation and await consensus
                 {
@@ -561,6 +583,12 @@ bool ccoip::CCoIPClientHandler::allReduceAsync(const void *sendbuff, void *recvb
                     if (!master_socket.sendPacket<C2MPacketCollectiveCommsInitiate>(initiate_packet)) {
                         return false;
                     }
+
+                    // As long as we do not expect packets of types here that the main thread also expects and claims for normal operation
+                    // (such as commencing other concurrent collective comms operations), we can safely use receiveMatchingPacket packet here
+                    // to receive packets from the master socket.
+                    // Given that M2CPacketCollectiveCommsCommence is only expected in this context, we will never "steal" anyone else's packet
+                    // nor will the main thread steal our packet.
                     const auto response = master_socket.receiveMatchingPacket<M2CPacketCollectiveCommsCommence>(
                         [tag](const M2CPacketCollectiveCommsCommence &packet) {
                             return packet.tag == tag;
@@ -623,7 +651,7 @@ bool ccoip::CCoIPClientHandler::allReduceAsync(const void *sendbuff, void *recvb
                         return false;
                     }
                     auto &prev_peer_socket = prev_peer_socket_opt->second;
-                    const auto rx_packet = prev_peer_socket->receivePacket<P2PPacketReduceTerm>();
+                    const auto rx_packet = receiveReduceTerm(*prev_peer_socket);
                     if (!rx_packet) {
                         LOG(ERR) << "Failed to receive reduce term from previous peer " << uuid_to_string(prev_peer);
                         return false;
@@ -687,7 +715,7 @@ bool ccoip::CCoIPClientHandler::allReduceAsync(const void *sendbuff, void *recvb
                         return false;
                     }
                     auto &final_peer_socket = final_peer_socket_opt->second;
-                    const auto final_rx_packet = final_peer_socket->receivePacket<P2PPacketReduceTerm>();
+                    const auto final_rx_packet = receiveReduceTerm(*final_peer_socket);
                     if (!final_rx_packet) {
                         LOG(ERR) << "Failed to receive reduce term from final peer " << uuid_to_string(final_peer);
                         return false;
@@ -705,18 +733,33 @@ bool ccoip::CCoIPClientHandler::allReduceAsync(const void *sendbuff, void *recvb
                 C2MPacketCollectiveCommsComplete complete_packet{};
                 complete_packet.tag = tag;
                 complete_packet.was_aborted = success == false;
+
                 if (!master_socket.sendPacket<C2MPacketCollectiveCommsComplete>(complete_packet)) {
                     return false;
                 }
-                const auto response = master_socket.receiveMatchingPacket<M2CPacketCollectiveCommsComplete>(
+
+                if (!abort_packet_received) {
+                    const auto abort_response = master_socket.receiveMatchingPacket<M2CPacketCollectiveCommsAbort>(
+                        [tag](const M2CPacketCollectiveCommsAbort &packet) {
+                            return packet.tag == tag;
+                        });
+                    if (!abort_response) {
+                        return false;
+                    }
+                    aborted = abort_response->aborted;
+                }
+
+                const auto complete_response = master_socket.receiveMatchingPacket<M2CPacketCollectiveCommsComplete>(
                     [tag](const M2CPacketCollectiveCommsComplete &packet) {
                         return packet.tag == tag;
                     });
 
-                if (!response) {
+                if (!complete_response) {
                     return false;
                 }
-                if (response->was_aborted) {
+                if (aborted) {
+                    // abort=true is considered a failure, where the user must re-issue
+                    // the collective comms operation to try again, if so desired.
                     return false;
                 }
                 return true;

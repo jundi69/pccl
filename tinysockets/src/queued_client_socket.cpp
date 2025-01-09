@@ -370,29 +370,47 @@ bool tinysockets::QueuedSocket::sendLtvPacket(ccoip::packetId_t packet_id, const
 }
 
 std::optional<std::pair<std::unique_ptr<uint8_t[]>, std::span<uint8_t> > >
-tinysockets::QueuedSocket::pollNextPacketBuffer(const bool no_wait) const {
+tinysockets::QueuedSocket::pollNextPacketBuffer(const ccoip::packetId_t packet_id, const bool no_wait) const {
     if (!running) {
         return std::nullopt;
     }
+
     std::unique_lock lock(internal_state->mutex);
-    while (internal_state->recv_queue.empty()) {
-        if (no_wait || !running) {
-            return std::nullopt;
-        }
-        internal_state->cond_var.wait(lock);
-    }
-
     auto &packet_queue = internal_state->recv_queue;
-    auto &packet = packet_queue.front();
 
-    std::span<uint8_t> data = packet.data;
-    std::unique_ptr<uint8_t[]> data_ptr = std::move(packet.data_ptr);
+    size_t idx = 0;
+    while (true) {
+        if (idx >= packet_queue.size()) {
+            if (no_wait || !running) {
+                return std::nullopt;
+            }
+            idx = 0; // reset index, as .wait() unlocks internal_state->mutex, where recv_queue can be modified again
+            internal_state->cond_var.wait(lock);
+            continue;
+        }
+        auto &packet = packet_queue[idx];
 
-    auto moved_ptr = std::move(data_ptr);
+        std::span<uint8_t> data = packet.data;
 
-    packet_queue.erase(packet_queue.begin()); // pop the packet from the queue
+        if (data.size_bytes() < sizeof(ccoip::packetId_t)) {
+            LOG(FATAL) << "Received packet with insufficient length";
+            idx++;
+            continue;
+        }
 
-    return std::make_pair(std::move(moved_ptr), data);
+        PacketReadBuffer buffer{data.data(), data.size()};
+
+        if (const auto received_packet_id = buffer.read<ccoip::packetId_t>(); packet_id != received_packet_id) {
+            // Predicate did not match, continue to next packet
+            idx++;
+            continue;
+        }
+
+        // Predicate matched, return the packet and remove it from the queue
+        std::unique_ptr<uint8_t[]> data_ptr = std::move(packet.data_ptr);
+        packet_queue.erase(packet_queue.begin() + idx);
+        return std::make_pair(std::move(data_ptr), data);
+    }
 }
 
 std::optional<std::pair<std::unique_ptr<uint8_t[]>, std::span<uint8_t> > >

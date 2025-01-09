@@ -223,10 +223,11 @@ std::optional<size_t> tinysockets::BlockingIOSocket::receivePacketLength(const b
 #endif
 
         if (no_wait) {
-            if (i == -1 || i == 0) {
-                if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                    return std::nullopt;
-                }
+            if (i == -1) {
+                return std::nullopt;
+            }
+            if (i == 0) {
+                continue; // no data available, but repeat the loop to see if next call fails with EAGAIN/EWOULDBLOCK
             }
         }
         if (i == -1 || i == 0) {
