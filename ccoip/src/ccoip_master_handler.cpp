@@ -323,10 +323,11 @@ bool ccoip::CCoIPMasterHandler::checkSyncSharedStateConsensus(const uint32_t pee
             if (*status_opt == CCoIPMasterState::KEY_SET_MISMATCH) {
                 LOG(WARN) << "Kicking client " << ccoip_sockaddr_to_str(peer_address) <<
                         " due to shared state mismatch";
-                if (!kickClient(peer_address)) {
+                if (!kickClient(peer_address)) [[unlikely]] {
                     LOG(ERR) << "Failed to kick client " << ccoip_sockaddr_to_str(peer_address);
+                    return false;
                 }
-                return false;
+                return true; // this is not a failure case; we have kicked a client and should recover
             }
         }
 
@@ -573,7 +574,10 @@ void ccoip::CCoIPMasterHandler::handleP2PConnectionsEstablished(const ccoip_sock
         return;
     }
 
-    checkP2PConnectionsEstablished();
+    if (!checkP2PConnectionsEstablished()) {
+        LOG(BUG) << "checkP2PConnectionsEstablished() failed for " << ccoip_sockaddr_to_str(client_address) <<
+                " when handling a p2p connection established packet. This should never happen!";
+    }
 }
 
 void ccoip::CCoIPMasterHandler::handleGetTopologyRequest(const ccoip_socket_address_t &client_address,
