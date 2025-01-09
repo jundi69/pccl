@@ -101,6 +101,7 @@ bool tinysockets::BlockingIOSocket::closeConnection() {
     if (socket_fd == 0) {
         return false;
     }
+    shutdown(socket_fd, SHUT_RDWR); // this is needed to ensure recv() unblock and return an error
     closesocket(socket_fd);
     socket_fd = 0;
     return true;
@@ -198,11 +199,36 @@ bool tinysockets::BlockingIOSocket::sendLtvPacket(const ccoip::packetId_t packet
     return true;
 }
 
-std::optional<size_t> tinysockets::BlockingIOSocket::receivePacketLength() const {
+std::optional<size_t> tinysockets::BlockingIOSocket::receivePacketLength(const bool no_wait) const {
     uint64_t length;
     size_t n_received = 0;
     do {
+#ifdef WIN32
+        // On Windows, MSG_DONTWAIT is not supported, so we have to use ioctlsocket to set the socket to non-blocking mode
+        u_long mode = 1;
+        if (ioctlsocket(socket_fd, FIONBIO, &mode) != NO_ERROR) {
+            LOG(ERR) << "Failed to set socket into non-blocking mode";
+            return std::nullopt;
+        }
         const ssize_t i = recvvp(socket_fd, &length, sizeof(length), 0);
+
+        // set socket back to blocking mode
+        mode = 0;
+        if (ioctlsocket(socket_fd, FIONBIO, &mode) != NO_ERROR) {
+            LOG(ERR) << "Failed to set socket back to blocking mode";
+            return std::nullopt;
+        }
+#else
+        const ssize_t i = recvvp(socket_fd, &length, sizeof(length), no_wait ? MSG_DONTWAIT : 0);
+#endif
+
+        if (no_wait) {
+            if (i == -1 || i == 0) {
+                if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                    return std::nullopt;
+                }
+            }
+        }
         if (i == -1 || i == 0) {
             std::string error_message = std::strerror(errno);
             if (!isOpen()) {
