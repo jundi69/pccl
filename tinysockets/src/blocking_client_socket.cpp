@@ -203,25 +203,53 @@ std::optional<size_t> tinysockets::BlockingIOSocket::receivePacketLength(const b
     uint64_t length;
     size_t n_received = 0;
     do {
+        ssize_t i = 0;
+        if (no_wait) {
 #ifdef WIN32
-        // On Windows, MSG_DONTWAIT is not supported, so we have to use ioctlsocket to set the socket to non-blocking mode
-        u_long mode = 1;
-        if (ioctlsocket(socket_fd, FIONBIO, &mode) != NO_ERROR) {
-            LOG(ERR) << "Failed to set socket into non-blocking mode";
-            return std::nullopt;
-        }
-        const ssize_t i = recvvp(socket_fd, &length, sizeof(length), 0);
+            // On Windows, MSG_DONTWAIT is not supported, so we have to use ioctlsocket to set the socket to non-blocking mode
+            u_long mode = 1;
+            if (ioctlsocket(socket_fd, FIONBIO, &mode) != NO_ERROR) {
+                LOG(ERR) << "Failed to set socket into non-blocking mode";
+                return std::nullopt;
+            }
+            i = recvvp(socket_fd, &length, sizeof(length), 0);
 
-        // set socket back to blocking mode
-        mode = 0;
-        if (ioctlsocket(socket_fd, FIONBIO, &mode) != NO_ERROR) {
-            LOG(ERR) << "Failed to set socket back to blocking mode";
-            return std::nullopt;
-        }
+            // set socket back to blocking mode
+            mode = 0;
+            if (ioctlsocket(socket_fd, FIONBIO, &mode) != NO_ERROR) {
+                LOG(ERR) << "Failed to set socket back to blocking mode";
+                return std::nullopt;
+            }
+#elif __APPLE__
+            // MacOS does not support MSG_DONTWAIT, so we have to use ioctl to set the socket to non-blocking mode
+            int flags = fcntl(socket_fd, F_GETFL, 0);
+            if (flags == -1) {
+                LOG(ERR) << "Failed to get socket flags";
+                return std::nullopt;
+            }
+            // set to non-blocking mode
+            flags |= O_NONBLOCK;
+            if (fcntl(socket_fd, F_SETFL, flags) == -1) {
+                LOG(ERR) << "Failed to set socket into non-blocking mode";
+                return std::nullopt;
+            }
+
+            // perform the non-blocking recv
+            i = recvvp(socket_fd, &length, sizeof(length), 0);
+
+            // set back to blocking mode
+            flags &= ~O_NONBLOCK;
+            if (fcntl(socket_fd, F_SETFL, flags) == -1) {
+                LOG(ERR) << "Failed to set socket back to blocking mode";
+                return std::nullopt;
+            }
 #else
-        const ssize_t i = recvvp(socket_fd, &length, sizeof(length), no_wait ? MSG_DONTWAIT : 0);
+            // Linux, FreeBSD and other Unix-like systems support MSG_DONTWAIT
+            i = recvvp(socket_fd, &length, sizeof(length), MSG_DONTWAIT);
 #endif
-
+        } else {
+            i = recvvp(socket_fd, &length, sizeof(length), 0);
+        }
         if (no_wait) {
             if (i == -1) {
                 return std::nullopt;

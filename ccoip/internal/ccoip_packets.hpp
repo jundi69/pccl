@@ -234,6 +234,7 @@ namespace ccoip {
         static packetId_t packet_id;
 
         uint64_t tag;
+        bool require_topology_update;
 
         void serialize(PacketWriteBuffer &buffer) const override;
 

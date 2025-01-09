@@ -554,10 +554,13 @@ bool ccoip::CCoIPClientHandler::allReduceAsync(const void *sendbuff, void *recvb
             bool abort_packet_received = false;
             bool aborted = false;
 
-            const auto receiveReduceTerm = [this, tag, &abort_packet_received, &aborted
-                    ](tinysockets::BlockingIOSocket &socket) -> std::optional<P2PPacketReduceTerm> {
+            const auto receiveReduceTerm = [this, tag, &abort_packet_received, &aborted]
+            (tinysockets::BlockingIOSocket &p2p_rx_socket) -> std::optional<P2PPacketReduceTerm> {
                 while (true) {
-                    if (auto term_packet = socket.receivePacket<P2PPacketReduceTerm>(true)) {
+                    if (!p2p_rx_socket.isOpen()) {
+                        return std::nullopt;
+                    }
+                    if (auto term_packet = p2p_rx_socket.receivePacket<P2PPacketReduceTerm>(true)) {
                         return term_packet;
                     }
                     auto abort_packet = master_socket.receiveMatchingPacket<M2CPacketCollectiveCommsAbort>(
@@ -599,6 +602,12 @@ bool ccoip::CCoIPClientHandler::allReduceAsync(const void *sendbuff, void *recvb
                     }
                     LOG(DEBUG) << "Received M2CPacketCollectiveCommsCommence for tag " << tag <<
                             "; Collective communications consensus reached";
+                    if (response->require_topology_update) {
+                        if (!updateTopology()) {
+                            LOG(ERR) <<
+                                    "Failed to update topology after collective comms commence indicated dirty topology";
+                        }
+                    }
                 }
 
                 // TODO: THIS IS SUBJECT TO CHANGE AND FOR NOW IS A HARDCODED UNOPTIMIZED NON-PIPELINED RING REDUCE.
@@ -737,6 +746,7 @@ bool ccoip::CCoIPClientHandler::allReduceAsync(const void *sendbuff, void *recvb
                 if (!master_socket.sendPacket<C2MPacketCollectiveCommsComplete>(complete_packet)) {
                     return false;
                 }
+                LOG(DEBUG) << "Sent C2MPacketCollectiveCommsComplete for tag " << tag;
 
                 if (!abort_packet_received) {
                     const auto abort_response = master_socket.receiveMatchingPacket<M2CPacketCollectiveCommsAbort>(
@@ -760,6 +770,9 @@ bool ccoip::CCoIPClientHandler::allReduceAsync(const void *sendbuff, void *recvb
                 if (aborted) {
                     // abort=true is considered a failure, where the user must re-issue
                     // the collective comms operation to try again, if so desired.
+                    if (!updateTopology()) {
+                        LOG(ERR) << "Failed to update topology after collective comms operation was aborted";
+                    }
                     return false;
                 }
                 return true;

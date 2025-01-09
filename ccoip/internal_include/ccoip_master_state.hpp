@@ -248,6 +248,7 @@ namespace ccoip {
         /// Boolean state for each collective communications operation tag in every peer group that indicates if the operation has been aborted or not.
         /// true = aborted
         /// false = not aborted
+        /// Cleared when the collective communications operation ends.
         std::unordered_map<uint32_t, std::unordered_map<uint64_t, bool> > collective_comms_op_abort_states{};
 
     public:

@@ -457,7 +457,8 @@ bool ccoip::CCoIPMasterHandler::checkSyncSharedStateCompleteConsensus(const uint
 }
 
 bool ccoip::CCoIPMasterHandler::checkCollectiveCommsInitiateConsensus(const uint32_t peer_group,
-                                                                      const uint64_t tag) {
+                                                                      const uint64_t tag,
+                                                                      bool topology_changed) {
     // check if all clients have voted to initiate the collective communications operation
     if (server_state.collectiveCommsInitiateConsensus(peer_group, tag)) {
         if (!server_state.transitionToPerformCollectiveCommsPhase(peer_group, tag)) {
@@ -494,6 +495,7 @@ bool ccoip::CCoIPMasterHandler::checkCollectiveCommsInitiateConsensus(const uint
             // send confirmation packet
             M2CPacketCollectiveCommsCommence confirm_packet{};
             confirm_packet.tag = tag;
+            confirm_packet.require_topology_update = topology_changed;
             if (!server_socket.sendPacket<M2CPacketCollectiveCommsCommence>(peer_address, confirm_packet)) {
                 LOG(ERR) << "Failed to send M2CPacketCollectiveCommsCommence to " <<
                         ccoip_sockaddr_to_str(peer_address);
@@ -774,7 +776,8 @@ void ccoip::CCoIPMasterHandler::handleCollectiveCommsInitiate(const ccoip_socket
         LOG(WARN) << "Client " << uuid_to_string(client_uuid) << " not found";
         return;
     }
-    if (const auto &info = info_opt->get(); !checkCollectiveCommsInitiateConsensus(info.peer_group, packet.tag)) {
+    if (const auto &info = info_opt->get(); !
+        checkCollectiveCommsInitiateConsensus(info.peer_group, packet.tag, false)) {
         LOG(BUG) << "checkCollectiveCommsInitiateConsensus() failed for " << ccoip_sockaddr_to_str(client_address) <<
                 " when handling collective comms initiate packet. This should never happen.";
     }
@@ -802,6 +805,8 @@ void ccoip::CCoIPMasterHandler::sendCollectiveCommsAbortPackets(const uint32_t p
         if (!server_socket.sendPacket<M2CPacketCollectiveCommsAbort>(peer_address, abort_packet)) {
             LOG(ERR) << "Failed to send M2CPacketCollectiveCommsAbort to " << ccoip_sockaddr_to_str(peer_address);
         }
+        LOG(DEBUG) << "Sent abort packet to " << ccoip_sockaddr_to_str(peer_address) << " with abort state: " <<
+                aborted;
     }
 }
 
@@ -899,7 +904,7 @@ void ccoip::CCoIPMasterHandler::onClientDisconnect(const ccoip_socket_address_t 
             LOG(INFO) <<
                     "checkCollectiveCommsCompleteConsensus() returned false; This likely means no clients are waiting for collective comms completion and is expected during disconnects.";
         }
-        if (!checkCollectiveCommsInitiateConsensus(client_info.peer_group, tag)) {
+        if (!checkCollectiveCommsInitiateConsensus(client_info.peer_group, tag, true)) {
             LOG(INFO) <<
                     "checkCollectiveCommsInitiateConsensus() returned false; This likely means no clients are waiting for collective comms initiation and is expected during disconnects.";
         }

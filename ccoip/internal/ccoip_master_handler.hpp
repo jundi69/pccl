@@ -44,7 +44,7 @@ namespace ccoip {
 
         [[nodiscard]] bool checkSyncSharedStateCompleteConsensus(uint32_t peer_group);
 
-        [[nodiscard]] bool checkCollectiveCommsInitiateConsensus(uint32_t peer_group, uint64_t tag);
+        [[nodiscard]] bool checkCollectiveCommsInitiateConsensus(uint32_t peer_group, uint64_t tag, bool topology_changed);
 
         [[nodiscard]] bool checkCollectiveCommsCompleteConsensus(uint32_t peer_group, uint64_t tag);
 

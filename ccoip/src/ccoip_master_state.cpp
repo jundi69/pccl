@@ -500,18 +500,18 @@ bool ccoip::CCoIPMasterState::transitionToCollectiveCommsCompletePhase(const uin
             info.connection_state = IDLE;
         }
     }
+    collective_comms_op_abort_states[peer_group].clear();
     return true;
 }
 
 bool ccoip::CCoIPMasterState::abortCollectiveCommsOperation(const uint32_t peer_group, const uint64_t tag) {
     auto &peer_group_map = collective_comms_op_abort_states[peer_group];
-    const auto it = peer_group_map.find(tag);
-    if (it == peer_group_map.end()) {
+    if (const auto it = peer_group_map.find(tag); it != peer_group_map.end()) {
         if (it->second) {
             return false;
         }
     }
-    it->second = true;
+    peer_group_map[tag] = true;
     return true;
 }
 
