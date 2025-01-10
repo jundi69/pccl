@@ -24,19 +24,7 @@ def main():
 
     # Create a communicator and connect to the master node
     communicator: Communicator = Communicator(HOST, 0)
-
-    n_attempts = 5
-    for attempt in range(n_attempts):
-        try:
-            communicator.connect()
-            break
-        except PCCLError as e:
-            logging.error(f"(RANK={RANK}) Failed to connect to the master node: {e}; (Attempt {attempt + 1}/{n_attempts})")
-
-            sleep(1)
-    else:
-        assert False, f"(RANK={RANK}) Failed to connect to the master node"
-    logging.info(f"(RANK={RANK}) Connected to the master node")
+    communicator.connect()
 
     world_size: int = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
 
