@@ -1,44 +1,63 @@
-# CCOIP Library
+# Prime Collective Communications Library (PCCL)
 
-CCOIP (Collective Communication Over IP) is a distributed communication library that provides efficient collective operations over IP networks. It supports both C++ and Python interfaces, making it suitable for various distributed computing applications including machine learning workloads.
+The Prime Collective Communications Library (PCCL) implements efficient and fault tolerant collective communications operations such as reductions over IP and provides shared state synchronization mechanisms to keep peers in sync and allow for the dynamic joining and leaving of peers at any point during training.
+PCCL implements a novel TCP based network protocol "Collective Communications over IP" (CCoIP). A specification for this protocol will be released upon stabilization of the feature set.
 
 ## Prerequisites
 
 - CMake (3.22.1 or higher)
-- C++ compiler with C++11 support
-- Python 3.x (for Python bindings)
-- libuv
-- Google Test (for running tests)
+- C++ compiler with C++20 support (MSVC 17+, gcc 11+ or clang 12+)
+- Python 3.12+ (if bindings are used)
 
-## Installation
+## Supported Operating Systems
+- Windows
+- macOS
+- Linux
 
-### Building from Source (C++)
+## Supported architectures
+PCCL aims to be compatible with all architectures. While specialized kernels exist to optimize crucial operations like CRC32 hashing and quantization, fallback to a generic implementation should always be possible.
+Feel free to create issues for architecture-induced compilation failures.
+
+### Explicitly supported are:
+- x86_64
+- aarch64 (incl. Apple Silicon)
+
+## Building
+
+### Building the native library & other targets
 
 ```bash
 git submodule update --init --recursive
 mkdir build
 cd build
-cmake ..
-make
+cmake -DCMAKE_BUILD_TYPE=Release ..
+cmake --build . --config Release --parallel
 ```
 
-### Installing Python Package
+### Installing the Python Package locally
 
 ```bash
 git submodule update --init --recursive
-pip install python/framework
+pip install ./python/framework
 ```
 
-## Project Structure
+### Recommended way to use the pccl native library
 
-- `ccoip/`: Core C++ library implementation
-  - `public_include/`: Public API headers
-  - `internal/`: Internal implementation details
-  - `src/`: Source files
-  - `tests/`: Unit and end-to-end tests
-- `python/`: Python bindings and examples
-  - `framework/`: Python package implementation
-  - `tests/`: Python tests including MNIST distributed training example
+The recommended way to use PCCL in a C/C++ project is to clone the PCCL repository and link against the pccl library in CMake:
+
+```bash
+git clone --recurse https://github.com/PrimeIntellect-ai/pccl.git
+```
+
+Then add the newly cloned repository as a subdirectory in your CMakeLists file:
+```cmake
+add_subdirectory(pccl)
+```
+
+Then link against the pccl library
+```cmake
+target_link_libraries(YourTarget PRIVATE pccl)
+```
 
 ## Testing
 
@@ -59,7 +78,7 @@ python -m pytest
 
 The library includes several examples:
 - Basic reduction operations
-- Distributed MNIST training using PyTorch DDP
+- DDP MNIST training example using Pytorch
 - Network peer acceptance tests
 
 For detailed examples, see:
@@ -68,8 +87,8 @@ For detailed examples, see:
 
 ## License
 
-TBD
+This project is licensed under the MIT License.
 
 ## Contributing
 
-TBD
+Contributions are welcome! Please submit issues and pull requests to help improve PCCL.
