@@ -1,4 +1,3 @@
 cffi
 ipaddress
 pycparser
-torch

@@ -4,7 +4,6 @@ from ipaddress import ip_address, IPv4Address, IPv6Address
 from enum import Enum
 from pccl._loader import load_native_module
 import logging
-from pccl._version import __version__
 import importlib
 
 class ModuleDummy:
@@ -12,7 +11,7 @@ class ModuleDummy:
         self.name = name
 
     def __getattr__(self, name: str):
-        raise RuntimeError(f"Module {self.name} is not available. Please install the module via pip")
+        raise RuntimeError(f"Module {self.name} is not available. Please install the module via pip if you want pccl to interoperate with it.")
 
 
 # check if torch is available
@@ -22,6 +21,13 @@ if importlib.util.find_spec('torch') is not None:
 else:
     # dummy that fails on first access
     torch = ModuleDummy('torch')
+
+# check if numpy is available
+if importlib.util.find_spec('numpy') is not None:
+    import numpy as np
+else:
+    # dummy that fails on first access
+    np = ModuleDummy('numpy')
 
 # To debug Python to C FFI calls:
 # $ cp examples/any.py tmp.py && gdb -ex r --args python3 tmp.py
@@ -100,10 +106,26 @@ class DataType(Enum):
         assert self in map, f'Unsupported DataType: {self}'
         return map[self]
 
+    def to_numpy_dtype(self):
+        """Converts a DataType to the corresponding Numpy dtype."""
+        dtype_map = {
+            DataType.UINT8: np.uint8,
+            DataType.INT8: np.int8,
+            DataType.UINT16: np.uint16,
+            DataType.UINT32: np.uint32,
+            DataType.INT32: np.int32,
+            DataType.UINT64: np.uint64,
+            DataType.INT64: np.int64,
+            DataType.FLOAT: np.float32,
+            DataType.DOUBLE: np.float64,
+        }
+        assert self in dtype_map, f'Unsupported DataType: {self}'
+        return dtype_map[self]
+
     @classmethod
     def from_torch_dtype(cls, dtype: torch.dtype):
         """Converts a PyTorch dtype to the corresponding DataType."""
-        map = {
+        dtype_map = {
             torch.uint8: DataType.UINT8,
             torch.int8: DataType.INT8,
             torch.uint16: DataType.UINT16,
@@ -114,8 +136,25 @@ class DataType(Enum):
             torch.float32: DataType.FLOAT,
             torch.float64: DataType.DOUBLE,
         }
-        assert dtype in map, f'Unsupported dtype: {dtype}'
-        return map[dtype]
+        assert dtype in dtype_map, f'Unsupported dtype: {dtype}'
+        return dtype_map[dtype]
+
+    @classmethod
+    def from_numpy_dtype(cls, dtype: np.dtype):
+        """Converts a Numpy dtype to the corresponding DataType."""
+        dtype_map = {
+            np.uint8: DataType.UINT8,
+            np.int8: DataType.INT8,
+            np.uint16: DataType.UINT16,
+            np.uint32: DataType.UINT32,
+            np.int32: DataType.INT32,
+            np.uint64: DataType.UINT64,
+            np.int64: DataType.INT64,
+            np.float32: DataType.FLOAT,
+            np.float64: DataType.DOUBLE,
+        }
+        assert dtype in dtype_map, f'Unsupported dtype: {dtype}'
+        return dtype_map[dtype]
 
 
 class TensorInfo:
@@ -134,6 +173,15 @@ class TensorInfo:
         numel: int = tensor.numel()
         data_ptr: int = tensor.data_ptr()
         dtype: DataType = DataType.from_torch_dtype(tensor.dtype)
+        return cls(name, data_ptr, numel=numel, dtype=dtype, allow_content_inequality=allow_content_inequality)
+
+    @classmethod
+    def from_numpy(cls, tensor: np.ndarray, name: str, *, allow_content_inequality: bool = False):
+        """Creates a TensorInfo from a Numpy tensor."""
+        assert tensor.flags['C_CONTIGUOUS'], 'Input tensor must be contiguous'
+        numel: int = tensor.size
+        data_ptr: int = tensor.ctypes.data
+        dtype: DataType = DataType.from_numpy_dtype(tensor.dtype)
         return cls(name, data_ptr, numel=numel, dtype=dtype, allow_content_inequality=allow_content_inequality)
 
 
