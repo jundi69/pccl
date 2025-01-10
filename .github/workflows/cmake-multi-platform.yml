@@ -24,16 +24,14 @@ jobs:
             os: ubuntu-latest
             c_compiler: gcc
             cpp_compiler: g++
-          - runs-on: [self-hosted, Linux]
-            os: ubuntu-latest
-            c_compiler: clang
-            cpp_compiler: clang++
+            build_type: Release
 
           # Windows configurations using GitHub-hosted runners
           - runs-on: windows-latest
             os: windows-latest
             c_compiler: cl
             cpp_compiler: cl
+            build_type: Release
 
     steps:
       - uses: actions/checkout@v4
