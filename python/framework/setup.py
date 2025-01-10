@@ -6,18 +6,22 @@ import multiprocessing
 from setuptools import setup, Extension
 from setuptools.command.build_ext import build_ext
 
-CMAKE_ROOT: str = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))  # Root directory of the CMake project
+CMAKE_ROOT: str = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), '..', '..'))  # Root directory of the CMake project
 NUM_JOBS: int = max(multiprocessing.cpu_count() - 1, 1)  # Use all but one core
+
 
 class BuildException(Exception):
     def __init__(self, message: str):
         self.message = message
         super().__init__(self.message)
 
+
 class CMakeBuildExtension(Extension):
     def __init__(self, name, root_dir: str = ''):
         super().__init__(name, sources=[])
         self.root_dir = os.path.abspath(root_dir)
+
 
 class CMakeBuildExecutor(build_ext):
     def initialize_options(self):
@@ -27,7 +31,8 @@ class CMakeBuildExecutor(build_ext):
         try:
             print(subprocess.check_output(['cmake', '--version']))
         except OSError:
-            raise BuildException('CMake must be installed to build the pccl binaries from source. Please install CMake and try again.')
+            raise BuildException(
+                'CMake must be installed to build the pccl binaries from source. Please install CMake and try again.')
         super().run()
         for ext in self.extensions:
             self.build_extension(ext)
@@ -123,6 +128,7 @@ class CMakeBuildExecutor(build_ext):
         print(' '.join(['cmake', '--build', '.'] + build_args))
         subprocess.check_call(['cmake', '--build', '.'] + build_args, cwd=self.build_temp)
 
+
 # Setup dependencies from requirements.txt
 lib_folder = os.path.dirname(os.path.realpath(__file__))
 requirement_path = os.path.join(lib_folder, 'requirements.txt')
@@ -139,9 +145,9 @@ else:
     package_data_files = ['libpccl.so']
 
 # Setup pccl package
+
 setup(
     name='pccl',
-    version='0.1.0',
     author='Michael Keiblinger <mike@primeintellect.ai>, Mario Sieg <mario@primeintellect.ai>',
     description='An IP-based collective communications library',
     long_description='An IP-based collective communications library',
