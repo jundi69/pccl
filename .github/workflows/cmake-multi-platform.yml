@@ -8,7 +8,7 @@ on:
 
 jobs:
   build:
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runs-on }}
     env:
       IS_CI: 1
       LSAN_OPTIONS: suppressions=${{ github.workspace }}/.github/workflows/lsan.supp
@@ -18,18 +18,20 @@ jobs:
       fail-fast: false
 
       matrix:
-        os: [ ubuntu-latest, windows-latest ]
-        build_type: [ RelWithDebInfo ]
         include:
-          # Linux configurations
-          - os: ubuntu-latest
+          # Linux configurations using self-hosted runners
+          - runs-on: [self-hosted, Linux]
+            os: ubuntu-latest
             c_compiler: gcc
             cpp_compiler: g++
-          - os: ubuntu-latest
+          - runs-on: [self-hosted, Linux]
+            os: ubuntu-latest
             c_compiler: clang
             cpp_compiler: clang++
-          # Windows configurations
-          - os: windows-latest
+
+          # Windows configurations using GitHub-hosted runners
+          - runs-on: windows-latest
+            os: windows-latest
             c_compiler: cl
             cpp_compiler: cl
 
