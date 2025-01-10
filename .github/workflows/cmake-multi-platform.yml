@@ -67,14 +67,14 @@ jobs:
 
       - name: Install Python wheel Win32
         if: runner.os == 'Windows'
-        run: ${{ github.workspace }}/venv/bin/pip3 install ${{ github.workspace }}/python/framework/dist/pccl-0.1.0-cp39-cp39-win_amd64.whl
+        run: ${{ github.workspace }}/venv/bin/pip install ${{ github.workspace }}/python/framework/dist/pccl-0.1.0-cp39-cp39-win_amd64.whl
 
       - name: Install Python wheel Unix
         if: runner.os == 'Linux'
-        run: ${{ github.workspace }}/venv/bin/pip3 install ${{ github.workspace }}/python/framework/dist/*.whl
+        run: ${{ github.workspace }}/venv/bin/pip install ${{ github.workspace }}/python/framework/dist/*.whl
 
       - name: Install Test dependencies
-        run: ${{ github.workspace }}/venv/bin/pip3 install pytest torchvision
+        run: ${{ github.workspace }}/venv/bin/pip install pytest torchvision
 
       - name: Python Unit Tests
         run: ${{ github.workspace }}/venv/bin/python -m pytest -s ${{ github.workspace }}/python/tests/unit_tests

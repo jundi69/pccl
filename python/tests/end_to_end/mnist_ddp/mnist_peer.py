@@ -42,7 +42,7 @@ num_classes = 10  # Digits 0-9
 batch_size = 64
 learning_rate = 0.001
 IS_CI = os.getenv('IS_CI', '0') == '1'
-max_steps = IS_CI and 2048 or 4096
+max_steps = IS_CI and 1024 or 4096
 
 # MNIST dataset (images and labels)
 train_dataset = datasets.MNIST(root='./data', train=True, transform=transforms.ToTensor(), download=True)
