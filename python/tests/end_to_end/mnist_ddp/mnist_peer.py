@@ -37,12 +37,12 @@ device = torch.device("cpu")
 # Define hyperparameters
 input_size = 28 * 28  # MNIST images are 28x28
 # hidden_sizes = [1024, 4096, 4096, 4096, 4096, 1024]
-hidden_sizes = [128]
+hidden_sizes = [256]
 num_classes = 10  # Digits 0-9
-batch_size = 64
+batch_size = 128
 learning_rate = 0.001
 IS_CI = os.getenv('IS_CI', '0') == '1'
-max_steps = IS_CI and 1024 or 4096
+max_steps = IS_CI and 512 or 2048
 
 # MNIST dataset (images and labels)
 train_dataset = datasets.MNIST(root='./data', train=True, transform=transforms.ToTensor(), download=True)
