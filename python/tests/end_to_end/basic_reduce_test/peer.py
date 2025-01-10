@@ -32,7 +32,7 @@ def main():
 
     n_performed_steps = 0
     while n_performed_steps < STEPS:
-        if world_size == 1:
+        if n_performed_steps > 0 or world_size == 1:
             logging.info(f"(RANK={RANK}, it={n_performed_steps}) update_topology()")
             communicator.update_topology()
         world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
