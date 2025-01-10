@@ -1,4 +1,4 @@
-from typing import Union
+from typing import Union, Optional, Tuple
 import time
 from ipaddress import ip_address, IPv4Address, IPv6Address
 from enum import Enum
@@ -188,7 +188,7 @@ class AsyncReduceHandle:
         self._handle = handle
         self._info: Optional[Tuple[bool, int, ReduceInfo]] = None
 
-    def wait(self) -> (bool, int, ReduceInfo):
+    def wait(self) -> Tuple[bool, int, ReduceInfo]:
         """Awaits the completion of an async reduce operation. Blocks until the operation is complete."""
 
         if self._info is not None:  # guard native await function because it will fail on the second invocation
