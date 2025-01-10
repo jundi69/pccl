@@ -1,11 +1,11 @@
-import torch
-
 from typing import Union
-
+import time
 from ipaddress import ip_address, IPv4Address, IPv6Address
 from enum import Enum
 from torch import Tensor
+import torch
 from pccl._loader import load_native_module
+import logging
 
 # To debug Python to C FFI calls:
 # $ cp examples/any.py tmp.py && gdb -ex r --args python3 tmp.py
@@ -256,12 +256,21 @@ class Communicator:
         assert filename and filename.endswith('.dot')
         PCCLError.check(C.pcclSaveReducePlan(self._comm[0], bytes(filename, 'utf-8')))
 
-    def connect(self):
+    def connect(self, n_attempts: int = 3):
         """
         Establishes a connection to a master node.
         This function must be called on a communicator for the communicator to be usable.
         """
-        PCCLError.check(C.pcclConnect(self._comm[0]))
+        for attempt in range(1, n_attempts + 1):
+            try:
+                PCCLError.check(C.pcclConnect(self._comm[0]))
+                logging.info(f"Connected to the master node")
+                break
+            except PCCLError as e:
+                logging.error(f"Failed to connect to the master node (Attempt {attempt}/{n_attempts}): {e}")
+                time.sleep(1)
+        else:
+            raise Exception("Failed to connect to the master node")
 
     def all_reduce(self, send: Tensor, recv: Tensor, *, op: ReduceOp, tag: int = 0) -> ReduceInfo:
         """Performs an all reduce operation on a communicator. Blocks until the all reduce is complete."""
