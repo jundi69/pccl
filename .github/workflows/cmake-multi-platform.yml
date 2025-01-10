@@ -20,7 +20,7 @@ jobs:
       matrix:
         include:
           # Linux configurations using self-hosted runners
-          - runs-on: [self-hosted, Linux]
+          - runs-on: [ self-hosted, Linux ]
             os: ubuntu-latest
             c_compiler: gcc
             cpp_compiler: g++
@@ -62,20 +62,23 @@ jobs:
       - name: Compile Python wheel
         run: cd ${{ github.workspace }}/python/framework && pip3 wheel --verbose -w dist .
 
+      - name: Create Python virtual environment
+        run: python3 -m venv ${{ github.workspace }}/venv
+
       - name: Install Python wheel Win32
         if: runner.os == 'Windows'
-        run: pip3 install ${{ github.workspace }}/python/framework/dist/pccl-0.1.0-cp39-cp39-win_amd64.whl
+        run: ${{ github.workspace }}/venv/bin/pip3 install ${{ github.workspace }}/python/framework/dist/pccl-0.1.0-cp39-cp39-win_amd64.whl
 
       - name: Install Python wheel Unix
         if: runner.os == 'Linux'
-        run: pip3 install ${{ github.workspace }}/python/framework/dist/*.whl
+        run: ${{ github.workspace }}/venv/bin/pip3 install ${{ github.workspace }}/python/framework/dist/*.whl
 
       - name: Install Test dependencies
-        run: pip3 install pytest torchvision
+        run: ${{ github.workspace }}/venv/bin/pip3 install pytest torchvision
 
       - name: Python Unit Tests
-        run: python -m pytest -s ${{ github.workspace }}/python/tests/unit_tests
+        run: ${{ github.workspace }}/venv/bin/python -m pytest -s ${{ github.workspace }}/python/tests/unit_tests
 
       - name: Python End-to-End Tests
         working-directory: ${{ github.workspace }}/python/tests/end_to_end/
-        run: python -m pytest -s -v ${{ github.workspace }}/python/tests/end_to_end
+        run: ${{ github.workspace }}/venv/bin/python -m pytest -s -v ${{ github.workspace }}/python/tests/end_to_end
