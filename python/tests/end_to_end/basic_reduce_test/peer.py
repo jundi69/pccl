@@ -25,8 +25,9 @@ def main():
     ])
 
     # Create a communicator and connect to the master node
-    communicator: Communicator = Communicator(HOST, 0)
-    communicator.connect()
+    communicator: Communicator = Communicator(HOST, 0
+    communicator.connect(n_attempts=15)
+    logging.info(f"(RANK={RANK}) Connected to the master node")
 
     world_size: int = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
 
