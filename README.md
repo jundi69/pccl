@@ -5,6 +5,7 @@ PCCL implements a novel TCP based network protocol "Collective Communications ov
 
 ## Prerequisites
 
+- Git
 - CMake (3.22.1 or higher)
 - C++ compiler with C++20 support (MSVC 17+, gcc 11+ or clang 12+)
 - Python 3.12+ (if bindings are used)
@@ -24,21 +25,56 @@ Feel free to create issues for architecture-induced compilation failures.
 
 ## Building
 
+### Installing prerequisites
+In this section we propose a method of installing the required prerequisites for building PCCL on Windows and macOS.
+
+#### Windows
+
+With the winget package manager installed & up-to-date from the Microsoft Store, you can install the prerequisites as follows:
+```bash
+winget install Microsoft.VisualStudio.2022.Community --silent --override "--wait --quiet --add ProductLang En-us --add Microsoft.VisualStudio.Workload.NativeDesktop --includeRecommended"
+winget install Git.Git --source winget
+winget install Kitware.CMake --source winget
+winget install Python.Python.3.12 --source winget # (if you want to use the Python bindings)
+```
+After installing these packages, make sure to refresh your PATH by restarting your explorer.exe in the Task Manager and opening a new Terminal launched by said explorer.
+
+#### macOS
+```bash
+xcode-select --install # if not already installed
+
+# install Homebrew package manager if not already installed
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+brew install git # if not already installed by xcode command line tools
+brew install cmake
+brew install python@3.12 # (if you want to use the Python bindings)
+```
+We recommend using python distributions from Homebrew to avoid conflicts with the system python
+and additionally because Homebrew python is built to allow attachment of debuggers, such as lldb and gdb
+to debug both python and native code end to end.
+
+#### Ubuntu
+```bash
+sudo apt update
+sudo apt install -y build-essential
+sudo apt install -y git
+sudo apt install -y cmake
+
+# (if you want to use the Python bindings)
+sudo apt install -y python3.12 python3.12-venv python3-pip
+```
+
 ### Building the native library & other targets
 
+To build all native targets, run the following commands valid for both Windows with PowerShell and Unix-like systems
+starting from the root directory of the repository:
 ```bash
 git submodule update --init --recursive
 mkdir build
 cd build
 cmake -DCMAKE_BUILD_TYPE=Release ..
 cmake --build . --config Release --parallel
-```
-
-### Installing the Python Package locally
-
-```bash
-git submodule update --init --recursive
-pip install ./python/framework
 ```
 
 ### Recommended way to use the pccl native library
@@ -59,19 +95,71 @@ Then link against the pccl library
 target_link_libraries(YourTarget PRIVATE pccl)
 ```
 
+### Installing the Python Package locally
+
+To install the Python package locally, starting from the root directory of the repository, run the following commands:
+
+```bash
+git submodule update --init --recursive # if not done already
+```
+
+#### Optionally create a virtual environment.
+NOTE: Sometimes this may even be REQUIRED on certain distributions when using system python
+
+```bash
+cd python
+python -m venv venv # on Linux, "python3"/"python3.12" may be required instead of "python"
+```
+
+To activate the virtual environment, depending on your operating system and shell, run one of the following commands:
+```ps1
+# on Windows with PowerShell
+.\venv\Scripts\Activate.ps1
+```
+NOTE: `Set-ExecutionPolicy -ExecutionPolicy AllSigned -Scope CurrentUser` and choosing `A` for "Always Run" may be required to run the script.
+
+```batch
+# on Windows with cmd
+.\venv\Scripts\activate.bat
+```
+```bash
+# on Unix-like systems
+source venv/bin/activate
+```
+
+Then build and install the package from source:
+```
+pip install framework/ # make sure not to forget the trailing slash
+```
+
+To test the installation, run the following command valid for both Windows with PowerShell and Unix-like systems:
+```bash
+python -c 'import pccl; print(pccl.__version__)'
+```
+
 ## Testing
 
 ### C++ Tests
+
+To run the C++ unit tests, starting from the root directory of the repository, run the following commands valid for both Windows with PowerShell and Unix-like systems:
 ```bash
 cd build
-ctest
+ctest --verbose --build-config Release --output-on-failure
 ```
 
 ### Python Tests
+To run the python unit and end-to-end tests, starting from the root directory of the repository, run the following commands:
 ```bash
 cd python/tests
 pip install -r requirements.txt
-python -m pytest
+
+# Run end to end tests
+cd end_to_end
+python -m pytest -s
+
+# Run unit tests
+cd ../unit_tests
+python -m pytest -s
 ```
 
 ## Examples

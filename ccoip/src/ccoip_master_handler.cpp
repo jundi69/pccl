@@ -887,25 +887,25 @@ void ccoip::CCoIPMasterHandler::onClientDisconnect(const ccoip_socket_address_t 
     // the consensus and send response packets as necessary.
     checkAcceptNewPeersConsensus();
     if (!checkP2PConnectionsEstablished()) {
-        LOG(INFO) <<
+        LOG(DEBUG) <<
                 "checkP2PConnectionsEstablished() returned false; This likely means no clients are waiting for other peers and is expected during disconnects.";
     }
     if (!checkSyncSharedStateConsensus(client_info.peer_group)) {
-        LOG(INFO) <<
+        LOG(DEBUG) <<
                 "checkSyncSharedStateConsensus() returned false; This likely means no clients are waiting for shared state sync and is expected during disconnects.";
     }
     if (!checkSyncSharedStateCompleteConsensus(client_info.peer_group)) {
-        LOG(INFO) <<
+        LOG(DEBUG) <<
                 "checkSyncSharedStateCompleteConsensus() returned false; This likely means no clients are waiting for shared state sync completion and is expected during disconnects.";
     }
 
     for (const auto &tag: server_state.getOngoingCollectiveComsOpTags(client_info.peer_group)) {
         if (!checkCollectiveCommsCompleteConsensus(client_info.peer_group, tag)) {
-            LOG(INFO) <<
+            LOG(DEBUG) <<
                     "checkCollectiveCommsCompleteConsensus() returned false; This likely means no clients are waiting for collective comms completion and is expected during disconnects.";
         }
         if (!checkCollectiveCommsInitiateConsensus(client_info.peer_group, tag, true)) {
-            LOG(INFO) <<
+            LOG(DEBUG) <<
                     "checkCollectiveCommsInitiateConsensus() returned false; This likely means no clients are waiting for collective comms initiation and is expected during disconnects.";
         }
     }
