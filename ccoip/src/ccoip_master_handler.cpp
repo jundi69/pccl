@@ -776,8 +776,8 @@ void ccoip::CCoIPMasterHandler::handleCollectiveCommsInitiate(const ccoip_socket
         LOG(WARN) << "Client " << uuid_to_string(client_uuid) << " not found";
         return;
     }
-    if (const auto &info = info_opt->get(); !
-        checkCollectiveCommsInitiateConsensus(info.peer_group, packet.tag, false)) {
+    if (const auto &info = info_opt->get();
+        !checkCollectiveCommsInitiateConsensus(info.peer_group, packet.tag, false)) {
         LOG(BUG) << "checkCollectiveCommsInitiateConsensus() failed for " << ccoip_sockaddr_to_str(client_address) <<
                 " when handling collective comms initiate packet. This should never happen.";
     }

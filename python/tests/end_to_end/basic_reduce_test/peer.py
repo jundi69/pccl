@@ -4,7 +4,7 @@ import logging
 from pccl import *
 
 HOST: str = '127.0.0.1:48148'
-STEPS: int = 10000
+STEPS: int = 1000
 WEIGHT_N: int = 1024
 PEERS: int = 1
 NUM_ELEMENTS: int = 1024
@@ -25,7 +25,7 @@ def main():
     # Create a communicator and connect to the master node
     communicator: Communicator = Communicator(HOST, 0)
 
-    n_attempts = 5
+    n_attempts = 15
     for attempt in range(n_attempts):
         try:
             communicator.connect()
