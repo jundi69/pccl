@@ -25,7 +25,7 @@ def main():
     ])
 
     # Create a communicator and connect to the master node
-    communicator: Communicator = Communicator(HOST, 0
+    communicator: Communicator = Communicator(HOST, 0)
     communicator.connect(n_attempts=15)
     logging.info(f"(RANK={RANK}) Connected to the master node")
 
