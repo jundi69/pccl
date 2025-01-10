@@ -256,9 +256,10 @@ class Communicator:
         assert filename and filename.endswith('.dot')
         PCCLError.check(C.pcclSaveReducePlan(self._comm[0], bytes(filename, 'utf-8')))
 
-    def connect(self, n_attempts: int = 3):
+    def connect(self, n_attempts: int = 5):
         """
         Establishes a connection to a master node.
+        Performs the specified number of attempts with a one second sleep interval.
         This function must be called on a communicator for the communicator to be usable.
         """
         for attempt in range(1, n_attempts + 1):
