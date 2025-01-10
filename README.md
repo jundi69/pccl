@@ -15,6 +15,7 @@ CCOIP (Collective Communication Over IP) is a distributed communication library 
 ### Building from Source (C++)
 
 ```bash
+git submodule update --init --recursive
 mkdir build
 cd build
 cmake ..
@@ -24,9 +25,8 @@ make
 ### Installing Python Package
 
 ```bash
-cd python/framework
-pip install -r requirements.txt
-./install_wheel_local.sh
+git submodule update --init --recursive
+pip install python/framework
 ```
 
 ## Project Structure
