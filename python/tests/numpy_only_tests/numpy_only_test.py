@@ -2,7 +2,10 @@ import importlib
 
 
 def get_module_by_name(module_name: str):
-    return importlib.import_module(module_name)
+    try:
+        return importlib.import_module(module_name)
+    except (ImportError, ModuleNotFoundError):
+        return None
 
 
 np = get_module_by_name("numpy")
