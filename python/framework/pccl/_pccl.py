@@ -353,9 +353,9 @@ class Communicator:
     def all_reduce(self, send: Union['torch.Tensor', 'np.ndarray'], recv: Union['torch.Tensor', 'np.ndarray'], *,
                    op: ReduceOp, tag: int = 0) -> ReduceInfo:
         """Performs an all reduce operation on a communicator. Blocks until the all reduce is complete."""
-        if isinstance(send, torch.Tensor) and isinstance(recv, torch.Tensor):
+        if not isinstance(torch, ModuleDummy) and isinstance(send, torch.Tensor) and isinstance(recv, torch.Tensor):
             return self._all_reduce_pt(send, recv, op=op, tag=tag)
-        elif isinstance(send, np.ndarray) and isinstance(recv, np.ndarray):
+        elif not isinstance(np, ModuleDummy) and isinstance(send, np.ndarray) and isinstance(recv, np.ndarray):
             return self._all_reduce_np(send, recv, op=op, tag=tag)
         else:
             raise ValueError(
