@@ -49,7 +49,7 @@ def main():
         grad: torch.Tensor = torch.rand(NUM_ELEMENTS, dtype=torch.float32)
         while True:
             logging.info(f"(RANK={RANK}, it={n_performed_steps}) all_reduce_async()")
-            handle = communicator.all_reduce_async(grad, weights, numel=NUM_ELEMENTS, op=ReduceOp.SUM)
+            handle = communicator.all_reduce_async(grad, weights, op=ReduceOp.SUM)
             is_success, status, info = handle.wait()
             assert is_success, f"All reduce failed with stats: {status}"
             assert info is not None

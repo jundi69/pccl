@@ -76,12 +76,27 @@ jobs:
         if: runner.os == 'Linux'
         run: pip install ${{ github.workspace }}/python/framework/dist/*.whl
 
-      - name: Install Test dependencies
-        run: pip install pytest torchvision
+      - name: Install Unit Test dependencies
+        run: pip install -r ${{ github.workspace }}/python/tests/unit_tests/requirements.txt
 
       - name: Python Unit Tests
         run: python -m pytest -s ${{ github.workspace }}/python/tests/unit_tests
 
+      - name: Install End-to-End Test dependencies
+        run: pip install -r ${{ github.workspace }}/python/tests/end_to_end/requirements.txt
+
       - name: Python End-to-End Tests
         working-directory: ${{ github.workspace }}/python/tests/end_to_end/
         run: python -m pytest -s -v ${{ github.workspace }}/python/tests/end_to_end
+
+      - name: Install Numpy-Only Test dependencies
+        run: pip install -r ${{ github.workspace }}/python/tests/numpy_only_tests/requirements.txt | pip uninstall -y torch
+
+      - name: Python Numpy-Only Tests
+        run: python -m pytest -s -v ${{ github.workspace }}/python/tests/numpy_only_tests
+
+      - name: Install Pytorch-Only Test dependencies
+        run: pip install -r ${{ github.workspace }}/python/tests/pytorch_only_tests/requirements.txt | pip uninstall -y numpy
+
+      - name: Python Pytorch-Only Tests
+        run: python -m pytest -s -v ${{ github.workspace }}/python/tests/pytorch_only_tests

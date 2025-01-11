@@ -179,7 +179,7 @@ def main():
 
             while True:
                 log_debug(f"(RANK={RANK}, it={i}) all_reduce_async()")
-                handle = communicator.all_reduce_async(grads, grads, numel=grads.numel(), op=ReduceOp.SUM)
+                handle = communicator.all_reduce_async(grads, grads, op=ReduceOp.SUM)
                 is_success, status, info = handle.wait()
                 if not is_success:
                     log_debug(f"(RANK={RANK}, it={i}) all_reduce_async() failed: {status}; retrying...")
