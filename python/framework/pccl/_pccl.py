@@ -16,7 +16,6 @@ class ModuleDummy:
 
 # check if torch is available
 if importlib.util.find_spec('torch') is not None:
-    from torch import Tensor
     import torch
 else:
     # dummy that fails on first access
@@ -123,7 +122,7 @@ class DataType(Enum):
         return dtype_map[self]
 
     @classmethod
-    def from_torch_dtype(cls, dtype: torch.dtype):
+    def from_torch_dtype(cls, dtype: 'torch.dtype'):
         """Converts a PyTorch dtype to the corresponding DataType."""
         dtype_map = {
             torch.uint8: DataType.UINT8,
@@ -140,7 +139,7 @@ class DataType(Enum):
         return dtype_map[dtype]
 
     @classmethod
-    def from_numpy_dtype(cls, dtype: np.dtype):
+    def from_numpy_dtype(cls, dtype: 'np.dtype'):
         """Converts a Numpy dtype to the corresponding DataType."""
         dtype_map = {
             np.uint8: DataType.UINT8,
@@ -166,7 +165,7 @@ class TensorInfo:
         self.allow_content_inequality = allow_content_inequality
 
     @classmethod
-    def from_torch(cls, tensor: Tensor, name: str, *, allow_content_inequality: bool = False):
+    def from_torch(cls, tensor: 'torch.Tensor', name: str, *, allow_content_inequality: bool = False):
         """Creates a TensorInfo from a PyTorch tensor."""
         assert tensor.is_contiguous(), 'Input tensor must be contiguous'
         assert tensor.device.type == 'cpu', 'Only CPU tensors are supported'
@@ -176,7 +175,7 @@ class TensorInfo:
         return cls(name, data_ptr, numel=numel, dtype=dtype, allow_content_inequality=allow_content_inequality)
 
     @classmethod
-    def from_numpy(cls, tensor: np.ndarray, name: str, *, allow_content_inequality: bool = False):
+    def from_numpy(cls, tensor: 'np.ndarray', name: str, *, allow_content_inequality: bool = False):
         """Creates a TensorInfo from a Numpy tensor."""
         assert tensor.flags['C_CONTIGUOUS'], 'Input tensor must be contiguous'
         numel: int = tensor.size
@@ -337,7 +336,7 @@ class Communicator:
         else:
             raise Exception("Failed to connect to the master node")
 
-    def all_reduce(self, send: Tensor, recv: Tensor, *, op: ReduceOp, tag: int = 0) -> ReduceInfo:
+    def all_reduce(self, send: 'torch.Tensor', recv: 'torch.Tensor', *, op: ReduceOp, tag: int = 0) -> ReduceInfo:
         """Performs an all reduce operation on a communicator. Blocks until the all reduce is complete."""
         assert send.is_contiguous(), 'Input tensor must be contiguous'
         assert recv.is_contiguous(), 'Output tensor must be contiguous'
@@ -352,7 +351,7 @@ class Communicator:
         PCCLError.check(C.pcclAllReduce(sendbuff, recvbuff, numel, dtype, op.value, tag, self._comm[0], info))
         return ReduceInfo(info.world_size, info.tx_bytes, info.rx_bytes)
 
-    def all_reduce_async(self, send: Tensor, recv: Tensor, *, numel: int, op: ReduceOp,
+    def all_reduce_async(self, send: 'torch.Tensor', recv: 'torch.Tensor', *, numel: int, op: ReduceOp,
                          tag: int = 0) -> AsyncReduceHandle:
         """Performs an all reduce operation on a communicator. Async version of all_reduce."""
         assert send.is_contiguous(), 'Input tensor must be contiguous'
