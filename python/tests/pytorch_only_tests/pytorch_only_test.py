@@ -8,7 +8,7 @@ def get_module_by_name(module_name: str):
     except (ImportError, ModuleNotFoundError):
         return None
 
-torch = get_module_by_name("torch")
+import torch
 assert get_module_by_name("numpy") is None, "numpy module should not be available for pytorch_only tests"
 
 import pccl

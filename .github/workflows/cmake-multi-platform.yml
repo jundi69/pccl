@@ -93,7 +93,7 @@ jobs:
 
       - name: Python Pytorch-Only Tests
         run: python -m pytest -s -v ${{ github.workspace }}/python/tests/pytorch_only_tests
-      
+
       - name: Install End-to-End Test dependencies
         run: pip install -r ${{ github.workspace }}/python/tests/end_to_end/requirements.txt
 

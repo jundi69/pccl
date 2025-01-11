@@ -8,7 +8,7 @@ def get_module_by_name(module_name: str):
         return None
 
 
-np = get_module_by_name("numpy")
+import numpy as np
 assert get_module_by_name("torch") is None, "torch module should not be available for numpy_only tests"
 
 import pccl
