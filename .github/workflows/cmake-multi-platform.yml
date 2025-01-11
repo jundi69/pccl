@@ -83,13 +83,19 @@ jobs:
         run: python -m pytest -s ${{ github.workspace }}/python/tests/unit_tests
 
       - name: Install Numpy-Only Test dependencies
-        run: pip install -r ${{ github.workspace }}/python/tests/numpy_only_tests/requirements.txt | pip uninstall -y torch
+        run: pip install -r ${{ github.workspace }}/python/tests/numpy_only_tests/requirements.txt
+
+      - name: Uninstall pytorch for Numpy-Only Tests
+        run: pip uninstall -y torch torchvision
 
       - name: Python Numpy-Only Tests
         run: python -m pytest -s -v ${{ github.workspace }}/python/tests/numpy_only_tests
 
       - name: Install Pytorch-Only Test dependencies
-        run: pip install -r ${{ github.workspace }}/python/tests/pytorch_only_tests/requirements.txt | pip uninstall -y numpy
+        run: pip install -r ${{ github.workspace }}/python/tests/pytorch_only_tests/requirements.txt
+
+      - name: Uninstall numpy for Pytorch-Only Tests
+        run: pip uninstall -y numpy
 
       - name: Python Pytorch-Only Tests
         run: python -m pytest -s -v ${{ github.workspace }}/python/tests/pytorch_only_tests
