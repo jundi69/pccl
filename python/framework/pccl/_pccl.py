@@ -428,7 +428,7 @@ class Communicator:
                             tag: int = 0) -> AsyncReduceHandle:
         handle: ffi.CData = ffi.new('pcclAsyncReduceOp_t*')
         PCCLError.check(
-            C.pcclAllReduceAsync(sendbuff, recvbuff, num_elements, dtype, op.value, tag, self._comm[0], handle)
+            C.pcclAllReduceAsync(sendbuff, recvbuff, num_elements, dtype.value, op.value, tag, self._comm[0], handle)
         )
         return AsyncReduceHandle(handle)
 
