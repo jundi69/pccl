@@ -82,13 +82,6 @@ jobs:
       - name: Python Unit Tests
         run: python -m pytest -s ${{ github.workspace }}/python/tests/unit_tests
 
-      - name: Install End-to-End Test dependencies
-        run: pip install -r ${{ github.workspace }}/python/tests/end_to_end/requirements.txt
-
-      - name: Python End-to-End Tests
-        working-directory: ${{ github.workspace }}/python/tests/end_to_end/
-        run: python -m pytest -s -v ${{ github.workspace }}/python/tests/end_to_end
-
       - name: Install Numpy-Only Test dependencies
         run: pip install -r ${{ github.workspace }}/python/tests/numpy_only_tests/requirements.txt | pip uninstall -y torch
 
@@ -100,3 +93,10 @@ jobs:
 
       - name: Python Pytorch-Only Tests
         run: python -m pytest -s -v ${{ github.workspace }}/python/tests/pytorch_only_tests
+      
+      - name: Install End-to-End Test dependencies
+        run: pip install -r ${{ github.workspace }}/python/tests/end_to_end/requirements.txt
+
+      - name: Python End-to-End Tests
+        working-directory: ${{ github.workspace }}/python/tests/end_to_end/
+        run: python -m pytest -s -v ${{ github.workspace }}/python/tests/end_to_end
