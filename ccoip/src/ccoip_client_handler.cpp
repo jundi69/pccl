@@ -650,6 +650,7 @@ bool ccoip::CCoIPClientHandler::allReduceAsync(const void *sendbuff, void *recvb
                         LOG(ERR) << "Failed to send reduce term to next peer " << uuid_to_string(next_peer);
                         return false;
                     }
+                    client_state.trackCollectiveComsTxBytes(tag, packet.data.size());
                 } else {
                     // is not first
                     // wait for data from previous peer
