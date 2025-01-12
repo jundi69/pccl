@@ -66,7 +66,6 @@ bool ccoip::CCoIPMasterState::unregisterClient(const ccoip_socket_address_t &cli
 
         // remove from all voting sets
         votes_accept_new_peers.erase(it->second);
-        votes_p2p_connections_established.erase(it->second);
         votes_sync_shared_state[peer_group].erase(it->second);
         votes_sync_shared_state_complete[peer_group].erase(it->second);
         client_uuids.erase(it);
@@ -98,8 +97,10 @@ bool ccoip::CCoIPMasterState::voteAcceptNewPeers(const ccoip_uuid_t &peer_uuid) 
                 << info.connection_phase;
         return false;
     }
+
     // in order to vote to accept new peers, the client must be idle
-    if (info.connection_state != IDLE) {
+    // or in the CONNECTING_TO_PEERS_FAILED state
+    if (info.connection_state != IDLE && info.connection_state != CONNECTING_TO_PEERS_FAILED) {
         LOG(WARN) << "Client " << ccoip_sockaddr_to_str(info.socket_address) <<
                 " cannot vote to accept new peers in state "
                 << info.connection_state;
@@ -280,7 +281,7 @@ bool ccoip::CCoIPMasterState::voteCollectiveCommsComplete(const ccoip_uuid_t &pe
     return true;
 }
 
-bool ccoip::CCoIPMasterState::markP2PConnectionsEstablished(const ccoip_uuid_t &client_uuid) {
+bool ccoip::CCoIPMasterState::markP2PConnectionsEstablished(const ccoip_uuid_t &client_uuid, bool success) {
     const auto info_opt = getClientInfo(client_uuid);
     if (!info_opt) {
         LOG(WARN) << "Cannot vote to accept new peers for unregistered client " << uuid_to_string(client_uuid);
@@ -292,34 +293,42 @@ bool ccoip::CCoIPMasterState::markP2PConnectionsEstablished(const ccoip_uuid_t &
                 " cannot mark p2p connections established in state " << info.connection_state;
         return false;
     }
-    info.connection_state = WAITING_FOR_OTHER_PEERS;
-    if (auto [_, inserted] = votes_p2p_connections_established.insert(info.client_uuid); !inserted) {
+    if (!success) {
         LOG(WARN) << "Client " << ccoip_sockaddr_to_str(info.socket_address) <<
-                " found in votes_p2p_connections_established set, but was in CONNECTING_TO_PEERS state before voting";
-        return false;
+                " failed to establish p2p connections";
     }
+    info.connection_state = success ? WAITING_FOR_OTHER_PEERS : CONNECTING_TO_PEERS_FAILED;
     return true;
 }
 
-bool ccoip::CCoIPMasterState::transitionToP2PConnectionsEstablishedPhase() {
+bool ccoip::CCoIPMasterState::transitionToP2PConnectionsEstablishedPhase(const bool any_failed) {
     for (auto &[_, info]: client_info) {
         if (info.connection_phase == PEER_REGISTERED && info.connection_state == IDLE) {
             // ignore clients that have not made the cut for the current peer acceptance phase
             continue;
         }
-        if (info.connection_state == WAITING_FOR_OTHER_PEERS) {
-            info.connection_state = IDLE;
-            if (info.connection_phase == PEER_REGISTERED) {
-                info.connection_phase = PEER_ACCEPTED; // update connection phase to PEER_ACCEPTED
+        if (any_failed) {
+            if (info.connection_state == WAITING_FOR_OTHER_PEERS) {
+                info.connection_state = CONNECTING_TO_PEERS_FAILED;
+            } else if (info.connection_state != CONNECTING_TO_PEERS_FAILED) {
+                LOG(WARN) << "Client " << ccoip_sockaddr_to_str(info.socket_address) <<
+                        " in state " << info.connection_state << " but expected WAITING_FOR_OTHER_PEERS or CONNECTING_TO_PEERS_FAILED";
+                return false;
             }
         } else {
-            LOG(WARN) << "Client " << ccoip_sockaddr_to_str(info.socket_address) <<
-                    " in state " << info.connection_state << " but expected WAITING_FOR_OTHER_PEERS";
-            return false;
+            if (info.connection_state == WAITING_FOR_OTHER_PEERS) {
+                info.connection_state = IDLE;
+                if (info.connection_phase == PEER_REGISTERED) {
+                    info.connection_phase = PEER_ACCEPTED; // update connection phase to PEER_ACCEPTED
+                }
+            } else {
+                LOG(WARN) << "Client " << ccoip_sockaddr_to_str(info.socket_address) <<
+                        " in state " << info.connection_state << " but expected WAITING_FOR_OTHER_PEERS";
+                return false;
+            }
         }
     }
     // all clients have established p2p connections
-    votes_p2p_connections_established.clear();
     return true;
 }
 
@@ -351,16 +360,16 @@ bool ccoip::CCoIPMasterState::endSharedStateSyncPhase(const uint32_t peer_group)
 
 bool ccoip::CCoIPMasterState::p2pConnectionsEstablishConsensus() const {
     size_t num_connecting_peers = 0;
-    std::unordered_set<ccoip_uuid_t> voting_peers{};
+    size_t num_voting_peers = 0;
     for (const auto &[_, info]: client_info) {
-        if (info.connection_state == WAITING_FOR_OTHER_PEERS) {
-            voting_peers.insert(info.client_uuid);
+        if (info.connection_state == WAITING_FOR_OTHER_PEERS || info.connection_state == CONNECTING_TO_PEERS_FAILED) {
+            num_voting_peers++;
         }
-        if (info.connection_state == WAITING_FOR_OTHER_PEERS || info.connection_state == CONNECTING_TO_PEERS) {
+        if (info.connection_state == WAITING_FOR_OTHER_PEERS || info.connection_state == CONNECTING_TO_PEERS || info.connection_state == CONNECTING_TO_PEERS_FAILED) {
             num_connecting_peers++;
         }
     }
-    return voting_peers.size() == num_connecting_peers;
+    return num_voting_peers == num_connecting_peers;
 }
 
 bool ccoip::CCoIPMasterState::syncSharedStateCompleteConsensus(const uint32_t peer_group) {

@@ -65,18 +65,18 @@ class Result(Enum):  # Keep in sync with pccl_status.h.
 class PCCLError(Exception):
     """PCCL specific exception."""
 
-    def __init__(self, result: Result):
-        super().__init__(f'PCCL error: {result}')
+    def __init__(self, result: Result, func_name: str):
+        super().__init__(f'{func_name} failed with error: {result.name}')
         self.result = result
 
     def __str__(self):
         return f'{super().__str__()}: {self.result.name}'
 
     @staticmethod
-    def check(result: int):
+    def check(result: int, func_name: str):
         """Check the result and raise an exception if necessary."""
         if result != Result.SUCCESS.value:
-            raise PCCLError(Result(result))
+            raise PCCLError(Result(result), func_name)
 
 
 class DataType(Enum):
@@ -271,8 +271,7 @@ class AsyncReduceHandle:
 
 
 # Init PCCL
-PCCLError.check(C.pcclInit())
-
+PCCLError.check(C.pcclInit(), "pcclInit")
 
 def _create_ccoip_socket_address(address: Union[IPv4Address, IPv6Address], port: int) -> ffi.CData:
     """Create a ccoip_socket_address_t."""
@@ -304,7 +303,7 @@ class Communicator:
         params.master_address = _create_ccoip_socket_address(ip, int(port))[0]
         params.peer_group = ffi.cast('uint32_t', peer_group)
         self._comm = ffi.new('pcclComm_t**')
-        PCCLError.check(C.pcclCreateCommunicator(params, self._comm))
+        PCCLError.check(C.pcclCreateCommunicator(params, self._comm), "pcclCreateCommunicator")
 
     def __del__(self):
         C.pcclDestroyCommunicator(self._comm[0])
@@ -312,18 +311,18 @@ class Communicator:
     def get_attribute(self, attribute: Attribute) -> int:
         """Get a communicator attribute."""
         value = ffi.new('int*')
-        PCCLError.check(C.pcclGetAttribute(self._comm[0], attribute.value, value))
+        PCCLError.check(C.pcclGetAttribute(self._comm[0], attribute.value, value), "pcclGetAttribute")
         return value[0]
 
     def save_topology_graph(self, filename: str):
         """Save the topology graph into a graphviz dot file for visualization."""
         assert filename and filename.endswith('.dot')
-        PCCLError.check(C.pcclTopologySaveGraph(self._comm[0], bytes(filename, 'utf-8')))
+        PCCLError.check(C.pcclTopologySaveGraph(self._comm[0], bytes(filename, 'utf-8')), "pcclTopologySaveGraph")
 
     def save_reduce_plan(self, filename: str):
         """Save the reduce plan into a graphviz dot file for visualization."""
         assert filename and filename.endswith('.dot')
-        PCCLError.check(C.pcclSaveReducePlan(self._comm[0], bytes(filename, 'utf-8')))
+        PCCLError.check(C.pcclSaveReducePlan(self._comm[0], bytes(filename, 'utf-8')), "pcclSaveReducePlan")
 
     def connect(self, n_attempts: int = 5):
         """
@@ -333,7 +332,7 @@ class Communicator:
         """
         for attempt in range(1, n_attempts + 1):
             try:
-                PCCLError.check(C.pcclConnect(self._comm[0]))
+                PCCLError.check(C.pcclConnect(self._comm[0]), "pcclConnect")
                 logging.info(f"Connected to the master node")
                 break
             except PCCLError as e:
@@ -347,7 +346,9 @@ class Communicator:
                       tag: int = 0) -> ReduceInfo:
         info: ffi.CData = ffi.new('pcclReduceInfo_t*')
         PCCLError.check(
-            C.pcclAllReduce(sendbuff, recvbuff, num_elements, dtype.value, op.value, tag, self._comm[0], info))
+            C.pcclAllReduce(sendbuff, recvbuff, num_elements, dtype.value, op.value, tag, self._comm[0], info),
+            "pcclAllReduce"
+        )
         return ReduceInfo(info.world_size, info.tx_bytes, info.rx_bytes)
 
     def all_reduce(self, send: Union['torch.Tensor', 'np.ndarray'], recv: Union['torch.Tensor', 'np.ndarray'], *,
@@ -428,7 +429,8 @@ class Communicator:
                             tag: int = 0) -> AsyncReduceHandle:
         handle: ffi.CData = ffi.new('pcclAsyncReduceOp_t*')
         PCCLError.check(
-            C.pcclAllReduceAsync(sendbuff, recvbuff, num_elements, dtype.value, op.value, tag, self._comm[0], handle)
+            C.pcclAllReduceAsync(sendbuff, recvbuff, num_elements, dtype.value, op.value, tag, self._comm[0], handle),
+            "pcclAllReduceAsync"
         )
         return AsyncReduceHandle(handle)
 
@@ -440,7 +442,7 @@ class Communicator:
         Topology updates can also be triggered by the master node in response to bandwidth changes or other events.
         This function will block until the topology update is complete.
         """
-        PCCLError.check(C.pcclUpdateTopology(self._comm[0]))
+        PCCLError.check(C.pcclUpdateTopology(self._comm[0]), "pcclUpdateTopology")
 
     def sync_shared_state(self, shared_state: SharedState) -> SharedStateSyncInfo:
         """
@@ -449,7 +451,7 @@ class Communicator:
         The function will not unblock until it is confirmed all peers have the same shared state revision.
         """
         sync_info: ffi.CData = ffi.new('pcclSharedStateSyncInfo_t*')
-        PCCLError.check(C.pcclSynchronizeSharedState(self._comm[0], shared_state._state, sync_info))
+        PCCLError.check(C.pcclSynchronizeSharedState(self._comm[0], shared_state._state, sync_info), "pcclSynchronizeSharedState")
         return SharedStateSyncInfo(sync_info.tx_bytes, sync_info.rx_bytes)
 
 
@@ -461,16 +463,16 @@ class MasterNode:
         ccoip_address = _create_ccoip_socket_address(ip, int(port))
         self._socket_address = ccoip_address
         self._master = ffi.new('pcclMasterInstance_t**')
-        PCCLError.check(C.pcclCreateMaster(ccoip_address[0], self._master))
+        PCCLError.check(C.pcclCreateMaster(ccoip_address[0], self._master), "pcclCreateMaster")
 
     def run(self):
         """Runs a master node. This function is non-blocking."""
-        PCCLError.check(C.pcclRunMaster(self._master[0]))
+        PCCLError.check(C.pcclRunMaster(self._master[0]), "pcclRunMaster")
 
     def interrupt(self):
         """Interrupts a master node."""
-        PCCLError.check(C.pcclInterruptMaster(self._master[0]))
+        PCCLError.check(C.pcclInterruptMaster(self._master[0]), "pcclInterruptMaster")
 
     def __del__(self):
-        PCCLError.check(C.pcclMasterAwaitTermination(self._master[0]))
-        PCCLError.check(C.pcclDestroyMaster(self._master[0]))
+        PCCLError.check(C.pcclMasterAwaitTermination(self._master[0]), "pcclMasterAwaitTermination")
+        PCCLError.check(C.pcclDestroyMaster(self._master[0]), "pcclDestroyMaster")

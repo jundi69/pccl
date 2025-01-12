@@ -43,7 +43,15 @@ namespace ccoip {
         /// will enter the p2p establishment phase.
         CONNECTING_TO_PEERS,
 
-        /// When the node has established p2p connections with all peers,
+        /// When the client has failed to establish p2p connections with all peers,
+        /// it will enter this state.
+        /// In this state, the client may only attempt to retry establishing p2p connections.
+        /// This means the client must vote to accept new peers again.
+        /// Because this necessitates all peers to vote to accept new peers again,
+        /// this failure is propagated to all clients.
+        CONNECTING_TO_PEERS_FAILED,
+
+        /// When the node has successfully established p2p connections with all peers,
         /// but other peers have not yet declared that they have established p2p connections,
         /// the client will be in the @code WAITING_FOR_OTHER_PEERS@endcode state.
         /// Once all peers have declared that they have established p2p connections,
@@ -172,11 +180,6 @@ namespace ccoip {
         /// cleared once accept new peers consensus is reached.
         /// Removed from on client leave/disconnect.
         std::unordered_set<ccoip_uuid_t> votes_accept_new_peers{};
-
-        /// set of all uuids that have established p2p connections.
-        /// cleared once all clients have established p2p connections.
-        /// Removed from on client leave/disconnect.
-        std::unordered_set<ccoip_uuid_t> votes_p2p_connections_established{};
 
         /// set of all uuids that have voted to synchronize shared state for each peer group.
         /// Peer group bin is cleared once shared state distribution consensus is reached.
@@ -310,13 +313,17 @@ namespace ccoip {
         ///
         /// Once all peers have declared that they have established p2p connections,
         /// clients return back to the @code IDLE@endcode state.
-        [[nodiscard]] bool markP2PConnectionsEstablished(const ccoip_uuid_t &peer_uuid);
+        [[nodiscard]] bool markP2PConnectionsEstablished(const ccoip_uuid_t &peer_uuid, bool success);
 
         /// Transition to the p2p connections established phase
-        /// Triggered after all clients have declared that they have established p2p connections.
-        /// This means that all clients will return to the @code IDLE@endcode state.
+        /// Triggered after all clients have declared that they have established p2p connections either successfully or not.
+        /// If @code any_failed@endcode is false, the following occurs:
+        /// All clients will return to the @code IDLE@endcode state.
         /// Returns false if any client is not in the @code WAITING_FOR_OTHER_PEERS@endcode state
-        [[nodiscard]] bool transitionToP2PConnectionsEstablishedPhase();
+        /// If @code any_failed@endcode is true, then the following occurs:
+        /// If peers are in the @code WAITING_FOR_OTHER_PEERS@endcode state, they will be transitioned to the @code CONNECTING_TO_PEERS_FAILED@endcode state.
+        /// Otherwise, all clients are expected to be in the @code CONNECTING_TO_PEERS_FAILED@endcode state.
+        [[nodiscard]] bool transitionToP2PConnectionsEstablishedPhase(bool any_failed);
 
         /// Transition to the shared state distribution phase
         /// Triggered after all peers of a peer group have voted to synchronize shared state

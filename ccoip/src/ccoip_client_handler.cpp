@@ -136,7 +136,7 @@ bool ccoip::CCoIPClientHandler::acceptNewPeers() {
 
     if (!master_socket.isOpen()) {
         LOG(ERR) <<
-                "Failed to sync shared state: Client socket has been closed; This may mean the client was kicked by the master";
+                "Failed to accept new peers: Client socket has been closed; This may mean the client was kicked by the master";
         return false;
     }
 
@@ -381,6 +381,8 @@ bool ccoip::CCoIPClientHandler::establishP2PConnections() {
         return false;
     }
     LOG(DEBUG) << "Received M2CPacketNewPeers from master";
+
+    bool all_peers_connected = true;
     if (!new_peers->unchanged) {
         LOG(DEBUG) << "New peers list has changed";
 
@@ -394,7 +396,8 @@ bool ccoip::CCoIPClientHandler::establishP2PConnections() {
             LOG(DEBUG) << "Establishing P2P connection with peer " << uuid_to_string(peer.peer_uuid);
             if (!establishP2PConnection(peer)) {
                 LOG(ERR) << "Failed to establish P2P connection with peer " << uuid_to_string(peer.peer_uuid);
-                return false;
+                all_peers_connected = false;
+                break;
             }
         }
         // close p2p connections that are no longer needed
@@ -415,18 +418,29 @@ bool ccoip::CCoIPClientHandler::establishP2PConnections() {
     }
 
     // send packet to this peer has established its p2p connections
-    if (!master_socket.sendPacket<C2MPacketP2PConnectionsEstablished>({})) {
+    C2MPacketP2PConnectionsEstablished packet{};
+    packet.success = all_peers_connected;
+    if (!master_socket.sendPacket<C2MPacketP2PConnectionsEstablished>(packet)) {
         LOG(ERR) << "Failed to send P2P connections established packet";
         return false;
     }
 
     // wait for response from master, indicating ALL peers have established their
     // respective p2p connections
-    if (const auto response = master_socket.receivePacket<M2CPacketP2PConnectionsEstablished>(); !response) {
+    const auto response = master_socket.receivePacket<M2CPacketP2PConnectionsEstablished>();
+    if (!response) {
         LOG(ERR) << "Failed to receive P2P connections established response";
         return false;
     }
-    return true;
+    if (!all_peers_connected && response->success) {
+        LOG(BUG) << "Master indicated that all peers have established their p2p connections, but this peer has not and should have reported this to the master. This is a bug!";
+        return false;
+    }
+    if (!response->success) {
+        LOG(ERR) << "Master indicated that not all peers have established their p2p connections";
+        return false;
+    }
+    return all_peers_connected;
 }
 
 bool ccoip::CCoIPClientHandler::establishP2PConnection(const M2CPacketNewPeerInfo &peer) {

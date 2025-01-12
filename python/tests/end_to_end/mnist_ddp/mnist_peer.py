@@ -1,12 +1,10 @@
 import os
-import signal
-import time
 import zlib
 from time import sleep
 from typing import List
 
 import pccl
-from pccl import Communicator, SharedState, TensorInfo, ReduceInfo, ReduceOp, Attribute, PCCLError
+from pccl import Communicator, SharedState, TensorInfo, ReduceOp, Attribute, PCCLError
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -52,6 +50,10 @@ test_dataset = datasets.MNIST(root='./data', train=False, transform=transforms.T
 train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
 test_loader = DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False)
 
+num_threads = os.getenv('USE_TORCH_NUM_THREADS', None)
+if num_threads is not None:
+    torch.set_num_threads(int(num_threads))
+
 
 # Define a simple neural network
 class NeuralNet(nn.Module):
@@ -82,7 +84,19 @@ def log_debug(msg: str):
         print(msg)
 
 
+_IS_FIRST_MSG = True
+
 def log_info(msg: str):
+    global _IS_FIRST_MSG
+    if _IS_FIRST_MSG:
+        event_name = os.getenv('FIRST_MSG_EVENT_NAME', None)
+        if event_name is not None:
+            import win32event
+            event_handle = win32event.OpenEvent(win32event.EVENT_ALL_ACCESS, False, event_name)
+            if event_handle:
+                win32event.SetEvent(event_handle)
+
+        _IS_FIRST_MSG = False
     print(msg)
 
 
@@ -141,7 +155,13 @@ def main():
             i += 1
             if i > 1:
                 log_debug(f"(RANK={RANK}, it={i}) update_topology()")
-                communicator.update_topology()
+                while True:
+                    try:
+                        communicator.update_topology()
+                        break
+                    except PCCLError as e:
+                        log_debug(f"(RANK={RANK}, it={i}) update_topology() failed: {e}; retrying...")
+                        continue
 
             world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
 

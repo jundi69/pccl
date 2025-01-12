@@ -80,7 +80,14 @@ void ccoip::CCoIPMasterHandler::onClientRead(const ccoip_socket_address_t &clien
         handleAcceptNewPeers(client_address, packet);
     } else if (packet_type == C2MPacketP2PConnectionsEstablished::packet_id) {
         C2MPacketP2PConnectionsEstablished packet{};
-        packet.deserialize(buffer);
+        if (!packet.deserialize(buffer)) [[unlikely]] {
+            LOG(ERR) << "Failed to deserialize C2MPacketP2PConnectionsEstablished from " << ccoip_sockaddr_to_str(
+                client_address);
+            if (!kickClient(client_address)) [[unlikely]] {
+                LOG(ERR) << "Failed to kick client " << ccoip_sockaddr_to_str(client_address);
+            }
+            return;
+        }
         handleP2PConnectionsEstablished(client_address, packet);
     } else if (packet_type == C2MPacketGetTopologyRequest::packet_id) {
         C2MPacketGetTopologyRequest packet{};
@@ -193,7 +200,7 @@ bool ccoip::CCoIPMasterHandler::checkP2PConnectionsEstablished() {
 
         // all connection phases are legal (both REGISTERED & ACCEPTED)
 
-        if (peer_info.connection_state == WAITING_FOR_OTHER_PEERS) {
+        if (peer_info.connection_state == WAITING_FOR_OTHER_PEERS || peer_info.connection_state == CONNECTING_TO_PEERS_FAILED) {
             any_waiting = true;
             break;
         }
@@ -204,8 +211,23 @@ bool ccoip::CCoIPMasterHandler::checkP2PConnectionsEstablished() {
 
     // send establish new peers packets to all clients
     if (server_state.p2pConnectionsEstablishConsensus()) {
+        LOG(DEBUG) << "All clients have declared that they have established P2P connections";
+
+        bool any_failed = false;
+        for (auto &[peer_uuid, peer_address]: server_state.getClientEntrySet()) {
+            const auto peer_info_opt = server_state.getClientInfo(peer_uuid);
+            if (!peer_info_opt) [[unlikely]] {
+                LOG(BUG) << "Client " << ccoip_sockaddr_to_str(peer_address) << " not found";
+                continue;
+            }
+            const auto &peer_info = peer_info_opt->get();
+            if (peer_info.connection_state == CONNECTING_TO_PEERS_FAILED) {
+                any_failed = true;
+                break;
+            }
+        }
         // send confirmation packets to all clients
-        if (!server_state.transitionToP2PConnectionsEstablishedPhase()) [[unlikely]] {
+        if (!server_state.transitionToP2PConnectionsEstablishedPhase(any_failed)) [[unlikely]] {
             LOG(WARN) << "Failed to transition to P2P connections established phase;";
             return false;
         }
@@ -216,10 +238,14 @@ bool ccoip::CCoIPMasterHandler::checkP2PConnectionsEstablished() {
                 LOG(BUG) << "Client " << ccoip_sockaddr_to_str(peer_address) << " not found";
                 continue;
             }
-            if (const auto &peer_info = peer_info_opt->get(); peer_info.connection_phase != PEER_ACCEPTED) {
+            const auto &peer_info = peer_info_opt->get();
+            if (peer_info.connection_phase == PEER_REGISTERED && peer_info.connection_state == IDLE) {
+                // ignore clients that have not made the cut for the current peer acceptance phase
                 continue;
             }
-            if (!server_socket.sendPacket<C2MPacketP2PConnectionsEstablished>(peer_address, {})) {
+            M2CPacketP2PConnectionsEstablished packet{};
+            packet.success = !any_failed;
+            if (!server_socket.sendPacket<M2CPacketP2PConnectionsEstablished>(peer_address, packet)) {
                 LOG(ERR) << "Failed to send M2CPacketP2PConnectionsEstablished to " << ccoip_sockaddr_to_str(
                     peer_address
                 );
@@ -564,7 +590,7 @@ bool ccoip::CCoIPMasterHandler::checkCollectiveCommsCompleteConsensus(const uint
 }
 
 void ccoip::CCoIPMasterHandler::handleP2PConnectionsEstablished(const ccoip_socket_address_t &client_address,
-                                                                const C2MPacketP2PConnectionsEstablished &) {
+                                                                const C2MPacketP2PConnectionsEstablished &packet) {
     THREAD_GUARD(server_thread_id);
     LOG(DEBUG) << "Received C2MPacketP2PConnectionsEstablished from " << ccoip_sockaddr_to_str(client_address);
 
@@ -577,7 +603,7 @@ void ccoip::CCoIPMasterHandler::handleP2PConnectionsEstablished(const ccoip_sock
         return;
     }
     if (const auto client_uuid = client_uuid_opt.value();
-        !server_state.markP2PConnectionsEstablished(client_uuid)) [[unlikely]] {
+        !server_state.markP2PConnectionsEstablished(client_uuid, packet.success)) [[unlikely]] {
         LOG(WARN) << "Failed to mark P2P connections established for " << ccoip_sockaddr_to_str(client_address);
         if (!kickClient(client_address)) [[unlikely]] {
             LOG(ERR) << "Failed to kick client " << ccoip_sockaddr_to_str(client_address);

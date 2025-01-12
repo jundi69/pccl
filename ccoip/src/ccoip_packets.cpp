@@ -31,11 +31,21 @@ bool ccoip::C2MPacketRequestSessionRegistration::deserialize(PacketReadBuffer &b
 // C2MPacketAcceptNewPeers
 ccoip::packetId_t ccoip::C2MPacketAcceptNewPeers::packet_id = C2M_PACKET_ACCEPT_NEW_PEERS_ID;
 
+// C2MPacketGetTopologyRequest
+ccoip::packetId_t ccoip::C2MPacketGetTopologyRequest::packet_id = C2M_PACKET_GET_TOPOLOGY_REQUEST_ID;
+
 // C2MPacketP2PConnectionsEstablished
 ccoip::packetId_t ccoip::C2MPacketP2PConnectionsEstablished::packet_id = C2M_PACKET_P2P_CONNECTIONS_ESTABLISHED_ID;
 
-// C2MPacketGetTopologyRequest
-ccoip::packetId_t ccoip::C2MPacketGetTopologyRequest::packet_id = C2M_PACKET_GET_TOPOLOGY_REQUEST_ID;
+void ccoip::C2MPacketP2PConnectionsEstablished::serialize(PacketWriteBuffer &buffer) const {
+    buffer.write<boolean>(success);
+}
+
+bool ccoip::C2MPacketP2PConnectionsEstablished::deserialize(PacketReadBuffer &buffer) {
+    success = buffer.read<boolean>();
+    return true;
+}
+
 
 // C2MPacketSyncSharedState
 ccoip::packetId_t ccoip::C2MPacketSyncSharedState::packet_id = C2M_PACKET_SYNC_SHARED_STATE_ID;
@@ -184,6 +194,18 @@ bool ccoip::M2CPacketNewPeers::deserialize(PacketReadBuffer &buffer) {
         }
         new_peers.push_back(peer_info);
     }
+    return true;
+}
+
+// M2CPacketP2PConnectionsEstablished
+ccoip::packetId_t ccoip::M2CPacketP2PConnectionsEstablished::packet_id = M2C_PACKET_P2P_CONNECTIONS_ESTABLISHED_ID;
+
+void ccoip::M2CPacketP2PConnectionsEstablished::serialize(PacketWriteBuffer &buffer) const {
+    buffer.write<boolean>(success);
+}
+
+bool ccoip::M2CPacketP2PConnectionsEstablished::deserialize(PacketReadBuffer &buffer) {
+    success = buffer.read<boolean>();
     return true;
 }
 
@@ -378,9 +400,6 @@ bool ccoip::S2CPacketSharedStateResponse::deserialize(PacketReadBuffer &buffer) 
 
 // M2CPacketNewPeers
 ccoip::packetId_t ccoip::M2CPacketNewPeers::packet_id = M2C_PACKET_NEW_PEERS_ID;
-
-// M2CPacketP2PConnectionsEstablished
-ccoip::packetId_t ccoip::M2CPacketP2PConnectionsEstablished::packet_id = M2C_PACKET_P2P_CONNECTIONS_ESTABLISHED_ID;
 
 // P2PPacketHelloAck
 ccoip::packetId_t ccoip::P2PPacketHelloAck::packet_id = P2P_PACKET_HELLO_ACK_ID;

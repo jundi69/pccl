@@ -75,9 +75,14 @@ namespace ccoip {
     };
 
     // C2MPacketP2PConnectionsEstablished
-    class C2MPacketP2PConnectionsEstablished final : public EmptyPacket {
+    class C2MPacketP2PConnectionsEstablished final : public Packet {
     public:
         static packetId_t packet_id;
+        bool success;
+
+        void serialize(PacketWriteBuffer &buffer) const override;
+
+        [[nodiscard]] bool deserialize(PacketReadBuffer &buffer) override;
     };
 
     // C2MPacketGetTopologyRequest
@@ -92,7 +97,7 @@ namespace ccoip {
         uint64_t hash;
         size_t num_elements;
         ccoip_data_type_t data_type;
-        boolean allow_content_inequality;
+        bool allow_content_inequality;
 
         friend bool operator==(const SharedStateHashEntry &lhs, const SharedStateHashEntry &rhs) {
             return lhs.key == rhs.key
@@ -158,7 +163,7 @@ namespace ccoip {
     public:
         static packetId_t packet_id;
 
-        boolean accepted;
+        bool accepted;
         ccoip_uuid_t assigned_uuid;
 
         void serialize(PacketWriteBuffer &buffer) const override;
@@ -186,9 +191,14 @@ namespace ccoip {
     };
 
     // M2CPacketP2PConnectionsEstablished
-    class M2CPacketP2PConnectionsEstablished final : public EmptyPacket {
+    class M2CPacketP2PConnectionsEstablished final : public Packet {
     public:
         static packetId_t packet_id;
+        bool success;
+
+        void serialize(PacketWriteBuffer &buffer) const override;
+
+        [[nodiscard]] bool deserialize(PacketReadBuffer &buffer) override;
     };
 
     // M2CPacketGetTopologyResponse
@@ -212,7 +222,7 @@ namespace ccoip {
     class M2CPacketSyncSharedState final : public Packet {
     public:
         static packetId_t packet_id;
-        boolean is_outdated;
+        bool is_outdated;
         ccoip_socket_address_t distributor_address;
         std::vector<std::string> outdated_keys;
         std::vector<uint64_t> expected_hashes;
