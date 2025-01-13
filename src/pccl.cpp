@@ -161,13 +161,19 @@ pcclResult_t pcclUpdateTopology(pcclComm_t *communicator) {
     return pcclSuccess;
 }
 
-pcclResult_t pcclAllReduceAsync(const void *sendbuff, void *recvbuff, const size_t count, const pcclDataType_t datatype,
-                                const pcclRedOp_t op, const uint64_t tag, const pcclComm_t *communicator,
+pcclResult_t pcclAllReduceAsync(const void *sendbuff, void *recvbuff,
+                                const pcclReduceDescriptor_t *descriptor,
+                                const pcclComm_t *communicator,
                                 pcclAsyncReduceOp_t *reduce_handle_out) {
     PCCL_VALIDATE_INITIALIZED();
     PCCL_VALIDATE(communicator != nullptr, pcclInvalidArgument);
     PCCL_VALIDATE(communicator->ccoip_client != nullptr, pcclInvalidUsage);
     PCCL_VALIDATE(reduce_handle_out != nullptr, pcclInvalidArgument);
+
+    const size_t count = descriptor->count;
+    const auto datatype = descriptor->src_descriptor.datatype;
+    const auto op = descriptor->op;
+    const auto tag = descriptor->tag;
 
     auto ccoip_data_type = getCCoIPDataType(datatype);
     if (!ccoip_data_type) {
@@ -188,14 +194,15 @@ pcclResult_t pcclAllReduceAsync(const void *sendbuff, void *recvbuff, const size
     return pcclSuccess;
 }
 
-pcclResult_t pcclAllReduce(const void *sendbuff, void *recvbuff, const size_t count, const pcclDataType_t datatype,
-                           const pcclRedOp_t op, const uint64_t tag, const pcclComm_t *communicator,
+pcclResult_t pcclAllReduce(const void *sendbuff, void *recvbuff,
+                           const pcclReduceDescriptor_t *descriptor,
+                           const pcclComm_t *communicator,
                            pcclReduceInfo_t *PCCL_NULLABLE reduce_info_out) {
     PCCL_VALIDATE_INITIALIZED();
     PCCL_VALIDATE(communicator != nullptr, pcclInvalidArgument);
     PCCL_VALIDATE(communicator->ccoip_client != nullptr, pcclInvalidUsage);
     pcclAsyncReduceOp_t reduce_handle{};
-    pcclAllReduceAsync(sendbuff, recvbuff, count, datatype, op, tag, communicator, &reduce_handle);
+    pcclAllReduceAsync(sendbuff, recvbuff, descriptor, communicator, &reduce_handle);
     pcclAwaitAsyncReduce(&reduce_handle, reduce_info_out);
     return pcclSuccess;
 }

@@ -16,27 +16,20 @@ class ModuleDummy:
             f"Module {self.name} is not available. Please install the module via pip if you want pccl to interoperate with it.")
 
 
-# check if torch is available
+# Check if torch is available
 if importlib.util.find_spec('torch') is not None:
     import torch
 else:
-    # dummy that fails on first access
     torch = ModuleDummy('torch')
 
-# check if numpy is available
+# Check if numpy is available
 if importlib.util.find_spec('numpy') is not None:
     import numpy as np
 else:
-    # dummy that fails on first access
     np = ModuleDummy('numpy')
-
-# To debug Python to C FFI calls:
-# $ cp examples/any.py tmp.py && gdb -ex r --args python3 tmp.py
-# See also https://wiki.python.org/moin/DebuggingWithGdb
 
 # Enable faulthandler for debugging
 PY_PCCL_DEBUG = False
-
 if PY_PCCL_DEBUG:
     import faulthandler
 
@@ -45,7 +38,7 @@ if PY_PCCL_DEBUG:
 ffi, C = load_native_module()  # Load native module
 
 
-class Result(Enum):  # Keep in sync with pccl_status.h.
+class Result(Enum):
     """PCCL result codes."""
     SUCCESS = C.pcclSuccess
     NOT_INITIALIZED = C.pcclNotInitialized
@@ -77,6 +70,24 @@ class PCCLError(Exception):
         """Check the result and raise an exception if necessary."""
         if result != Result.SUCCESS.value:
             raise PCCLError(Result(result), func_name)
+
+
+# Init PCCL
+PCCLError.check(C.pcclInit(), "pcclInit")
+
+
+class ReduceOp(Enum):
+    """PCCL reduction operations."""
+    SUM = C.pcclSum
+    AVG = C.pcclAvg
+    PROD = C.pcclProd
+    MAX = C.pcclMax
+    MIN = C.pcclMin
+
+
+class Attribute(Enum):
+    """PCCL attributes."""
+    CURRENT_WORLD_SIZE = C.PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE
 
 
 class DataType(Enum):
@@ -129,18 +140,17 @@ class DataType(Enum):
     def from_torch_dtype(cls, dtype: 'torch.dtype'):
         """Converts a PyTorch dtype to the corresponding DataType."""
         dtype_map = {
-            torch.uint8: DataType.UINT8,
-            torch.int8: DataType.INT8,
-            torch.uint16: DataType.UINT16,
-            torch.uint32: DataType.UINT32,
-            torch.int32: DataType.INT32,
-            torch.uint64: DataType.UINT64,
-            torch.int64: DataType.INT64,
-            torch.float32: DataType.FLOAT,
-            torch.float64: DataType.DOUBLE,
+            torch.uint8: cls.UINT8,
+            torch.int8: cls.INT8,
+            torch.uint16: cls.UINT16,
+            torch.uint32: cls.UINT32,
+            torch.int32: cls.INT32,
+            torch.uint64: cls.UINT64,
+            torch.int64: cls.INT64,
+            torch.float32: cls.FLOAT,
+            torch.float64: cls.DOUBLE,
         }
-        assert dtype in dtype_map, f'Unsupported dtype: {dtype}'
-        return dtype_map[dtype]
+        return dtype_map.get(dtype, None)
 
     @classmethod
     def from_numpy_dtype(cls, dtype: 'np.dtype'):
@@ -162,6 +172,67 @@ class DataType(Enum):
         return dtype_map[dtype_clazz]
 
 
+class DistributionHint(Enum):
+    """PCCL distribution hints."""
+    NONE = C.PCCL_DISTRIBUTION_HINT_NONE
+    NORMAL = C.PCCL_NORMAL_DISTRIBUTION_HINT
+    UNIFORM = C.PCCL_UNIFORM_DISTRIBUTION_HINT
+
+
+class QuantizationAlgorithm(Enum):
+    """PCCL quantization algorithms."""
+    NONE = C.pcclQuantNone
+    MIN_MAX = C.pcclQuantMinMax
+
+
+class ReduceOperandDescriptor:
+    def __init__(self, datatype: DataType, distribution_hint: DistributionHint = DistributionHint.NONE):
+        self.datatype = datatype
+        self.distribution_hint = distribution_hint
+
+    def to_c(self):
+        c_desc = ffi.new("pcclReduceOperandDescriptor_t*")
+        c_desc.datatype = self.datatype.value
+        c_desc.distribution_hint = self.distribution_hint.value
+        return c_desc
+
+
+class QuantizationOptions:
+    def __init__(self, quantized_datatype: DataType = DataType.UINT8,
+                 algorithm: QuantizationAlgorithm = QuantizationAlgorithm.MIN_MAX):
+        self.quantized_datatype = quantized_datatype
+        self.algorithm = algorithm
+
+    def to_c(self):
+        c_opts = ffi.new("pcclQuantizationOptions_t*")
+        c_opts.quantized_datatype = self.quantized_datatype.value
+        c_opts.algorithm = self.algorithm.value
+        return c_opts
+
+
+class ReduceDescriptor:
+    def __init__(self, count: int, op: ReduceOp, tag: int,
+                 operand_descriptor: ReduceOperandDescriptor,
+                 quantization_options: QuantizationOptions):
+        self.count = count
+        self.op = op
+        self.tag = tag
+        self.operand_descriptor = operand_descriptor
+        self.quantization_options = quantization_options
+
+    def to_c(self):
+        c_desc = ffi.new("pcclReduceDescriptor_t*")
+        c_desc.count = self.count
+        c_desc.op = self.op.value
+        c_desc.tag = self.tag
+        c_desc.src_descriptor.datatype = self.operand_descriptor.datatype.value
+        c_desc.src_descriptor.distribution_hint = self.operand_descriptor.distribution_hint.value
+        c_desc.quantization_options.quantized_datatype = self.quantization_options.quantized_datatype.value
+        c_desc.quantization_options.algorithm = self.quantization_options.algorithm.value
+        return c_desc
+
+
+# Define TensorInfo and SharedState Classes
 class TensorInfo:
     def __init__(self, name: str, data_ptr: int, *, numel: int, dtype: DataType, allow_content_inequality: bool):
         self.name = name
@@ -225,29 +296,15 @@ class SharedState:
         self._state[0].revision += 1
 
 
-class ReduceOp(Enum):
-    """PCCL reduction operations."""
-    SUM = C.pcclSum
-    AVG = C.pcclAvg
-    PROD = C.pcclProd
-    MAX = C.pcclMax
-    MIN = C.pcclMin
-
-
-class Attribute(Enum):
-    """PCCL attributes."""
-    CURRENT_WORLD_SIZE = C.PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE
+class SharedStateSyncInfo:
+    def __init__(self, tx_bytes: int, rx_bytes: int):
+        self.tx_bytes = tx_bytes
+        self.rx_bytes = rx_bytes
 
 
 class ReduceInfo:
     def __init__(self, world_size: int, tx_bytes: int, rx_bytes: int):
         self.world_size = world_size
-        self.tx_bytes = tx_bytes
-        self.rx_bytes = rx_bytes
-
-
-class SharedStateSyncInfo:
-    def __init__(self, tx_bytes: int, rx_bytes: int):
         self.tx_bytes = tx_bytes
         self.rx_bytes = rx_bytes
 
@@ -259,8 +316,7 @@ class AsyncReduceHandle:
 
     def wait(self) -> Tuple[bool, int, ReduceInfo]:
         """Awaits the completion of an async reduce operation. Blocks until the operation is complete."""
-
-        if self._info is not None:  # guard native await function because it will fail on the second invocation
+        if self._info is not None:
             return self._info
 
         info: ffi.CData = ffi.new('pcclReduceInfo_t*')
@@ -270,11 +326,7 @@ class AsyncReduceHandle:
         return self._info
 
 
-# Init PCCL
-PCCLError.check(C.pcclInit(), "pcclInit")
-
 def _create_ccoip_socket_address(address: Union[IPv4Address, IPv6Address], port: int) -> ffi.CData:
-    """Create a ccoip_socket_address_t."""
     socket_addr = ffi.new("ccoip_socket_address_t*")
     if isinstance(address, IPv4Address):
         socket_addr.inet.protocol = ffi.cast("ccoip_inet_protocol_t", C.inetIPv4)
@@ -308,7 +360,7 @@ class Communicator:
     def __del__(self):
         C.pcclDestroyCommunicator(self._comm[0])
 
-    def get_attribute(self, attribute: Attribute) -> int:
+    def get_attribute(self, attribute: Enum) -> int:
         """Get a communicator attribute."""
         value = ffi.new('int*')
         PCCLError.check(C.pcclGetAttribute(self._comm[0], attribute.value, value), "pcclGetAttribute")
@@ -341,103 +393,10 @@ class Communicator:
         else:
             raise Exception("Failed to connect to the master node")
 
-    def _all_reduce_n(self, sendbuff: ffi.CData, recvbuff: ffi.CData, *,
-                      num_elements: int, dtype: DataType, op: ReduceOp,
-                      tag: int = 0) -> ReduceInfo:
-        info: ffi.CData = ffi.new('pcclReduceInfo_t*')
-        PCCLError.check(
-            C.pcclAllReduce(sendbuff, recvbuff, num_elements, dtype.value, op.value, tag, self._comm[0], info),
-            "pcclAllReduce"
-        )
-        return ReduceInfo(info.world_size, info.tx_bytes, info.rx_bytes)
-
-    def all_reduce(self, send: Union['torch.Tensor', 'np.ndarray'], recv: Union['torch.Tensor', 'np.ndarray'], *,
-                   op: ReduceOp, tag: int = 0) -> ReduceInfo:
-        """Performs an all reduce operation on a communicator. Blocks until the all reduce is complete."""
-        if not isinstance(torch, ModuleDummy) and isinstance(send, torch.Tensor) and isinstance(recv, torch.Tensor):
-            return self._all_reduce_pt(send, recv, op=op, tag=tag)
-        elif not isinstance(np, ModuleDummy) and isinstance(send, np.ndarray) and isinstance(recv, np.ndarray):
-            return self._all_reduce_np(send, recv, op=op, tag=tag)
-        else:
-            raise ValueError(
-                f'Unsupported input types: {type(send)}, {type(recv)}; send and recv must either be both torch.Tensor or both np.ndarray')
-
-    def _all_reduce_pt(self, send: 'torch.Tensor', recv: 'torch.Tensor', *, op: ReduceOp, tag: int = 0) -> ReduceInfo:
-        assert send.is_contiguous(), 'Input tensor must be contiguous'
-        assert recv.is_contiguous(), 'Output tensor must be contiguous'
-        assert send.device == recv.device, 'Input and output tensors must be on the same device'
-        assert send.dtype == recv.dtype, 'Input and output tensors must have the same dtype'
-        assert send.device.type == 'cpu', 'Only CPU tensors are supported'
-        assert send.numel() == recv.numel(), 'Input and output tensors must have the same number of elements'
-        sendbuff: ffi.CData = ffi.cast('void*', send.data_ptr())
-        recvbuff: ffi.CData = ffi.cast('void*', recv.data_ptr())
-        num_elements: int = recv.numel()
-        dtype: DataType = DataType.from_torch_dtype(send.dtype)
-        return self._all_reduce_n(sendbuff, recvbuff, num_elements=num_elements, dtype=dtype, op=op, tag=tag)
-
-    def _all_reduce_np(self, send: 'np.ndarray', recv: 'np.ndarray', *, op: ReduceOp, tag: int = 0) -> ReduceInfo:
-        assert send.flags['C_CONTIGUOUS'], 'Input tensor must be contiguous'
-        assert recv.flags['C_CONTIGUOUS'], 'Output tensor must be contiguous'
-        assert send.dtype == recv.dtype, 'Input and output tensors must have the same dtype'
-        assert send.size == recv.size, 'Input and output tensors must have the same number of elements'
-        sendbuff: ffi.CData = ffi.cast('void*', send.ctypes.data)
-        recvbuff: ffi.CData = ffi.cast('void*', recv.ctypes.data)
-        dtype: DataType = DataType.from_numpy_dtype(send.dtype)
-        num_elements: int = recv.size
-        return self._all_reduce_n(sendbuff, recvbuff, num_elements=num_elements, dtype=dtype, op=op, tag=tag)
-
-    def all_reduce_async(self, send: Union['torch.Tensor', 'np.ndarray'], recv: Union['torch.Tensor', 'np.ndarray'], *,
-                         op: ReduceOp, tag: int = 0) -> AsyncReduceHandle:
-        """Performs an all reduce operation on a communicator. Async version of all_reduce."""
-        if not isinstance(torch, ModuleDummy) and isinstance(send, torch.Tensor) and isinstance(recv, torch.Tensor):
-            return self._all_reduce_async_pt(send, recv, op=op, tag=tag)
-        elif not isinstance(np, ModuleDummy) and isinstance(send, np.ndarray) and isinstance(recv, np.ndarray):
-            return self._all_reduce_async_np(send, recv, op=op, tag=tag)
-        else:
-            raise ValueError(
-                f'Unsupported input types: {type(send)}, {type(recv)}; send and recv must either be both torch.Tensor or both np.ndarray')
-        pass
-
-    def _all_reduce_async_pt(self, send: 'torch.Tensor', recv: 'torch.Tensor', *, op: ReduceOp,
-                             tag: int = 0) -> AsyncReduceHandle:
-        assert send.is_contiguous(), 'Input tensor must be contiguous'
-        assert recv.is_contiguous(), 'Output tensor must be contiguous'
-        assert send.device == recv.device, 'Input and output tensors must be on the same device'
-        assert send.dtype == recv.dtype, 'Input and output tensors must have the same dtype'
-        assert send.device.type == 'cpu', 'Only CPU tensors are supported'
-        assert send.numel() == recv.numel(), 'Input and output tensors must have the same number of elements'
-        sendbuff: ffi.CData = ffi.cast('void*', send.data_ptr())
-        recvbuff: ffi.CData = ffi.cast('void*', recv.data_ptr())
-        dtype: DataType = DataType.from_torch_dtype(send.dtype)
-        num_elements: int = recv.numel()
-        return self._all_reduce_async_n(sendbuff, recvbuff, num_elements=num_elements, dtype=dtype, op=op, tag=tag)
-
-    def _all_reduce_async_np(self, send: 'np.ndarray', recv: 'np.ndarray', *, op: ReduceOp,
-                             tag: int = 0) -> AsyncReduceHandle:
-        assert send.flags['C_CONTIGUOUS'], 'Input tensor must be contiguous'
-        assert recv.flags['C_CONTIGUOUS'], 'Output tensor must be contiguous'
-        assert send.dtype == recv.dtype, 'Input and output tensors must have the same dtype'
-        assert send.size == recv.size, 'Input and output tensors must have the same number of elements'
-        sendbuff: ffi.CData = ffi.cast('void*', send.ctypes.data)
-        recvbuff: ffi.CData = ffi.cast('void*', recv.ctypes.data)
-        dtype: DataType = DataType.from_numpy_dtype(send.dtype)
-        num_elements: int = recv.size
-        return self._all_reduce_async_n(sendbuff, recvbuff, num_elements=num_elements, dtype=dtype, op=op, tag=tag)
-
-    def _all_reduce_async_n(self, sendbuff: ffi.CData, recvbuff: ffi.CData, *,
-                            num_elements: int, dtype: DataType, op: ReduceOp,
-                            tag: int = 0) -> AsyncReduceHandle:
-        handle: ffi.CData = ffi.new('pcclAsyncReduceOp_t*')
-        PCCLError.check(
-            C.pcclAllReduceAsync(sendbuff, recvbuff, num_elements, dtype.value, op.value, tag, self._comm[0], handle),
-            "pcclAllReduceAsync"
-        )
-        return AsyncReduceHandle(handle)
-
     def update_topology(self):
         """
         Update the topology of a communicator if required.
-        Topology updates are required when new peers join, in which case @code pcclUpdateTopology@endcode will
+        Topology updates are required when new peers join, in which case pcclUpdateTopology will
         automatically handle connection establishment with the new peer(s).
         Topology updates can also be triggered by the master node in response to bandwidth changes or other events.
         This function will block until the topology update is complete.
@@ -451,8 +410,208 @@ class Communicator:
         The function will not unblock until it is confirmed all peers have the same shared state revision.
         """
         sync_info: ffi.CData = ffi.new('pcclSharedStateSyncInfo_t*')
-        PCCLError.check(C.pcclSynchronizeSharedState(self._comm[0], shared_state._state, sync_info), "pcclSynchronizeSharedState")
+        PCCLError.check(C.pcclSynchronizeSharedState(self._comm[0], shared_state._state, sync_info),
+                        "pcclSynchronizeSharedState")
         return SharedStateSyncInfo(sync_info.tx_bytes, sync_info.rx_bytes)
+
+    def all_reduce(self, send: Union['torch.Tensor', 'np.ndarray'], recv: Union['torch.Tensor', 'np.ndarray'], *,
+                   op: ReduceOp, tag: int = 0,
+                   operand_descriptor: Optional[ReduceOperandDescriptor] = None,
+                   quantization_options: Optional[QuantizationOptions] = None) -> ReduceInfo:
+        """Performs an all reduce operation on a communicator. Blocks until the all reduce is complete."""
+        if not isinstance(torch, ModuleDummy) and isinstance(send, torch.Tensor) and isinstance(recv, torch.Tensor):
+            return self._all_reduce_pt(send, recv, op=op, tag=tag,
+                                       operand_descriptor=operand_descriptor,
+                                       quantization_options=quantization_options)
+        elif not isinstance(np, ModuleDummy) and isinstance(send, np.ndarray) and isinstance(recv, np.ndarray):
+            return self._all_reduce_np(send, recv, op=op, tag=tag,
+                                       operand_descriptor=operand_descriptor,
+                                       quantization_options=quantization_options)
+        else:
+            raise ValueError(
+                f'Unsupported input types: {type(send)}, {type(recv)}; send and recv must either be both torch.Tensor or both np.ndarray')
+
+    def _all_reduce_pt(self, send: 'torch.Tensor', recv: 'torch.Tensor', *, op: ReduceOp, tag: int,
+                       operand_descriptor: Optional[ReduceOperandDescriptor],
+                       quantization_options: Optional[QuantizationOptions]) -> ReduceInfo:
+        assert send.is_contiguous(), 'Input tensor must be contiguous'
+        assert recv.is_contiguous(), 'Output tensor must be contiguous'
+        assert send.device == recv.device, 'Input and output tensors must be on the same device'
+        assert send.dtype == recv.dtype, 'Input and output tensors must have the same dtype'
+        assert send.device.type == 'cpu', 'Only CPU tensors are supported'
+        assert send.numel() == recv.numel(), 'Input and output tensors must have the same number of elements'
+
+        sendbuff: ffi.CData = ffi.cast('void*', send.data_ptr())
+        recvbuff: ffi.CData = ffi.cast('void*', recv.data_ptr())
+        num_elements: int = recv.numel()
+        dtype: DataType = DataType.from_torch_dtype(send.dtype)
+
+        if operand_descriptor is None:
+            operand_descriptor = ReduceOperandDescriptor(
+                datatype=dtype,
+                distribution_hint=DistributionHint.NONE
+            )
+
+        if quantization_options is None:
+            quantization_options = QuantizationOptions(
+                quantized_datatype=dtype,
+                algorithm=QuantizationAlgorithm.NONE
+            )
+
+        descriptor = ReduceDescriptor(
+            count=num_elements,
+            op=op,
+            tag=tag,
+            operand_descriptor=operand_descriptor,
+            quantization_options=quantization_options
+        ).to_c()
+
+        info: ffi.CData = ffi.new('pcclReduceInfo_t*')
+        PCCLError.check(
+            C.pcclAllReduce(sendbuff, recvbuff, descriptor, self._comm[0], info),
+            "pcclAllReduce"
+        )
+        return ReduceInfo(info.world_size, info.tx_bytes, info.rx_bytes)
+
+    def _all_reduce_np(self, send: 'np.ndarray', recv: 'np.ndarray', *, op: ReduceOp, tag: int,
+                       operand_descriptor: Optional[ReduceOperandDescriptor],
+                       quantization_options: Optional[QuantizationOptions]) -> ReduceInfo:
+        assert send.flags['C_CONTIGUOUS'], 'Input tensor must be contiguous'
+        assert recv.flags['C_CONTIGUOUS'], 'Output tensor must be contiguous'
+        assert send.dtype == recv.dtype, 'Input and output tensors must have the same dtype'
+        assert send.size == recv.size, 'Input and output tensors must have the same number of elements'
+
+        sendbuff: ffi.CData = ffi.cast('void*', send.ctypes.data)
+        recvbuff: ffi.CData = ffi.cast('void*', recv.ctypes.data)
+        num_elements: int = recv.size
+        dtype: DataType = DataType.from_torch_dtype(send.dtype)
+
+        if operand_descriptor is None:
+            operand_descriptor = ReduceOperandDescriptor(
+                datatype=dtype,
+                distribution_hint=DistributionHint.NONE
+            )
+
+        if quantization_options is None:
+            quantization_options = QuantizationOptions(
+                quantized_datatype=dtype,
+                algorithm=QuantizationAlgorithm.NONE
+            )
+
+        descriptor = ReduceDescriptor(
+            count=num_elements,
+            op=op,
+            tag=tag,
+            operand_descriptor=operand_descriptor,
+            quantization_options=quantization_options
+        ).to_c()
+
+        info: ffi.CData = ffi.new('pcclReduceInfo_t*')
+        PCCLError.check(
+            C.pcclAllReduce(sendbuff, recvbuff, descriptor, self._comm[0], info),
+            "pcclAllReduce"
+        )
+        return ReduceInfo(info.world_size, info.tx_bytes, info.rx_bytes)
+
+    def all_reduce_async(self, send: Union['torch.Tensor', 'np.ndarray'], recv: Union['torch.Tensor', 'np.ndarray'], *,
+                         op: ReduceOp, tag: int = 0,
+                         operand_descriptor: Optional[ReduceOperandDescriptor] = None,
+                         quantization_options: Optional[QuantizationOptions] = None) -> AsyncReduceHandle:
+        """Performs an all reduce operation on a communicator. Async version of all_reduce."""
+        if not isinstance(torch, ModuleDummy) and isinstance(send, torch.Tensor) and isinstance(recv, torch.Tensor):
+            return self._all_reduce_async_pt(send, recv, op=op, tag=tag,
+                                             operand_descriptor=operand_descriptor,
+                                             quantization_options=quantization_options)
+        elif not isinstance(np, ModuleDummy) and isinstance(send, np.ndarray) and isinstance(recv, np.ndarray):
+            return self._all_reduce_async_np(send, recv, op=op, tag=tag,
+                                             operand_descriptor=operand_descriptor,
+                                             quantization_options=quantization_options)
+        else:
+            raise ValueError(
+                f'Unsupported input types: {type(send)}, {type(recv)}; send and recv must either be both torch.Tensor or both np.ndarray')
+
+    def _all_reduce_async_pt(self, send: 'torch.Tensor', recv: 'torch.Tensor', *, op: ReduceOp, tag: int,
+                             operand_descriptor: Optional[ReduceOperandDescriptor],
+                             quantization_options: Optional[QuantizationOptions]) -> AsyncReduceHandle:
+        assert send.is_contiguous(), 'Input tensor must be contiguous'
+        assert recv.is_contiguous(), 'Output tensor must be contiguous'
+        assert send.device == recv.device, 'Input and output tensors must be on the same device'
+        assert send.dtype == recv.dtype, 'Input and output tensors must have the same dtype'
+        assert send.device.type == 'cpu', 'Only CPU tensors are supported'
+        assert send.numel() == recv.numel(), 'Input and output tensors must have the same number of elements'
+
+        sendbuff: ffi.CData = ffi.cast('void*', send.data_ptr())
+        recvbuff: ffi.CData = ffi.cast('void*', recv.data_ptr())
+        num_elements: int = recv.numel()
+        dtype: DataType = DataType.from_torch_dtype(send.dtype)
+
+        if operand_descriptor is None:
+            operand_descriptor = ReduceOperandDescriptor(
+                datatype=dtype,
+                distribution_hint=DistributionHint.NONE
+            )
+
+        if quantization_options is None:
+            quantization_options = QuantizationOptions(
+                quantized_datatype=dtype,
+                algorithm=QuantizationAlgorithm.NONE
+            )
+
+        descriptor = ReduceDescriptor(
+            count=num_elements,
+            op=op,
+            tag=tag,
+            operand_descriptor=operand_descriptor,
+            quantization_options=quantization_options
+        ).to_c()
+
+        handle: ffi.CData = ffi.new('pcclAsyncReduceOp_t*')
+        PCCLError.check(
+            C.pcclAllReduceAsync(sendbuff, recvbuff, descriptor, self._comm[0], handle),
+            "pcclAllReduceAsync"
+        )
+        return AsyncReduceHandle(handle)
+
+    def _all_reduce_async_np(self, send: 'np.ndarray', recv: 'np.ndarray', *, op: ReduceOp, tag: int,
+                             operand_descriptor: Optional[ReduceOperandDescriptor],
+                             quantization_options: Optional[QuantizationOptions]) -> AsyncReduceHandle:
+        assert send.flags['C_CONTIGUOUS'], 'Input tensor must be contiguous'
+        assert recv.flags['C_CONTIGUOUS'], 'Output tensor must be contiguous'
+        assert send.dtype == recv.dtype, 'Input and output tensors must have the same dtype'
+        assert send.size == recv.size, 'Input and output tensors must have the same number of elements'
+
+        sendbuff: ffi.CData = ffi.cast('void*', send.ctypes.data)
+        recvbuff: ffi.CData = ffi.cast('void*', recv.ctypes.data)
+        num_elements: int = recv.size
+
+        dtype: DataType = DataType.from_torch_dtype(send.dtype)
+
+        if operand_descriptor is None:
+            operand_descriptor = ReduceOperandDescriptor(
+                datatype=dtype,
+                distribution_hint=DistributionHint.NONE
+            )
+
+        if quantization_options is None:
+            quantization_options = QuantizationOptions(
+                quantized_datatype=dtype,
+                algorithm=QuantizationAlgorithm.NONE
+            )
+
+        descriptor = ReduceDescriptor(
+            count=num_elements,
+            op=op,
+            tag=tag,
+            operand_descriptor=operand_descriptor,
+            quantization_options=quantization_options
+        ).to_c()
+
+        handle: ffi.CData = ffi.new('pcclAsyncReduceOp_t*')
+        PCCLError.check(
+            C.pcclAllReduceAsync(sendbuff, recvbuff, descriptor, self._comm[0], handle),
+            "pcclAllReduceAsync"
+        )
+        return AsyncReduceHandle(handle)
 
 
 class MasterNode:

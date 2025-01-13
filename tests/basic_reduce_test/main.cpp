@@ -78,9 +78,18 @@ int main() {
         pcclAsyncReduceOp_t async_op{};
         pcclReduceInfo_t reduce_info{};
         do {
-            pcclAllReduceAsync(gradients, weights, n_elements, pcclFloat, pcclSum, 0, communicator, &async_op);
+            constexpr pcclReduceDescriptor_t desc{
+                .count = n_elements,
+                .op = pcclSum,
+                .tag = 0,
+                .src_descriptor = {.datatype = pcclFloat, .distribution_hint = PCCL_DISTRIBUTION_HINT_NONE},
+                // .quantization_options = {.quantized_datatype = pcclFloat, .algorithm = pcclQuantNone},
+                .quantization_options = {.quantized_datatype = pcclUint8, .algorithm = pcclQuantMinMax},
+            };
+            pcclAllReduceAsync(gradients, weights, &desc, communicator, &async_op);
         } while (pcclAwaitAsyncReduce(&async_op, &reduce_info) != pcclSuccess);
-        std::cout << "All reduce finished: " << shared_state.revision << "; Rx-Bytes:" << reduce_info.rx_bytes << "; Tx-Bytes:" << reduce_info.tx_bytes << std::endl;
+        std::cout << "All reduce finished: " << shared_state.revision << "; Rx-Bytes:" << reduce_info.rx_bytes <<
+                "; Tx-Bytes:" << reduce_info.tx_bytes << std::endl;
         shared_state.revision++;
         i++;
     }

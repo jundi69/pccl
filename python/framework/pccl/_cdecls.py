@@ -1,4 +1,4 @@
-# Autogenered by /Users/mike/CLionProjects/pccl-refactor/python/framework/gen_bindings.py 2025-01-02 00:50:10.030130, do NOT edit!
+# Autogenered by /Users/mike/CLionProjects/pccl/python/framework/gen_bindings.py 2025-01-13 01:05:40.558252, do NOT edit!
 
 __PCCL_CDECLS: str = '''
 
@@ -70,6 +70,30 @@ uint32_t world_size;
 uint64_t tx_bytes;
 uint64_t rx_bytes;
 } pcclReduceInfo_t;
+typedef enum pcclDistributionHint_t {
+PCCL_DISTRIBUTION_HINT_NONE = 0,
+PCCL_NORMAL_DISTRIBUTION_HINT = 1,
+PCCL_UNIFORM_DISTRIBUTION_HINT = 2
+} pcclDistributionHint_t;
+typedef struct pcclReduceOperandDescriptor_t {
+pcclDataType_t datatype;
+pcclDistributionHint_t distribution_hint;
+} pcclReduceOperandDescriptor_t;
+typedef enum pcclQuantizationAlgorithm_t {
+pcclQuantNone = 0,
+pcclQuantMinMax = 1,
+} pcclQuantizationAlgorithm_t;
+typedef struct pcclQuantizationOptions_t {
+pcclDataType_t quantized_datatype;
+pcclQuantizationAlgorithm_t algorithm;
+} pcclQuantizationOptions_t;
+typedef struct pcclReduceDescriptor_t {
+size_t count;
+pcclRedOp_t op;
+uint64_t tag;
+pcclReduceOperandDescriptor_t src_descriptor;
+pcclQuantizationOptions_t quantization_options;
+} pcclReduceDescriptor_t;
 typedef struct pcclAsyncReduceOp_t {
 pcclComm_t *comm;
 uint64_t tag;
@@ -104,13 +128,16 @@ int *p_attribute_out);
  pcclResult_t pcclDestroyCommunicator(pcclComm_t *communicator);
  pcclResult_t pcclConnect(pcclComm_t *communicator);
  pcclResult_t pcclUpdateTopology(pcclComm_t *communicator);
- pcclResult_t pcclAllReduce(const void *sendbuff, void *recvbuff, size_t count, pcclDataType_t datatype,
-pcclRedOp_t op, uint64_t tag, const pcclComm_t *communicator,
+ pcclResult_t pcclAllReduce(const void *sendbuff, void *recvbuff,
+const pcclReduceDescriptor_t *descriptor,
+const pcclComm_t *communicator,
 pcclReduceInfo_t * reduce_info_out);
- pcclResult_t pcclAllReduceAsync(const void *sendbuff, void *recvbuff, size_t count, pcclDataType_t datatype,
-pcclRedOp_t op, uint64_t tag, const pcclComm_t *communicator,
+ pcclResult_t pcclAllReduceAsync(const void *sendbuff, void *recvbuff,
+const pcclReduceDescriptor_t *descriptor,
+const pcclComm_t *communicator,
 pcclAsyncReduceOp_t *reduce_handle_out);
- pcclResult_t pcclAwaitAsyncReduce(const pcclAsyncReduceOp_t *reduce_handle, pcclReduceInfo_t * reduce_info_out);
+ pcclResult_t pcclAwaitAsyncReduce(const pcclAsyncReduceOp_t *reduce_handle,
+pcclReduceInfo_t * reduce_info_out);
  pcclResult_t pcclSynchronizeSharedState(const pcclComm_t *communicator,
 pcclSharedState_t *shared_state,
 pcclSharedStateSyncInfo_t * sync_info_out);

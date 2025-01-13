@@ -4,7 +4,8 @@ from time import sleep
 from typing import List
 
 import pccl
-from pccl import Communicator, SharedState, TensorInfo, ReduceOp, Attribute, PCCLError
+from pccl import Communicator, SharedState, TensorInfo, ReduceOp, Attribute, PCCLError, ReduceOperandDescriptor, \
+    DataType, DistributionHint, QuantizationOptions
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -86,6 +87,7 @@ def log_debug(msg: str):
 
 _IS_FIRST_MSG = True
 
+
 def log_info(msg: str):
     global _IS_FIRST_MSG
     if _IS_FIRST_MSG:
@@ -114,7 +116,7 @@ def main():
 
     # communicator
     communicator: Communicator = Communicator(HOST, 0)
-    communicator.connect(n_attempts = 15)
+    communicator.connect(n_attempts=15)
     log_info(f"(RANK={RANK}) Connected to the master node; PID={os.getpid()}")
 
     # perform a dummy forward pass to initialize the optimizer state
@@ -199,7 +201,16 @@ def main():
 
             while True:
                 log_debug(f"(RANK={RANK}, it={i}) all_reduce_async()")
-                handle = communicator.all_reduce_async(grads, grads, op=ReduceOp.SUM)
+                op_desc = ReduceOperandDescriptor(
+                    datatype=DataType.FLOAT,
+                    distribution_hint=DistributionHint.NORMAL
+                )
+                quant_desc = QuantizationOptions(
+                    quantized_datatype=DataType.UINT8,
+                    algorithm=pccl.QuantizationAlgorithm.MIN_MAX
+                )
+                handle = communicator.all_reduce_async(grads, grads, operand_descriptor=op_desc,
+                                                       quantization_options=quant_desc, op=ReduceOp.SUM)
                 is_success, status, info = handle.wait()
                 if not is_success:
                     log_debug(f"(RANK={RANK}, it={i}) all_reduce_async() failed: {status}; retrying...")

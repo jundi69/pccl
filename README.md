@@ -34,7 +34,7 @@ Feel free to create issues for architecture-induced compilation failures.
 
 ### Installing prerequisites
 
-In this section we propose a method of installing the required prerequisites for building PCCL on Windows and macOS.
+In this section we propose a method of installing the required prerequisites for building PCCL on Windows, macOS and Linux.
 
 #### Windows
 

@@ -86,6 +86,35 @@ typedef struct pcclReduceInfo_t {
     uint64_t rx_bytes;
 } pcclReduceInfo_t;
 
+typedef enum pcclDistributionHint_t {
+    PCCL_DISTRIBUTION_HINT_NONE = 0,
+    PCCL_NORMAL_DISTRIBUTION_HINT = 1,
+    PCCL_UNIFORM_DISTRIBUTION_HINT = 2
+} pcclDistributionHint_t;
+
+typedef struct pcclReduceOperandDescriptor_t {
+    pcclDataType_t datatype;
+    pcclDistributionHint_t distribution_hint;
+} pcclReduceOperandDescriptor_t;
+
+typedef enum pcclQuantizationAlgorithm_t {
+    pcclQuantNone = 0,
+    pcclQuantMinMax = 1,
+} pcclQuantizationAlgorithm_t;
+
+typedef struct pcclQuantizationOptions_t {
+    pcclDataType_t quantized_datatype;
+    pcclQuantizationAlgorithm_t algorithm;
+} pcclQuantizationOptions_t;
+
+typedef struct pcclReduceDescriptor_t {
+    size_t count;
+    pcclRedOp_t op;
+    uint64_t tag;
+    pcclReduceOperandDescriptor_t src_descriptor;
+    pcclQuantizationOptions_t quantization_options;
+} pcclReduceDescriptor_t;
+
 typedef struct pcclAsyncReduceOp_t {
     pcclComm_t *comm;
     uint64_t tag;
@@ -213,10 +242,7 @@ PCCL_EXPORT pcclResult_t pcclUpdateTopology(pcclComm_t *communicator);
  *
  * @param sendbuff The buffer to send data from.
  * @param recvbuff The buffer to receive data into.
- * @param count The number of elements in the buffer.
- * @param datatype The data type of the elements in the buffer.
- * @param op The reduction operation to perform.
- * @param tag The tag to identify the operation.
+ * @param descriptor Descriptor containing parameters for configuring the reduce operation.
  * @param communicator The communicator to perform the operation on.
  * @param reduce_info_out The reduce info to be filled with information about the operation.
  *
@@ -226,8 +252,9 @@ PCCL_EXPORT pcclResult_t pcclUpdateTopology(pcclComm_t *communicator);
  * @return @code pcclNotInitialized@endcode if @code pcclInit@endcode has not been called yet.
  * @return @code pcclInvalidUsage@endcode if the communicator is not connected to a master node.
  */
-PCCL_EXPORT pcclResult_t pcclAllReduce(const void *sendbuff, void *recvbuff, size_t count, pcclDataType_t datatype,
-                                       pcclRedOp_t op, uint64_t tag, const pcclComm_t *communicator,
+PCCL_EXPORT pcclResult_t pcclAllReduce(const void *sendbuff, void *recvbuff,
+                                       const pcclReduceDescriptor_t *descriptor,
+                                       const pcclComm_t *communicator,
                                        pcclReduceInfo_t *PCCL_NULLABLE reduce_info_out);
 
 /**
@@ -235,10 +262,7 @@ PCCL_EXPORT pcclResult_t pcclAllReduce(const void *sendbuff, void *recvbuff, siz
 *
 * @param sendbuff The buffer to send data from.
 * @param recvbuff The buffer to receive data into.
-* @param count The number of elements in the buffer.
-* @param datatype The data type of the elements in the buffer.
-* @param op The reduction operation to perform.
-* @param tag The tag to identify the operation.
+* @param descriptor Descriptor containing parameters for configuring the reduce operation.
 * @param communicator The communicator to perform the operation on.
 * @param reduce_handle_out The reduce op handle to be filled with an async handle to the operation.
 *
@@ -248,8 +272,9 @@ PCCL_EXPORT pcclResult_t pcclAllReduce(const void *sendbuff, void *recvbuff, siz
 * @return @code pcclInvalidUsage@endcode if the communicator is not connected to a master node.
 * @return @code pcclInvalidArgument@endcode if the reduce handle output is null.
 */
-PCCL_EXPORT pcclResult_t pcclAllReduceAsync(const void *sendbuff, void *recvbuff, size_t count, pcclDataType_t datatype,
-                                            pcclRedOp_t op, uint64_t tag, const pcclComm_t *communicator,
+PCCL_EXPORT pcclResult_t pcclAllReduceAsync(const void *sendbuff, void *recvbuff,
+                                            const pcclReduceDescriptor_t *descriptor,
+                                            const pcclComm_t *communicator,
                                             pcclAsyncReduceOp_t *reduce_handle_out);
 
 /**
