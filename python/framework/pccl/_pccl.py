@@ -484,7 +484,8 @@ class Communicator:
         sendbuff: ffi.CData = ffi.cast('void*', send.ctypes.data)
         recvbuff: ffi.CData = ffi.cast('void*', recv.ctypes.data)
         num_elements: int = recv.size
-        dtype: DataType = DataType.from_torch_dtype(send.dtype)
+        
+        dtype: DataType = DataType.from_numpy_dtype(send.dtype)
 
         if operand_descriptor is None:
             operand_descriptor = ReduceOperandDescriptor(
@@ -584,7 +585,7 @@ class Communicator:
         recvbuff: ffi.CData = ffi.cast('void*', recv.ctypes.data)
         num_elements: int = recv.size
 
-        dtype: DataType = DataType.from_torch_dtype(send.dtype)
+        dtype: DataType = DataType.from_numpy_dtype(send.dtype)
 
         if operand_descriptor is None:
             operand_descriptor = ReduceOperandDescriptor(
