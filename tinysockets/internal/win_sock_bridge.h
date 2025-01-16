@@ -2,6 +2,7 @@
 #define SOCKET_UTILS_H
 
 #ifdef WIN32
+#define WIN32_LEAN_AND_MEAN
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #undef min
@@ -12,6 +13,7 @@
 #include <sys/socket.h>
 #include <sys/ioctl.h>
 #include <sys/fcntl.h>
+#include <sys/poll.h>
 #endif
 
 #ifdef WIN32
