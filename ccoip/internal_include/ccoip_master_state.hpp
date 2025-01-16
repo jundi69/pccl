@@ -14,16 +14,15 @@ namespace ccoip {
         /// It does not yet participate in collective communications operations
         /// or shared state distribution.
         /// In this tate, the client is not allowed to request to participate in any of the above.
-        /// While in this state, the only legal state for the client to be in is @code IDLE@endcode, except
-        /// @code CONNECTING_TO_PEERS@endcode and @code WAITING_FOR_OTHER_PEERS@endcode while establishing p2p connections.
-        /// Only after establishment, is the client moved to the @code PEER_ACCEPTED@endcode phase.
+        /// While in @code PEER_REGISTERED@endcode, the client is generally restricted to @code IDLE@endcode or the transitional states used for p2p establishment (@code CONNECTING_TO_PEERS@endcode or @code WAITING_FOR_OTHER_PEERS@endcode).
+        /// The client is not allowed to request other phases.
         PEER_REGISTERED,
 
         /// Peers have accepted the client.
         /// Peers periodically accept new clients to join the running session.
         /// This is a phase unanimously agreed upon by all peers.
-        /// New clients once they have established their p2p connections with all peers,
-        /// will be moved to this phase.
+        /// New clients once they have established their p2p connections with all peers
+        /// and confirmed to the master to have done so, will be moved to this phase.
         PEER_ACCEPTED
     };
 
@@ -108,6 +107,7 @@ namespace ccoip {
         /// However, in this state, the client cannot transition to any other state until all collective communications operations have completed.
         /// Because more fine-grained state tracking is required for collective communications operations, the @code CollectiveCommunicationState@endcode enum is used
         /// to indicate the state of each collective communications operation per tag.
+        /// Note that the client can be in multiple @code CollectiveCommunicationState@endcode states at the same time, one for each collective communications operation.
         COLLECTIVE_COMMUNICATIONS_RUNNING
     };
 

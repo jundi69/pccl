@@ -430,4 +430,28 @@ namespace tinysockets {
         /// Called when a new connection is established
         void onNewConnection(int client_socket, sockaddr_in sockaddr_in) const;
     };
+
+
+    namespace poll {
+        enum PollEvent {
+            POLL_INPUT = 1,
+            POLL_OUTPUT = 2,
+        };
+
+        struct PollDescriptor {
+        public:
+            int socket_fd{};
+            PollEvent target_event{};
+            PollEvent event_out{};
+
+        public:
+            [[nodiscard]] bool hasEvent(PollEvent event) const;
+        };
+
+        void poll(const std::initializer_list<PollDescriptor> &requests, int timeout);
+
+        std::optional<size_t> send_nonblocking(const std::span<uint8_t> &data, const PollDescriptor &poll_descriptor);
+
+        std::optional<size_t> recv_nonblocking(std::span<uint8_t> &data, const PollDescriptor &poll_descriptor);
+    };
 };
