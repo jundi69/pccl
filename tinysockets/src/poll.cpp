@@ -1,6 +1,7 @@
 #include <tinysockets.hpp>
-
 #include <win_sock_bridge.h>
+
+#include <cstring> // for std::strerror
 
 static short ToPollEvent(const tinysockets::poll::PollEvent poll_event) {
     switch (poll_event) {
@@ -34,7 +35,7 @@ static void unix_poll(const std::initializer_list<tinysockets::poll::PollDescrip
         }
     }
 
-    ::poll(poll_fds.data(), poll_fds.size(), timeout);
+    poll(poll_fds.data(), poll_fds.size(), timeout);
 }
 #else
 static void wsa_poll(const std::initializer_list<tinysockets::poll::PollDescriptor> &requests, const int timeout) {
