@@ -169,10 +169,8 @@ public:
      * @tparam T The type to write to the buffer.
      * @param value The value to write to the buffer.
      */
-    template<typename T>
+    template<typename T> requires BufferPOD<T>
     void write(T value) {
-        static_assert(std::is_arithmetic_v<T>, "Only arithmetic types are supported");
-
         ensureCapacity(sizeof(T));
 
         for (size_t i = 0; i < sizeof(T); ++i) {
@@ -187,7 +185,7 @@ public:
      * @tparam T The type of the array to write to the buffer.
      * @param array The array to write to the buffer.
      */
-    template<typename T, size_t N>
+    template<typename T, size_t N> requires BufferPOD<T>
     void writeFixedArray(std::array<T, N> array) {
         for (size_t i = 0; i < N; ++i) {
             write(array[i]);

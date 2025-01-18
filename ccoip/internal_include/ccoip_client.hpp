@@ -49,7 +49,8 @@ namespace ccoip {
 
         /// Launches an asynchronous all reduce operation
         [[nodiscard]] bool allReduceAsync(const void *sendbuff, void *recvbuff, size_t count,
-                                          ccoip_data_type_t datatype,
+                                          ccoip_data_type_t datatype, ccoip_data_type_t quantized_data_type,
+                                          ccoip_quantization_algorithm_t quantization_algorithm,
                                           ccoip_reduce_op_t op, uint64_t tag) const;
 
         /// Awaits the completion of an async reduce operation

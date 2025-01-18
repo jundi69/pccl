@@ -25,10 +25,10 @@ namespace ccoip {
         std::thread::id shared_state_server_thread_id;
 
         /// Open p2p connections; Tx connections (we have established this connection to the peer)
-        std::unordered_map<ccoip_uuid_t, std::unique_ptr<tinysockets::BlockingIOSocket>> p2p_connections_tx;
+        std::unordered_map<ccoip_uuid_t, std::unique_ptr<tinysockets::BlockingIOSocket> > p2p_connections_tx;
 
         /// Open p2p connections; Rx connections (peer has established this connection to us)
-        std::unordered_map<ccoip_uuid_t, std::unique_ptr<tinysockets::BlockingIOSocket>> p2p_connections_rx;
+        std::unordered_map<ccoip_uuid_t, std::unique_ptr<tinysockets::BlockingIOSocket> > p2p_connections_rx;
 
         /// Peer group of the client
         uint32_t peer_group;
@@ -59,7 +59,10 @@ namespace ccoip {
 
         [[nodiscard]] bool allReduceAsync(const void *sendbuff, void *recvbuff, size_t count,
                                           ccoip_data_type_t datatype,
-                                          ccoip_reduce_op_t op, uint64_t tag);
+                                          ccoip_data_type_t quantized_data_type,
+                                          ccoip_quantization_algorithm_t quantization_algorithm,
+                                          ccoip_reduce_op_t op,
+                                          uint64_t tag);
 
         [[nodiscard]] bool joinAsyncReduce(uint64_t tag);
 
@@ -68,7 +71,6 @@ namespace ccoip {
         [[nodiscard]] bool isAnyCollectiveComsOpRunning() const;
 
         [[nodiscard]] size_t getWorldSize() const;
-
 
     private:
         [[nodiscard]] bool establishP2PConnections();

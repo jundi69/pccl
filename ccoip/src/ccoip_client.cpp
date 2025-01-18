@@ -28,9 +28,11 @@ bool ccoip::CCoIPClient::updateTopology() const {
     return client->updateTopology();
 }
 
-bool ccoip::CCoIPClient::allReduceAsync(const void *sendbuff, void *recvbuff, const size_t count, const ccoip_data_type_t datatype,
+bool ccoip::CCoIPClient::allReduceAsync(const void *sendbuff, void *recvbuff, const size_t count,
+                                        const ccoip_data_type_t datatype, const ccoip_data_type_t quantized_data_type,
+                                        const ccoip_quantization_algorithm_t quantization_algorithm,
                                         const ccoip_reduce_op_t op, const uint64_t tag) const {
-    return client->allReduceAsync(sendbuff, recvbuff, count, datatype, op, tag);
+    return client->allReduceAsync(sendbuff, recvbuff, count, datatype, quantized_data_type, quantization_algorithm, op, tag);
 }
 
 bool ccoip::CCoIPClient::joinAsyncReduce(const uint64_t tag) const {

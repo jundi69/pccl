@@ -187,6 +187,8 @@ namespace tinysockets {
 
         [[nodiscard]] const ccoip_socket_address_t &getConnectSockAddr() const;
 
+        [[nodiscard]] int getSocketFd() const;
+
         template<typename T> requires std::is_base_of_v<ccoip::Packet, T>
         [[nodiscard]] bool sendPacket(const T &packet) {
             std::lock_guard guard{send_mutex};
@@ -439,19 +441,17 @@ namespace tinysockets {
         };
 
         struct PollDescriptor {
-        public:
-            int socket_fd{};
+            BlockingIOSocket &socket;
             PollEvent target_event{};
             PollEvent event_out{};
 
-        public:
             [[nodiscard]] bool hasEvent(PollEvent event) const;
         };
 
-        void poll(const std::initializer_list<PollDescriptor> &requests, int timeout);
+        int poll(std::vector<PollDescriptor> &descriptors, int timeout);
 
-        std::optional<size_t> send_nonblocking(const std::span<uint8_t> &data, const PollDescriptor &poll_descriptor);
+        std::optional<size_t> send_nonblocking(const std::span<const std::byte> &data, const PollDescriptor &poll_descriptor);
 
-        std::optional<size_t> recv_nonblocking(std::span<uint8_t> &data, const PollDescriptor &poll_descriptor);
+        std::optional<size_t> recv_nonblocking(const std::span<std::byte> &data, const PollDescriptor &poll_descriptor);
     };
 };

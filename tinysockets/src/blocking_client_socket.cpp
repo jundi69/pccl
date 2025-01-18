@@ -167,6 +167,10 @@ const ccoip_socket_address_t &tinysockets::BlockingIOSocket::getConnectSockAddr(
     return connect_sockaddr;
 }
 
+int tinysockets::BlockingIOSocket::getSocketFd() const {
+    return socket_fd;
+}
+
 bool tinysockets::BlockingIOSocket::sendLtvPacket(const ccoip::packetId_t packet_id,
                                                   const PacketWriteBuffer &buffer) const {
     PacketWriteBuffer tlv_buffer{};

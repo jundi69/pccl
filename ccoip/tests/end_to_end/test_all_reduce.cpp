@@ -2,6 +2,7 @@
 #include <ccoip_client.hpp>
 #include <ccoip_master.hpp>
 #include <thread>
+#include <typeindex>
 #include <gtest/gtest.h>
 
 
@@ -35,7 +36,44 @@ static void establishConnections(const std::vector<const ccoip::CCoIPClient *> &
     }
 }
 
-TEST(AllReduceTest, TestBasic) {
+template<typename T>
+class TypeAllReduceTest : public testing::Test {
+};
+
+typedef testing::Types<uint8_t, int8_t, int16_t, uint16_t, int32_t, uint32_t, int64_t, uint64_t, float, double>
+AllReduceTestTypes;
+TYPED_TEST_SUITE(TypeAllReduceTest, AllReduceTestTypes);
+
+template<typename T>
+class QuantizeTypedAllReduceTest : public testing::Test {
+};
+typedef testing::Types<float, double> AllReduceQuantizeTestTypes;
+TYPED_TEST_SUITE(QuantizeTypedAllReduceTest, AllReduceQuantizeTestTypes);
+
+inline ccoip::ccoip_data_type_t getCcoipDataType(const std::type_info &ti) {
+    static const std::unordered_map<std::type_index, ccoip::ccoip_data_type_t> type_map{
+        {typeid(uint8_t), ccoip::ccoipUint8},
+        {typeid(int8_t), ccoip::ccoipInt8},
+        {typeid(uint16_t), ccoip::ccoipUint16},
+        {typeid(int16_t), ccoip::ccoipInt16},
+        {typeid(uint32_t), ccoip::ccoipUint32},
+        {typeid(int32_t), ccoip::ccoipInt32},
+        {typeid(uint64_t), ccoip::ccoipUint64},
+        {typeid(int64_t), ccoip::ccoipInt64},
+        {typeid(float), ccoip::ccoipFloat},
+        {typeid(double), ccoip::ccoipDouble},
+    };
+    const auto it = type_map.find(std::type_index(ti));
+    if (it == type_map.end()) {
+        throw std::runtime_error("Unsupported type");
+    }
+    return it->second;
+}
+
+TYPED_TEST(TypeAllReduceTest, TestSumWorldSize2) {
+    using ValueType = TypeParam;
+    auto ccoipType = getCcoipDataType(typeid(TypeParam));
+
     ccoip::CCoIPMaster master({
         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {0, 0, 0, 0}}},
         .port = CCOIP_PROTOCOL_PORT_MASTER
@@ -55,14 +93,14 @@ TEST(AllReduceTest, TestBasic) {
 
     establishConnections({&client1, &client2});
 
-    std::thread client1_reduce_thread([&client1] {
-        const std::unique_ptr<uint8_t[]> value1(new uint8_t[1024]);
+    std::thread client1_reduce_thread([&client1, ccoipType] {
+        const std::unique_ptr<ValueType[]> value1(new ValueType[1024]);
         std::fill_n(value1.get(), 1024, 42);
 
-        const std::unique_ptr<uint8_t[]> result(new uint8_t[1024]);
+        const std::unique_ptr<ValueType[]> result(new ValueType[1024]);
         std::fill_n(result.get(), 1024, 0);
 
-        ASSERT_TRUE(client1.allReduceAsync(value1.get(), result.get(), 1024, ccoip::ccoipUint8, ccoip::ccoipOpSum, 1));
+        ASSERT_TRUE(client1.allReduceAsync(value1.get(), result.get(), 1024, ccoipType, ccoipType, ccoip::ccoipQuantizationNone, ccoip::ccoipOpSum, 1));
         ASSERT_TRUE(client1.joinAsyncReduce(1));
 
         // check result
@@ -71,19 +109,312 @@ TEST(AllReduceTest, TestBasic) {
         }
     });
 
-    std::thread client2_reduce_thread([&client2] {
-        const std::unique_ptr<uint8_t[]> value2(new uint8_t[1024]);
+    std::thread client2_reduce_thread([&client2, ccoipType] {
+        const std::unique_ptr<ValueType[]> value2(new ValueType[1024]);
         std::fill_n(value2.get(), 1024, 43);
 
-        const std::unique_ptr<uint8_t[]> result(new uint8_t[1024]);
+        const std::unique_ptr<ValueType[]> result(new ValueType[1024]);
         std::fill_n(result.get(), 1024, 0);
 
-        ASSERT_TRUE(client2.allReduceAsync(value2.get(), result.get(), 1024, ccoip::ccoipUint8, ccoip::ccoipOpSum, 1));
+        ASSERT_TRUE(client2.allReduceAsync(value2.get(), result.get(), 1024, ccoipType, ccoipType, ccoip::ccoipQuantizationNone, ccoip::ccoipOpSum, 1));
         ASSERT_TRUE(client2.joinAsyncReduce(1));
 
         // check result
         for (size_t i = 0; i < 1024; i++) {
             ASSERT_EQ(result[i], 85);
+        }
+    });
+
+    // wait for shared state sync to complete
+    client1_reduce_thread.join();
+    client2_reduce_thread.join();
+
+    // clean shutdown
+    ASSERT_TRUE(client2.interrupt());
+    ASSERT_TRUE(client1.interrupt());
+
+    ASSERT_TRUE(client1.join());
+    ASSERT_TRUE(client2.join());
+
+    ASSERT_TRUE(master.interrupt());
+    ASSERT_TRUE(master.join());
+}
+*/
+
+TYPED_TEST(QuantizeTypedAllReduceTest, TestSumQuantizedWorldSize2) {
+    using ValueType = TypeParam;
+    auto ccoipType = getCcoipDataType(typeid(TypeParam));
+
+    ccoip::CCoIPMaster master({
+        .inet = {.protocol = inetIPv4, .ipv4 = {.data = {0, 0, 0, 0}}},
+        .port = CCOIP_PROTOCOL_PORT_MASTER
+    });
+    ASSERT_TRUE(master.launch());
+
+    // client 1
+    const ccoip::CCoIPClient client1({
+                                         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                         .port = CCOIP_PROTOCOL_PORT_MASTER,
+                                     }, 0);
+    // client 2
+    const ccoip::CCoIPClient client2({
+                                         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                         .port = CCOIP_PROTOCOL_PORT_MASTER
+                                     }, 0);
+
+    establishConnections({&client1, &client2});
+
+    std::thread client1_reduce_thread([&client1, ccoipType] {
+        const std::unique_ptr<ValueType[]> value1(new ValueType[1024]);
+        std::fill_n(value1.get(), 1024, 42);
+
+        const std::unique_ptr<ValueType[]> result(new ValueType[1024]);
+        std::fill_n(result.get(), 1024, 0);
+
+        ASSERT_TRUE(client1.allReduceAsync(value1.get(), result.get(), 1024, ccoipType, ccoip::ccoipUint8, ccoip::ccoipQuantizationMinMax, ccoip::ccoipOpSum, 1));
+        ASSERT_TRUE(client1.joinAsyncReduce(1));
+
+        // check result
+        for (size_t i = 0; i < 1024; i++) {
+            ASSERT_EQ(result[i], 85);
+        }
+    });
+
+    std::thread client2_reduce_thread([&client2, ccoipType] {
+        const std::unique_ptr<ValueType[]> value2(new ValueType[1024]);
+        std::fill_n(value2.get(), 1024, 43);
+
+        const std::unique_ptr<ValueType[]> result(new ValueType[1024]);
+        std::fill_n(result.get(), 1024, 0);
+
+        ASSERT_TRUE(client2.allReduceAsync(value2.get(), result.get(), 1024, ccoipType, ccoip::ccoipUint8, ccoip::ccoipQuantizationMinMax, ccoip::ccoipOpSum, 1));
+        ASSERT_TRUE(client2.joinAsyncReduce(1));
+
+        // check result
+        for (size_t i = 0; i < 1024; i++) {
+            ASSERT_EQ(result[i], 85);
+        }
+    });
+
+    // wait for shared state sync to complete
+    client1_reduce_thread.join();
+    client2_reduce_thread.join();
+
+    // clean shutdown
+    ASSERT_TRUE(client2.interrupt());
+    ASSERT_TRUE(client1.interrupt());
+
+    ASSERT_TRUE(client1.join());
+    ASSERT_TRUE(client2.join());
+
+    ASSERT_TRUE(master.interrupt());
+    ASSERT_TRUE(master.join());
+}
+
+/*
+TYPED_TEST(TypeAllReduceTest, TestAvgWorldSize2) {
+    using ValueType = TypeParam;
+    auto ccoipType = getCcoipDataType(typeid(TypeParam));
+
+    ccoip::CCoIPMaster master({
+        .inet = {.protocol = inetIPv4, .ipv4 = {.data = {0, 0, 0, 0}}},
+        .port = CCOIP_PROTOCOL_PORT_MASTER
+    });
+    ASSERT_TRUE(master.launch());
+
+    // client 1
+    const ccoip::CCoIPClient client1({
+                                         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                         .port = CCOIP_PROTOCOL_PORT_MASTER,
+                                     }, 0);
+    // client 2
+    const ccoip::CCoIPClient client2({
+                                         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                         .port = CCOIP_PROTOCOL_PORT_MASTER
+                                     }, 0);
+
+    establishConnections({&client1, &client2});
+
+    std::thread client1_reduce_thread([&client1, ccoipType] {
+        const std::unique_ptr<ValueType[]> value1(new ValueType[1024]);
+        std::fill_n(value1.get(), 1024, 42);
+
+        const std::unique_ptr<ValueType[]> result(new ValueType[1024]);
+        std::fill_n(result.get(), 1024, 0);
+
+        ASSERT_TRUE(client1.allReduceAsync(value1.get(), result.get(), 1024, ccoipType, ccoipType, ccoip::ccoipQuantizationNone, ccoip::ccoipOpAvg, 1));
+        ASSERT_TRUE(client1.joinAsyncReduce(1));
+
+        // check result
+        for (size_t i = 0; i < 1024; i++) {
+            if constexpr (std::is_floating_point_v<ValueType>) {
+                ASSERT_EQ(result[i], 42.5);
+            } else {
+                ASSERT_EQ(result[i], 42);
+            }
+        }
+    });
+
+    std::thread client2_reduce_thread([&client2, ccoipType] {
+        const std::unique_ptr<ValueType[]> value2(new ValueType[1024]);
+        std::fill_n(value2.get(), 1024, 43);
+
+        const std::unique_ptr<ValueType[]> result(new ValueType[1024]);
+        std::fill_n(result.get(), 1024, 0);
+
+        ASSERT_TRUE(client2.allReduceAsync(value2.get(), result.get(), 1024, ccoipType, ccoipType, ccoip::ccoipQuantizationNone, ccoip::ccoipOpAvg, 1));
+        ASSERT_TRUE(client2.joinAsyncReduce(1));
+
+        // check result
+        for (size_t i = 0; i < 1024; i++) {
+            if constexpr (std::is_floating_point_v<ValueType>) {
+                ASSERT_EQ(result[i], 42.5);
+            } else {
+                ASSERT_EQ(result[i], 42);
+            }
+        }
+    });
+
+    // wait for shared state sync to complete
+    client1_reduce_thread.join();
+    client2_reduce_thread.join();
+
+    // clean shutdown
+    ASSERT_TRUE(client2.interrupt());
+    ASSERT_TRUE(client1.interrupt());
+
+    ASSERT_TRUE(client1.join());
+    ASSERT_TRUE(client2.join());
+
+    ASSERT_TRUE(master.interrupt());
+    ASSERT_TRUE(master.join());
+}
+
+
+TYPED_TEST(TypeAllReduceTest, TestMinWorldSize2) {
+    using ValueType = TypeParam;
+    auto ccoipType = getCcoipDataType(typeid(TypeParam));
+
+    ccoip::CCoIPMaster master({
+        .inet = {.protocol = inetIPv4, .ipv4 = {.data = {0, 0, 0, 0}}},
+        .port = CCOIP_PROTOCOL_PORT_MASTER
+    });
+    ASSERT_TRUE(master.launch());
+
+    // client 1
+    const ccoip::CCoIPClient client1({
+                                         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                         .port = CCOIP_PROTOCOL_PORT_MASTER,
+                                     }, 0);
+    // client 2
+    const ccoip::CCoIPClient client2({
+                                         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                         .port = CCOIP_PROTOCOL_PORT_MASTER
+                                     }, 0);
+
+    establishConnections({&client1, &client2});
+
+    std::thread client1_reduce_thread([&client1, ccoipType] {
+        const std::unique_ptr<ValueType[]> value1(new ValueType[1024]);
+        std::fill_n(value1.get(), 1024, 42);
+
+        const std::unique_ptr<ValueType[]> result(new ValueType[1024]);
+        std::fill_n(result.get(), 1024, 0);
+
+        ASSERT_TRUE(client1.allReduceAsync(value1.get(), result.get(), 1024, ccoipType, ccoipType, ccoip::ccoipQuantizationNone, ccoip::ccoipOpMin, 1));
+        ASSERT_TRUE(client1.joinAsyncReduce(1));
+
+        // check result
+        for (size_t i = 0; i < 1024; i++) {
+            ASSERT_EQ(result[i], 42);
+        }
+    });
+
+    std::thread client2_reduce_thread([&client2, ccoipType] {
+        const std::unique_ptr<ValueType[]> value2(new ValueType[1024]);
+        std::fill_n(value2.get(), 1024, 43);
+
+        const std::unique_ptr<ValueType[]> result(new ValueType[1024]);
+        std::fill_n(result.get(), 1024, 0);
+
+        ASSERT_TRUE(client2.allReduceAsync(value2.get(), result.get(), 1024, ccoipType, ccoipType, ccoip::ccoipQuantizationNone, ccoip::ccoipOpMin, 1));
+        ASSERT_TRUE(client2.joinAsyncReduce(1));
+
+        // check result
+        for (size_t i = 0; i < 1024; i++) {
+            ASSERT_EQ(result[i], 42);
+        }
+    });
+
+    // wait for shared state sync to complete
+    client1_reduce_thread.join();
+    client2_reduce_thread.join();
+
+    // clean shutdown
+    ASSERT_TRUE(client2.interrupt());
+    ASSERT_TRUE(client1.interrupt());
+
+    ASSERT_TRUE(client1.join());
+    ASSERT_TRUE(client2.join());
+
+    ASSERT_TRUE(master.interrupt());
+    ASSERT_TRUE(master.join());
+}
+
+
+
+TYPED_TEST(TypeAllReduceTest, TestMaxWorldSize2) {
+    using ValueType = TypeParam;
+    auto ccoipType = getCcoipDataType(typeid(TypeParam));
+
+    ccoip::CCoIPMaster master({
+        .inet = {.protocol = inetIPv4, .ipv4 = {.data = {0, 0, 0, 0}}},
+        .port = CCOIP_PROTOCOL_PORT_MASTER
+    });
+    ASSERT_TRUE(master.launch());
+
+    // client 1
+    const ccoip::CCoIPClient client1({
+                                         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                         .port = CCOIP_PROTOCOL_PORT_MASTER,
+                                     }, 0);
+    // client 2
+    const ccoip::CCoIPClient client2({
+                                         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                         .port = CCOIP_PROTOCOL_PORT_MASTER
+                                     }, 0);
+
+    establishConnections({&client1, &client2});
+
+    std::thread client1_reduce_thread([&client1, ccoipType] {
+        const std::unique_ptr<ValueType[]> value1(new ValueType[1024]);
+        std::fill_n(value1.get(), 1024, 42);
+
+        const std::unique_ptr<ValueType[]> result(new ValueType[1024]);
+        std::fill_n(result.get(), 1024, 0);
+
+        ASSERT_TRUE(client1.allReduceAsync(value1.get(), result.get(), 1024, ccoipType, ccoipType, ccoip::ccoipQuantizationNone, ccoip::ccoipOpMax, 1));
+        ASSERT_TRUE(client1.joinAsyncReduce(1));
+
+        // check result
+        for (size_t i = 0; i < 1024; i++) {
+            ASSERT_EQ(result[i], 43);
+        }
+    });
+
+    std::thread client2_reduce_thread([&client2, ccoipType] {
+        const std::unique_ptr<ValueType[]> value2(new ValueType[1024]);
+        std::fill_n(value2.get(), 1024, 43);
+
+        const std::unique_ptr<ValueType[]> result(new ValueType[1024]);
+        std::fill_n(result.get(), 1024, 0);
+
+        ASSERT_TRUE(client2.allReduceAsync(value2.get(), result.get(), 1024, ccoipType, ccoipType, ccoip::ccoipQuantizationNone, ccoip::ccoipOpMax, 1));
+        ASSERT_TRUE(client2.joinAsyncReduce(1));
+
+        // check result
+        for (size_t i = 0; i < 1024; i++) {
+            ASSERT_EQ(result[i], 43);
         }
     });
 
@@ -130,7 +461,7 @@ TEST(AllReduceTest, TestNoAcceptNewPeersDuringConcurrentReduce) {
         const std::unique_ptr<uint8_t[]> result(new uint8_t[1024]);
         std::fill_n(result.get(), 1024, 0);
 
-        ASSERT_TRUE(client1.allReduceAsync(value1.get(), result.get(), 1024, ccoip::ccoipUint8, ccoip::ccoipOpSum, 1));
+        ASSERT_TRUE(client1.allReduceAsync(value1.get(), result.get(), 1024, ccoip::ccoipUint8, ccoip::ccoipUint8, ccoip::ccoipQuantizationNone, ccoip::ccoipOpSum, 1));
         ASSERT_FALSE(client1.acceptNewPeers());
         ASSERT_TRUE(client1.joinAsyncReduce(1));
     });
@@ -142,7 +473,7 @@ TEST(AllReduceTest, TestNoAcceptNewPeersDuringConcurrentReduce) {
         const std::unique_ptr<uint8_t[]> result(new uint8_t[1024]);
         std::fill_n(result.get(), 1024, 0);
 
-        ASSERT_TRUE(client2.allReduceAsync(value2.get(), result.get(), 1024, ccoip::ccoipUint8, ccoip::ccoipOpSum, 1));
+        ASSERT_TRUE(client2.allReduceAsync(value2.get(), result.get(), 1024, ccoip::ccoipUint8, ccoip::ccoipUint8, ccoip::ccoipQuantizationNone, ccoip::ccoipOpSum, 1));
         ASSERT_FALSE(client2.acceptNewPeers());
         ASSERT_TRUE(client2.joinAsyncReduce(1));
     });
@@ -190,7 +521,7 @@ TEST(AllReduceTest, TestNoSharedStateSyncDuringConcurrentReduce) {
         const std::unique_ptr<uint8_t[]> result(new uint8_t[1024]);
         std::fill_n(result.get(), 1024, 0);
 
-        ASSERT_TRUE(client1.allReduceAsync(value1.get(), result.get(), 1024, ccoip::ccoipUint8, ccoip::ccoipOpSum, 1));
+        ASSERT_TRUE(client1.allReduceAsync(value1.get(), result.get(), 1024, ccoip::ccoipUint8, ccoip::ccoipUint8, ccoip::ccoipQuantizationNone, ccoip::ccoipOpSum, 1));
 
         // shared state sync
         {
@@ -216,7 +547,7 @@ TEST(AllReduceTest, TestNoSharedStateSyncDuringConcurrentReduce) {
         const std::unique_ptr<uint8_t[]> result(new uint8_t[1024]);
         std::fill_n(result.get(), 1024, 0);
 
-        ASSERT_TRUE(client2.allReduceAsync(value2.get(), result.get(), 1024, ccoip::ccoipUint8, ccoip::ccoipOpSum, 1));
+        ASSERT_TRUE(client2.allReduceAsync(value2.get(), result.get(), 1024, ccoip::ccoipUint8, ccoip::ccoipUint8, ccoip::ccoipQuantizationNone, ccoip::ccoipOpSum, 1));
 
         // shared state sync
         {
@@ -250,6 +581,7 @@ TEST(AllReduceTest, TestNoSharedStateSyncDuringConcurrentReduce) {
     ASSERT_TRUE(master.join());
 }
 
+// TODO: ADD TEST WITH UNEVEN NUMBER OF ELEMENTS TO TEST TRAILING STAGE
 
 int main() {
     testing::InitGoogleTest();

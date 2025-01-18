@@ -316,25 +316,20 @@ bool ccoip::P2PPacketHello::deserialize(PacketReadBuffer &buffer) {
 ccoip::packetId_t ccoip::M2CPacketSyncSharedStateComplete::packet_id = M2C_PACKET_SYNC_SHARED_STATE_COMPLETE_ID;
 
 // P2PPacketReduceTerm
-ccoip::packetId_t ccoip::P2PPacketReduceTerm::packet_id = P2P_PACKET_REDUCE_TERM_ID;
+ccoip::packetId_t ccoip::P2PPacketDequantizationMeta::packet_id = P2P_PACKET_DEQUANTIZATION_META;
 
-void ccoip::P2PPacketReduceTerm::serialize(PacketWriteBuffer &buffer) const {
+void ccoip::P2PPacketDequantizationMeta::serialize(PacketWriteBuffer &buffer) const {
     buffer.write<uint64_t>(tag);
-    buffer.write<boolean>(is_reduce);
-    buffer.write<uint64_t>(data.size_bytes());
-    buffer.writeContents(reinterpret_cast<const uint8_t *>(data.data()), data.size_bytes());
+    buffer.write<uint8_t>(static_cast<uint8_t>(dequantization_meta.data_type));
+    buffer.writeVarLenList(dequantization_meta.min_value);
+    buffer.writeVarLenList(dequantization_meta.max_value);
 }
 
-bool ccoip::P2PPacketReduceTerm::deserialize(PacketReadBuffer &buffer) {
+bool ccoip::P2PPacketDequantizationMeta::deserialize(PacketReadBuffer &buffer) {
     tag = buffer.read<uint64_t>();
-    is_reduce = buffer.read<boolean>();
-    const auto length = buffer.read<uint64_t>();
-    if (length > buffer.remaining()) {
-        return false;
-    }
-    dst_ptr = std::unique_ptr<std::byte[]>(new std::byte[length]);
-    data = std::span(dst_ptr.get(), length);
-    buffer.readContents(reinterpret_cast<uint8_t *>(dst_ptr.get()), length);
+    dequantization_meta.data_type = static_cast<ccoip_data_type_t>(buffer.read<uint8_t>());
+    dequantization_meta.min_value = buffer.readVarLenList<uint8_t>();
+    dequantization_meta.max_value = buffer.readVarLenList<uint8_t>();
     return true;
 }
 

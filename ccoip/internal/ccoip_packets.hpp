@@ -8,6 +8,7 @@
 #include <ccoip_packet_buffer.hpp>
 #include <ccoip_shared_state.hpp>
 #include <ccoip_types.hpp>
+#include <quantize.hpp>
 #include <unordered_set>
 
 namespace ccoip {
@@ -47,7 +48,7 @@ namespace ccoip {
     // P2P packets:
 #define P2P_PACKET_HELLO_ID 1
 #define P2P_PACKET_HELLO_ACK_ID 2
-#define P2P_PACKET_REDUCE_TERM_ID 3
+#define P2P_PACKET_DEQUANTIZATION_META 3
 
     // C2S packets:
 #define C2S_PACKET_REQUEST_SHARED_STATE_ID 1
@@ -293,15 +294,13 @@ namespace ccoip {
         static packetId_t packet_id;
     };
 
-    // P2PPacketReduceTerm
-    class P2PPacketReduceTerm final : public Packet {
+    // P2PPacketDequantizationMeta
+    class P2PPacketDequantizationMeta final : public Packet {
     public:
         static packetId_t packet_id;
 
         uint64_t tag;
-        bool is_reduce;
-        std::span<const std::byte> data;
-        std::unique_ptr<std::byte[]> dst_ptr;
+        internal::quantize::DeQuantizationMetaData dequantization_meta;
 
         void serialize(PacketWriteBuffer &buffer) const override;
 

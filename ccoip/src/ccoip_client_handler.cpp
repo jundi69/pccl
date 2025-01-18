@@ -10,6 +10,7 @@
 #include <thread_guard.hpp>
 #include <guard_utils.hpp>
 #include <reduce_kernels.hpp>
+#include <reduce.hpp>
 
 ccoip::CCoIPClientHandler::CCoIPClientHandler(const ccoip_socket_address_t &address,
                                               const uint32_t peer_group) : master_socket(address),
@@ -433,7 +434,8 @@ bool ccoip::CCoIPClientHandler::establishP2PConnections() {
         return false;
     }
     if (!all_peers_connected && response->success) {
-        LOG(BUG) << "Master indicated that all peers have established their p2p connections, but this peer has not and should have reported this to the master. This is a bug!";
+        LOG(BUG) <<
+                "Master indicated that all peers have established their p2p connections, but this peer has not and should have reported this to the master. This is a bug!";
         return false;
     }
     if (!response->success) {
@@ -554,41 +556,23 @@ void ccoip::CCoIPClientHandler::onSharedStateClientRead(const ccoip_socket_addre
 
 
 bool ccoip::CCoIPClientHandler::allReduceAsync(const void *sendbuff, void *recvbuff, const size_t count,
-                                               const ccoip_data_type_t datatype, const ccoip_reduce_op_t op,
-                                               const uint64_t tag) {
+                                               const ccoip_data_type_t datatype,
+                                               const ccoip_data_type_t quantized_data_type,
+                                               const ccoip_quantization_algorithm_t quantization_algorithm,
+                                               const ccoip_reduce_op_t op, const uint64_t tag) {
     if (client_state.isCollectiveComsOpRunning(tag)) {
         // can't start a new collective coms op while one is already running
         return false;
     }
 
     if (!client_state.launchAsyncCollectiveOp(
-        tag, [this, sendbuff, recvbuff, count, datatype, op, tag](std::promise<bool> &promise) {
+        tag, [this, sendbuff, recvbuff, count, datatype, quantized_data_type, quantization_algorithm, op, tag](
+    std::promise<bool> &promise) {
             LOG(DEBUG) << "Vote to commence all reduce operation with tag " << tag;
 
-            bool abort_packet_received = false;
+            const bool abort_packet_received = false;
             bool aborted = false;
 
-            const auto receiveReduceTerm = [this, tag, &abort_packet_received, &aborted]
-            (tinysockets::BlockingIOSocket &p2p_rx_socket) -> std::optional<P2PPacketReduceTerm> {
-                while (true) {
-                    if (!p2p_rx_socket.isOpen()) {
-                        return std::nullopt;
-                    }
-                    if (auto term_packet = p2p_rx_socket.receivePacket<P2PPacketReduceTerm>(true)) {
-                        return term_packet;
-                    }
-                    auto abort_packet = master_socket.receiveMatchingPacket<M2CPacketCollectiveCommsAbort>(
-                        [tag](const M2CPacketCollectiveCommsAbort &packet) {
-                            return packet.tag == tag;
-                        }, true);
-                    if (abort_packet) {
-                        abort_packet_received = true;
-                        aborted = abort_packet->aborted;
-                        return std::nullopt;
-                    }
-                    std::this_thread::yield();
-                }
-            };
             const auto reduce_fun = [&] {
                 // vote commence collective comms operation and await consensus
                 {
@@ -624,8 +608,6 @@ bool ccoip::CCoIPClientHandler::allReduceAsync(const void *sendbuff, void *recvb
                     }
                 }
 
-                // TODO: THIS IS SUBJECT TO CHANGE AND FOR NOW IS A HARDCODED UNOPTIMIZED NON-PIPELINED RING REDUCE.
-                //  THIS ENTIRE SECTION WILL BE DELETED IN THE NEAR FUTURE
                 const auto &ring_order = client_state.getRingOrder();
                 const auto &client_uuid = client_state.getAssignedUUID();
 
@@ -634,121 +616,21 @@ bool ccoip::CCoIPClientHandler::allReduceAsync(const void *sendbuff, void *recvb
                 if (it == ring_order.end()) {
                     return false;
                 }
-                const auto position = std::distance(ring_order.begin(), it);
-
+                const size_t position = std::distance(ring_order.begin(), it);
                 const size_t byte_size = count * ccoip_data_type_size(datatype);
 
-                std::span send_span(static_cast<const std::byte *>(sendbuff), byte_size);
-                std::span recv_span(static_cast<std::byte *>(recvbuff), byte_size);
-                std::memcpy(recv_span.data(), send_span.data(), send_span.size());
+                const std::span send_span(static_cast<const std::byte *>(sendbuff), byte_size);
+                const std::span recv_span(static_cast<std::byte *>(recvbuff), byte_size);
 
-                if (position == 0) {
-                    // is first
-                    // initiate ring reduce
+                // perform pipeline ring reduce
+                reduce::pipelineRingReduce(
+                    tag,
+                    send_span, recv_span,
+                    datatype, quantized_data_type,
+                    op, quantization_algorithm, position, ring_order.size(),
+                    ring_order, p2p_connections_tx, p2p_connections_rx
+                );
 
-                    // find next peer
-                    const auto next_peer = ring_order[position + 1];
-                    const auto next_peer_socket_opt = p2p_connections_tx.find(next_peer);
-                    if (next_peer_socket_opt == p2p_connections_tx.end()) {
-                        LOG(ERR) << "Failed to find p2p connection for next peer " << uuid_to_string(next_peer);
-                        return false;
-                    }
-
-                    auto &next_peer_socket = next_peer_socket_opt->second;
-
-                    P2PPacketReduceTerm packet{};
-                    packet.tag = tag;
-                    packet.is_reduce = true;
-                    packet.data = send_span;
-                    if (!next_peer_socket->sendPacket<P2PPacketReduceTerm>(packet)) {
-                        LOG(ERR) << "Failed to send reduce term to next peer " << uuid_to_string(next_peer);
-                        return false;
-                    }
-                    client_state.trackCollectiveComsTxBytes(tag, packet.data.size());
-                } else {
-                    // is not first
-                    // wait for data from previous peer
-                    const auto prev_peer = ring_order[position - 1];
-                    const auto prev_peer_socket_opt = p2p_connections_rx.find(prev_peer);
-                    if (prev_peer_socket_opt == p2p_connections_rx.end()) {
-                        LOG(ERR) << "Failed to find p2p connection for previous peer " << uuid_to_string(prev_peer);
-                        return false;
-                    }
-                    auto &prev_peer_socket = prev_peer_socket_opt->second;
-                    const auto rx_packet = receiveReduceTerm(*prev_peer_socket);
-                    if (!rx_packet) {
-                        LOG(ERR) << "Failed to receive reduce term from previous peer " << uuid_to_string(prev_peer);
-                        return false;
-                    }
-                    client_state.trackCollectiveComsRxBytes(tag, rx_packet->data.size());
-
-                    // perform reduction
-                    performReduction(recv_span, rx_packet->data, datatype, op);
-
-                    // if is not last, send data to next peer
-                    if (position < ring_order.size() - 1) {
-                        // find next peer
-                        const auto next_peer = ring_order[position + 1];
-                        const auto next_peer_socket_opt = p2p_connections_tx.find(next_peer);
-                        if (next_peer_socket_opt == p2p_connections_tx.end()) {
-                            LOG(ERR) << "Failed to find p2p connection for next peer " << uuid_to_string(next_peer);
-                            return false;
-                        }
-                        auto &next_peer_socket = next_peer_socket_opt->second;
-
-                        P2PPacketReduceTerm tx_packet{};
-                        tx_packet.tag = tag;
-                        tx_packet.is_reduce = true;
-                        tx_packet.data = recv_span;
-                        if (!next_peer_socket->sendPacket<P2PPacketReduceTerm>(tx_packet)) {
-                            LOG(ERR) << "Failed to send reduce term to next peer " << uuid_to_string(next_peer);
-                            return false;
-                        }
-                        client_state.trackCollectiveComsTxBytes(tag, byte_size);
-                    }
-                }
-
-                if (position == ring_order.size() - 1) {
-                    // is last
-                    // distribute to other peers
-                    for (size_t i = 0; i < ring_order.size() - 1; i++) {
-                        const auto peer = ring_order[i];
-                        const auto peer_socket_opt = p2p_connections_tx.find(peer);
-                        if (peer_socket_opt == p2p_connections_tx.end()) {
-                            LOG(ERR) << "Failed to find p2p connection for peer " << uuid_to_string(peer);
-                            return false;
-                        }
-                        auto &peer_socket = peer_socket_opt->second;
-                        P2PPacketReduceTerm packet{};
-                        packet.tag = tag;
-                        packet.is_reduce = false;
-                        packet.data = recv_span;
-                        if (!peer_socket->sendPacket<P2PPacketReduceTerm>(packet)) {
-                            LOG(ERR) << "Failed to send reduce term to peer " << uuid_to_string(peer);
-                            return false;
-                        }
-                        client_state.trackCollectiveComsTxBytes(tag, byte_size);
-                    }
-                } else {
-                    // is not last
-                    // wait for final result
-                    const auto final_peer = ring_order[ring_order.size() - 1];
-                    const auto final_peer_socket_opt = p2p_connections_rx.find(final_peer);
-                    if (final_peer_socket_opt == p2p_connections_rx.end()) {
-                        LOG(ERR) << "Failed to find p2p connection for final peer " << uuid_to_string(final_peer);
-                        return false;
-                    }
-                    auto &final_peer_socket = final_peer_socket_opt->second;
-                    const auto final_rx_packet = receiveReduceTerm(*final_peer_socket);
-                    if (!final_rx_packet) {
-                        LOG(ERR) << "Failed to receive reduce term from final peer " << uuid_to_string(final_peer);
-                        return false;
-                    }
-                    client_state.trackCollectiveComsRxBytes(tag, byte_size);
-
-                    std::memcpy(recv_span.data(), final_rx_packet->data.data(), final_rx_packet->data.size());
-                    // set content to final result
-                }
                 return true;
             };
             auto success = reduce_fun();

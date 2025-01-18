@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <tinysockets.hpp>
 #include <win_sock_bridge.h>
 
@@ -20,58 +21,80 @@ bool tinysockets::poll::PollDescriptor::hasEvent(const PollEvent event) const {
 }
 
 #ifndef WIN32
-static void unix_poll(const std::initializer_list<tinysockets::poll::PollDescriptor> &requests, const int timeout) {
+static int unix_poll(std::vector<tinysockets::poll::PollDescriptor> &descriptors, const int timeout) {
     std::vector<pollfd> poll_fds{};
 
-    // convert requests to pollfds
+    // convert descriptors to pollfds
     {
-        poll_fds.reserve(requests.size());
-        for (const auto &request: requests) {
+        poll_fds.reserve(descriptors.size());
+        for (const auto &request: descriptors) {
             poll_fds.push_back(pollfd{
-                .fd = request.socket_fd,
+                .fd = request.socket.getSocketFd(),
                 .events = ToPollEvent(request.target_event),
                 .revents = 0,
             });
         }
     }
 
-    poll(poll_fds.data(), poll_fds.size(), timeout);
+    const int ret = poll(poll_fds.data(), poll_fds.size(), timeout);
+
+    // copy revents back to the descriptors
+    if (ret > 0) {
+        assert(ret <= descriptors.size());
+
+        for (size_t i = 0; i < ret; i++) {
+            descriptors[i].event_out = static_cast<tinysockets::poll::PollEvent>(poll_fds[i].revents);
+        }
+    }
+
+    return ret;
 }
 #else
-static void wsa_poll(const std::initializer_list<tinysockets::poll::PollDescriptor> &requests, const int timeout) {
+static void wsa_poll(const std::vector<tinysockets::poll::PollDescriptor> &descriptors, const int timeout) {
     std::vector<WSAPOLLFD> poll_fds{};
 
-    // convert requests to pollfds
+    // convert descriptors to pollfds
     {
-        poll_fds.reserve(requests.size());
-        for (const auto &request: requests) {
+        poll_fds.reserve(descriptors.size());
+        for (const auto &request: descriptors) {
             poll_fds.push_back(WSAPOLLFD{
-                .fd = static_cast<SOCKET>(request.socket_fd),
+                .fd = static_cast<SOCKET>(request.socket.getSocketFd()),
                 .events = ToPollEvent(request.target_event),
                 .revents = 0,
             });
         }
     }
 
-    WSAPoll(poll_fds.data(), poll_fds.size(), timeout);
+    const int ret = WSAPoll(poll_fds.data(), poll_fds.size(), timeout);
+
+    // copy revents back to the descriptors
+    if (ret > 0) {
+        assert(ret <= descriptors.size());
+
+        for (size_t i = 0; i < ret; i++) {
+            descriptors[i].event_out = static_cast<tinysockets::poll::PollEvent>(poll_fds[i].revents);
+        }
+    }
+
+    return ret;
 }
 #endif
 
-void tinysockets::poll::poll(const std::initializer_list<PollDescriptor> &requests, const int timeout) {
+int tinysockets::poll::poll(std::vector<PollDescriptor> &descriptors, const int timeout) {
 #ifndef WIN32
-    unix_poll(requests, timeout);
+    return unix_poll(descriptors, timeout);
 #else
-    wsa_poll(requests, timeout);
+    return wsa_poll(descriptors, timeout);
 #endif
 }
 
-std::optional<size_t> tinysockets::poll::send_nonblocking(const std::span<uint8_t> &data,
+std::optional<size_t> tinysockets::poll::send_nonblocking(const std::span<const std::byte> &data,
                                                           const PollDescriptor &poll_descriptor) {
     if (!poll_descriptor.hasEvent(POLL_OUTPUT)) {
         return std::nullopt;
     }
 
-    const int socket_fd = poll_descriptor.socket_fd;
+    const int socket_fd = poll_descriptor.socket.getSocketFd();
     if (const ssize_t bytes_sent = sendvp(socket_fd, data.data(), data.size_bytes(), 0);
         bytes_sent < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
         const std::string error_message = strerror(errno);
@@ -84,13 +107,13 @@ std::optional<size_t> tinysockets::poll::send_nonblocking(const std::span<uint8_
     return std::nullopt;
 }
 
-std::optional<size_t> tinysockets::poll::recv_nonblocking(std::span<uint8_t> &data,
+std::optional<size_t> tinysockets::poll::recv_nonblocking(const std::span<std::byte> &data,
                                                           const PollDescriptor &poll_descriptor) {
     if (!poll_descriptor.hasEvent(POLL_INPUT)) {
         return std::nullopt;
     }
 
-    const int socket_fd = poll_descriptor.socket_fd;
+    const int socket_fd = poll_descriptor.socket.getSocketFd();
     if (const ssize_t bytes_received = recvvp(socket_fd, data.data(), data.size_bytes(), 0);
         bytes_received <= 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
         const std::string error_message = strerror(errno);

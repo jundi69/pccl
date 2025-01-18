@@ -126,6 +126,15 @@ static std::optional<ccoip::ccoip_data_type_t> getCCoIPDataType(const pcclDataTy
     return std::nullopt;
 }
 
+static std::optional<ccoip::ccoip_quantization_algorithm_t>
+getCCoIPQuantizationAlgorithm(const pcclQuantizationAlgorithm_t algorithm) {
+    switch (algorithm) {
+        case pcclQuantNone: return ccoip::ccoipQuantizationNone;
+        case pcclQuantMinMax: return ccoip::ccoipQuantizationMinMax;
+    }
+    return std::nullopt;
+}
+
 static std::optional<ccoip::ccoip_reduce_op_t> getCCoIPReduceOp(const pcclRedOp_t op) {
     switch (op) {
         case pcclSum: return ccoip::ccoip_reduce_op_t::ccoipOpSum;
@@ -172,18 +181,31 @@ pcclResult_t pcclAllReduceAsync(const void *sendbuff, void *recvbuff,
 
     const size_t count = descriptor->count;
     const auto datatype = descriptor->src_descriptor.datatype;
+    const auto quantization_algorithm = descriptor->quantization_options.algorithm;
+    const auto quantized_datatype = quantization_algorithm == pcclQuantNone
+                                        ? datatype
+                                        : descriptor->quantization_options.quantized_datatype;
     const auto op = descriptor->op;
     const auto tag = descriptor->tag;
 
-    auto ccoip_data_type = getCCoIPDataType(datatype);
+    const auto ccoip_data_type = getCCoIPDataType(datatype);
     if (!ccoip_data_type) {
         return pcclInvalidArgument;
     }
-    auto ccoip_op = getCCoIPReduceOp(op);
+    const auto ccoip_quantized_data_type = getCCoIPDataType(quantized_datatype);
+    if (!ccoip_quantized_data_type) {
+        return pcclInvalidArgument;
+    }
+    const auto ccoip_quantization_algorithm = getCCoIPQuantizationAlgorithm(quantization_algorithm);
+    if (!ccoip_quantization_algorithm) {
+        return pcclInvalidArgument;
+    }
+    const auto ccoip_op = getCCoIPReduceOp(op);
     if (!ccoip_op) {
         return pcclInvalidArgument;
     }
-    if (!communicator->ccoip_client->allReduceAsync(sendbuff, recvbuff, count, *ccoip_data_type, *ccoip_op, tag)) {
+    if (!communicator->ccoip_client->allReduceAsync(sendbuff, recvbuff, count, *ccoip_data_type,
+                                                    *ccoip_quantized_data_type, *ccoip_op, tag)) {
         return pcclInvalidUsage;
     }
 
