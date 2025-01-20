@@ -1,5 +1,7 @@
 #include "quantize_kernels.hpp"
 
+#include <unordered_map>
+
 #include <pccl_log.hpp>
 
 #ifndef _MSC_VER

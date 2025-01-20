@@ -3,9 +3,10 @@
 #include <cassert>
 #include <span>
 #include <type_traits>
+#include <vector>
+#include <cstring>
 #include <ccoip_types.hpp>
 #include <network_order_utils.hpp>
-
 
 namespace ccoip::internal::quantize {
 
