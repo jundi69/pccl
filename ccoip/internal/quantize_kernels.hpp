@@ -1,6 +1,7 @@
 #pragma once
 
 #include <span>
+#include <limits>
 #include <type_traits>
 #include <quantize.hpp>
 
