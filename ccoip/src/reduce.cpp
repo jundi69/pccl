@@ -120,7 +120,7 @@ static void runReduceStage(
                 const std::span receive_span = recv_buffer_span.subspan(bytes_recvd);
                 if (const auto received = recv_nonblocking(receive_span, **rx_descriptor); received) {
                     if (received > 0) {
-                        client_state.trackCollectiveComsTxBytes(tag, *received);
+                        client_state.trackCollectiveComsRxBytes(tag, *received);
                         const auto r = *received;
 
                         const size_t quant_element_size = ccoip_data_type_size(quantized_type);
