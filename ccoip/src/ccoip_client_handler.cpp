@@ -609,6 +609,12 @@ bool ccoip::CCoIPClientHandler::allReduceAsync(const void *sendbuff, void *recvb
                 }
 
                 const auto &ring_order = client_state.getRingOrder();
+
+                // no need to actually all reduce when there is no second peer.
+                if (ring_order.size() < 2) {
+                    return false;
+                }
+
                 const auto &client_uuid = client_state.getAssignedUUID();
 
                 // find position in ring order
@@ -635,10 +641,12 @@ bool ccoip::CCoIPClientHandler::allReduceAsync(const void *sendbuff, void *recvb
             };
             auto success = reduce_fun();
             if (![&] {
+                const auto &ring_order = client_state.getRingOrder();
+
                 // vote collective comms operation complete and await consensus
                 C2MPacketCollectiveCommsComplete complete_packet{};
                 complete_packet.tag = tag;
-                complete_packet.was_aborted = success == false;
+                complete_packet.was_aborted = success == false && ring_order.size() > 1;
 
                 if (!master_socket.sendPacket<C2MPacketCollectiveCommsComplete>(complete_packet)) {
                     return false;

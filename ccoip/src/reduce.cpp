@@ -191,7 +191,7 @@ void ccoip::reduce::pipelineRingReduce(const uint64_t tag,
     const size_t normal_chunk_size_bytes_quant = normal_chunk_size_elements * quantized_type_element_size;
 
     // perform normal reduce stages
-    {
+    if (world_size > 1) {
         const std::unique_ptr<std::byte[]> recv_buffer(new std::byte[normal_chunk_size_bytes_quant]);
         const std::span recv_buffer_span(recv_buffer.get(), normal_chunk_size_bytes_quant);
 
