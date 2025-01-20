@@ -139,7 +139,6 @@ TYPED_TEST(TypeAllReduceTest, TestSumWorldSize2) {
     ASSERT_TRUE(master.interrupt());
     ASSERT_TRUE(master.join());
 }
-*/
 
 TYPED_TEST(QuantizeTypedAllReduceTest, TestSumQuantizedWorldSize2) {
     using ValueType = TypeParam;
@@ -211,7 +210,6 @@ TYPED_TEST(QuantizeTypedAllReduceTest, TestSumQuantizedWorldSize2) {
     ASSERT_TRUE(master.join());
 }
 
-/*
 TYPED_TEST(TypeAllReduceTest, TestAvgWorldSize2) {
     using ValueType = TypeParam;
     auto ccoipType = getCcoipDataType(typeid(TypeParam));

@@ -1,6 +1,7 @@
 #include "reduce.hpp"
 
 #include <cassert>
+#include <cstring>
 #include <ccoip_packets.hpp>
 #include <ccoip_types.hpp>
 #include <quantize.hpp>
@@ -33,6 +34,8 @@ static void runReduceStage(
     // rx span must be a multiple of the data_type size
     assert(tx_span.size_bytes() % ccoip_data_type_size(quantized_type) == 0);
     assert(rx_span.size_bytes() % ccoip_data_type_size(data_type) == 0);
+    assert(recv_buffer_span.size_bytes() % ccoip_data_type_size(quantized_type) == 0);
+    assert(tx_span.size_bytes() == recv_buffer_span.size_bytes());
 
     using namespace tinysockets;
     using namespace ccoip::internal::reduce;
@@ -51,7 +54,7 @@ static void runReduceStage(
     const auto &rx_socket = peer_rx_sockets.at(rx_peer);
 
     // send meta-data to the next peer
-    /*{
+    {
         ccoip::P2PPacketDequantizationMeta packet{};
         packet.tag = tag;
         packet.dequantization_meta = meta_data_self ? *meta_data_self : DeQuantizationMetaData{};
@@ -59,19 +62,19 @@ static void runReduceStage(
             LOG(WARN) << "Failed to send de-quantization meta data!";
             return;
         }
-    }*/
+    }
 
     // receive meta data from prev peer
     // TODO: this is not a good way to do it for multiple concurrent all reduces because you will steal other tag's packet...
     DeQuantizationMetaData received_meta_data{};
-    /*{
+    {
         const auto packet = rx_socket->receivePacket<ccoip::P2PPacketDequantizationMeta>();
         if (!packet) {
             LOG(WARN) << "Failed to receive de-quantization meta data!";
             return;
         }
         received_meta_data = packet->dequantization_meta;
-    }*/
+    }
 
 
     // TODO: HINT DATA WITH REDUCE OP TAG?
@@ -81,28 +84,35 @@ static void runReduceStage(
         size_t bytes_sent = 0;
         size_t bytes_recvd = 0;
 
-        while (bytes_sent < tx_span.size_bytes() || bytes_recvd < rx_span.size_bytes()) {
-            std::vector<poll::PollDescriptor> descriptors = {
-                {*tx_socket, poll::PollEvent::POLL_OUTPUT},
-                {*rx_socket, poll::PollEvent::POLL_INPUT}
-            };
-            const auto &tx_descriptor = descriptors[0];
-            const auto &rx_descriptor = descriptors[1];
+        while (bytes_sent < tx_span.size_bytes() || bytes_recvd < recv_buffer_span.size_bytes()) {
+            std::vector<poll::PollDescriptor> descriptors{};
+            descriptors.reserve(2);
+
+            std::optional<poll::PollDescriptor *> tx_descriptor = std::nullopt;
+            std::optional<poll::PollDescriptor *> rx_descriptor = std::nullopt;
+            if (bytes_sent < tx_span.size_bytes()) {
+                descriptors.push_back({*tx_socket, poll::PollEvent::POLL_OUTPUT});
+                tx_descriptor = &descriptors.back();
+            }
+            if (bytes_recvd < recv_buffer_span.size_bytes()) {
+                descriptors.push_back({*rx_socket, poll::PollEvent::POLL_INPUT});
+                rx_descriptor = &descriptors.back();
+            }
 
             if (const int poll_result = poll::poll(descriptors, -1); poll_result < 0) {
                 const std::string error_message = strerror(errno);
                 LOG(WARN) << "poll() failed: " << error_message;
                 return;
             }
-            if (tx_descriptor.hasEvent(poll::PollEvent::POLL_OUTPUT)) {
+            if (tx_descriptor && (*tx_descriptor)->hasEvent(poll::PollEvent::POLL_OUTPUT)) {
                 const std::span send_span = tx_span.subspan(bytes_sent);
-                if (const auto sent = send_nonblocking(send_span, descriptors[0]); sent) {
+                if (const auto sent = send_nonblocking(send_span, **tx_descriptor); sent) {
                     bytes_sent += *sent;
                 }
             }
-            if (rx_descriptor.hasEvent(poll::PollEvent::POLL_INPUT)) {
+            if (rx_descriptor && (*rx_descriptor)->hasEvent(poll::PollEvent::POLL_INPUT)) {
                 const std::span receive_span = recv_buffer_span.subspan(bytes_recvd);
-                if (const auto received = recv_nonblocking(receive_span, descriptors[1]); received) {
+                if (const auto received = recv_nonblocking(receive_span, **rx_descriptor); received) {
                     if (received > 0) {
                         const auto r = *received;
 
@@ -140,7 +150,6 @@ static void runReduceStage(
                             // the rx span that serves as the destination contains de-quantized data!
                             std::span reduce_dst_span = rx_span
                                     .subspan(start_offset_dequant, end_offset_dequant - start_offset_dequant);
-
 
                             performReduction(reduce_dst_span, reduce_src_span, data_type, quantized_type,
                                              quantization_algorithm, op, received_meta_data);
