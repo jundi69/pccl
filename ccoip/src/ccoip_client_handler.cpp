@@ -630,6 +630,7 @@ bool ccoip::CCoIPClientHandler::allReduceAsync(const void *sendbuff, void *recvb
 
                 // perform pipeline ring reduce
                 reduce::pipelineRingReduce(
+                    client_state,
                     tag,
                     send_span, recv_span,
                     datatype, quantized_data_type,

@@ -1,6 +1,7 @@
 #include "reduce.hpp"
 
 #include <cassert>
+#include <ccoip_master_state.hpp>
 #include <cstring>
 #include <ccoip_packets.hpp>
 #include <ccoip_types.hpp>
@@ -9,27 +10,28 @@
 #include <tinysockets.hpp>
 
 static void runReduceStage(
-    const uint64_t tag,
-    const std::span<const std::byte> &tx_span,
-    const std::span<std::byte> &rx_span,
-    const std::span<std::byte> &recv_buffer_span,
+        ccoip::CCoIPClientState &client_state,
+        const uint64_t tag,
+        const std::span<const std::byte> &tx_span,
+        const std::span<std::byte> &rx_span,
+        const std::span<std::byte> &recv_buffer_span,
 
-    const ccoip::ccoip_data_type_t data_type,
-    const ccoip::ccoip_data_type_t quantized_type,
-    const ccoip::ccoip_quantization_algorithm_t quantization_algorithm,
-    const ccoip::ccoip_reduce_op_t op,
+        const ccoip::ccoip_data_type_t data_type,
+        const ccoip::ccoip_data_type_t quantized_type,
+        const ccoip::ccoip_quantization_algorithm_t quantization_algorithm,
+        const ccoip::ccoip_reduce_op_t op,
 
-    const size_t rank,
+        const size_t rank,
 
-    const size_t world_size,
-    const std::vector<ccoip_uuid_t> &ring_order,
+        const size_t world_size,
+        const std::vector<ccoip_uuid_t> &ring_order,
 
-    const std::optional<ccoip::internal::quantize::DeQuantizationMetaData> &meta_data_self,
+        const std::optional<ccoip::internal::quantize::DeQuantizationMetaData> &meta_data_self,
 
-    const std::unordered_map<ccoip_uuid_t, std::unique_ptr<tinysockets::BlockingIOSocket> > &
-    peer_tx_sockets,
-    const std::unordered_map<ccoip_uuid_t, std::unique_ptr<tinysockets::BlockingIOSocket> > &
-    peer_rx_sockets) {
+        const std::unordered_map<ccoip_uuid_t, std::unique_ptr<tinysockets::BlockingIOSocket>> &
+        peer_tx_sockets,
+        const std::unordered_map<ccoip_uuid_t, std::unique_ptr<tinysockets::BlockingIOSocket>> &
+        peer_rx_sockets) {
     // tx span must be a multiple of the quantized_type size
     // rx span must be a multiple of the data_type size
     assert(tx_span.size_bytes() % ccoip_data_type_size(quantized_type) == 0);
@@ -62,18 +64,21 @@ static void runReduceStage(
             LOG(WARN) << "Failed to send de-quantization meta data!";
             return;
         }
+        size_t ltv_header = sizeof(uint64_t) + sizeof(ccoip::packetId_t);
+        client_state.trackCollectiveComsTxBytes(tag, ltv_header + packet.serializedSize());
     }
 
     // receive meta data from prev peer
     // TODO: this is not a good way to do it for multiple concurrent all reduces because you will steal other tag's packet...
-    DeQuantizationMetaData received_meta_data{};
-    {
+    DeQuantizationMetaData received_meta_data{}; {
         const auto packet = rx_socket->receivePacket<ccoip::P2PPacketDequantizationMeta>();
         if (!packet) {
             LOG(WARN) << "Failed to receive de-quantization meta data!";
             return;
         }
         received_meta_data = packet->dequantization_meta;
+        size_t ltv_header = sizeof(uint64_t) + sizeof(ccoip::packetId_t);
+        client_state.trackCollectiveComsRxBytes(tag, ltv_header + packet->serializedSize());
     }
 
 
@@ -108,12 +113,14 @@ static void runReduceStage(
                 const std::span send_span = tx_span.subspan(bytes_sent);
                 if (const auto sent = send_nonblocking(send_span, **tx_descriptor); sent) {
                     bytes_sent += *sent;
+                    client_state.trackCollectiveComsTxBytes(tag, *sent);
                 }
             }
             if (rx_descriptor && (*rx_descriptor)->hasEvent(poll::PollEvent::POLL_INPUT)) {
                 const std::span receive_span = recv_buffer_span.subspan(bytes_recvd);
                 if (const auto received = recv_nonblocking(receive_span, **rx_descriptor); received) {
                     if (received > 0) {
+                        client_state.trackCollectiveComsTxBytes(tag, *received);
                         const auto r = *received;
 
                         const size_t quant_element_size = ccoip_data_type_size(quantized_type);
@@ -161,20 +168,22 @@ static void runReduceStage(
     }
 }
 
-void ccoip::reduce::pipelineRingReduce(const uint64_t tag,
-                                       const std::span<const std::byte> &src_buf, const std::span<std::byte> &dst_buf,
-                                       const ccoip_data_type_t data_type,
-                                       const ccoip_data_type_t quantized_type,
-                                       const ccoip_reduce_op_t op,
-                                       const ccoip_quantization_algorithm_t quantization_algorithm,
-                                       const size_t rank,
-                                       const size_t world_size,
-                                       const std::vector<ccoip_uuid_t> &ring_order,
-                                       const std::unordered_map<ccoip_uuid_t, std::unique_ptr<
-                                           tinysockets::BlockingIOSocket> > &
-                                       peer_tx_sockets, const std::unordered_map<ccoip_uuid_t, std::unique_ptr<
-                                           tinysockets::BlockingIOSocket> > &
-                                       peer_rx_sockets) {
+void ccoip::reduce::pipelineRingReduce(
+        CCoIPClientState &client_state,
+        const uint64_t tag,
+        const std::span<const std::byte> &src_buf, const std::span<std::byte> &dst_buf,
+        const ccoip_data_type_t data_type,
+        const ccoip_data_type_t quantized_type,
+        const ccoip_reduce_op_t op,
+        const ccoip_quantization_algorithm_t quantization_algorithm,
+        const size_t rank,
+        const size_t world_size,
+        const std::vector<ccoip_uuid_t> &ring_order,
+        const std::unordered_map<ccoip_uuid_t, std::unique_ptr<
+                                     tinysockets::BlockingIOSocket>> &
+        peer_tx_sockets, const std::unordered_map<ccoip_uuid_t, std::unique_ptr<
+                                                      tinysockets::BlockingIOSocket>> &
+        peer_rx_sockets) {
     assert(src_buf.size() == dst_buf.size());
 
     // copy src_buf to dst_buf as initial accumulation
@@ -228,7 +237,7 @@ void ccoip::reduce::pipelineRingReduce(const uint64_t tag,
                 tx_span = quantized_data_span; // the tx span now becomes the quantized data
             }
 
-            runReduceStage(tag, tx_span, rx_span, recv_buffer_span,
+            runReduceStage(client_state, tag, tx_span, rx_span, recv_buffer_span,
                            data_type, quantized_type, quantization_algorithm,
                            op,
                            rank, world_size,

@@ -333,6 +333,13 @@ bool ccoip::P2PPacketDequantizationMeta::deserialize(PacketReadBuffer &buffer) {
     return true;
 }
 
+size_t ccoip::P2PPacketDequantizationMeta::serializedSize() const {
+    size_t size = sizeof(uint64_t) + sizeof(uint8_t);
+    size += sizeof(uint32_t) + dequantization_meta.min_value.size();
+    size += sizeof(uint32_t) + dequantization_meta.max_value.size();
+    return size;
+}
+
 // C2SPacketRequestSharedState
 void ccoip::C2SPacketRequestSharedState::serialize(PacketWriteBuffer &buffer) const {
     buffer.write<uint64_t>(requested_keys.size());

@@ -305,6 +305,8 @@ namespace ccoip {
         void serialize(PacketWriteBuffer &buffer) const override;
 
         [[nodiscard]] bool deserialize(PacketReadBuffer &buffer) override;
+
+        [[nodiscard]] size_t serializedSize() const;
     };
 
     // C2SPacketRequestSharedState
