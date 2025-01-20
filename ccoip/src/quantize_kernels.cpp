@@ -15,9 +15,14 @@ struct minmax_t {
     T max;
 };
 
+#ifndef _MSC_VER
+#define RESTRICT __restrict__
+#else
+#define RESTRICT __restrict
+#endif
 
 template<typename T>
-FORCE_INLINE minmax_t<T> findMinAndMax(const T *__restrict__ src, const size_t count) {
+FORCE_INLINE minmax_t<T> findMinAndMax(const T *RESTRICT src, const size_t count) {
     minmax_t<T> result{};
     result.min = std::numeric_limits<T>::max();
     result.max = std::numeric_limits<T>::min();
@@ -33,7 +38,7 @@ using namespace ccoip::internal::quantize;
 template<typename O, typename I, typename = std::enable_if_t<
     std::is_integral_v<O> && std::is_unsigned_v<O> && std::is_floating_point_v<I>> >
 [[nodiscard]]
-FORCE_INLINE static DeQuantizationMetaData minMaxQuant(O *__restrict__ dst, const I *__restrict__ src,
+FORCE_INLINE static DeQuantizationMetaData minMaxQuant(O *RESTRICT dst, const I *RESTRICT src,
                                                        const size_t count) {
     minmax_t<I> minmax = findMinAndMax<I>(src, count);
     auto dif = static_cast<double>(minmax.max - minmax.min);

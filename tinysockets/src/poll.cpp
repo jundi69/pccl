@@ -1,4 +1,4 @@
-#include <assert.h>
+#include <cassert>
 #include <tinysockets.hpp>
 #include <win_sock_bridge.h>
 

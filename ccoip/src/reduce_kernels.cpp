@@ -14,6 +14,12 @@
 #endif
 
 
+#ifndef _MSC_VER
+#define RESTRICT __restrict__
+#else
+#define RESTRICT __restrict
+#endif
+
 template<typename T>
 struct DeQuantizationMetaDataInternal {
     T min_value;
@@ -46,14 +52,14 @@ struct DeQuantizationMetaDataInternal {
 struct Sum {
 private:
     template<typename D, typename S>
-    FORCE_INLINE static void apply_NoQuant(D *__restrict__ dst, const S *__restrict__ src, const size_t count) {
+    FORCE_INLINE static void apply_NoQuant(D *RESTRICT dst, const S *RESTRICT src, const size_t count) {
         for (size_t i = 0; i < count; ++i) {
             dst[i] += src[i];
         }
     }
 
     template<typename D, typename S>
-    FORCE_INLINE static void apply_MinMaxQuant(D *__restrict__ dst, const S *__restrict__ src, const size_t count, D min_val, D max_val) {
+    FORCE_INLINE static void apply_MinMaxQuant(D *RESTRICT dst, const S *RESTRICT src, const size_t count, D min_val, D max_val) {
         for (size_t i = 0; i < count; ++i) {
             dst[i] += ccoip::internal::quantize::deQuantizeMinMaxScalar(src[i], min_val, max_val);
         }
@@ -61,7 +67,7 @@ private:
 
 public:
     template<typename D, typename S, ccoip::ccoip_quantization_algorithm_t quant_algo>
-    FORCE_INLINE static void apply(D *__restrict__ dst, const S *__restrict__ src, const size_t count,
+    FORCE_INLINE static void apply(D *RESTRICT dst, const S *RESTRICT src, const size_t count,
                                    const ccoip::internal::quantize::DeQuantizationMetaData &meta_data) {
         if constexpr (quant_algo == ccoip::ccoipQuantizationNone) {
             apply_NoQuant(dst, src, count);
@@ -75,14 +81,14 @@ public:
 struct Prod {
 private:
     template<typename D, typename S>
-    FORCE_INLINE static void apply_NoQuant(D *__restrict__ dst, const S *__restrict__ src, const size_t count) {
+    FORCE_INLINE static void apply_NoQuant(D *RESTRICT dst, const S *RESTRICT src, const size_t count) {
         for (size_t i = 0; i < count; ++i) {
             dst[i] += src[i];
         }
     }
 
     template<typename D, typename S>
-    FORCE_INLINE static void apply_MinMaxQuant(D *__restrict__ dst, const S *__restrict__ src, const size_t count, D min_val, D max_val) {
+    FORCE_INLINE static void apply_MinMaxQuant(D *RESTRICT dst, const S *RESTRICT src, const size_t count, D min_val, D max_val) {
         for (size_t i = 0; i < count; ++i) {
             dst[i] += ccoip::internal::quantize::deQuantizeMinMaxScalar(src[i], min_val, max_val);
         }
@@ -90,7 +96,7 @@ private:
 
 public:
     template<typename D, typename S, ccoip::ccoip_quantization_algorithm_t quant_algo>
-    FORCE_INLINE static void apply(D *__restrict__ dst, const S *__restrict__ src, const size_t count,
+    FORCE_INLINE static void apply(D *RESTRICT dst, const S *RESTRICT src, const size_t count,
                                    const ccoip::internal::quantize::DeQuantizationMetaData &meta_data) {
         if constexpr (quant_algo == ccoip::ccoipQuantizationNone) {
             apply_NoQuant(dst, src, count);
@@ -104,7 +110,7 @@ public:
 struct Min {
 private:
     template<typename D, typename S, typename UpT>
-    FORCE_INLINE static void apply_NoQuant(D *__restrict__ dst, const S *__restrict__ src, const size_t count) {
+    FORCE_INLINE static void apply_NoQuant(D *RESTRICT dst, const S *RESTRICT src, const size_t count) {
         for (size_t i = 0; i < count; ++i) {
             UpT temp = std::min<UpT>(static_cast<UpT>(dst[i]),
                                      static_cast<UpT>(src[i]));
@@ -113,7 +119,7 @@ private:
     }
 
     template<typename D, typename S, typename UpT>
-    FORCE_INLINE static void apply_MinMaxQuant(D *__restrict__ dst, const S *__restrict__ src, const size_t count, D min_val, D max_val) {
+    FORCE_INLINE static void apply_MinMaxQuant(D *RESTRICT dst, const S *RESTRICT src, const size_t count, D min_val, D max_val) {
         for (size_t i = 0; i < count; ++i) {
             UpT temp = std::min<UpT>(static_cast<UpT>(dst[i]),
                                      static_cast<UpT>(ccoip::internal::quantize::deQuantizeMinMaxScalar(src[i], min_val, max_val)));
@@ -123,7 +129,7 @@ private:
 
 public:
     template<typename D, typename S, ccoip::ccoip_quantization_algorithm_t quant_algo>
-    FORCE_INLINE static void apply(D *__restrict__ dst, const S *__restrict__ src, const size_t count,
+    FORCE_INLINE static void apply(D *RESTRICT dst, const S *RESTRICT src, const size_t count,
                                    const ccoip::internal::quantize::DeQuantizationMetaData &meta_data) {
         using UpT = std::common_type_t<D, S>;
         if constexpr (quant_algo == ccoip::ccoipQuantizationNone) {
@@ -137,7 +143,7 @@ public:
 struct Max {
 private:
     template<typename D, typename S, typename UpT>
-    FORCE_INLINE static void apply_NoQuant(D *__restrict__ dst, const S *__restrict__ src, const size_t count) {
+    FORCE_INLINE static void apply_NoQuant(D *RESTRICT dst, const S *RESTRICT src, const size_t count) {
         for (size_t i = 0; i < count; ++i) {
             UpT temp = std::max<UpT>(static_cast<UpT>(dst[i]),
                                      static_cast<UpT>(src[i]));
@@ -146,7 +152,7 @@ private:
     }
 
     template<typename D, typename S, typename UpT>
-    FORCE_INLINE static void apply_MinMaxQuant(D *__restrict__ dst, const S *__restrict__ src, const size_t count, D min_val, D max_val) {
+    FORCE_INLINE static void apply_MinMaxQuant(D *RESTRICT dst, const S *RESTRICT src, const size_t count, D min_val, D max_val) {
         for (size_t i = 0; i < count; ++i) {
             UpT temp = std::max<UpT>(static_cast<UpT>(dst[i]),
                                      static_cast<UpT>(ccoip::internal::quantize::deQuantizeMinMaxScalar(src[i], min_val, max_val)));
@@ -155,7 +161,7 @@ private:
     }
 public:
     template<typename D, typename S, ccoip::ccoip_quantization_algorithm_t quant_algo>
-    FORCE_INLINE static void apply(D *__restrict__ dst, const S *__restrict__ src, const size_t count,
+    FORCE_INLINE static void apply(D *RESTRICT dst, const S *RESTRICT src, const size_t count,
                                    const ccoip::internal::quantize::DeQuantizationMetaData &meta_data) {
         using UpT = std::common_type_t<D, S>;
         if constexpr (quant_algo == ccoip::ccoipQuantizationNone) {
