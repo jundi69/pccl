@@ -1,6 +1,7 @@
 #include "reduce_kernels.hpp"
 
 #include <cassert>
+#include <unordered_map>
 #include <pccl_log.hpp>
 #include <quantize.hpp>
 #include <quantize_kernels.hpp>
