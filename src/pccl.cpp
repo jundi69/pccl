@@ -112,16 +112,26 @@ failure:
 
 static std::optional<ccoip::ccoip_data_type_t> getCCoIPDataType(const pcclDataType_t datatype) {
     switch (datatype) {
-        case pcclUint8: return ccoip::ccoipUint8;
-        case pcclUint16: return ccoip::ccoipUint16;
-        case pcclUint32: return ccoip::ccoipUint32;
-        case pcclUint64: return ccoip::ccoipUint64;
-        case pcclInt8: return ccoip::ccoipInt8;
-        case pcclInt16: return ccoip::ccoipInt16;
-        case pcclInt32: return ccoip::ccoipInt32;
-        case pcclInt64: return ccoip::ccoipInt64;
-        case pcclFloat: return ccoip::ccoipFloat;
-        case pcclDouble: return ccoip::ccoipDouble;
+        case pcclUint8:
+            return ccoip::ccoipUint8;
+        case pcclUint16:
+            return ccoip::ccoipUint16;
+        case pcclUint32:
+            return ccoip::ccoipUint32;
+        case pcclUint64:
+            return ccoip::ccoipUint64;
+        case pcclInt8:
+            return ccoip::ccoipInt8;
+        case pcclInt16:
+            return ccoip::ccoipInt16;
+        case pcclInt32:
+            return ccoip::ccoipInt32;
+        case pcclInt64:
+            return ccoip::ccoipInt64;
+        case pcclFloat:
+            return ccoip::ccoipFloat;
+        case pcclDouble:
+            return ccoip::ccoipDouble;
     }
     return std::nullopt;
 }
@@ -129,19 +139,26 @@ static std::optional<ccoip::ccoip_data_type_t> getCCoIPDataType(const pcclDataTy
 static std::optional<ccoip::ccoip_quantization_algorithm_t>
 getCCoIPQuantizationAlgorithm(const pcclQuantizationAlgorithm_t algorithm) {
     switch (algorithm) {
-        case pcclQuantNone: return ccoip::ccoipQuantizationNone;
-        case pcclQuantMinMax: return ccoip::ccoipQuantizationMinMax;
+        case pcclQuantNone:
+            return ccoip::ccoipQuantizationNone;
+        case pcclQuantMinMax:
+            return ccoip::ccoipQuantizationMinMax;
     }
     return std::nullopt;
 }
 
 static std::optional<ccoip::ccoip_reduce_op_t> getCCoIPReduceOp(const pcclRedOp_t op) {
     switch (op) {
-        case pcclSum: return ccoip::ccoip_reduce_op_t::ccoipOpSum;
-        case pcclAvg: return ccoip::ccoip_reduce_op_t::ccoipOpAvg;
-        case pcclProd: return ccoip::ccoip_reduce_op_t::ccoipOpProd;
-        case pcclMax: return ccoip::ccoip_reduce_op_t::ccoipOpMax;
-        case pcclMin: return ccoip::ccoip_reduce_op_t::ccoipOpMin;
+        case pcclSum:
+            return ccoip::ccoip_reduce_op_t::ccoipOpSum;
+        case pcclAvg:
+            return ccoip::ccoip_reduce_op_t::ccoipOpAvg;
+        case pcclProd:
+            return ccoip::ccoip_reduce_op_t::ccoipOpProd;
+        case pcclMax:
+            return ccoip::ccoip_reduce_op_t::ccoipOpMax;
+        case pcclMin:
+            return ccoip::ccoip_reduce_op_t::ccoipOpMin;
     }
     return std::nullopt;
 }
@@ -205,13 +222,14 @@ pcclResult_t pcclAllReduceAsync(const void *sendbuff, void *recvbuff,
         return pcclInvalidArgument;
     }
     if (!communicator->ccoip_client->allReduceAsync(sendbuff, recvbuff, count, *ccoip_data_type,
-                                                    *ccoip_quantized_data_type, *ccoip_op, tag)) {
+                                                    *ccoip_quantized_data_type,
+                                                    *ccoip_quantization_algorithm, *ccoip_op, tag)) {
         return pcclInvalidUsage;
     }
 
     *reduce_handle_out = pcclAsyncReduceOp_t{
-        .comm = const_cast<pcclComm_t *>(communicator),
-        .tag = tag,
+            .comm = const_cast<pcclComm_t *>(communicator),
+            .tag = tag,
     };
     return pcclSuccess;
 }
@@ -301,10 +319,10 @@ pcclResult_t pcclSynchronizeSharedState(const pcclComm_t *communicator, pcclShar
             return pcclInvalidArgument;
         }
         shared_state_internal.entries.push_back(ccoip_shared_state_entry_t{
-            .key = entry.name,
-            .data_type = *ccoip_data_type,
-            .value = std::span(static_cast<std::byte *>(entry.data), entry_bytes),
-            .allow_content_inequality = entry.allow_content_inequality
+                .key = entry.name,
+                .data_type = *ccoip_data_type,
+                .value = std::span(static_cast<std::byte *>(entry.data), entry_bytes),
+                .allow_content_inequality = entry.allow_content_inequality
         });
     }
     ccoip_shared_state_sync_info_t info{};
@@ -317,8 +335,8 @@ pcclResult_t pcclSynchronizeSharedState(const pcclComm_t *communicator, pcclShar
 
     if (sync_info_out != nullptr) {
         *sync_info_out = pcclSharedStateSyncInfo_t{
-            .tx_bytes = info.tx_bytes,
-            .rx_bytes = info.rx_bytes,
+                .tx_bytes = info.tx_bytes,
+                .rx_bytes = info.rx_bytes,
         };
     }
     return pcclSuccess;
@@ -331,7 +349,7 @@ struct pcclMasterInstanceState_t {
 pcclResult_t pcclCreateMaster(ccoip_socket_address_t listen_address, pcclMasterInstance_t **p_master_handle_out) {
     PCCL_VALIDATE(p_master_handle_out != nullptr, pcclInvalidArgument);
     *p_master_handle_out = new pcclMasterInstance_t{
-        .master_handler = std::make_unique<ccoip::CCoIPMaster>(listen_address),
+            .master_handler = std::make_unique<ccoip::CCoIPMaster>(listen_address),
     };
     return pcclSuccess;
 }
