@@ -50,7 +50,7 @@ static int unix_poll(std::vector<tinysockets::poll::PollDescriptor> &descriptors
     return ret;
 }
 #else
-static int wsa_poll(const std::vector<tinysockets::poll::PollDescriptor> &descriptors, const int timeout) {
+static int wsa_poll(std::vector<tinysockets::poll::PollDescriptor> &descriptors, const int timeout) {
     std::vector<WSAPOLLFD> poll_fds{};
 
     // convert descriptors to pollfds
