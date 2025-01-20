@@ -17,7 +17,7 @@ static short ToPollEvent(const tinysockets::poll::PollEvent poll_event) {
 
 bool tinysockets::poll::PollDescriptor::hasEvent(const PollEvent event) const {
     const short target = ToPollEvent(event);
-    return (event_out & target) == target;
+    return (event_out & target) != 0;
 }
 
 #ifndef WIN32
