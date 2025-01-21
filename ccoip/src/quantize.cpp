@@ -8,7 +8,7 @@
 
 ccoip::internal::quantize::DeQuantizationMetaData ccoip::internal::quantize::performQuantization(const std::span<std::byte> &dst_span, const std::span<const std::byte> &src_span,
                                                                              const ccoip_quantization_algorithm_t quantization_algorithm,
-                                                                             ccoip_data_type_t quantized_type, ccoip_data_type_t data_type) {
+                                                                             const ccoip_data_type_t quantized_type, const ccoip_data_type_t data_type) {
 
     switch (quantization_algorithm) {
         case ccoipQuantizationNone: {

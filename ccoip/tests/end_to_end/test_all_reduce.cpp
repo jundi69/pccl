@@ -111,14 +111,16 @@ void reduceTest(ccoip::ccoip_reduce_op_t reduce_op, ccoip::ccoip_quantization_al
                 lower_bound = 0;
             }
             ValueType upper_bound = 10;
-            std::uniform_int_distribution<ValueType> dist(lower_bound, upper_bound);
+            using DistType = std::conditional_t<sizeof(ValueType) < sizeof(int), int, ValueType>;
+
+            std::uniform_int_distribution<DistType> dist(lower_bound, upper_bound);
             for (size_t i = 0; i < n_elements; i++) {
-                value1[i] = dist(gen);
-                value2[i] = dist(gen);
+                value1[i] = static_cast<ValueType>(dist(gen));
+                value2[i] = static_cast<ValueType>(dist(gen));
             }
         } else {
             std::uniform_real_distribution<ValueType> dist(0.0,
-                                                            1.0);
+                                                           1.0);
             for (size_t i = 0; i < n_elements; i++) {
                 value1[i] = dist(gen);
                 value2[i] = dist(gen);
@@ -264,7 +266,9 @@ TYPED_TEST(QuantizeTypedAllReduceTest, TestSumQuantizedWorldSize2) {
 TYPED_TEST(TypeAllReduceTest, TestAvgWorldSize2) {
     using ValueType = TypeParam;
     reduceTest<ValueType>(ccoip::ccoipOpAvg, ccoip::ccoipQuantizationNone, 1024, 42,
-                          [](ValueType a, ValueType b) { return static_cast<ValueType>(a + b) / static_cast<ValueType>(2); });
+                          [](ValueType a, ValueType b) {
+                              return static_cast<ValueType>(a + b) / static_cast<ValueType>(2);
+                          });
 }
 
 
