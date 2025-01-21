@@ -42,7 +42,7 @@ static int unix_poll(std::vector<tinysockets::poll::PollDescriptor> &descriptors
     if (ret > 0) {
         assert(ret <= descriptors.size());
 
-        for (size_t i = 0; i < ret; i++) {
+        for (size_t i = 0; i < descriptors.size(); i++) {
             descriptors[i].event_out = static_cast<tinysockets::poll::PollEvent>(poll_fds[i].revents);
         }
     }
@@ -71,7 +71,7 @@ static int wsa_poll(std::vector<tinysockets::poll::PollDescriptor> &descriptors,
     if (ret > 0) {
         assert(ret <= descriptors.size());
 
-        for (size_t i = 0; i < ret; i++) {
+        for (size_t i = 0; i < descriptors.size(); i++) {
             descriptors[i].event_out = static_cast<tinysockets::poll::PollEvent>(poll_fds[i].revents);
         }
     }

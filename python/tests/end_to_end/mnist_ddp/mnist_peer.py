@@ -179,6 +179,10 @@ def main():
                 log_debug(f"(RANK={RANK}, it={i}) Training completed")
                 break
 
+            # collect model parameters in one contiguous tensor
+            params = torch.cat([p.view(-1) for p in model.parameters()])
+            log_debug(f"(RANK={RANK}, it={i}) params hash: {compute_crc32(params)}")
+
             try:
                 batch_idx, (images, labels) = next(train_it)
             except StopIteration:
@@ -206,8 +210,8 @@ def main():
                     distribution_hint=DistributionHint.NORMAL
                 )
                 quant_desc = QuantizationOptions(
-                    quantized_datatype=DataType.UINT8,
-                    algorithm=pccl.QuantizationAlgorithm.MIN_MAX
+                    quantized_datatype=DataType.FLOAT,
+                    algorithm=pccl.QuantizationAlgorithm.NONE
                 )
                 handle = communicator.all_reduce_async(grads, grads, operand_descriptor=op_desc,
                                                        quantization_options=quant_desc, op=ReduceOp.SUM)

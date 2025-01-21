@@ -124,39 +124,30 @@ static void runReduceStage(
                         const auto r = *received;
 
                         const size_t quant_element_size = ccoip_data_type_size(quantized_type);
-                        const size_t old_bytes_recvd_ceiled =
-                                (bytes_recvd + quant_element_size - 1) / quant_element_size * quant_element_size;
+
+                        // Let "old_bytes_recvd" be how many bytes were read in total so far
+                        const size_t old_bytes_recvd_floored =
+                                (bytes_recvd / quant_element_size) * quant_element_size;
+
                         bytes_recvd += r;
 
-                        const size_t bytes_recvd_floored = (bytes_recvd / quant_element_size) * quant_element_size;
-                        assert(old_bytes_recvd_ceiled < bytes_recvd && bytes_recvd_floored <= bytes_recvd_floored);
+                        // Now see how many *complete* elements we have in total
+                        const size_t new_bytes_recvd_floored =
+                                (bytes_recvd / quant_element_size) * quant_element_size;
 
-                        if (bytes_recvd == rx_span.size_bytes() && bytes_recvd != bytes_recvd_floored) {
-                            // this should never happen. In the last iteration, we should not have any trailing bytes not divisible by element size.
-                            // this would mean that the received data is not a multiple of the element size.
-                            assert(false);
-                        }
+                        // The newly arrived, fully aligned portion is [old_bytes_recvd_floored, new_bytes_recvd_floored)
+                        if (new_bytes_recvd_floored > old_bytes_recvd_floored) {
+                            auto reduce_src_span =
+                                    recv_buffer_span.subspan(old_bytes_recvd_floored,
+                                                             new_bytes_recvd_floored - old_bytes_recvd_floored);
 
-                        // perform reduce operation on the received data
-                        {
-                            const size_t start_offset_quant = old_bytes_recvd_ceiled;
-                            const size_t end_offset_quant = bytes_recvd_floored;
-
-                            assert(start_offset_quant % quant_element_size == 0);
-                            assert(end_offset_quant % quant_element_size == 0);
-
-                            const size_t start_offset_dequant =
-                                    (start_offset_quant / quant_element_size) * ccoip_data_type_size(data_type);
-                            const size_t end_offset_dequant =
-                                    (end_offset_quant / quant_element_size) * ccoip_data_type_size(data_type);
-
-                            // the recv buffer contains quantized data!
-                            std::span reduce_src_span = recv_buffer_span
-                                    .subspan(start_offset_quant, end_offset_quant - start_offset_quant);
-
-                            // the rx span that serves as the destination contains de-quantized data!
-                            std::span reduce_dst_span = rx_span
-                                    .subspan(start_offset_dequant, end_offset_dequant - start_offset_dequant);
+                            auto reduce_dst_span =
+                                    rx_span.subspan( // same mapping to the de-quantized offsets
+                                            (old_bytes_recvd_floored / quant_element_size) * ccoip_data_type_size(
+                                                    data_type),
+                                            (new_bytes_recvd_floored - old_bytes_recvd_floored) / quant_element_size *
+                                            ccoip_data_type_size(data_type)
+                                            );
 
                             performReduction(reduce_dst_span, reduce_src_span, data_type, quantized_type,
                                              quantization_algorithm, op, received_meta_data);
@@ -171,7 +162,7 @@ static void runReduceStage(
 void ccoip::reduce::pipelineRingReduce(
         CCoIPClientState &client_state,
         const uint64_t tag,
-        const std::span<const std::byte> &src_buf, const std::span<std::byte> &dst_buf,
+        std::span<const std::byte> src_buf, const std::span<std::byte> &dst_buf,
         const ccoip_data_type_t data_type,
         const ccoip_data_type_t quantized_type,
         const ccoip_reduce_op_t op,
@@ -185,6 +176,24 @@ void ccoip::reduce::pipelineRingReduce(
                                                       tinysockets::BlockingIOSocket>> &
         peer_rx_sockets) {
     assert(src_buf.size() == dst_buf.size());
+
+    // check if src and dst buffer overlap. if yes, we need a temporary copy of the src buffer
+    std::optional<std::unique_ptr<std::byte[]>> src_buf_copy = std::nullopt;
+    {
+        const void *src_start = src_buf.data();
+        const void *src_end = src_buf.data() + src_buf.size_bytes();
+        const void *dst_start = dst_buf.data();
+        const void *dst_end = dst_buf.data() + dst_buf.size_bytes();
+
+        if ((src_start >= dst_start && src_start < dst_end) ||
+            (src_end > dst_start && src_end <= dst_end) ||
+            (dst_start >= src_start && dst_start < src_end) ||
+            (dst_end > src_start && dst_end <= src_end)) {
+            src_buf_copy = std::make_unique<std::byte[]>(src_buf.size_bytes());
+            std::memcpy(src_buf_copy->get(), src_buf.data(), src_buf.size_bytes());
+            src_buf = std::span(src_buf_copy->get(), src_buf.size_bytes());
+        }
+    }
 
     // copy src_buf to dst_buf as initial accumulation
     std::memcpy(dst_buf.data(), src_buf.data(), src_buf.size_bytes());

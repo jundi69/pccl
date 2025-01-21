@@ -9,7 +9,7 @@ namespace ccoip::reduce {
     /// Performs a pipeline ring reduce operation.
     void pipelineRingReduce(
         CCoIPClientState &client_state,
-        uint64_t tag, const std::span<const std::byte> &src_buf, const std::span<std::byte> &dst_buf,
+        uint64_t tag, std::span<const std::byte> src_buf, const std::span<std::byte> &dst_buf,
         ccoip_data_type_t data_type, ccoip_data_type_t quantized_type,
         ccoip_reduce_op_t op, ccoip_quantization_algorithm_t quantization_algorithm, size_t rank,
         size_t world_size,

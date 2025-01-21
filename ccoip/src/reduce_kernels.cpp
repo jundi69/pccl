@@ -221,7 +221,7 @@ FORCE_INLINE void doReduceDataType(const std::span<std::byte> &dst,
     const size_t src_element_size = ccoip_data_type_size(src_type);
 
     assert(dst.size_bytes() % dst_element_size == 0);
-    assert(src.size_bytes() % dst_element_size == 0);
+    assert(src.size_bytes() % src_element_size == 0);
 
     const size_t num_elements = dst.size_bytes() / dst_element_size;
     assert(num_elements == src.size_bytes() / src_element_size);
@@ -359,7 +359,7 @@ void ccoip::internal::reduce::performReduction(const std::span<std::byte> &dst,
 template<typename T>
 FORCE_INLINE static void performAvgFinalization(T *dst, const size_t count, const size_t world_size) {
     for (size_t i = 0; i < count; ++i) {
-        dst[i] /= world_size;
+        dst[i] = dst[i] / static_cast<T>(world_size);
     }
 }
 
