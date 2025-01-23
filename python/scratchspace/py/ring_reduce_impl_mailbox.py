@@ -2,14 +2,9 @@ import numpy as np
 import threading
 import time
 
-WORLD_SIZE = 3
-
 ###############################################################################
-# GLOBAL MAILBOX + LOCK
-#
-# Instead of storing a list of discrete "messages," each mailbox is now
-# a raw byte stream (bytearray). The sender appends bytes to the back,
-# the receiver reads from the front. This emulates a TCP socket.
+# Standalone experiment for implementation a ring reduce.
+# Socket layer is emulated with process-local mailboxes.
 ###############################################################################
 mailboxes = {}
 mailbox_lock = threading.Lock()
@@ -17,22 +12,28 @@ mailbox_lock = threading.Lock()
 bytes_sent = 0
 bytes_received = 0
 
+world_size: int = 0
 
-def init_mailboxes():
+def init_mailboxes(new_world_size: int):
     """
     Initialize a byte-stream mailbox for each (src, dst) pair.
     Also reset global counters for bytes sent/received.
     """
-    global mailboxes, bytes_sent, bytes_received
+    global world_size, mailboxes, bytes_sent, bytes_received
+
+    world_size = new_world_size
+
     mailboxes = {}
     bytes_sent = 0
     bytes_received = 0
 
-    for src in range(WORLD_SIZE):
-        for dst in range(WORLD_SIZE):
+    for src in range(world_size):
+        for dst in range(world_size):
             if src != dst:
                 # Each mailbox is now a single bytearray
                 mailboxes[(src, dst)] = bytearray()
+
+
 
 
 ###############################################################################
@@ -67,7 +68,7 @@ def recv_bytes(dst, src, n: int) -> bytes:
 
 
 ###############################################################################
-# PARTITION 1D ARRAY INTO WORLD_SIZE CHUNKS
+# PARTITION 1D ARRAY INTO world_size CHUNKS
 ###############################################################################
 def compute_chunk_boundaries(length, world_size):
     """
@@ -86,12 +87,7 @@ def compute_chunk_boundaries(length, world_size):
     return boundaries
 
 
-###############################################################################
-# BARRIERS
-###############################################################################
-rs_barrier = threading.Barrier(WORLD_SIZE)  # reduce-scatter
-ag_barrier = threading.Barrier(WORLD_SIZE)  # allgather
-
+# Data type for serialization
 DTYPE = np.float64
 
 
@@ -104,7 +100,7 @@ def ring_reduce_scatter(rank, local_data, boundaries):
     to the next rank and reading raw bytes from the previous rank.
     """
     chunk_val = {}
-    has_added = {i: False for i in range(WORLD_SIZE)}
+    has_added = {i: False for i in range(world_size)}
 
     # This rank "owns" chunk = rank initially
     s_i, e_i = boundaries[rank]
@@ -112,10 +108,10 @@ def ring_reduce_scatter(rank, local_data, boundaries):
     chunk_val[rank] = local_slice.copy()
     has_added[rank] = True
 
-    for step in range(WORLD_SIZE - 1):
+    for step in range(world_size - 1):
         # Determine which chunk to send
-        chunk_to_send = (rank - step) % WORLD_SIZE
-        next_rank = (rank + 1) % WORLD_SIZE
+        chunk_to_send = (rank - step) % world_size
+        next_rank = (rank + 1) % world_size
 
         # Send the chunk if we have it, else send an empty array
         if chunk_to_send in chunk_val:
@@ -126,16 +122,14 @@ def ring_reduce_scatter(rank, local_data, boundaries):
         # Convert to DTYPE (no metadata) and send as raw bytes
         send_bytes(rank, next_rank, arr_to_send.astype(DTYPE, copy=False).tobytes())
 
-        rs_barrier.wait()
-
         # Receive the next chunk from prev_rank
-        prev_rank = (rank - 1) % WORLD_SIZE
-        prev_chunk_idx = (prev_rank - step) % WORLD_SIZE
+        prev_rank = (rank - 1) % world_size
+        prev_chunk_idx = (prev_rank - step) % world_size
 
         # We know how many elements chunk `prev_chunk_idx` SHOULD have:
         #   chunk_size = boundaries[prev_chunk_idx][1] - boundaries[prev_chunk_idx][0]
         # If boundaries say 0, we read 0 bytes. Otherwise, we read exactly that many.
-        if 0 <= prev_chunk_idx < WORLD_SIZE:
+        if 0 <= prev_chunk_idx < world_size:
             s_j, e_j = boundaries[prev_chunk_idx]
             chunk_size = e_j - s_j
             nbytes = chunk_size * np.dtype(DTYPE).itemsize
@@ -150,8 +144,6 @@ def ring_reduce_scatter(rank, local_data, boundaries):
                 has_added[prev_chunk_idx] = True
 
             chunk_val[prev_chunk_idx] = inc_arr
-
-        rs_barrier.wait()
 
     return chunk_val
 
@@ -170,22 +162,20 @@ def ring_allgather_pipeline(rank, chunk_val, boundaries):
     assert len(owned_items) == 1, "Should have exactly 1 chunk after reduce-scatter"
     current_chunk_idx, current_chunk_arr = owned_items[0]
 
-    for step in range(WORLD_SIZE - 1):
-        next_rank = (rank + 1) % WORLD_SIZE
-        prev_rank = (rank - 1) % WORLD_SIZE
+    for step in range(world_size - 1):
+        next_rank = (rank + 1) % world_size
+        prev_rank = (rank - 1) % world_size
 
         # Send the chunk we currently have
         send_bytes(rank,
                    next_rank,
                    current_chunk_arr.astype(DTYPE, copy=False).tobytes())
 
-        ag_barrier.wait()
-
         # Receive from prev_rank
         # We figure out which chunk we are *now* getting:
-        #   inc_idx = (prev_rank + 1 - step) % WORLD_SIZE
-        inc_idx = (prev_rank + 1 - step) % WORLD_SIZE
-        if 0 <= inc_idx < WORLD_SIZE:
+        #   inc_idx = (prev_rank + 1 - step) % world_size
+        inc_idx = (prev_rank + 1 - step) % world_size
+        if 0 <= inc_idx < world_size:
             s_j, e_j = boundaries[inc_idx]
             chunk_size = e_j - s_j
             nbytes = chunk_size * np.dtype(DTYPE).itemsize
@@ -195,8 +185,6 @@ def ring_allgather_pipeline(rank, chunk_val, boundaries):
             # This becomes our new "current chunk"
             chunk_val[inc_idx] = inc_arr
             current_chunk_idx, current_chunk_arr = inc_idx, inc_arr
-
-        ag_barrier.wait()
 
     return chunk_val
 
@@ -210,7 +198,7 @@ def reassemble_chunks(chunk_val, boundaries, total_length):
     """
     out = np.zeros(total_length, dtype=DTYPE)
     for i, arr in chunk_val.items():
-        if 0 <= i < WORLD_SIZE:
+        if 0 <= i < world_size:
             s_i, e_i = boundaries[i]
             out[s_i:e_i] = arr
     return out
@@ -221,7 +209,7 @@ def reassemble_chunks(chunk_val, boundaries, total_length):
 ###############################################################################
 def ring_allreduce(rank, local_data):
     length = len(local_data)
-    boundaries = compute_chunk_boundaries(length, WORLD_SIZE)
+    boundaries = compute_chunk_boundaries(length, world_size)
     partials = ring_reduce_scatter(rank, local_data, boundaries)
     final_chunks = ring_allgather_pipeline(rank, partials, boundaries)
     return reassemble_chunks(final_chunks, boundaries, length)
@@ -237,7 +225,9 @@ def worker(rank, local_data, results):
 
 
 def main():
-    init_mailboxes()
+    test_world_size = 3
+
+    init_mailboxes(test_world_size)
 
     length = 3
     np.random.seed(42)
@@ -250,13 +240,13 @@ def main():
     expected = np.sum(all_data, axis=0)
     print("Expected sum:", expected)
 
-    results = [np.array([])] * WORLD_SIZE
+    results = [np.array([])] * test_world_size
     threads = []
 
     def launch_th(rank: int):
         worker(rank, all_data[rank], results)
 
-    for r in range(WORLD_SIZE):
+    for r in range(test_world_size):
         t = threading.Thread(target=launch_th, args=(r,))
         threads.append(t)
         t.start()
@@ -265,7 +255,7 @@ def main():
         t.join()
 
     # Check correctness
-    for r in range(WORLD_SIZE):
+    for r in range(test_world_size):
         diff = results[r] - expected
         print(f"Rank {r}: out={results[r]}, diff={diff}")
         assert np.allclose(results[r], expected), f"Rank {r} mismatch!"
