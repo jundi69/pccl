@@ -19,11 +19,12 @@ namespace ccoip {
     };
 
     enum ccoip_reduce_op_t {
-        ccoipOpSum = 0,
-        ccoipOpAvg = 1,
-        ccoipOpProd = 2,
-        ccoipOpMax = 3,
-        ccoipOpMin = 4
+        ccoipOpSet = 0,
+        ccoipOpSum = 1,
+        ccoipOpAvg = 2,
+        ccoipOpProd = 3,
+        ccoipOpMax = 4,
+        ccoipOpMin = 5
     };
 
     enum ccoip_quantization_algorithm_t {

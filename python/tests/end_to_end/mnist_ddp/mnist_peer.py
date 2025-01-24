@@ -107,6 +107,27 @@ RANK: int = int(os.getenv('RANK', "0"))
 CREATE_RANK_0_REV_50: int = int(os.getenv('CREATE_RANK_0_REV_50', "0"))
 
 
+def generate_random_vectors_64(d: int,
+                               device=None,
+                               dtype=torch.float32):
+    """
+    Generate 64 random vectors each of dimension d.
+    Shape: (64, d).
+    """
+    gen = torch.Generator()
+    gen.manual_seed(42)
+    return torch.randn((64, d), device=device, dtype=dtype, generator=gen)
+
+
+def random_projection_64(weights: torch.Tensor) -> torch.Tensor:
+    """
+    Project 'weights' (shape [d]) onto the 64 random vectors (shape [64, d]).
+
+    Returns a tensor of shape (64,) which is the 64D random projection.
+    """
+    return generate_random_vectors_64(len(weights)) @ weights
+
+
 def main():
     model = NeuralNet(input_size, hidden_sizes, num_classes).to(device)
 
@@ -167,11 +188,14 @@ def main():
 
             world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
 
-            if world_size < 2:
+            if world_size < 3:
                 sleep(1)
                 continue
 
-            log_debug(f"(RANK={RANK}, it={i}, ws={world_size}) sync_shared_state()")
+            params = torch.cat([p.view(-1) for p in model.parameters()])
+            #log_debug(f"(RANK={RANK}, it={i}, ws={world_size}) [pre shared state sync] params crc32 hash: {compute_crc32(params)}, lindenstrauss: {random_projection_64(params)}")
+            log_debug(f"(RANK={RANK}, it={i}, ws={world_size}) [pre shared state sync] params crc32 hash: {compute_crc32(params)}")
+
             sync_info = communicator.sync_shared_state(shared_state)
             log_debug(
                 f"(RANK={RANK}, it={i}) shared_state.revision: {shared_state.revision}, sync_info (tx_bytes={sync_info.tx_bytes}, rx_bytes={sync_info.rx_bytes})")
@@ -181,7 +205,9 @@ def main():
 
             # collect model parameters in one contiguous tensor
             params = torch.cat([p.view(-1) for p in model.parameters()])
-            log_debug(f"(RANK={RANK}, it={i}) params hash: {compute_crc32(params)}")
+            log_debug(
+                f"(RANK={RANK}, it={i}) [post shared state sync] params crc32 hash: {compute_crc32(params)}")
+            # log_debug(f"(RANK={RANK}, it={i}) [post shared state sync] params crc32 hash: {compute_crc32(params)}, lindenstrauss: {random_projection_64(params)}")
 
             try:
                 batch_idx, (images, labels) = next(train_it)
@@ -225,7 +251,7 @@ def main():
                 break
 
             # print hash of the gradients tensor content
-            log_debug(f"(RANK={RANK}, it={i}) grads hash: {compute_crc32(grads)}")
+            log_debug(f"(RANK={RANK}, it={i}) grads hash: {compute_crc32(grads)}, grads: {grads[1024:1034]}")
 
             # scatter gradients back to model parameters
             offset = 0

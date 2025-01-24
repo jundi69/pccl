@@ -49,6 +49,35 @@ struct DeQuantizationMetaDataInternal {
     }
 };
 
+struct Set {
+private:
+    template<typename D, typename S>
+    FORCE_INLINE static void apply_NoQuant(D *RESTRICT dst, const S *RESTRICT src, const size_t count) {
+        for (size_t i = 0; i < count; ++i) {
+            dst[i] = src[i];
+        }
+    }
+
+    template<typename D, typename S>
+    FORCE_INLINE static void apply_MinMaxQuant(D *RESTRICT dst, const S *RESTRICT src, const size_t count, D min_val, D max_val) {
+        for (size_t i = 0; i < count; ++i) {
+            dst[i] = ccoip::internal::quantize::deQuantizeMinMaxScalar(src[i], min_val, max_val);
+        }
+    }
+
+public:
+    template<typename D, typename S, ccoip::ccoip_quantization_algorithm_t quant_algo>
+    FORCE_INLINE static void apply(D *RESTRICT dst, const S *RESTRICT src, const size_t count,
+                                   const ccoip::internal::quantize::DeQuantizationMetaData &meta_data) {
+        if constexpr (quant_algo == ccoip::ccoipQuantizationNone) {
+            apply_NoQuant(dst, src, count);
+        } else if constexpr (quant_algo == ccoip::ccoipQuantizationMinMax) {
+            DeQuantizationMetaDataInternal<D> meta_data_internal = DeQuantizationMetaDataInternal<D>::From(meta_data);
+            apply_MinMaxQuant(dst, src, count, meta_data_internal.min_value, meta_data_internal.max_value);
+        }
+    }
+};
+
 struct Sum {
 private:
     template<typename D, typename S>
@@ -325,6 +354,9 @@ void performReduction(const std::span<std::byte> &dst,
                       const ccoip::ccoip_reduce_op_t op,
                       const ccoip::internal::quantize::DeQuantizationMetaData &meta_data) {
     switch (op) {
+        case ccoip::ccoipOpSet:
+            doReduceDataType<Set>(dst, src, dst_type, src_type, quantization_algorithm, meta_data);
+            break;
         // both sum & avg have the same reduction operation (that being sum),
         // however avg has a finalization step that is applied when all stages are complete.
         case ccoip::ccoipOpSum:

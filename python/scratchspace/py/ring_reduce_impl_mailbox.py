@@ -229,7 +229,7 @@ def main():
 
     init_mailboxes(test_world_size)
 
-    length = 3
+    length = 2
     np.random.seed(42)
 
     p0_data = np.random.randn(length)

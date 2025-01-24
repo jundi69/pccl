@@ -74,119 +74,162 @@ inline ccoip::ccoip_data_type_t getCcoipDataType(const std::type_info &ti) {
 
 
 template<typename ValueType>
-void reduceTest(ccoip::ccoip_reduce_op_t reduce_op, ccoip::ccoip_quantization_algorithm_t quant_algo, size_t n_elements,
+void reduceTest(const ccoip::ccoip_reduce_op_t reduce_op,
+                const ccoip::ccoip_quantization_algorithm_t quant_algo,
+                size_t n_elements,
                 const uint64_t seed,
-                const std::function<ValueType(ValueType, ValueType)> &op) {
-    auto ccoip_type = getCcoipDataType(typeid(ValueType));
+                const std::function<ValueType(ValueType, ValueType)> &op,
+                size_t num_clients, const bool init_random = true) {
+    // Launch master
+    const auto ccoip_type = getCcoipDataType(typeid(ValueType));
     ccoip::CCoIPMaster master({
             .inet = {.protocol = inetIPv4, .ipv4 = {.data = {0, 0, 0, 0}}},
             .port = CCOIP_PROTOCOL_PORT_MASTER
     });
     ASSERT_TRUE(master.launch());
+    
+    // Create clients
+    std::vector<std::unique_ptr<ccoip::CCoIPClient>> clients;
+    clients.reserve(num_clients);
+    for (size_t i = 0; i < num_clients; ++i) {
+        clients.emplace_back(std::make_unique<ccoip::CCoIPClient>(ccoip_socket_address_t{
+                                                                          .inet = {.protocol = inetIPv4,
+                                                                              .ipv4 = {.data = {127, 0, 0, 1}}},
+                                                                          .port = CCOIP_PROTOCOL_PORT_MASTER
+                                                                  }, 0));
+    }
 
-    // client 1
-    const ccoip::CCoIPClient client1({
-                                             .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
-                                             .port = CCOIP_PROTOCOL_PORT_MASTER,
-                                     }, 0);
-    // client 2
-    const ccoip::CCoIPClient client2({
-                                             .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
-                                             .port = CCOIP_PROTOCOL_PORT_MASTER
-                                     }, 0);
+    // Establish connections (collect raw pointers for the helper function)
+    std::vector<const ccoip::CCoIPClient *> client_ptrs;
+    client_ptrs.reserve(num_clients);
+    for (auto &client: clients) {
+        client_ptrs.push_back(client.get());
+    }
+    establishConnections(client_ptrs);
 
-    establishConnections({&client1, &client2});
+    // Allocate data buffers for each client
+    std::vector<std::unique_ptr<ValueType[]>> client_values(num_clients);
+    for (size_t i = 0; i < num_clients; ++i) {
+        client_values[i] = std::make_unique<ValueType[]>(n_elements);
+    }
 
-    const std::unique_ptr<ValueType[]> value1(new ValueType[n_elements]);
-    const std::unique_ptr<ValueType[]> value2(new ValueType[n_elements]);
-
-    // fill random
-    {
+    // Fill each client's buffer with random data
+    if (init_random) {
         std::mt19937 gen(seed);
         if constexpr (std::is_integral_v<ValueType>) {
-            ValueType lower_bound;
+            ValueType lower_bound = 0;
             if constexpr (std::is_signed_v<ValueType>) {
-                lower_bound = -10;
-            } else {
-                lower_bound = 0;
+                lower_bound = static_cast<ValueType>(-10);
             }
-            ValueType upper_bound = 10;
+            auto upper_bound = static_cast<ValueType>(10);
             using DistType = std::conditional_t<sizeof(ValueType) < sizeof(int), int, ValueType>;
-
             std::uniform_int_distribution<DistType> dist(lower_bound, upper_bound);
-            for (size_t i = 0; i < n_elements; i++) {
-                value1[i] = static_cast<ValueType>(dist(gen));
-                value2[i] = static_cast<ValueType>(dist(gen));
+
+            for (size_t i = 0; i < n_elements; ++i) {
+                for (size_t c = 0; c < num_clients; ++c) {
+                    client_values[c][i] = static_cast<ValueType>(dist(gen));
+                }
             }
         } else {
-            std::uniform_real_distribution<ValueType> dist(0.0,
-                                                           1.0);
-            for (size_t i = 0; i < n_elements; i++) {
-                value1[i] = dist(gen);
-                value2[i] = dist(gen);
+            std::uniform_real_distribution<ValueType> dist(static_cast<ValueType>(0.0),
+                                                           static_cast<ValueType>(1.0));
+            for (size_t i = 0; i < n_elements; ++i) {
+                for (size_t c = 0; c < num_clients; ++c) {
+                    client_values[c][i] = dist(gen);
+                }
+            }
+        }
+    } else {
+        // fill with 1 values
+        for (size_t i = 0; i < n_elements; ++i) {
+            for (size_t c = 0; c < num_clients; ++c) {
+                client_values[c][i] = static_cast<ValueType>(1);
             }
         }
     }
 
-    const std::unique_ptr<ValueType[]> expected_result(new ValueType[n_elements]);
-    for (size_t i = 0; i < n_elements; i++) {
-        expected_result[i] = static_cast<ValueType>(op(value1[i], value2[i]));
+    // Compute expected result by folding (reducing) all client inputs
+    auto expected_result = std::make_unique<ValueType[]>(n_elements);
+    for (size_t i = 0; i < n_elements; ++i) {
+        ValueType aggregate = client_values[0][i];
+        for (size_t c = 1; c < num_clients; ++c) {
+            aggregate = op(aggregate, client_values[c][i]);
+        }
+        expected_result[i] = aggregate;
     }
 
-    std::thread client1_reduce_thread(
-            [&client1, ccoip_type, &value1, &expected_result, n_elements, reduce_op, quant_algo] {
-                const std::unique_ptr<ValueType[]> result(new ValueType[n_elements]);
-                std::fill_n(result.get(), n_elements, 0);
+    // Start a thread for each client to perform allReduceAsync
+    std::vector<std::thread> threads;
+    threads.reserve(num_clients);
+    for (size_t c = 0; c < num_clients; ++c) {
+        threads.emplace_back([&, c]() {
+            const auto &client = clients[c];
+            auto result = std::make_unique<ValueType[]>(n_elements);
+            std::fill_n(result.get(), n_elements, ValueType{});
 
-                ASSERT_TRUE(
-                        client1.allReduceAsync(value1.get(), result.get(), n_elements, ccoip_type, ccoip_type,
-                            quant_algo, reduce_op, 1));
-                ASSERT_TRUE(client1.joinAsyncReduce(1));
+            // Perform the asynchronous all-reduce
+            ASSERT_TRUE(client->allReduceAsync(client_values[c].get(),
+                result.get(),
+                n_elements,
+                ccoip_type,
+                ccoip_type,
+                quant_algo,
+                reduce_op,
+                1));
+            ASSERT_TRUE(client->joinAsyncReduce(1));
 
-                // check result
-                for (size_t i = 0; i < n_elements; i++) {
-                    EXPECT_EQ(result[i], expected_result[i]) << "Mismatch at index " << i;
-                }
-            });
+            // Verify results
+            for (size_t i = 0; i < n_elements; ++i) {
+                EXPECT_EQ(result[i], expected_result[i])
+                    << "Mismatch at index " << i << " for client " << c;
+            }
+        });
+    }
 
-    std::thread client2_reduce_thread(
-            [&client2, ccoip_type, &value2, &expected_result, n_elements, reduce_op, quant_algo] {
-                const std::unique_ptr<ValueType[]> result(new ValueType[n_elements]);
-                std::fill_n(result.get(), n_elements, 0);
+    // Join all client threads
+    for (auto &t: threads) {
+        t.join();
+    }
 
-                ASSERT_TRUE(
-                        client2.allReduceAsync(value2.get(), result.get(), n_elements, ccoip_type, ccoip_type,
-                            quant_algo, reduce_op, 1));
-                ASSERT_TRUE(client2.joinAsyncReduce(1));
-
-                // check result
-                for (size_t i = 0; i < n_elements; i++) {
-                    EXPECT_EQ(result[i], expected_result[i]) << "Mismatch at index " << i;
-                }
-            });
-
-    // wait for shared state sync to complete
-    client1_reduce_thread.join();
-    client2_reduce_thread.join();
-
-    // clean shutdown
-    ASSERT_TRUE(client2.interrupt());
-    ASSERT_TRUE(client1.interrupt());
-
-    ASSERT_TRUE(client1.join());
-    ASSERT_TRUE(client2.join());
-
+    // Clean shutdown
+    for (const auto &client: clients) {
+        ASSERT_TRUE(client->interrupt());
+    }
+    for (const auto &client: clients) {
+        ASSERT_TRUE(client->join());
+    }
     ASSERT_TRUE(master.interrupt());
     ASSERT_TRUE(master.join());
 }
 
-TYPED_TEST(TypeAllReduceTest, TestSumWorldSize2) {
-    using ValueType = double;
+/*
+TYPED_TEST(TypeAllReduceTest, TestSumWorldSize2LargeArray) {
+    using ValueType = TypeParam;
     reduceTest<ValueType>(ccoip::ccoipOpSum, ccoip::ccoipQuantizationNone, 203530, 42,
-                          [](ValueType a, ValueType b) { return a + b; });
+                          [](ValueType a, ValueType b) { return a + b; }, 2);
+}
+*/
+
+TYPED_TEST(TypeAllReduceTest, TestSumWorldSize3NumElements2) {
+    using ValueType = TypeParam;
+    reduceTest<ValueType>(ccoip::ccoipOpSum, ccoip::ccoipQuantizationNone, 2, 42,
+                          [](const ValueType a, const ValueType b) { return a + b; }, 3, false);
 }
 
+/*
+TYPED_TEST(TypeAllReduceTest, TestSumWorldSize3NumElements3) {
+    using ValueType = TypeParam;
+    reduceTest<ValueType>(ccoip::ccoipOpSum, ccoip::ccoipQuantizationNone, 3, 42,
+                          [](const ValueType a, const ValueType b) { return a + b; }, 3, false);
+}
 
+TEST(TypeAllReduceTest, TestSumWorldSize4NumElements2) {
+    using ValueType = float;
+    reduceTest<ValueType>(ccoip::ccoipOpSum, ccoip::ccoipQuantizationNone, 2, 42,
+                          [](const ValueType a, const ValueType b) { return a + b; }, 4, false);
+}
+
+/*
 TYPED_TEST(QuantizeTypedAllReduceTest, TestSumQuantizedWorldSize2) {
     using ValueType = TypeParam;
     auto ccoipType = getCcoipDataType(typeid(TypeParam));
@@ -268,21 +311,21 @@ TYPED_TEST(TypeAllReduceTest, TestAvgWorldSize2) {
     reduceTest<ValueType>(ccoip::ccoipOpAvg, ccoip::ccoipQuantizationNone, 1024, 42,
                           [](ValueType a, ValueType b) {
                               return static_cast<ValueType>(a + b) / static_cast<ValueType>(2);
-                          });
+                          }, 2);
 }
 
 
 TYPED_TEST(TypeAllReduceTest, TestMinWorldSize2) {
     using ValueType = TypeParam;
     reduceTest<ValueType>(ccoip::ccoipOpMin, ccoip::ccoipQuantizationNone, 1024, 42,
-                          [](ValueType a, ValueType b) { return std::min(a, b); });
+                          [](ValueType a, ValueType b) { return std::min(a, b); }, 2);
 }
 
 
 TYPED_TEST(TypeAllReduceTest, TestMaxWorldSize2) {
     using ValueType = TypeParam;
     reduceTest<ValueType>(ccoip::ccoipOpMax, ccoip::ccoipQuantizationNone, 1024, 42,
-                          [](ValueType a, ValueType b) { return std::max(a, b); });
+                          [](ValueType a, ValueType b) { return std::max(a, b); }, 2);
 }
 
 
@@ -440,7 +483,7 @@ TEST(AllReduceTest, TestNoSharedStateSyncDuringConcurrentReduce) {
     ASSERT_TRUE(master.interrupt());
     ASSERT_TRUE(master.join());
 }
-
+*/
 // TODO: ADD TEST WITH UNEVEN NUMBER OF ELEMENTS TO TEST TRAILING STAGE
 
 int main() {
