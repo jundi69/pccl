@@ -87,7 +87,7 @@ void reduceTest(const ccoip::ccoip_reduce_op_t reduce_op,
             .port = CCOIP_PROTOCOL_PORT_MASTER
     });
     ASSERT_TRUE(master.launch());
-    
+
     // Create clients
     std::vector<std::unique_ptr<ccoip::CCoIPClient>> clients;
     clients.reserve(num_clients);
@@ -158,37 +158,35 @@ void reduceTest(const ccoip::ccoip_reduce_op_t reduce_op,
         expected_result[i] = aggregate;
     }
 
-    // Start a thread for each client to perform allReduceAsync
-    std::vector<std::thread> threads;
-    threads.reserve(num_clients);
+    std::vector<std::unique_ptr<ValueType[]>> results(num_clients);
     for (size_t c = 0; c < num_clients; ++c) {
-        threads.emplace_back([&, c]() {
-            const auto &client = clients[c];
-            auto result = std::make_unique<ValueType[]>(n_elements);
-            std::fill_n(result.get(), n_elements, ValueType{});
+        const auto &client = clients[c];
+        auto &result = results[c] = std::make_unique<ValueType[]>(n_elements);
+        std::fill_n(result.get(), n_elements, ValueType{});
 
-            // Perform the asynchronous all-reduce
-            ASSERT_TRUE(client->allReduceAsync(client_values[c].get(),
-                result.get(),
-                n_elements,
-                ccoip_type,
-                ccoip_type,
-                quant_algo,
-                reduce_op,
-                1));
-            ASSERT_TRUE(client->joinAsyncReduce(1));
-
-            // Verify results
-            for (size_t i = 0; i < n_elements; ++i) {
-                EXPECT_EQ(result[i], expected_result[i])
-                    << "Mismatch at index " << i << " for client " << c;
-            }
-        });
+        // Perform the asynchronous all-reduce
+        ASSERT_TRUE(client->allReduceAsync(client_values[c].get(),
+            result.get(),
+            n_elements,
+            ccoip_type,
+            ccoip_type,
+            quant_algo,
+            reduce_op,
+            1));
     }
 
-    // Join all client threads
-    for (auto &t: threads) {
-        t.join();
+    // Wait for all clients to finish
+    for (size_t c = 0; c < num_clients; ++c) {
+        const auto &client = clients[c];
+        ASSERT_TRUE(client->joinAsyncReduce(1));
+    }
+
+    // Check the results
+    for (size_t c = 0; c < num_clients; ++c) {
+        const auto &result = results[c];
+        for (size_t i = 0; i < n_elements; ++i) {
+            ASSERT_EQ(result[i], expected_result[i]);
+        }
     }
 
     // Clean shutdown
@@ -202,13 +200,11 @@ void reduceTest(const ccoip::ccoip_reduce_op_t reduce_op,
     ASSERT_TRUE(master.join());
 }
 
-/*
 TYPED_TEST(TypeAllReduceTest, TestSumWorldSize2LargeArray) {
     using ValueType = TypeParam;
     reduceTest<ValueType>(ccoip::ccoipOpSum, ccoip::ccoipQuantizationNone, 203530, 42,
                           [](ValueType a, ValueType b) { return a + b; }, 2);
 }
-*/
 
 TYPED_TEST(TypeAllReduceTest, TestSumWorldSize3NumElements2) {
     using ValueType = TypeParam;
@@ -216,7 +212,6 @@ TYPED_TEST(TypeAllReduceTest, TestSumWorldSize3NumElements2) {
                           [](const ValueType a, const ValueType b) { return a + b; }, 3, false);
 }
 
-/*
 TYPED_TEST(TypeAllReduceTest, TestSumWorldSize3NumElements3) {
     using ValueType = TypeParam;
     reduceTest<ValueType>(ccoip::ccoipOpSum, ccoip::ccoipQuantizationNone, 3, 42,
@@ -229,7 +224,6 @@ TEST(TypeAllReduceTest, TestSumWorldSize4NumElements2) {
                           [](const ValueType a, const ValueType b) { return a + b; }, 4, false);
 }
 
-/*
 TYPED_TEST(QuantizeTypedAllReduceTest, TestSumQuantizedWorldSize2) {
     using ValueType = TypeParam;
     auto ccoipType = getCcoipDataType(typeid(TypeParam));
@@ -483,7 +477,6 @@ TEST(AllReduceTest, TestNoSharedStateSyncDuringConcurrentReduce) {
     ASSERT_TRUE(master.interrupt());
     ASSERT_TRUE(master.join());
 }
-*/
 // TODO: ADD TEST WITH UNEVEN NUMBER OF ELEMENTS TO TEST TRAILING STAGE
 
 int main() {
