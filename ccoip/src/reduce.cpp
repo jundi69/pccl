@@ -305,9 +305,8 @@ namespace {
 
                         const size_t old_floor = (bytes_recvd / quant_el_sz) * quant_el_sz;
                         bytes_recvd += *recvd;
-                        const size_t new_floor = (bytes_recvd / quant_el_sz) * quant_el_sz;
 
-                        if (new_floor > old_floor) {
+                        if (const size_t new_floor = (bytes_recvd / quant_el_sz) * quant_el_sz; new_floor > old_floor) {
                             const size_t chunk_bytes = new_floor - old_floor;
                             // De-quantize + copy into rx_span
                             auto copy_src_span = recv_buffer_span.subspan(old_floor, chunk_bytes);

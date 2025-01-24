@@ -634,39 +634,14 @@ void ccoip::CCoIPMasterHandler::handleGetTopologyRequest(const ccoip_socket_addr
         }
         client_uuid = client_uuid_opt.value();
     }
-    auto client_info_opt = server_state.getClientInfo(client_uuid);
-    if (!client_info_opt) {
+    if (const auto client_info_opt = server_state.getClientInfo(client_uuid); !client_info_opt) {
         LOG(WARN) << "Client " << ccoip_sockaddr_to_str(client_address) << " not found";
         return;
     }
-    const auto &client_info = client_info_opt->get();
-    const auto peer_group = client_info.peer_group;
 
     // TODO: implement real topology optimization,
     //  for now we assert ring reduce and return the ring order to be ascending order of client uuids
-    std::vector<ccoip_uuid_t> topology{};
-    for (const auto &[peer_uuid, _]: server_state.getClientEntrySet()) {
-        const auto peer_info_opt = server_state.getClientInfo(peer_uuid);
-        if (!peer_info_opt) {
-            LOG(WARN) << "Client " << uuid_to_string(peer_uuid) << " not found";
-            continue;
-        }
-        if (const auto &peer_info = peer_info_opt->get();
-            peer_info.connection_phase != PEER_ACCEPTED || peer_info.peer_group != peer_group) {
-            continue;
-        }
-        topology.push_back(peer_uuid);
-    }
-    std::ranges::sort(topology, [](const ccoip_uuid_t &a, const ccoip_uuid_t &b) {
-        int cmp = 0;
-        for (size_t i = 0; i < CCOIP_UUID_N_BYTES; i++) {
-            cmp = a.data[i] - b.data[i];
-            if (cmp != 0) {
-                return cmp < 0;
-            }
-        }
-        return false;
-    });
+    const auto topology = server_state.getRingTopology();
 
     M2CPacketGetTopologyResponse response{};
     response.ring_reduce_order = topology;

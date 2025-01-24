@@ -91,8 +91,7 @@ def test_mnist_ddp_world_size_2_plus_1_late_joiner():
     # launch 2 peers
     process_list = []
     for rank in range(2):
-        process_list.append(launch_py_process(peer_script_path, [], {'PCCL_LOG_LEVEL': 'INFO', 'RANK': str(rank),
-                                                                     'CREATE_RANK_0_REV_50': '1'}))
+        process_list.append(launch_py_process(peer_script_path, [], {'PCCL_LOG_LEVEL': 'INFO', 'RANK': str(rank)}))
         print(f"Launched peer {rank}; PID: {process_list[-1].pid}")
 
     time.sleep(1)
@@ -103,6 +102,54 @@ def test_mnist_ddp_world_size_2_plus_1_late_joiner():
         print(f"Launched peer 2; PID: {process_list[-1].pid}")
     else:
         assert False, "One of the peers exited prematurely"
+
+    # wait for all processes to finish
+    for process in process_list:
+        exit_code = process.wait()
+        assert exit_code == 0, "Peer process exited with non-zero exit code"
+
+    # kill master process
+    master_process.kill()
+    master_process.wait()
+
+
+def test_mnist_ddp_world_size_4():
+    peer_script_path = os.path.join(os.path.dirname(__file__), 'mnist_peer.py')
+    master_script_path = os.path.join(os.path.dirname(__file__), 'mnist_master.py')
+
+    # launch master node
+    master_process = launch_py_process(master_script_path, [], {'PCCL_LOG_LEVEL': 'INFO'})
+    print(f"Launched master node; PID: {master_process.pid}")
+
+    # launch 4 peers
+    process_list = []
+    for rank in range(4):
+        process_list.append(launch_py_process(peer_script_path, [], {'PCCL_LOG_LEVEL': 'INFO', 'RANK': str(rank)}))
+        print(f"Launched peer {rank}; PID: {process_list[-1].pid}")
+
+    # wait for all processes to finish
+    for process in process_list:
+        exit_code = process.wait()
+        assert exit_code == 0, "Peer process exited with non-zero exit code"
+
+    # kill master process
+    master_process.kill()
+    master_process.wait()
+
+
+def test_mnist_ddp_world_size_16():
+    peer_script_path = os.path.join(os.path.dirname(__file__), 'mnist_peer.py')
+    master_script_path = os.path.join(os.path.dirname(__file__), 'mnist_master.py')
+
+    # launch master node
+    master_process = launch_py_process(master_script_path, [], {'PCCL_LOG_LEVEL': 'INFO'})
+    print(f"Launched master node; PID: {master_process.pid}")
+
+    # launch 16 peers
+    process_list = []
+    for rank in range(16):
+        process_list.append(launch_py_process(peer_script_path, [], {'PCCL_LOG_LEVEL': 'INFO', 'RANK': str(rank)}))
+        print(f"Launched peer {rank}; PID: {process_list[-1].pid}")
 
     # wait for all processes to finish
     for process in process_list:

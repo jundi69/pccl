@@ -104,7 +104,6 @@ def log_info(msg: str):
 
 HOST: str = '127.0.0.1:48148'
 RANK: int = int(os.getenv('RANK', "0"))
-CREATE_RANK_0_REV_50: int = int(os.getenv('CREATE_RANK_0_REV_50', "0"))
 
 
 def generate_random_vectors_64(d: int,
@@ -278,11 +277,6 @@ def main():
 
             if shared_state.revision % 5 == 0:
                 log_info(f"(RANK={RANK}, it={it}) loss: {loss.item()}, revision: {shared_state.revision}")
-
-            if RANK == 0 and CREATE_RANK_0_REV_50 == 1 and shared_state.revision == 50:
-                rev50_signal_file = os.path.join(os.path.dirname(__file__), 'RANK_0_REV_50')
-                with open(rev50_signal_file, 'w') as f:
-                    f.write('')
 
     except Exception as e:
         print(f"Training aborted with exception: {e}")

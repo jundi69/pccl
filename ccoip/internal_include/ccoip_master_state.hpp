@@ -403,7 +403,7 @@ namespace ccoip {
         /// Returns the peers that a particular client should establish p2p connections with
         [[nodiscard]] std::vector<ClientInfo> getPeersForClient(
             const ccoip_socket_address_t &client_address
-        ) const;
+        );
 
         /// Returns all client socket addresses
         [[nodiscard]] std::vector<ccoip_socket_address_t> getClientSocketAddresses();
@@ -462,5 +462,10 @@ namespace ccoip {
 
         /// Returns the set of ongoing collective communications operation tags for a particular peer group
         [[nodiscard]] std::vector<uint64_t> getOngoingCollectiveComsOpTags(uint32_t peer_group);
+
+        // TODO: THIS IS SUBJECT TO CHANGE, AS IT ASSERTS THAT THE TOPOLOGY IS A RING ALWAYS
+
+        /// Returns the ring topology
+        [[nodiscard]] std::vector<ccoip_uuid_t> getRingTopology();
     };
 }
