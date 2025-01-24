@@ -188,7 +188,7 @@ def main():
 
             world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
 
-            if world_size < 3:
+            if world_size < 2:
                 sleep(1)
                 continue
 
@@ -251,7 +251,7 @@ def main():
                 break
 
             # print hash of the gradients tensor content
-            log_debug(f"(RANK={RANK}, it={i}) grads hash: {compute_crc32(grads)}, grads: {grads[1024:1034]}")
+            log_debug(f"(RANK={RANK}, it={i}) grads hash: {compute_crc32(grads)}")
 
             # scatter gradients back to model parameters
             offset = 0
