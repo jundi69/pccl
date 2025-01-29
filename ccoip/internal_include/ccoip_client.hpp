@@ -47,6 +47,9 @@ namespace ccoip {
         /// Performs a topology update if required
         [[nodiscard]] bool updateTopology() const;
 
+        /// Performs topology optimization on the current topology
+        [[nodiscard]] bool optimizeTopology() const;
+
         /// Launches an asynchronous all reduce operation
         [[nodiscard]] bool allReduceAsync(const void *sendbuff, void *recvbuff, size_t count,
                                           ccoip_data_type_t datatype, ccoip_data_type_t quantized_data_type,

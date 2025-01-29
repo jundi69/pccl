@@ -29,7 +29,7 @@ static int unix_poll(std::vector<tinysockets::poll::PollDescriptor> &descriptors
         poll_fds.reserve(descriptors.size());
         for (const auto &request: descriptors) {
             poll_fds.push_back(pollfd{
-                    .fd = request.socket.getSocketFd(),
+                    .fd = request.socket_fd,
                     .events = ToPollEvent(request.target_event),
                     .revents = 0,
             });
@@ -58,7 +58,7 @@ static int wsa_poll(std::vector<tinysockets::poll::PollDescriptor> &descriptors,
         poll_fds.reserve(descriptors.size());
         for (const auto &request: descriptors) {
             poll_fds.push_back(WSAPOLLFD{
-                .fd = static_cast<SOCKET>(request.socket.getSocketFd()),
+                .fd = static_cast<SOCKET>(request.socket_fd),
                 .events = ToPollEvent(request.target_event),
                 .revents = 0,
             });
@@ -94,51 +94,8 @@ std::optional<size_t> tinysockets::poll::send_nonblocking(const std::span<const 
         return std::nullopt;
     }
 
-    const int socket_fd = poll_descriptor.socket.getSocketFd();
-
-    ssize_t bytes_sent;
-#ifdef WIN32
-    // On Windows, MSG_DONTWAIT is not supported, so we have to use ioctlsocket to set the socket to non-blocking mode
-    u_long mode = 1;
-    if (ioctlsocket(socket_fd, FIONBIO, &mode) != NO_ERROR) {
-        LOG(ERR) << "Failed to set socket into non-blocking mode";
-        return std::nullopt;
-    }
-    bytes_sent = sendvp(socket_fd, data.data(), data.size_bytes(), 0);
-
-    // set socket back to blocking mode
-    mode = 0;
-    if (ioctlsocket(socket_fd, FIONBIO, &mode) != NO_ERROR) {
-        LOG(ERR) << "Failed to set socket back to blocking mode";
-        return std::nullopt;
-    }
-#elif __APPLE__
-    // MacOS does not support MSG_DONTWAIT, so we have to use ioctl to set the socket to non-blocking mode
-    int flags = fcntl(socket_fd, F_GETFL, 0);
-    if (flags == -1) {
-        LOG(ERR) << "Failed to get socket flags";
-        return std::nullopt;
-    }
-    // set to non-blocking mode
-    flags |= O_NONBLOCK;
-    if (fcntl(socket_fd, F_SETFL, flags) == -1) {
-        LOG(ERR) << "Failed to set socket into non-blocking mode";
-        return std::nullopt;
-    }
-
-    // perform the non-blocking recv
-    bytes_sent = sendvp(socket_fd, data.data(), data.size_bytes(), 0);
-
-    // set back to blocking mode
-    flags &= ~O_NONBLOCK;
-    if (fcntl(socket_fd, F_SETFL, flags) == -1) {
-        LOG(ERR) << "Failed to set socket back to blocking mode";
-        return std::nullopt;
-    }
-#else
-    bytes_sent = sendvp(socket_fd, data.data(), data.size_bytes(), MSG_DONTWAIT);
-#endif
-
+    const int socket_fd = poll_descriptor.socket_fd;
+    ssize_t bytes_sent = sendvp_nb(socket_fd, data.data(), data.size_bytes(), 0);
     if (bytes_sent < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
         const std::string error_message = strerror(errno);
         LOG(WARN) << "send() failed: " << error_message;
@@ -157,55 +114,14 @@ std::optional<size_t> tinysockets::poll::recv_nonblocking(const std::span<std::b
         return std::nullopt;
     }
 
-    const int socket_fd = poll_descriptor.socket.getSocketFd();
-    ssize_t bytes_received;
-#ifdef WIN32
-    // On Windows, MSG_DONTWAIT is not supported, so we have to use ioctlsocket to set the socket to non-blocking mode
-    u_long mode = 1;
-    if (ioctlsocket(socket_fd, FIONBIO, &mode) != NO_ERROR) {
-        LOG(ERR) << "Failed to set socket into non-blocking mode";
-        return std::nullopt;
-    }
-    bytes_received = recvvp(socket_fd, data.data(), data.size_bytes(), 0);
-
-    // set socket back to blocking mode
-    mode = 0;
-    if (ioctlsocket(socket_fd, FIONBIO, &mode) != NO_ERROR) {
-        LOG(ERR) << "Failed to set socket back to blocking mode";
-        return std::nullopt;
-    }
-#elif __APPLE__
-    // MacOS does not support MSG_DONTWAIT, so we have to use ioctl to set the socket to non-blocking mode
-    int flags = fcntl(socket_fd, F_GETFL, 0);
-    if (flags == -1) {
-        LOG(ERR) << "Failed to get socket flags";
-        return std::nullopt;
-    }
-    // set to non-blocking mode
-    flags |= O_NONBLOCK;
-    if (fcntl(socket_fd, F_SETFL, flags) == -1) {
-        LOG(ERR) << "Failed to set socket into non-blocking mode";
-        return std::nullopt;
-    }
-
-    // perform the non-blocking recv
-    bytes_received = recvvp(socket_fd, data.data(), data.size_bytes(), 0);
-
-    // set back to blocking mode
-    flags &= ~O_NONBLOCK;
-    if (fcntl(socket_fd, F_SETFL, flags) == -1) {
-        LOG(ERR) << "Failed to set socket back to blocking mode";
-        return std::nullopt;
-    }
-#else
-    bytes_received = recvvp(socket_fd, data.data(), data.size_bytes(), MSG_DONTWAIT);
-#endif
-
-    if (bytes_received <= 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
+    const int socket_fd = poll_descriptor.socket_fd;
+    ssize_t bytes_received = recvvp_nb(socket_fd, data.data(), data.size_bytes(), 0);
+    if (bytes_received < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
         const std::string error_message = strerror(errno);
-        LOG(WARN) << "recv() failed: " << error_message;
+        LOG(WARN) << "recv() failed [poll::recv_nonblocking]: " << error_message;
         return std::nullopt;
-    } else if (bytes_received > 0) {
+    }
+    if (bytes_received >= 0) {
         return bytes_received;
     }
 

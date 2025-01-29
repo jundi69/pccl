@@ -1,5 +1,7 @@
 #include "ccoip_packets.hpp"
 
+#include <random>
+
 size_t ccoip::EmptyPacket::serialized_size = 0;
 
 // EmptyPacket
@@ -18,12 +20,14 @@ ccoip::packetId_t ccoip::C2MPacketRequestSessionRegistration::packet_id = C2M_PA
 void ccoip::C2MPacketRequestSessionRegistration::serialize(PacketWriteBuffer &buffer) const {
     buffer.write<uint16_t>(p2p_listen_port);
     buffer.write<uint16_t>(shared_state_listen_port);
+    buffer.write<uint16_t>(bandwidth_benchmark_listen_port);
     buffer.write<uint32_t>(peer_group);
 }
 
 bool ccoip::C2MPacketRequestSessionRegistration::deserialize(PacketReadBuffer &buffer) {
     p2p_listen_port = buffer.read<uint16_t>();
     shared_state_listen_port = buffer.read<uint16_t>();
+    bandwidth_benchmark_listen_port = buffer.read<uint16_t>();
     peer_group = buffer.read<uint32_t>();
     return true;
 }
@@ -33,6 +37,13 @@ ccoip::packetId_t ccoip::C2MPacketAcceptNewPeers::packet_id = C2M_PACKET_ACCEPT_
 
 // C2MPacketGetTopologyRequest
 ccoip::packetId_t ccoip::C2MPacketGetTopologyRequest::packet_id = C2M_PACKET_GET_TOPOLOGY_REQUEST_ID;
+
+// C2MPacketOptimizeTopology
+ccoip::packetId_t ccoip::C2MPacketOptimizeTopology::packet_id = C2M_PACKET_OPTIMIZE_TOPOLOGY_ID;
+
+// C2MPacketOptimizeTopologyWorkComplete
+ccoip::packetId_t ccoip::C2MPacketOptimizeTopologyWorkComplete::packet_id =
+        C2M_PACKET_OPTIMIZE_TOPOLOGY_WORK_COMPLETE_ID;
 
 // C2MPacketP2PConnectionsEstablished
 ccoip::packetId_t ccoip::C2MPacketP2PConnectionsEstablished::packet_id = C2M_PACKET_P2P_CONNECTIONS_ESTABLISHED_ID;
@@ -46,6 +57,19 @@ bool ccoip::C2MPacketP2PConnectionsEstablished::deserialize(PacketReadBuffer &bu
     return true;
 }
 
+// C2MReportPeerBandwidth
+ccoip::packetId_t ccoip::C2MPacketReportPeerBandwidth::packet_id = C2M_PACKET_REPORT_PEER_BANDWIDTH_ID;
+
+void ccoip::C2MPacketReportPeerBandwidth::serialize(PacketWriteBuffer &buffer) const {
+    buffer.writeFixedArray(to_peer_uuid.data);
+    buffer.write<double>(bandwidth_mbits_per_second);
+}
+
+bool ccoip::C2MPacketReportPeerBandwidth::deserialize(PacketReadBuffer &buffer) {
+    to_peer_uuid.data = buffer.readFixedArray<uint8_t, CCOIP_UUID_N_BYTES>();
+    bandwidth_mbits_per_second = buffer.read<double>();
+    return true;
+}
 
 // C2MPacketSyncSharedState
 ccoip::packetId_t ccoip::C2MPacketSyncSharedState::packet_id = C2M_PACKET_SYNC_SHARED_STATE_ID;
@@ -78,12 +102,14 @@ bool ccoip::C2MPacketSyncSharedState::deserialize(PacketReadBuffer &buffer) {
     return true;
 }
 
+// M2CPacketSyncSharedStateComplete
+ccoip::packetId_t ccoip::M2CPacketSyncSharedStateComplete::packet_id = M2C_PACKET_SYNC_SHARED_STATE_COMPLETE_ID;
+
 // C2MPacketDistSharedStateComplete
 ccoip::packetId_t ccoip::C2MPacketDistSharedStateComplete::packet_id = C2M_PACKET_DIST_SHARED_STATE_COMPLETE_ID;
 
 // M2CPacketSessionRegistrationResponse
 ccoip::packetId_t ccoip::M2CPacketSessionRegistrationResponse::packet_id = M2C_PACKET_SESSION_REGISTRATION_RESPONSE_ID;
-
 
 // C2MPacketCollectiveCommsInitiate
 ccoip::packetId_t ccoip::C2MPacketCollectiveCommsInitiate::packet_id = C2M_PACKET_COLLECTIVE_COMMS_INITIATE_ID;
@@ -230,6 +256,44 @@ bool ccoip::M2CPacketGetTopologyResponse::deserialize(PacketReadBuffer &buffer) 
     return true;
 }
 
+// M2CPacketOptimizeTopologyResponse
+ccoip::packetId_t ccoip::M2CPacketOptimizeTopologyResponse::packet_id = M2C_PACKET_OPTIMIZE_TOPOLOGY_RESPONSE_ID;
+
+
+void ccoip::M2CPacketOptimizeTopologyResponse::serialize(PacketWriteBuffer &buffer) const {
+    buffer.write<uint64_t>(bw_benchmark_requests.size());
+    for (const auto &[from_peer_uuid, to_peer_uuid, endpoint_socket_address]: bw_benchmark_requests) {
+        buffer.writeFixedArray(from_peer_uuid.data);
+        buffer.writeFixedArray(to_peer_uuid.data);
+        writeSocketAddress(buffer, endpoint_socket_address);
+    }
+}
+
+bool ccoip::M2CPacketOptimizeTopologyResponse::deserialize(PacketReadBuffer &buffer) {
+    const auto n_requests = buffer.read<uint64_t>();
+    bw_benchmark_requests.reserve(n_requests);
+    for (size_t i = 0; i < n_requests; i++) {
+        BenchmarkRequest request{};
+        request.from_peer_uuid.data = buffer.readFixedArray<uint8_t, CCOIP_UUID_N_BYTES>();
+        request.to_peer_uuid.data = buffer.readFixedArray<uint8_t, CCOIP_UUID_N_BYTES>();
+        request.to_peer_benchmark_endpoint = readSocketAddress(buffer);
+        bw_benchmark_requests.push_back(request);
+    }
+    return true;
+}
+
+// M2CPacketOptimizeTopologyComplete
+ccoip::packetId_t ccoip::M2CPacketOptimizeTopologyComplete::packet_id = M2C_PACKET_OPTIMIZE_TOPOLOGY_COMPLETE_ID;
+
+void ccoip::M2CPacketOptimizeTopologyComplete::serialize(PacketWriteBuffer &buffer) const {
+    buffer.write<boolean>(success);
+}
+
+bool ccoip::M2CPacketOptimizeTopologyComplete::deserialize(PacketReadBuffer &buffer) {
+    success = buffer.read<boolean>();
+    return true;
+}
+
 // M2CPacketSyncSharedState
 ccoip::packetId_t ccoip::M2CPacketSyncSharedState::packet_id = M2C_PACKET_SYNC_SHARED_STATE_ID;
 
@@ -312,9 +376,6 @@ bool ccoip::P2PPacketHello::deserialize(PacketReadBuffer &buffer) {
     return true;
 }
 
-// M2CPacketSyncSharedStateComplete
-ccoip::packetId_t ccoip::M2CPacketSyncSharedStateComplete::packet_id = M2C_PACKET_SYNC_SHARED_STATE_COMPLETE_ID;
-
 // P2PPacketReduceTerm
 ccoip::packetId_t ccoip::P2PPacketDequantizationMeta::packet_id = P2P_PACKET_DEQUANTIZATION_META;
 
@@ -392,16 +453,29 @@ bool ccoip::S2CPacketSharedStateResponse::deserialize(PacketReadBuffer &buffer) 
         auto dst_buffer = std::unique_ptr<uint8_t[]>(new uint8_t[length]);
         buffer.readContents(dst_buffer.get(), length);
         entries.push_back(SharedStateEntry{
-            .key = key,
-            .dst_buffer = std::move(dst_buffer),
-            .dst_size = length
+                .key = key,
+                .dst_buffer = std::move(dst_buffer),
+                .dst_size = length
         });
     }
     return true;
 }
+
 
 // M2CPacketNewPeers
 ccoip::packetId_t ccoip::M2CPacketNewPeers::packet_id = M2C_PACKET_NEW_PEERS_ID;
 
 // P2PPacketHelloAck
 ccoip::packetId_t ccoip::P2PPacketHelloAck::packet_id = P2P_PACKET_HELLO_ACK_ID;
+
+// B2CPacketBenchmarkServerIsBusy
+ccoip::packetId_t ccoip::B2CPacketBenchmarkServerIsBusy::packet_id = B2C_PACKET_BENCHMARK_SERVER_IS_BUSY;
+
+void ccoip::B2CPacketBenchmarkServerIsBusy::serialize(PacketWriteBuffer &buffer) const {
+    buffer.write<boolean>(is_busy);
+}
+
+bool ccoip::B2CPacketBenchmarkServerIsBusy::deserialize(PacketReadBuffer &buffer) {
+    is_busy = buffer.read<boolean>();
+    return true;
+}

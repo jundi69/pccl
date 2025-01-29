@@ -206,10 +206,19 @@ namespace tinysockets {
             return receiveLtvPacket<T>(id, no_wait);
         }
 
-    private:
         // Packet decoding / encoding functions
+
+        /// Sends a packet to the connected socket
         [[nodiscard]] bool sendLtvPacket(ccoip::packetId_t packet_id, const PacketWriteBuffer &buffer) const;
 
+        /// Attempts to grow the send-buffer to the maximum size
+        void maximizeSendBuffer() const;
+
+        /// Attempts to grow the receive-buffer to the maximum size
+        void maximizeReceiveBuffer() const;
+
+    private:
+        // Packet decoding / encoding functions
         [[nodiscard]] std::optional<size_t> receivePacketLength(bool no_wait) const;
 
         [[nodiscard]] bool receivePacketData(std::span<std::uint8_t> &dst) const;
@@ -316,11 +325,11 @@ namespace tinysockets {
 
         [[nodiscard]] bool receivePacketData(std::span<std::uint8_t> &dst) const;
 
-        [[nodiscard]] std::optional<std::pair<std::unique_ptr<uint8_t[]>, std::span<uint8_t> > > pollNextPacketBuffer(
+        [[nodiscard]] std::optional<std::pair<std::unique_ptr<uint8_t[]>, std::span<uint8_t>>> pollNextPacketBuffer(
             ccoip::packetId_t packet_id,
             bool no_wait) const;
 
-        [[nodiscard]] std::optional<std::pair<std::unique_ptr<uint8_t[]>, std::span<uint8_t> > >
+        [[nodiscard]] std::optional<std::pair<std::unique_ptr<uint8_t[]>, std::span<uint8_t>>>
         pollNextMatchingPacketBuffer(
             ccoip::packetId_t packet_id, const std::function<bool(const std::span<uint8_t> &)> &predicate,
             bool no_wait) const;
@@ -441,7 +450,7 @@ namespace tinysockets {
         };
 
         struct PollDescriptor {
-            BlockingIOSocket &socket;
+            int socket_fd;
             PollEvent target_event{};
             PollEvent event_out{};
 
@@ -450,7 +459,8 @@ namespace tinysockets {
 
         int poll(std::vector<PollDescriptor> &descriptors, int timeout);
 
-        std::optional<size_t> send_nonblocking(const std::span<const std::byte> &data, const PollDescriptor &poll_descriptor);
+        std::optional<size_t> send_nonblocking(const std::span<const std::byte> &data,
+                                               const PollDescriptor &poll_descriptor);
 
         std::optional<size_t> recv_nonblocking(const std::span<std::byte> &data, const PollDescriptor &poll_descriptor);
     };

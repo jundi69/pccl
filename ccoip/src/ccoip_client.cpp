@@ -28,6 +28,10 @@ bool ccoip::CCoIPClient::updateTopology() const {
     return client->updateTopology();
 }
 
+bool ccoip::CCoIPClient::optimizeTopology() const {
+    return client->optimizeTopology();
+}
+
 bool ccoip::CCoIPClient::allReduceAsync(const void *sendbuff, void *recvbuff, const size_t count,
                                         const ccoip_data_type_t datatype, const ccoip_data_type_t quantized_data_type,
                                         const ccoip_quantization_algorithm_t quantization_algorithm,

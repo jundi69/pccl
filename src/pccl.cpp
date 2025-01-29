@@ -187,6 +187,23 @@ pcclResult_t pcclUpdateTopology(pcclComm_t *communicator) {
     return pcclSuccess;
 }
 
+pcclResult_t pcclOptimizeTopology(const pcclComm_t *communicator) {
+    PCCL_VALIDATE_INITIALIZED();
+    PCCL_VALIDATE(communicator != nullptr, pcclInvalidArgument);
+    PCCL_VALIDATE(communicator->ccoip_client != nullptr, pcclInvalidUsage);
+
+    if (!communicator->ccoip_client->optimizeTopology()) {
+        return pcclInvalidUsage;
+    }
+
+    // update the topology
+    if (!communicator->ccoip_client->updateTopology()) [[unlikely]] {
+        return pcclInvalidUsage;
+    }
+
+    return pcclSuccess;
+}
+
 pcclResult_t pcclAllReduceAsync(const void *sendbuff, void *recvbuff,
                                 const pcclReduceDescriptor_t *descriptor,
                                 const pcclComm_t *communicator,
@@ -391,3 +408,4 @@ pcclResult_t pcclDestroyMaster(pcclMasterInstance_t *master_instance) {
     delete master_instance;
     return pcclSuccess;
 }
+

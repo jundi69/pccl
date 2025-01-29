@@ -124,11 +124,11 @@ namespace {
             std::optional<poll::PollDescriptor *> rx_desc = std::nullopt;
 
             if (bytes_sent < total_tx_size) {
-                descriptors.push_back({*tx_socket, poll::PollEvent::POLL_OUTPUT});
+                descriptors.push_back({tx_socket->getSocketFd(), poll::PollEvent::POLL_OUTPUT});
                 tx_desc = &descriptors.back();
             }
             if (bytes_recvd < total_rx_size) {
-                descriptors.push_back({*rx_socket, poll::PollEvent::POLL_INPUT});
+                descriptors.push_back({rx_socket->getSocketFd(), poll::PollEvent::POLL_INPUT});
                 rx_desc = &descriptors.back();
             }
 
@@ -271,11 +271,11 @@ namespace {
             std::optional<poll::PollDescriptor *> rx_desc = std::nullopt;
 
             if (bytes_sent < total_tx_size) {
-                descriptors.push_back({*tx_socket, poll::PollEvent::POLL_OUTPUT});
+                descriptors.push_back({tx_socket->getSocketFd(), poll::PollEvent::POLL_OUTPUT});
                 tx_desc = &descriptors.back();
             }
             if (bytes_recvd < total_rx_size) {
-                descriptors.push_back({*rx_socket, poll::PollEvent::POLL_INPUT});
+                descriptors.push_back({rx_socket->getSocketFd(), poll::PollEvent::POLL_INPUT});
                 rx_desc = &descriptors.back();
             }
 

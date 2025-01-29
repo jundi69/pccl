@@ -21,6 +21,9 @@ namespace ccoip {
         /// Socket listening for shared state distribution requests
         tinysockets::ServerSocket shared_state_socket;
 
+        /// Socket listening for bandwidth benchmark requests
+        tinysockets::BlockingIOServerSocket benchmark_socket;
+
         /// Thread ID of the shared state server thread
         std::thread::id shared_state_server_thread_id;
 
@@ -37,6 +40,14 @@ namespace ccoip {
 
         bool connected = false;
 
+        /// Thread that runs the currently ongoing bandwidth benchmark (if any).
+        /// It runs the receiving side of the benchmark.
+        /// Only one benchmark can run at a time.
+        std::optional<std::thread> benchmark_thread_opt = std::nullopt;
+
+        /// Atomic bool to be set when the benchmark is complete by the benchmark thread
+        std::atomic_bool benchmark_complete_promise{};
+
     public:
         explicit CCoIPClientHandler(const ccoip_socket_address_t &address, uint32_t peer_group);
 
@@ -50,6 +61,8 @@ namespace ccoip {
         [[nodiscard]] bool interrupt();
 
         [[nodiscard]] bool updateTopology();
+
+        [[nodiscard]] bool optimizeTopology();
 
         [[nodiscard]] bool join();
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <bandwidth_store.hpp>
 #include <ccoip_inet_utils.hpp>
 #include <ccoip_packets.hpp>
 #include <ccoip_types.hpp>
@@ -56,6 +57,29 @@ namespace ccoip {
         /// Once all peers have declared that they have established p2p connections,
         /// the client will return to the @code IDLE@endcode state.
         WAITING_FOR_OTHER_PEERS,
+
+        /// The client has voted to optimize the topology.
+        /// In this state, it waits for all peers to vote to optimize the topology.
+        VOTE_OPTIMIZE_TOPOLOGY,
+
+        /// When all clients have voted to optimize the topology, the client will enter the @code OPTIMIZE_TOPOLOGY@endcode state.
+        /// In this state, the clients will perform the necessary work to optimize the topology.
+        /// This may be no work at all, if the topology has not changed.
+        /// Work may include bandwidth testing, if requested by the master.
+        /// Bandwidth information is reported to the master, which will in turn update the topology to reflect the new bandwidth information.
+        /// TODO: IMPLEMENT THAT CLIENTS MAY REQUEST TO RE-OPTIMIZE THE TOPOLOGY IF THEY DETECT DROP IN BANDWIDTH
+        OPTIMIZE_TOPOLOGY,
+
+        /// If the master detects that not all clients have performed all work requests necessary for topology optimization,
+        /// it will enter all clients into this state. In this state, the only legal state for the client to transition into
+        /// is into the @code VOTE_OPTIMIZE_TOPOLOGY@endcode state, as the client must re-request work from the master that
+        /// is necessary to optimize the topology.
+        OPTIMIZE_TOPOLOGY_FAILED,
+
+        /// After performing the work necessary to optimize the topology, the client will vote to complete the topology optimization.
+        /// In this state, it waits for all peers to vote to complete the topology optimization.
+        /// Once all peers have declared that they have completed the topology optimization work, the client will return to the @code IDLE@endcode state.
+        VOTE_COMPLETE_TOPOLOGY_OPTIMIZATION,
 
         /// The client has voted to synchronize shared state.
         /// In this state, it waits for all peers to vote to synchronize shared state.
@@ -140,6 +164,9 @@ namespace ccoip {
 
         /// The port the peer listens to for shared state distribution requests
         uint16_t shared_dist_state_listen_port;
+
+        /// The port the peer listens to for benchmarking network bandwidth
+        uint16_t bandwidth_benchmark_listen_port;
     };
 
     struct ClientInfo {
@@ -181,19 +208,29 @@ namespace ccoip {
         /// Removed from on client leave/disconnect.
         std::unordered_set<ccoip_uuid_t> votes_accept_new_peers{};
 
+        /// set of all uuids that have voted to optimize the topology.
+        /// cleared once topology optimization consensus is reached.
+        /// Removed from on client leave/disconnect.
+        std::unordered_set<ccoip_uuid_t> votes_optimize_topology{};
+
+        /// set of all uuids that have voted to complete the topology optimization.
+        /// cleared once topology optimization completion consensus is reached.
+        /// Removed from on client leave/disconnect.
+        std::unordered_set<ccoip_uuid_t> votes_complete_topology_optimization{};
+
         /// set of all uuids that have voted to synchronize shared state for each peer group.
         /// Peer group bin is cleared once shared state distribution consensus is reached.
         /// Removed from on client leave/disconnect.
-        std::unordered_map<uint32_t, std::unordered_set<ccoip_uuid_t> > votes_sync_shared_state{};
+        std::unordered_map<uint32_t, std::unordered_set<ccoip_uuid_t>> votes_sync_shared_state{};
 
         /// set of all uuids that have voted to complete shared state distribution for each peer group.
         /// Peer group bin is cleared once the shared state distribution phase ends.
         /// Removed from on client leave/disconnect.
-        std::unordered_map<uint32_t, std::unordered_set<ccoip_uuid_t> > votes_sync_shared_state_complete{};
+        std::unordered_map<uint32_t, std::unordered_set<ccoip_uuid_t>> votes_sync_shared_state_complete{};
 
-        /// Flag to indicate if the peer list has changed
+        /// Flag per "callsite" to indicate if the peer list has changed
         /// See @code hasPeerListChanged@endcode
-        bool peer_list_changed = false;
+        std::unordered_map<uint32_t, bool> peer_list_changed{};
 
         /// Defines the "mask" of shared state entries for each peer group.
         /// The mask is defined by the identity of the set of shared state key strings and their corresponding hashes.
@@ -204,19 +241,19 @@ namespace ccoip {
         /// This "mask" is elected by popularity from a set of candidates provided by
         /// each peer that has voted to synchronize shared state.
         /// Peer group bin is cleared once the shared state distribution phase ends.
-        std::unordered_map<uint32_t, std::vector<SharedStateHashEntry> > shared_state_mask{};
+        std::unordered_map<uint32_t, std::vector<SharedStateHashEntry>> shared_state_mask{};
 
         /// Defines the list of candidates for the shared state mask for each peer group.
         /// Most popular candidate is elected as the shared state mask.
         /// Peer group bin is cleared after the shared state distribution phase ends.
         /// Removed from on client leave/disconnect.
-        std::unordered_map<uint32_t, std::vector<std::pair<ccoip_uuid_t, std::vector<SharedStateHashEntry> > > >
+        std::unordered_map<uint32_t, std::vector<std::pair<ccoip_uuid_t, std::vector<SharedStateHashEntry>>>>
         shared_state_mask_candidates{};
 
         /// Cache of the shared state hashes for all entries in the shared state mask for each peer group.
         /// by their key string.
         /// Peer group bin is cleared when the shared state distribution phase ends.
-        std::unordered_map<uint32_t, std::unordered_map<std::string, uint64_t> > shared_state_hashes{};
+        std::unordered_map<uint32_t, std::unordered_map<std::string, uint64_t>> shared_state_hashes{};
 
         /// The next shared state revision that is expected from peers synchronizing shared state, intending to distribute.
         /// Shared state revisions that do not match this value will either be considered outdated or a violation of the
@@ -238,21 +275,24 @@ namespace ccoip {
         /// Maps the client UUID to the shared state mismatch status populated by the last invocation of @code sharedStateMatches@endcode.
         /// Grouped by peer group.
         /// Peer group bin is cleared when the shared state distribution phase ends.
-        std::unordered_map<uint32_t, std::unordered_map<ccoip_uuid_t, SharedStateMismatchStatus> > shared_state_statuses
+        std::unordered_map<uint32_t, std::unordered_map<ccoip_uuid_t, SharedStateMismatchStatus>> shared_state_statuses
                 {};
 
         /// Maps the client UUID to the set of shared state keys that have dirty content, meaning
         /// that the hash of the shared state entry does not match the hash in the shared state mask.
         /// Grouped by peer group.
         /// Peer group bin is cleared when the shared state distribution phase ends.
-        std::unordered_map<uint32_t, std::unordered_map<ccoip_uuid_t, std::vector<std::string> > >
+        std::unordered_map<uint32_t, std::unordered_map<ccoip_uuid_t, std::vector<std::string>>>
         shared_state_dirty_keys{};
 
         /// Boolean state for each collective communications operation tag in every peer group that indicates if the operation has been aborted or not.
         /// true = aborted
         /// false = not aborted
         /// Cleared when the collective communications operation ends.
-        std::unordered_map<uint32_t, std::unordered_map<uint64_t, bool> > collective_comms_op_abort_states{};
+        std::unordered_map<uint32_t, std::unordered_map<uint64_t, bool>> collective_comms_op_abort_states{};
+
+        /// Bandwidth store for all clients
+        BandwidthStore bandwidth_store{};
 
     public:
         /// Registers a client
@@ -271,6 +311,17 @@ namespace ccoip {
         /// All clients must vote to accept new peers before all clients start the p2p establishment phase.
         [[nodiscard]] bool voteAcceptNewPeers(const ccoip_uuid_t &peer_uuid);
 
+        /// Called when a client votes to optimize the topology
+        /// All clients must vote to optimize the topology before topology optimization can begin.
+        [[nodiscard]] bool voteOptimizeTopology(const ccoip_uuid_t &peer_uuid);
+
+        /// Called when a client votes to complete the topology optimization phase.
+        /// This indicates that it has completed the work requested by the master that was necessary for the master to be able to optimize the topology.
+        /// All clients must vote to complete the topology optimization phase before the topology optimization phase can end.
+        /// When consensus is reached, @code endTopologyOptimizationPhase()@endcode will be called.
+        /// All clients here shall mean the subset of clients that are in the @code PEER_ACCEPTED@endcode phase.
+        [[nodiscard]] bool voteTopologyOptimizationComplete(const ccoip_uuid_t &peer_uuid);
+
         /// Called when a client votes to synchronize shared state.
         /// All clients must vote to synchronize shared state before shared state distribution can begin.
         [[nodiscard]] bool voteSyncSharedState(const ccoip_uuid_t &peer_uuid);
@@ -278,7 +329,6 @@ namespace ccoip {
         /// Called when a client votes to complete the shared state distribution phase.
         /// This indicates that it has completed receiving the subset of shared state that was outdated.
         /// All clients must vote to complete shared state distribution before shared state distribution can end.
-        /// With the shared state distribution ending, the shared state synchronization phase also ends.
         /// When consensus is reached, @code endSharedStateDistributionPhase()@endcode will be called.
         /// All clients here shall mean the subset of clients that are in the @code PEER_ACCEPTED@endcode phase.
         [[nodiscard]] bool voteDistSharedStateComplete(const ccoip_uuid_t &peer_uuid);
@@ -303,9 +353,19 @@ namespace ccoip {
         /// Returns true if all clients have voted to accept new peers
         [[nodiscard]] bool acceptNewPeersConsensus() const;
 
+        /// Returns true if all clients have voted to optimize the topology
+        [[nodiscard]] bool optimizeTopologyConsensus() const;
+
+        /// Returns true if all clients have voted to complete the topology optimization phase
+        [[nodiscard]] bool topologyOptimizationCompleteConsensus() const;
+
         /// Transition to the p2p establishment phase
         /// Triggered after unanimous voting to accept new peers
-        void transitionToP2PEstablishmentPhase();
+        [[nodiscard]] bool transitionToP2PEstablishmentPhase();
+
+        /// Transition to the topology optimization phase
+        /// Triggered after unanimous voting to optimize the topology
+        [[nodiscard]] bool transitionToTopologyOptimizationPhase();
 
         /// Marks that p2p connections have been established by a particular client.
         /// The particular client will be transitioned to the @code WAITING_FOR_OTHER_PEERS@endcode state
@@ -314,6 +374,7 @@ namespace ccoip {
         /// Once all peers have declared that they have established p2p connections,
         /// clients return back to the @code IDLE@endcode state.
         [[nodiscard]] bool markP2PConnectionsEstablished(const ccoip_uuid_t &peer_uuid, bool success);
+
 
         /// Transition to the p2p connections established phase
         /// Triggered after all clients have declared that they have established p2p connections either successfully or not.
@@ -334,6 +395,10 @@ namespace ccoip {
         /// Called to end the shared state distribution phase
         /// Will revert all peers of the peer group to the @code IDLE@endcode state
         [[nodiscard]] bool endSharedStateSyncPhase(uint32_t peer_group);
+
+        /// Called to end the topology optimization phase
+        /// Will revert all clients to the @code IDLE@endcode state
+        [[nodiscard]] bool endTopologyOptimizationPhase(bool failed);
 
         /// Returns true if all clients have declared that they have established p2p connections
         /// Note: that "all clients" here means the subset of clients that are joining in the current acceptNewPeers phase.
@@ -409,10 +474,14 @@ namespace ccoip {
         [[nodiscard]] std::vector<ccoip_socket_address_t> getClientSocketAddresses();
 
         /// Returns a list pairs of client socket addresses and their corresponding UUIDs
-        [[nodiscard]] std::vector<std::pair<ccoip_uuid_t, ccoip_socket_address_t> > getClientEntrySet();
+        [[nodiscard]] std::vector<std::pair<ccoip_uuid_t, ccoip_socket_address_t>> getClientEntrySet();
 
-        /// Returns true if the peer list has changed since the last invocation of this function
-        [[nodiscard]] bool hasPeerListChanged();
+        /// Returns true if the peer list has changed since the last invocation of this function for this callsite.
+        /// @param callsite a unique identifier for the caller of this function
+        [[nodiscard]] bool hasPeerListChanged(uint32_t callsite);
+
+        /// Returns the set of currently accepted peers, meaning the set of peers that are currently in the @code PEER_ACCEPTED@endcode phase.
+        [[nodiscard]] std::unordered_set<ccoip_uuid_t> getCurrentlyAcceptedPeers();
 
         /// Returns the shared state mismatch status. This status is set by @code sharedStateMatches@endcode.
         /// If @code sharedStateMatches@endcode has not been called yet since the start of the current shared state voting phase,
@@ -436,11 +505,32 @@ namespace ccoip {
         /// @returns false if the check could not be performed, e.g. the shared state mask is empty.
         [[nodiscard]] bool checkMaskSharedStateMismatches(uint32_t peer_group);
 
+        /// Stores the bandwidth between two peers. The bandwidth is stored in both directions, so that the bandwidth from A to B is stored in the entry (A, B) and the bandwidth from B to A is stored in the entry (B, A).
+        /// @param from uuid of the "from" peer
+        /// @param to uuid of the "to" peer
+        /// @param send_bandwidth_mpbs the bandwidth in mbit/s that the "from" peer can send to the "to" peer. This is different from what the "to" peer can receive from the "from" peer, which is stored in a separate entry.
+        void storePeerBandwidth(ccoip_uuid_t from, ccoip_uuid_t to, double send_bandwidth_mpbs);
+
+        /// @param from the source peer for which this bandwidth entry is the tx bandwidth (as bottleneck by either peer "from" or peer "to")
+        /// @param to to the destination peer for which this bandwidth entry is the rx bandwidth (as bottleneck by either peer "from" or peer "to")
+        /// @return the bandwidth in mbit/s that the "from" peer can send to the "to" peer. If the bandwidth is not stored, returns std::nullopt.
+        [[nodiscard]] std::optional<double> getPeerBandwidthMbps(ccoip_uuid_t from, ccoip_uuid_t to);
+
+        /// Returns the set of bandwidth entries that are missing for a particular peer.
+        /// In a fully and correctly populated bandwidth store, each peer has entries to all other peers where it is "from".
+        /// Each peer also has entries where it is the "to" peer of each other peer.
+        /// Conceptually, this can be though of as an asymmetric cost matrix.
+        /// Entries that have never been reported, will be returned by this function.
+        [[nodiscard]] std::vector<bandwidth_entry> getMissingBandwidthEntries(ccoip_uuid_t peer);
+
+        /// Returns true if the bandwidth store is fully populated for all peers.
+        [[nodiscard]] bool isBandwidthStoreFullyPopulated();
+
         /// Finds the client UUID from the client address; returns std::nullopt if not found
         [[nodiscard]] std::optional<ccoip_uuid_t> findClientUUID(const ccoip_socket_address_t &client_address);
 
         /// Returns the client info for a particular client uuid; returns std::nullopt if not found
-        [[nodiscard]] std::optional<std::reference_wrapper<ClientInfo> > getClientInfo(const ccoip_uuid_t &client_uuid);
+        [[nodiscard]] std::optional<std::reference_wrapper<ClientInfo>> getClientInfo(const ccoip_uuid_t &client_uuid);
 
         /// Returns the current shared state revision for the given peer group. This represents the current maximum revision of the shared state
         /// that all clients have agreed upon to be the current shared state revision.
@@ -467,5 +557,9 @@ namespace ccoip {
 
         /// Returns the ring topology
         [[nodiscard]] std::vector<ccoip_uuid_t> getRingTopology();
+
+
+    private:
+        void onPeerAccepted(const ClientInfo &info);
     };
 }

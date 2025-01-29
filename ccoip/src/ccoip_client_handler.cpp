@@ -11,20 +11,26 @@
 #include <guard_utils.hpp>
 #include <reduce_kernels.hpp>
 #include <reduce.hpp>
+#include <benchmark_runner.hpp>
+#include <list>
+#include <win_sock_bridge.h>
 
 ccoip::CCoIPClientHandler::CCoIPClientHandler(const ccoip_socket_address_t &address,
-                                              const uint32_t peer_group) : master_socket(address),
-                                                                           // Both p2p_socket and shared_state_socket listen to the first free port above the specified port number
-                                                                           // as the constructor with inet_addr and above_port is called, which will bump on failure to bind.
-                                                                           // this is by design and the chosen ports will be communicated to the master, which will then distribute
-                                                                           // this information to clients to then correctly establish connections. The protocol does not assert these
-                                                                           // ports to be static; The only asserted static port is the master listening port.
-                                                                           p2p_socket({address.inet.protocol, {}, {}},
-                                                                               CCOIP_PROTOCOL_PORT_P2P),
-                                                                           shared_state_socket(
-                                                                               {address.inet.protocol, {}, {}},
-                                                                               CCOIP_PROTOCOL_PORT_SHARED_STATE),
-                                                                           peer_group(peer_group) {
+                                              const uint32_t peer_group) :
+    master_socket(address),
+    // Both p2p_socket and shared_state_socket listen to the first free port above the specified port number
+    // as the constructor with inet_addr and above_port is called, which will bump on failure to bind.
+    // this is by design and the chosen ports will be communicated to the master, which will then distribute
+    // this information to clients to then correctly establish connections. The protocol does not assert these
+    // ports to be static; The only asserted static port is the master listening port.
+    p2p_socket({address.inet.protocol, {}, {}},
+               CCOIP_PROTOCOL_PORT_P2P),
+    shared_state_socket(
+            {address.inet.protocol, {}, {}},
+            CCOIP_PROTOCOL_PORT_SHARED_STATE),
+    benchmark_socket({address.inet.protocol, {}, {}},
+                     CCOIP_PROTOCOL_PORT_BANDWIDTH_BENCHMARK),
+    peer_group(peer_group) {
 }
 
 bool ccoip::CCoIPClientHandler::connect() {
@@ -37,6 +43,11 @@ bool ccoip::CCoIPClientHandler::connect() {
     {
         p2p_socket.setJoinCallback([this](const ccoip_socket_address_t &client_address,
                                           std::unique_ptr<tinysockets::BlockingIOSocket> &socket) {
+
+            // maximize send and receive buffer sizes
+            socket->maximizeSendBuffer();
+            socket->maximizeReceiveBuffer();
+
             const auto hello_packet_opt = socket->receivePacket<P2PPacketHello>();
             if (!hello_packet_opt) {
                 LOG(ERR) << "Failed to receive P2PPacketHello from " << ccoip_sockaddr_to_str(client_address);
@@ -46,7 +57,6 @@ bool ccoip::CCoIPClientHandler::connect() {
                 return;
             }
             const auto &hello_packet = hello_packet_opt.value();
-
             p2p_connections_rx[hello_packet.peer_uuid] = std::move(socket);
             if (!p2p_connections_rx[hello_packet.peer_uuid]->sendPacket<P2PPacketHelloAck>({})) {
                 LOG(ERR) << "Failed to send P2PPacketHelloAck to " << ccoip_sockaddr_to_str(client_address);
@@ -72,9 +82,9 @@ bool ccoip::CCoIPClientHandler::connect() {
     // start listening with shared state distribution server
     {
         shared_state_socket.addReadCallback(
-            [this](const ccoip_socket_address_t &client_address, const std::span<std::uint8_t> &data) {
-                onSharedStateClientRead(client_address, data);
-            });
+                [this](const ccoip_socket_address_t &client_address, const std::span<std::uint8_t> &data) {
+                    onSharedStateClientRead(client_address, data);
+                });
         if (!shared_state_socket.listen()) {
             LOG(ERR) << "Failed to bind shared state socket " << shared_state_socket.getListenPort();
             return false;
@@ -85,6 +95,67 @@ bool ccoip::CCoIPClientHandler::connect() {
         }
         shared_state_server_thread_id = shared_state_socket.getServerThreadId();
         LOG(INFO) << "Shared state socket listening on port " << shared_state_socket.getListenPort() << "...";
+    }
+
+    // start listening with bandwidth benchmark socket
+    {
+        benchmark_socket.setJoinCallback([this](const ccoip_socket_address_t &client_address,
+                                                const std::unique_ptr<tinysockets::BlockingIOSocket> &socket) {
+            int socket_fd = socket->getSocketFd();
+
+            // if there is an ongoing benchmark
+            if (benchmark_thread_opt.has_value()) {
+                // and said benchmark is complete
+                if (benchmark_complete_promise.load()) {
+                    // join the thread
+                    benchmark_thread_opt->join();
+                } else {
+                    // if the benchmark is not complete, tell the incoming client to go away
+                    LOG(INFO) << "Rejecting incoming benchmark connection from " << ccoip_sockaddr_to_str(
+                            client_address) << " because a benchmark is already running. Telling it to retry later...";
+                    B2CPacketBenchmarkServerIsBusy packet{};
+                    packet.is_busy = true;
+                    if (!socket->sendPacket<B2CPacketBenchmarkServerIsBusy>(packet)) {
+                        LOG(WARN) << "Failed to send B2CPacketBenchmarkServerIsBusy to " << ccoip_sockaddr_to_str(
+                                client_address);
+                    }
+                    if (!socket->closeConnection()) {
+                        LOG(WARN) << "Failed to close connection to " << ccoip_sockaddr_to_str(client_address) << " after rejecting benchmark connection with busy signal";
+                    }
+                    return;
+                }
+            }
+
+            // tell the incoming client that it can start the benchmark
+            B2CPacketBenchmarkServerIsBusy packet{};
+            packet.is_busy = false;
+            if (!socket->sendPacket<B2CPacketBenchmarkServerIsBusy>(packet)) {
+                LOG(WARN) << "Failed to send B2CPacketBenchmarkServerIsBusy to " << ccoip_sockaddr_to_str(
+                        client_address);
+            }
+
+            benchmark_complete_promise.store(false);
+            std::thread benchmark_thread([client_address, socket_fd, this] {
+                NetworkBenchmarkHandler handler{};
+                if (!handler.runBlocking(socket_fd)) {
+                    // we have an accept backlog of 1, so this is fine and intended.
+                    LOG(WARN) << "Failed to run network benchmark with " << ccoip_sockaddr_to_str(client_address);
+                }
+                benchmark_complete_promise.store(true);
+            });
+
+            benchmark_thread_opt = std::move(benchmark_thread);
+        });
+        if (!benchmark_socket.listen()) {
+            LOG(ERR) << "Failed to bind bandwidth benchmark socket " << benchmark_socket.getListenPort();
+            return false;
+        }
+        if (!benchmark_socket.runAsync()) [[unlikely]] {
+            LOG(ERR) << "Failed to start bandwidth benchmark socket thread";
+            return false;
+        }
+        LOG(INFO) << "Network bandwidth benchmark socket listening on port " << benchmark_socket.getListenPort() <<
+                "...";
     }
 
     if (!master_socket.establishConnection()) {
@@ -101,6 +172,7 @@ bool ccoip::CCoIPClientHandler::connect() {
     C2MPacketRequestSessionRegistration join_request{};
     join_request.p2p_listen_port = p2p_socket.getListenPort();
     join_request.shared_state_listen_port = shared_state_socket.getListenPort();
+    join_request.bandwidth_benchmark_listen_port = benchmark_socket.getListenPort();
     join_request.peer_group = peer_group;
 
     if (!master_socket.sendPacket<C2MPacketRequestSessionRegistration>(join_request)) {
@@ -181,10 +253,10 @@ bool ccoip::CCoIPClientHandler::syncSharedState(ccoip_shared_state_t &shared_sta
         auto &key = entry.key;
         auto &value = entry.value;
         shared_state_hashes.push_back(SharedStateHashEntry{
-            .key = key,
-            .hash = entry.allow_content_inequality ? 0 : hash_utils::CRC32(value.data(), value.size_bytes()),
-            .data_type = entry.data_type,
-            .allow_content_inequality = entry.allow_content_inequality
+                .key = key,
+                .hash = entry.allow_content_inequality ? 0 : hash_utils::CRC32(value.data(), value.size_bytes()),
+                .data_type = entry.data_type,
+                .allow_content_inequality = entry.allow_content_inequality
         });
     }
 
@@ -344,6 +416,93 @@ bool ccoip::CCoIPClientHandler::updateTopology() {
     return true;
 }
 
+bool ccoip::CCoIPClientHandler::optimizeTopology() {
+    bool topology_optimization_complete = false;
+    do {
+        if (!master_socket.sendPacket<C2MPacketOptimizeTopology>({})) {
+            return false;
+        }
+        const auto optimize_response = master_socket.receivePacket<M2CPacketOptimizeTopologyResponse>();
+        if (!optimize_response) {
+            return false;
+        }
+        if (!optimize_response->bw_benchmark_requests.empty()) {
+            auto remaining_requests = std::list(
+                    optimize_response->bw_benchmark_requests.begin(), optimize_response->bw_benchmark_requests.end()
+                    );
+            auto iterator = remaining_requests.begin();
+
+            // back off if we have already attempted to benchmark this peer recently to avoid spamming a busy server
+            std::unordered_map<ccoip_uuid_t, std::chrono::steady_clock::time_point> last_attempt{};
+
+            while (!remaining_requests.empty()) {
+                if (iterator == remaining_requests.end()) {
+                    // if we have recent attempts for all peers, wait for a bit
+                    if (std::ranges::all_of(remaining_requests,
+                                            [&last_attempt](const BenchmarkRequest &request) {
+                                                return last_attempt.contains(request.to_peer_uuid) &&
+                                                       std::chrono::steady_clock::now() - last_attempt[request.
+                                                           to_peer_uuid] < std::chrono::seconds(1);
+                                            })) {
+                        std::this_thread::sleep_for(std::chrono::milliseconds(250));
+                    }
+                    iterator = remaining_requests.begin();
+                }
+                auto request = *iterator;
+                if (request.from_peer_uuid != client_state.getAssignedUUID()) {
+                    LOG(ERR) << "Received bandwidth benchmark request for peer " << uuid_to_string(
+                                    request.from_peer_uuid)
+                            <<
+                            " but this peer is not the target of the request. Ignoring...";
+                    iterator = remaining_requests.erase(iterator);
+                    continue;
+                }
+                if (last_attempt.contains(request.to_peer_uuid)) {
+                    auto last_attempt_time = last_attempt[request.to_peer_uuid];
+                    auto now = std::chrono::steady_clock::now();
+                    if (now - last_attempt_time < std::chrono::seconds(1)) {
+                        // try again later
+                        ++iterator;
+                        continue;
+                    }
+                }
+                NetworkBenchmarkRunner runner(request.to_peer_benchmark_endpoint);
+                const NetworkBenchmarkRunner::BenchmarkResult result = runner.runBlocking();
+
+                if (result == NetworkBenchmarkRunner::BenchmarkResult::SUCCESS) {
+                    const auto output_mbits_per_second = runner.getOutputBandwidthMbitsPerSecond();
+                    C2MPacketReportPeerBandwidth packet{};
+                    packet.to_peer_uuid = request.to_peer_uuid;
+                    packet.bandwidth_mbits_per_second = output_mbits_per_second;
+                    if (!master_socket.sendPacket<C2MPacketReportPeerBandwidth>(packet)) {
+                        return false;
+                    }
+                    iterator = remaining_requests.erase(iterator);
+                } else if (result == NetworkBenchmarkRunner::BenchmarkResult::BENCHMARK_SERVER_BUSY) {
+                    // try again later
+                    ++iterator;
+                    last_attempt[request.to_peer_uuid] = std::chrono::steady_clock::now();
+                } else {
+                    // benchmark failed, simply log and continue
+                    LOG(WARN) << "Failed to run network benchmark on endpoint " << ccoip_sockaddr_to_str(
+                            request.to_peer_benchmark_endpoint) << ". Ignoring and continuing...";
+                    iterator = remaining_requests.erase(iterator);
+                }
+            }
+        }
+        if (const C2MPacketOptimizeTopologyWorkComplete complete_packet{};
+            !master_socket.sendPacket<C2MPacketOptimizeTopologyWorkComplete>(complete_packet)) {
+            return false;
+        }
+        const auto response = master_socket.receivePacket<M2CPacketOptimizeTopologyComplete>();
+        if (!response) {
+            return false;
+        }
+        topology_optimization_complete = response->success;
+    } while (!topology_optimization_complete);
+    return true;
+}
+
 bool ccoip::CCoIPClientHandler::interrupt() {
     if (interrupted) {
         return false;
@@ -352,6 +511,9 @@ bool ccoip::CCoIPClientHandler::interrupt() {
         return false;
     }
     if (!shared_state_socket.interrupt()) [[unlikely]] {
+        return false;
+    }
+    if (!benchmark_socket.interrupt()) [[unlikely]] {
         return false;
     }
     if (!master_socket.interrupt()) {
@@ -364,6 +526,7 @@ bool ccoip::CCoIPClientHandler::interrupt() {
 bool ccoip::CCoIPClientHandler::join() {
     p2p_socket.join();
     shared_state_socket.join();
+    benchmark_socket.join();
     master_socket.join();
     return true;
 }
@@ -394,7 +557,6 @@ bool ccoip::CCoIPClientHandler::establishP2PConnections() {
                 LOG(DEBUG) << "P2P connection with peer " << uuid_to_string(peer.peer_uuid) << " already exists";
                 continue;
             }
-            LOG(DEBUG) << "Establishing P2P connection with peer " << uuid_to_string(peer.peer_uuid);
             if (!establishP2PConnection(peer)) {
                 LOG(ERR) << "Failed to establish P2P connection with peer " << uuid_to_string(peer.peer_uuid);
                 all_peers_connected = false;
@@ -449,22 +611,28 @@ bool ccoip::CCoIPClientHandler::establishP2PConnection(const M2CPacketNewPeerInf
     LOG(DEBUG) << "Establishing P2P connection with peer " << uuid_to_string(peer.peer_uuid);
     auto [it, inserted] = p2p_connections_tx.emplace(peer.peer_uuid,
                                                      std::make_unique<tinysockets::BlockingIOSocket>(
-                                                         peer.p2p_listen_addr));
+                                                             peer.p2p_listen_addr));
     if (!inserted) {
         LOG(ERR) << "P2P connection with peer " << uuid_to_string(peer.peer_uuid) << " already exists";
         return false;
     }
-    auto &connection = it->second;
-    if (!connection->establishConnection()) {
+
+    const auto &socket = it->second;
+    if (!socket->establishConnection()) {
         LOG(ERR) << "Failed to establish P2P connection with peer " << uuid_to_string(peer.peer_uuid);
         return false;
     }
+
+    // maximize send and receive buffer sizes
+    socket->maximizeSendBuffer();
+    socket->maximizeReceiveBuffer();
+
     P2PPacketHello hello_packet{};
     hello_packet.peer_uuid = client_state.getAssignedUUID();
-    if (!connection->sendPacket<P2PPacketHello>(hello_packet)) {
+    if (!socket->sendPacket<P2PPacketHello>(hello_packet)) {
         LOG(ERR) << "Failed to send hello packet to peer " << uuid_to_string(peer.peer_uuid);
     }
-    if (const auto response = connection->receivePacket<P2PPacketHelloAck>(); !response) {
+    if (const auto response = socket->receivePacket<P2PPacketHelloAck>(); !response) {
         LOG(ERR) << "Failed to receive hello ack from peer " << uuid_to_string(peer.peer_uuid);
         return false;
     }
@@ -520,8 +688,8 @@ void ccoip::CCoIPClientHandler::handleSharedStateRequest(const ccoip_socket_addr
                 goto end;
             }
             response.entries.push_back(SharedStateEntry{
-                .key = requested_key,
-                .src_buffer = std::span(reinterpret_cast<uint8_t *>(it->value.data()), it->value.size_bytes())
+                    .key = requested_key,
+                    .src_buffer = std::span(reinterpret_cast<uint8_t *>(it->value.data()), it->value.size_bytes())
             });
             client_state.trackSharedStateTxBytes(it->value.size_bytes());
         }
@@ -566,128 +734,129 @@ bool ccoip::CCoIPClientHandler::allReduceAsync(const void *sendbuff, void *recvb
     }
 
     if (!client_state.launchAsyncCollectiveOp(
-        tag, [this, sendbuff, recvbuff, count, datatype, quantized_data_type, quantization_algorithm, op, tag](
-    std::promise<bool> &promise) {
-            LOG(DEBUG) << "Vote to commence all reduce operation with tag " << tag;
+            tag, [this, sendbuff, recvbuff, count, datatype, quantized_data_type, quantization_algorithm, op, tag](
+            std::promise<bool> &promise) {
+                LOG(DEBUG) << "Vote to commence all reduce operation with tag " << tag;
 
-            const bool abort_packet_received = false;
-            bool aborted = false;
+                const bool abort_packet_received = false;
+                bool aborted = false;
 
-            const auto reduce_fun = [&] {
-                // vote commence collective comms operation and await consensus
-                {
-                    C2MPacketCollectiveCommsInitiate initiate_packet{};
-                    initiate_packet.tag = tag;
-                    initiate_packet.count = count;
-                    initiate_packet.data_type = datatype;
-                    initiate_packet.op = op;
-                    if (!master_socket.sendPacket<C2MPacketCollectiveCommsInitiate>(initiate_packet)) {
-                        return false;
-                    }
+                const auto reduce_fun = [&] {
+                    // vote commence collective comms operation and await consensus
+                    {
+                        C2MPacketCollectiveCommsInitiate initiate_packet{};
+                        initiate_packet.tag = tag;
+                        initiate_packet.count = count;
+                        initiate_packet.data_type = datatype;
+                        initiate_packet.op = op;
+                        if (!master_socket.sendPacket<C2MPacketCollectiveCommsInitiate>(initiate_packet)) {
+                            return false;
+                        }
 
-                    // As long as we do not expect packets of types here that the main thread also expects and claims for normal operation
-                    // (such as commencing other concurrent collective comms operations), we can safely use receiveMatchingPacket packet here
-                    // to receive packets from the master socket.
-                    // Given that M2CPacketCollectiveCommsCommence is only expected in this context, we will never "steal" anyone else's packet
-                    // nor will the main thread steal our packet.
-                    const auto response = master_socket.receiveMatchingPacket<M2CPacketCollectiveCommsCommence>(
-                        [tag](const M2CPacketCollectiveCommsCommence &packet) {
-                            return packet.tag == tag;
-                        });
+                        // As long as we do not expect packets of types here that the main thread also expects and claims for normal operation
+                        // (such as commencing other concurrent collective comms operations), we can safely use receiveMatchingPacket packet here
+                        // to receive packets from the master socket.
+                        // Given that M2CPacketCollectiveCommsCommence is only expected in this context, we will never "steal" anyone else's packet
+                        // nor will the main thread steal our packet.
+                        const auto response = master_socket.receiveMatchingPacket<M2CPacketCollectiveCommsCommence>(
+                                [tag](const M2CPacketCollectiveCommsCommence &packet) {
+                                    return packet.tag == tag;
+                                });
 
-                    if (!response) {
-                        return false;
-                    }
-                    LOG(DEBUG) << "Received M2CPacketCollectiveCommsCommence for tag " << tag <<
-                            "; Collective communications consensus reached";
-                    if (response->require_topology_update) {
-                        if (!updateTopology()) {
-                            LOG(ERR) <<
-                                    "Failed to update topology after collective comms commence indicated dirty topology";
+                        if (!response) {
+                            return false;
+                        }
+                        LOG(DEBUG) << "Received M2CPacketCollectiveCommsCommence for tag " << tag <<
+                                "; Collective communications consensus reached";
+                        if (response->require_topology_update) {
+                            if (!updateTopology()) {
+                                LOG(ERR) <<
+                                        "Failed to update topology after collective comms commence indicated dirty topology";
+                            }
                         }
                     }
-                }
 
-                const auto &ring_order = client_state.getRingOrder();
+                    const auto &ring_order = client_state.getRingOrder();
 
-                // no need to actually all reduce when there is no second peer.
-                if (ring_order.size() < 2) {
-                    return false;
-                }
-
-                const auto &client_uuid = client_state.getAssignedUUID();
-
-                // find position in ring order
-                const auto it = std::ranges::find(ring_order, client_uuid);
-                if (it == ring_order.end()) {
-                    return false;
-                }
-                const size_t position = std::distance(ring_order.begin(), it);
-                const size_t byte_size = count * ccoip_data_type_size(datatype);
-
-                const std::span send_span(static_cast<const std::byte *>(sendbuff), byte_size);
-                const std::span recv_span(static_cast<std::byte *>(recvbuff), byte_size);
-
-                // perform pipeline ring reduce
-                reduce::pipelineRingReduce(
-                    client_state,
-                    tag,
-                    send_span, recv_span,
-                    datatype, quantized_data_type,
-                    op, quantization_algorithm, position, ring_order.size(),
-                    ring_order, p2p_connections_tx, p2p_connections_rx
-                );
-
-                return true;
-            };
-            auto success = reduce_fun();
-            if (![&] {
-                const auto &ring_order = client_state.getRingOrder();
-
-                // vote collective comms operation complete and await consensus
-                C2MPacketCollectiveCommsComplete complete_packet{};
-                complete_packet.tag = tag;
-                complete_packet.was_aborted = success == false && ring_order.size() > 1;
-
-                if (!master_socket.sendPacket<C2MPacketCollectiveCommsComplete>(complete_packet)) {
-                    return false;
-                }
-                LOG(DEBUG) << "Sent C2MPacketCollectiveCommsComplete for tag " << tag;
-
-                if (!abort_packet_received) {
-                    const auto abort_response = master_socket.receiveMatchingPacket<M2CPacketCollectiveCommsAbort>(
-                        [tag](const M2CPacketCollectiveCommsAbort &packet) {
-                            return packet.tag == tag;
-                        });
-                    if (!abort_response) {
+                    // no need to actually all reduce when there is no second peer.
+                    if (ring_order.size() < 2) {
                         return false;
                     }
-                    aborted = abort_response->aborted;
-                }
 
-                const auto complete_response = master_socket.receiveMatchingPacket<M2CPacketCollectiveCommsComplete>(
-                    [tag](const M2CPacketCollectiveCommsComplete &packet) {
-                        return packet.tag == tag;
-                    });
+                    const auto &client_uuid = client_state.getAssignedUUID();
 
-                if (!complete_response) {
-                    return false;
-                }
-                if (aborted) {
-                    // abort=true is considered a failure, where the user must re-issue
-                    // the collective comms operation to try again, if so desired.
-                    if (!updateTopology()) {
-                        LOG(ERR) << "Failed to update topology after collective comms operation was aborted";
+                    // find position in ring order
+                    const auto it = std::ranges::find(ring_order, client_uuid);
+                    if (it == ring_order.end()) {
+                        return false;
                     }
-                    return false;
+                    const size_t position = std::distance(ring_order.begin(), it);
+                    const size_t byte_size = count * ccoip_data_type_size(datatype);
+
+                    const std::span send_span(static_cast<const std::byte *>(sendbuff), byte_size);
+                    const std::span recv_span(static_cast<std::byte *>(recvbuff), byte_size);
+
+                    // perform pipeline ring reduce
+                    reduce::pipelineRingReduce(
+                            client_state,
+                            tag,
+                            send_span, recv_span,
+                            datatype, quantized_data_type,
+                            op, quantization_algorithm, position, ring_order.size(),
+                            ring_order, p2p_connections_tx, p2p_connections_rx
+                            );
+
+                    return true;
+                };
+                auto success = reduce_fun();
+                if (![&] {
+                    const auto &ring_order = client_state.getRingOrder();
+
+                    // vote collective comms operation complete and await consensus
+                    C2MPacketCollectiveCommsComplete complete_packet{};
+                    complete_packet.tag = tag;
+                    complete_packet.was_aborted = success == false && ring_order.size() > 1;
+
+                    if (!master_socket.sendPacket<C2MPacketCollectiveCommsComplete>(complete_packet)) {
+                        return false;
+                    }
+                    LOG(DEBUG) << "Sent C2MPacketCollectiveCommsComplete for tag " << tag;
+
+                    if (!abort_packet_received) {
+                        const auto abort_response = master_socket.receiveMatchingPacket<M2CPacketCollectiveCommsAbort>(
+                                [tag](const M2CPacketCollectiveCommsAbort &packet) {
+                                    return packet.tag == tag;
+                                });
+                        if (!abort_response) {
+                            return false;
+                        }
+                        aborted = abort_response->aborted;
+                    }
+
+                    const auto complete_response = master_socket.receiveMatchingPacket<
+                        M2CPacketCollectiveCommsComplete>(
+                            [tag](const M2CPacketCollectiveCommsComplete &packet) {
+                                return packet.tag == tag;
+                            });
+
+                    if (!complete_response) {
+                        return false;
+                    }
+                    if (aborted) {
+                        // abort=true is considered a failure, where the user must re-issue
+                        // the collective comms operation to try again, if so desired.
+                        if (!updateTopology()) {
+                            LOG(ERR) << "Failed to update topology after collective comms operation was aborted";
+                        }
+                        return false;
+                    }
+                    return true;
+                }()) {
+                    success = false;
                 }
-                return true;
-            }()) {
-                success = false;
-            }
-            promise.set_value(success);
-            return success;
-        })) [[unlikely]] {
+                promise.set_value(success);
+                return success;
+            })) [[unlikely]] {
         return false;
     }
 

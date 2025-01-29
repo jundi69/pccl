@@ -30,11 +30,13 @@ static bool configure_socket_fd(const int socket_fd) {
 }
 
 
-tinysockets::BlockingIOSocket::BlockingIOSocket(const ccoip_socket_address_t &address) : socket_fd(0),
+tinysockets::BlockingIOSocket::BlockingIOSocket(const ccoip_socket_address_t &address) :
+    socket_fd(0),
     connect_sockaddr(address) {
 }
 
-tinysockets::BlockingIOSocket::BlockingIOSocket(const int socket_fd) : socket_fd(socket_fd), connect_sockaddr() {
+tinysockets::BlockingIOSocket::BlockingIOSocket(const int socket_fd) :
+    socket_fd(socket_fd), connect_sockaddr() {
 }
 
 bool tinysockets::BlockingIOSocket::establishConnection() {
@@ -101,7 +103,26 @@ bool tinysockets::BlockingIOSocket::closeConnection() {
     if (socket_fd == 0) {
         return false;
     }
-    shutdown(socket_fd, SHUT_RDWR); // this is needed to ensure recv() unblock and return an error
+
+    timeval tv{};
+    tv.tv_sec = 1;
+    tv.tv_usec = 0;
+    setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+
+    // do the half-close then drain trick
+    shutdown(socket_fd, SHUT_WR);
+
+    char buf[1024];
+    while (recv(socket_fd, buf, sizeof(buf), 0) > 0) {
+        // drain the socket
+    }
+
+    // Now shut everything down.
+    // This is needed to ensure recv() unblock and return an error.
+    // Docker is pedantic about this.
+    shutdown(socket_fd, SHUT_RDWR);
+
+    // finally, close the socket
     closesocket(socket_fd);
     socket_fd = 0;
     return true;
@@ -203,6 +224,18 @@ bool tinysockets::BlockingIOSocket::sendLtvPacket(const ccoip::packetId_t packet
         bytes_sent += bytes_sent_now;
     }
     return true;
+}
+
+void tinysockets::BlockingIOSocket::maximizeSendBuffer() const {
+    // request insanely large send and receive buffer sizes and let the kernel clamp them
+    constexpr int desired_size = 64 * 1024 * 1024; // 64 MB
+    setsockopt(socket_fd, SOL_SOCKET, SO_SNDBUF, &desired_size, sizeof(desired_size));
+}
+
+void tinysockets::BlockingIOSocket::maximizeReceiveBuffer() const {
+    // request insanely large send and receive buffer sizes and let the kernel clamp them
+    constexpr int desired_size = 64 * 1024 * 1024; // 64 MB
+    setsockopt(socket_fd, SOL_SOCKET, SO_RCVBUF, &desired_size, sizeof(desired_size));
 }
 
 std::optional<size_t> tinysockets::BlockingIOSocket::receivePacketLength(const bool no_wait) const {
