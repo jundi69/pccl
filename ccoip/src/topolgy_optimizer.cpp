@@ -56,9 +56,9 @@ bool ccoip::TopologyOptimizer::OptimizeTopology(const BandwidthStore &bandwidth_
             .num_restarts = 4,
             .time_limit_ms = 1000,
             .initial_heuristic = TSP_INIT_RANDOM_STRATEGY,
-            .enable_3opt = true,
-            .enable_4opt = false,
             .ant_colony_num_samples = 2048,
+            .enable_3opt = true,
+            .enable_4opt = false
     };
     TspSolutionDescriptor output_descriptor{};
     if (tspAsymmetricSolve(&input_graph, &solver_options, &output_descriptor) != TSP_STATUS_SUCCESS) {
