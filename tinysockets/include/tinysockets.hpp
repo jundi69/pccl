@@ -187,6 +187,8 @@ namespace tinysockets {
 
         [[nodiscard]] const ccoip_socket_address_t &getConnectSockAddr() const;
 
+        [[nodiscard]] int getSocketFd() const;
+
         template<typename T> requires std::is_base_of_v<ccoip::Packet, T>
         [[nodiscard]] bool sendPacket(const T &packet) {
             std::lock_guard guard{send_mutex};
@@ -204,10 +206,19 @@ namespace tinysockets {
             return receiveLtvPacket<T>(id, no_wait);
         }
 
-    private:
         // Packet decoding / encoding functions
+
+        /// Sends a packet to the connected socket
         [[nodiscard]] bool sendLtvPacket(ccoip::packetId_t packet_id, const PacketWriteBuffer &buffer) const;
 
+        /// Attempts to grow the send-buffer to the maximum size
+        void maximizeSendBuffer() const;
+
+        /// Attempts to grow the receive-buffer to the maximum size
+        void maximizeReceiveBuffer() const;
+
+    private:
+        // Packet decoding / encoding functions
         [[nodiscard]] std::optional<size_t> receivePacketLength(bool no_wait) const;
 
         [[nodiscard]] bool receivePacketData(std::span<std::uint8_t> &dst) const;
@@ -314,11 +325,11 @@ namespace tinysockets {
 
         [[nodiscard]] bool receivePacketData(std::span<std::uint8_t> &dst) const;
 
-        [[nodiscard]] std::optional<std::pair<std::unique_ptr<uint8_t[]>, std::span<uint8_t> > > pollNextPacketBuffer(
+        [[nodiscard]] std::optional<std::pair<std::unique_ptr<uint8_t[]>, std::span<uint8_t>>> pollNextPacketBuffer(
             ccoip::packetId_t packet_id,
             bool no_wait) const;
 
-        [[nodiscard]] std::optional<std::pair<std::unique_ptr<uint8_t[]>, std::span<uint8_t> > >
+        [[nodiscard]] std::optional<std::pair<std::unique_ptr<uint8_t[]>, std::span<uint8_t>>>
         pollNextMatchingPacketBuffer(
             ccoip::packetId_t packet_id, const std::function<bool(const std::span<uint8_t> &)> &predicate,
             bool no_wait) const;
@@ -429,5 +440,28 @@ namespace tinysockets {
     private:
         /// Called when a new connection is established
         void onNewConnection(int client_socket, sockaddr_in sockaddr_in) const;
+    };
+
+
+    namespace poll {
+        enum PollEvent {
+            POLL_INPUT = 1,
+            POLL_OUTPUT = 2,
+        };
+
+        struct PollDescriptor {
+            int socket_fd;
+            PollEvent target_event{};
+            PollEvent event_out{};
+
+            [[nodiscard]] bool hasEvent(PollEvent event) const;
+        };
+
+        int poll(std::vector<PollDescriptor> &descriptors, int timeout);
+
+        std::optional<size_t> send_nonblocking(const std::span<const std::byte> &data,
+                                               const PollDescriptor &poll_descriptor);
+
+        std::optional<size_t> recv_nonblocking(const std::span<std::byte> &data, const PollDescriptor &poll_descriptor);
     };
 };

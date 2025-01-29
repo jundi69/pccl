@@ -8,7 +8,7 @@
 #include <ccoip_packet_buffer.hpp>
 #include <ccoip_shared_state.hpp>
 #include <ccoip_types.hpp>
-#include <unordered_set>
+#include <quantize.hpp>
 
 namespace ccoip {
     // Definitions:
@@ -23,31 +23,41 @@ namespace ccoip {
     // C2S: Client to Shared State Server
     // S2C: Shared State Server to Client
 
+    // --- CCoIP Network Bandwidth Benchmark Protocol ---
+    // C2B: Client to Bandwidth Benchmark Server
+    // B2C: Bandwidth Benchmark Server to Client
+
     // C2M packets:
 #define C2M_PACKET_REQUEST_SESSION_REGISTRATION_ID 1
 #define C2M_PACKET_ACCEPT_NEW_PEERS_ID 2
 #define C2M_PACKET_P2P_CONNECTIONS_ESTABLISHED_ID 3
 #define C2M_PACKET_GET_TOPOLOGY_REQUEST_ID 4
-#define C2M_PACKET_SYNC_SHARED_STATE_ID 5
-#define C2M_PACKET_DIST_SHARED_STATE_COMPLETE_ID 6
-#define C2M_PACKET_COLLECTIVE_COMMS_INITIATE_ID 7
-#define C2M_PACKET_COLLECTIVE_COMMS_COMPLETE_ID 8
+#define C2M_PACKET_OPTIMIZE_TOPOLOGY_ID 5
+#define C2M_PACKET_REPORT_PEER_BANDWIDTH_ID 6
+#define C2M_PACKET_OPTIMIZE_TOPOLOGY_WORK_COMPLETE_ID 7
+#define C2M_PACKET_SYNC_SHARED_STATE_ID 8
+#define C2M_PACKET_DIST_SHARED_STATE_COMPLETE_ID 9
+#define C2M_PACKET_COLLECTIVE_COMMS_INITIATE_ID 10
+#define C2M_PACKET_COLLECTIVE_COMMS_COMPLETE_ID 11
 
     // M2C packets:
 #define M2C_PACKET_SESSION_REGISTRATION_RESPONSE_ID 1
 #define M2C_PACKET_NEW_PEERS_ID 2
 #define M2C_PACKET_P2P_CONNECTIONS_ESTABLISHED_ID 3
 #define M2C_PACKET_GET_TOPOLOGY_RESPONSE_ID 4
-#define M2C_PACKET_SYNC_SHARED_STATE_ID 5
-#define M2C_PACKET_SYNC_SHARED_STATE_COMPLETE_ID 6
-#define M2C_PACKET_COLLECTIVE_COMMS_COMMENCE_ID 7
-#define M2C_PACKET_COLLECTIVE_COMMS_COMPLETE_ID 8
-#define M2C_PACKET_COLLECTIVE_COMMS_ABORT_ID 9
+#define M2C_PACKET_OPTIMIZE_TOPOLOGY_RESPONSE_ID 5
+#define M2C_PACKET_OPTIMIZE_TOPOLOGY_COMPLETE_ID 6
+#define M2C_PACKET_SYNC_SHARED_STATE_ID 7
+#define M2C_PACKET_SYNC_SHARED_STATE_COMPLETE_ID 8
+#define M2C_PACKET_COLLECTIVE_COMMS_COMMENCE_ID 9
+#define M2C_PACKET_COLLECTIVE_COMMS_COMPLETE_ID 10
+#define M2C_PACKET_COLLECTIVE_COMMS_ABORT_ID 11
 
     // P2P packets:
 #define P2P_PACKET_HELLO_ID 1
 #define P2P_PACKET_HELLO_ACK_ID 2
-#define P2P_PACKET_REDUCE_TERM_ID 3
+#define P2P_PACKET_DEQUANTIZATION_META 3
+#define P2P_PACKET_BENCHMARK_START 4
 
     // C2S packets:
 #define C2S_PACKET_REQUEST_SHARED_STATE_ID 1
@@ -55,12 +65,19 @@ namespace ccoip {
     // S2C packets:
 #define S2C_PACKET_SHARED_STATE_RESPONSE_ID 1
 
+    // C2B packets:
+    // <no packets defined yet>
+
+    // B2C packets:
+#define B2C_PACKET_BENCHMARK_SERVER_IS_BUSY 1
+
     // C2MPacketRequestSessionRegistration
     class C2MPacketRequestSessionRegistration final : public Packet {
     public:
         static packetId_t packet_id;
         uint16_t p2p_listen_port;
         uint16_t shared_state_listen_port;
+        uint16_t bandwidth_benchmark_listen_port;
         uint32_t peer_group;
 
         void serialize(PacketWriteBuffer &buffer) const override;
@@ -87,6 +104,33 @@ namespace ccoip {
 
     // C2MPacketGetTopologyRequest
     class C2MPacketGetTopologyRequest final : public EmptyPacket {
+    public:
+        static packetId_t packet_id;
+    };
+
+    // C2MPacketOptimizeTopology
+    class C2MPacketOptimizeTopology final : public EmptyPacket {
+    public:
+        static packetId_t packet_id;
+    };
+
+    // C2MPacketReportPeerBandwidth
+    class C2MPacketReportPeerBandwidth final : public Packet {
+    public:
+        static packetId_t packet_id;
+
+        ccoip_uuid_t to_peer_uuid;
+
+        /// The reported send bandwidth in mbits per second
+        double bandwidth_mbits_per_second;
+
+        void serialize(PacketWriteBuffer &buffer) const override;
+
+        [[nodiscard]] bool deserialize(PacketReadBuffer &buffer) override;
+    };
+
+    // C2MPacketOptimizeTopologyWorkComplete
+    class C2MPacketOptimizeTopologyWorkComplete final : public EmptyPacket {
     public:
         static packetId_t packet_id;
     };
@@ -218,6 +262,36 @@ namespace ccoip {
         [[nodiscard]] bool deserialize(PacketReadBuffer &buffer) override;
     };
 
+    // M2CPacketOptimizeTopologyResponse
+    struct BenchmarkRequest {
+        ccoip_uuid_t from_peer_uuid{};
+        ccoip_uuid_t to_peer_uuid{};
+        ccoip_socket_address_t to_peer_benchmark_endpoint{};
+    };
+
+    class M2CPacketOptimizeTopologyResponse final : public Packet {
+    public:
+        static packetId_t packet_id;
+
+        std::vector<BenchmarkRequest> bw_benchmark_requests{};
+
+        void serialize(PacketWriteBuffer &buffer) const override;
+
+        [[nodiscard]] bool deserialize(PacketReadBuffer &buffer) override;
+    };
+
+    // M2CPacketOptimizeTopologyComplete
+    class M2CPacketOptimizeTopologyComplete final : public Packet {
+    public:
+        static packetId_t packet_id;
+
+        bool success;
+
+        void serialize(PacketWriteBuffer &buffer) const override;
+
+        [[nodiscard]] bool deserialize(PacketReadBuffer &buffer) override;
+    };
+
     // M2CPacketSyncSharedState
     class M2CPacketSyncSharedState final : public Packet {
     public:
@@ -293,19 +367,19 @@ namespace ccoip {
         static packetId_t packet_id;
     };
 
-    // P2PPacketReduceTerm
-    class P2PPacketReduceTerm final : public Packet {
+    // P2PPacketDequantizationMeta
+    class P2PPacketDequantizationMeta final : public Packet {
     public:
         static packetId_t packet_id;
 
         uint64_t tag;
-        bool is_reduce;
-        std::span<const std::byte> data;
-        std::unique_ptr<std::byte[]> dst_ptr;
+        internal::quantize::DeQuantizationMetaData dequantization_meta;
 
         void serialize(PacketWriteBuffer &buffer) const override;
 
         [[nodiscard]] bool deserialize(PacketReadBuffer &buffer) override;
+
+        [[nodiscard]] size_t serializedSize() const;
     };
 
     // C2SPacketRequestSharedState
@@ -371,6 +445,18 @@ namespace ccoip {
         void serialize(PacketWriteBuffer &buffer) const override;
 
         [[nodiscard]] bool deserialize(PacketReadBuffer &buffer) override;
+    };
+
+    // B2CPacketBenchmarkServerIsBusy
+    class B2CPacketBenchmarkServerIsBusy final : public Packet {
+    public:
+        static packetId_t packet_id;
+
+        bool is_busy;
+
+        void serialize(PacketWriteBuffer &buffer) const override;
+
+        bool deserialize(PacketReadBuffer &buffer) override;
     };
 }
 

@@ -38,6 +38,12 @@ namespace ccoip {
     private:
         void sendP2PConnectionInformation();
 
+        [[nodiscard]] bool checkAcceptNewPeersConsensus();
+
+        [[nodiscard]] bool checkTopologyOptimizationConsensus();
+
+        [[nodiscard]] bool checkTopologyOptimizationCompletionConsensus();
+
         [[nodiscard]] bool checkP2PConnectionsEstablished();
 
         [[nodiscard]] bool checkSyncSharedStateConsensus(uint32_t peer_group);
@@ -48,7 +54,6 @@ namespace ccoip {
 
         [[nodiscard]] bool checkCollectiveCommsCompleteConsensus(uint32_t peer_group, uint64_t tag);
 
-        void checkAcceptNewPeersConsensus();
 
         /// Finds the optimal peer to distribute the shared state to the specified requester.
         std::optional<ccoip_socket_address_t> findBestSharedStateTxPeer(const ccoip_uuid_t &peer_uuid);
@@ -66,6 +71,15 @@ namespace ccoip {
 
         void handleGetTopologyRequest(const ccoip_socket_address_t &client_address,
                                       const C2MPacketGetTopologyRequest &packet);
+
+        void handleOptimizeTopology(const ccoip_socket_address_t &client_address,
+                                   const C2MPacketOptimizeTopology &packet);
+
+        void handleReportPeerBandwidth(const ccoip_socket_address_t &client_address,
+                                      const C2MPacketReportPeerBandwidth &packet);
+
+        void handleOptimizeTopologyWorkComplete(const ccoip_socket_address_t &client_address,
+                                               const C2MPacketOptimizeTopologyWorkComplete &packet);
 
         void handleSyncSharedState(const ccoip_socket_address_t &client_address,
                                    const C2MPacketSyncSharedState &packet);

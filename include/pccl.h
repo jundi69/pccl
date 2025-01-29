@@ -238,6 +238,16 @@ PCCL_EXPORT pcclResult_t pcclConnect(pcclComm_t *communicator);
 PCCL_EXPORT pcclResult_t pcclUpdateTopology(pcclComm_t *communicator);
 
 /**
+ * Called to optimize the topology of a communicator.
+ * After topology updates, it is recommended that the topology be optimized to improve performance of collective communications operations.
+ * @param communicator the communicator
+ * @return @code pcclSuccess@endcode if the topology was successfully optimized / unchanged without error.
+ * @return @code pcclInternalError@endcode if an internal error occurred during the topology optimization.
+ * @return @code pcclNotInitialized@endcode if @code pcclInit@endcode has not been called yet.
+ */
+PCCL_EXPORT pcclResult_t pcclOptimizeTopology(const pcclComm_t *communicator);
+
+/**
  * Performs an all reduce operation on a communicator. Blocks until the all reduce is complete.
  *
  * @param sendbuff The buffer to send data from.

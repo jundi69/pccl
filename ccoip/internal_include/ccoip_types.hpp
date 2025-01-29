@@ -19,15 +19,20 @@ namespace ccoip {
     };
 
     enum ccoip_reduce_op_t {
-        ccoipOpSum = 0,
-        ccoipOpAvg = 1,
-        ccoipOpProd = 2,
-        ccoipOpMax = 3,
-        ccoipOpMin = 4
+        ccoipOpSet = 0,
+        ccoipOpSum = 1,
+        ccoipOpAvg = 2,
+        ccoipOpProd = 3,
+        ccoipOpMax = 4,
+        ccoipOpMin = 5
     };
 
+    enum ccoip_quantization_algorithm_t {
+        ccoipQuantizationNone = 0,
+        ccoipQuantizationMinMax = 1,
+    };
 
-    inline size_t ccoip_data_type_size(const ccoip_data_type_t datatype) {
+    [[nodiscard]] inline size_t ccoip_data_type_size(const ccoip_data_type_t datatype) {
         switch (datatype) {
             case ccoipUint8:
             case ccoipInt8:
@@ -45,6 +50,35 @@ namespace ccoip {
                 return 8;
         }
         return 0;
+    }
+
+    template<typename T, typename = std::enable_if_t<std::is_arithmetic_v<T> > >
+    [[nodiscard]]
+    constexpr ccoip_data_type_t ccoip_data_type_from_type() {
+        if constexpr (std::is_same_v<T, std::int8_t>) {
+            return ccoipInt8;
+        } else if constexpr (std::is_same_v<T, std::uint8_t>) {
+            return ccoipUint8;
+        } else if constexpr (std::is_same_v<T, std::int16_t>) {
+            return ccoipInt16;
+        } else if constexpr (std::is_same_v<T, std::uint16_t>) {
+            return ccoipUint16;
+        } else if constexpr (std::is_same_v<T, std::int32_t>) {
+            return ccoipInt32;
+        } else if constexpr (std::is_same_v<T, std::uint32_t>) {
+            return ccoipUint32;
+        } else if constexpr (std::is_same_v<T, std::int64_t>) {
+            return ccoipInt64;
+        } else if constexpr (std::is_same_v<T, std::uint64_t>) {
+            return ccoipUint64;
+        } else if constexpr (std::is_same_v<T, float>) {
+            return ccoipFloat;
+        } else if constexpr (std::is_same_v<T, double>) {
+            return ccoipDouble;
+        } else {
+            static_assert(std::is_arithmetic_v<T>, "Unsupported type");
+        }
+        return ccoipUint8;
     }
 };
 

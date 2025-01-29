@@ -22,3 +22,8 @@
 /// One peer's RX connection is the other peer's TX connection and vice versa.
 /// This design is chosen for simplicity and to avoid the need for a central server to manage connections.
 #define CCOIP_PROTOCOL_PORT_P2P 48150
+
+/// Port that each peer listens on for incoming connections from other peers for bandwidth benchmarking.
+/// The connections here are non-persistent and are closed after the benchmarking is complete.
+/// Only one connection is accepted at each point in time to preserve the integrity of the benchmark.
+#define CCOIP_PROTOCOL_PORT_BANDWIDTH_BENCHMARK 48151

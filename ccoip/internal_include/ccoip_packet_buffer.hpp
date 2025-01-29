@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <vector>
 #include <span>
+#include <bit>
 #include <algorithm>
 
 #include <type_utils.hpp>
@@ -37,14 +38,30 @@ public:
             throw std::out_of_range("Read exceeds buffer length");
         }
 
-        T value = 0;
-        for (size_t i = 0; i < sizeof(T); ++i) {
-            value |= static_cast<T>(data_[read_index_ + i]) << (8 * (sizeof(T) - 1 - i));
+        T value;
+        if constexpr (std::is_integral_v<T>) {
+            value = readIntegral<T>();
+        } else if constexpr (std::is_same_v<T, float>) {
+            value = std::bit_cast<T>(readIntegral<uint32_t>());
+        } else if constexpr (std::is_same_v<T, double>) {
+            value = std::bit_cast<T>(readIntegral<uint64_t>());
+        } else {
+            static_assert(std::is_same_v<T, float> || std::is_same_v<T, double>, "Unsupported type");
         }
 
         read_index_ += sizeof(T);
         return value;
     }
+private:
+    template<typename T> requires std::is_integral_v<T>
+    T readIntegral() {
+        T value = 0;
+        for (size_t i = 0; i < sizeof(T); ++i) {
+            value = (value << 8) | data_[read_index_ + i];
+        }
+        return value;
+    }
+public:
 
     void readContents(uint8_t *dst, const size_t length) {
         if (read_index_ + length > length_) {
@@ -169,10 +186,22 @@ public:
      * @tparam T The type to write to the buffer.
      * @param value The value to write to the buffer.
      */
-    template<typename T>
+    template<typename T> requires BufferPOD<T>
     void write(T value) {
-        static_assert(std::is_arithmetic_v<T>, "Only arithmetic types are supported");
+        if constexpr (std::is_same_v<T, float>) {
+            // if T is "float", bitcast to u32
+            writeIntegral<uint32_t>(std::bit_cast<uint32_t>(value));
+        } else if constexpr (std::is_same_v<T, double>) {
+            // if T is "double", bitcast to u64
+            writeIntegral<uint64_t>(std::bit_cast<uint64_t>(value));
+        } else {
+            writeIntegral<T>(value);
+        }
+    }
 
+private:
+    template<typename T> requires std::is_integral_v<T>
+    void writeIntegral(T value) {
         ensureCapacity(sizeof(T));
 
         for (size_t i = 0; i < sizeof(T); ++i) {
@@ -180,6 +209,7 @@ public:
         }
     }
 
+public:
     /**
      * @brief Writes a bounded array of type T to the buffer.
      *
@@ -187,7 +217,7 @@ public:
      * @tparam T The type of the array to write to the buffer.
      * @param array The array to write to the buffer.
      */
-    template<typename T, size_t N>
+    template<typename T, size_t N> requires BufferPOD<T>
     void writeFixedArray(std::array<T, N> array) {
         for (size_t i = 0; i < N; ++i) {
             write(array[i]);

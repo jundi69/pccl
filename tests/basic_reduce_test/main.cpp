@@ -4,7 +4,11 @@
 #include <random>
 #include <thread>
 
-#define PCCL_CHECK(status) { pcclResult_t status_val = status; if (status_val != pcclSuccess) { std::cerr << "Error: " << status_val << std::endl; exit(1); } }
+void panic(const int exit_code) {
+    exit(exit_code);
+}
+
+#define PCCL_CHECK(status) { pcclResult_t status_val = status; if (status_val != pcclSuccess) { std::cerr << "Error: " << status_val << std::endl; panic(1); } }
 
 void fill_uniform(float *data, const size_t count) {
     std::random_device rd;
@@ -22,14 +26,14 @@ int main() {
 
     pcclComm_t *communicator{};
     constexpr pcclCommCreateParams_t params{
-        .master_address = {
-            .inet = {
-                .protocol = inetIPv4,
-                .ipv4 = {127, 0, 0, 1}
+            .master_address = {
+                    .inet = {
+                            .protocol = inetIPv4,
+                            .ipv4 = {127, 0, 0, 1}
+                    },
+                    .port = CCOIP_PROTOCOL_PORT_MASTER
             },
-            .port = CCOIP_PROTOCOL_PORT_MASTER
-        },
-        .peer_group = 0
+            .peer_group = 0
     };
     PCCL_CHECK(pcclCreateCommunicator(&params, &communicator));
     PCCL_CHECK(pcclConnect(communicator));
@@ -43,12 +47,12 @@ int main() {
 
     constexpr size_t count = 1;
     pcclTensorInfo_t infos[count] = {
-        {"weights", weights, n_weights, pcclFloat, false}
+            {"weights", weights, n_weights, pcclFloat, false}
     };
     pcclSharedState_t shared_state = {
-        .revision = 0,
-        .count = count,
-        .infos = infos,
+            .revision = 0,
+            .count = count,
+            .infos = infos,
     };
 
     constexpr size_t n_elements = 1024;
@@ -59,6 +63,7 @@ int main() {
         if (i > 0 || world_size == 1) {
             PCCL_CHECK(pcclUpdateTopology(communicator));
         }
+        PCCL_CHECK(pcclOptimizeTopology(communicator));
         pcclGetAttribute(communicator, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size);
 
         if (world_size < 2) {
@@ -79,12 +84,12 @@ int main() {
         pcclReduceInfo_t reduce_info{};
         do {
             constexpr pcclReduceDescriptor_t desc{
-                .count = n_elements,
-                .op = pcclSum,
-                .tag = 0,
-                .src_descriptor = {.datatype = pcclFloat, .distribution_hint = PCCL_DISTRIBUTION_HINT_NONE},
-                // .quantization_options = {.quantized_datatype = pcclFloat, .algorithm = pcclQuantNone},
-                .quantization_options = {.quantized_datatype = pcclUint8, .algorithm = pcclQuantMinMax},
+                    .count = n_elements,
+                    .op = pcclSum,
+                    .tag = 0,
+                    .src_descriptor = {.datatype = pcclFloat, .distribution_hint = PCCL_DISTRIBUTION_HINT_NONE},
+                    .quantization_options = {.quantized_datatype = pcclFloat, .algorithm = pcclQuantNone},
+                    // .quantization_options = {.quantized_datatype = pcclUint8, .algorithm = pcclQuantMinMax},
             };
             pcclAllReduceAsync(gradients, weights, &desc, communicator, &async_op);
         } while (pcclAwaitAsyncReduce(&async_op, &reduce_info) != pcclSuccess);

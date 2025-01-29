@@ -75,7 +75,7 @@ bool ccoip::CCoIPClientState::launchAsyncCollectiveOp(const uint64_t tag,
     running_collective_coms_ops_world_size[tag] = getWorldSize(); // retain applicable world size at the time of launch
     running_reduce_tasks_promises[tag] = std::promise<bool>{};
     running_reduce_tasks[tag] = std::move(std::thread([this, tag, task = std::move(task)] {
-        std::promise<bool> &promise = running_reduce_tasks_promises[tag];
+        std::promise<bool> &promise = running_reduce_tasks_promises.at(tag);
         task(promise);
         if (!endCollectiveComsOp(tag)) [[unlikely]] {
             LOG(BUG) << "Collective comms op with tag " << tag << " was not started but is being ended";

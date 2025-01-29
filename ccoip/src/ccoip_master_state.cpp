@@ -2,6 +2,7 @@
 
 #include <ccoip_packets.hpp>
 #include <pccl_log.hpp>
+#include <topology_optimizer.hpp>
 
 bool ccoip::CCoIPMasterState::registerClient(const ccoip_socket_address_t &client_address,
                                              const CCoIPClientVariablePorts &variable_ports,
@@ -16,18 +17,24 @@ bool ccoip::CCoIPMasterState::registerClient(const ccoip_socket_address_t &clien
     client_uuids[internal_address] = uuid;
     uuid_clients[uuid] = internal_address;
     client_info[uuid] = ClientInfo{
-        .client_uuid = uuid,
-        .connection_phase = PEER_REGISTERED,
-        .connection_state = IDLE,
-        .socket_address = client_address,
-        .variable_ports = variable_ports,
-        .peer_group = peer_group
+            .client_uuid = uuid,
+            .connection_phase = PEER_REGISTERED,
+            .connection_state = IDLE,
+            .socket_address = client_address,
+            .variable_ports = variable_ports,
+            .peer_group = peer_group
     };
-    peer_list_changed = true;
+
+    // set all callsites in peer_list_changed to true
+    for (auto &[_, has_changed]: peer_list_changed) {
+        has_changed = true;
+    }
 
     // if this is the first client, consider it as voting to accept new peers
     if (client_uuids.size() == 1) {
-        client_info[uuid].connection_phase = PEER_ACCEPTED; // consider it accepted
+        auto &info = client_info[uuid];
+        info.connection_phase = PEER_ACCEPTED; // consider it accepted
+        onPeerAccepted(info);
         if (!voteAcceptNewPeers(uuid)) [[unlikely]] {
             LOG(WARN) << "Failed to vote to accept new peers for first client " <<
                     ccoip_sockaddr_to_str(client_address);
@@ -38,9 +45,19 @@ bool ccoip::CCoIPMasterState::registerClient(const ccoip_socket_address_t &clien
                     "Inconsistent state: the first and only client voted to accept new peers, but not all clients have voted";
             return false;
         }
-        transitionToP2PEstablishmentPhase();
+        if (!transitionToP2PEstablishmentPhase()) [[unlikely]] {
+            LOG(BUG) << "Failed to transition to P2P establishment phase; This is a bug";
+        }
     }
     return true;
+}
+
+void ccoip::CCoIPMasterState::onPeerAccepted(const ClientInfo &info) {
+    const auto uuid = info.client_uuid;
+    if (!bandwidth_store.registerPeer(uuid)) {
+        LOG(BUG) << "Failed to register bandwidth data for client " << uuid_to_string(uuid) <<
+                "; This means the peer was already registered. This is a bug";
+    }
 }
 
 bool ccoip::CCoIPMasterState::unregisterClient(const ccoip_socket_address_t &client_address) {
@@ -61,16 +78,33 @@ bool ccoip::CCoIPMasterState::unregisterClient(const ccoip_socket_address_t &cli
                     " not found in uuid->ClientInfo mapping. This means client info mapping is inconsistent";
             return false;
         }
-        const uint32_t peer_group = info_it->second.peer_group;
+        const auto &info = info_it->second;
+        const uint32_t peer_group = info.peer_group;
+        const auto connection_phase = info.connection_phase;
         client_info.erase(info_it);
 
+        const auto peer_uuid = it->second;
+
+        if (connection_phase == PEER_ACCEPTED) {
+            if (!bandwidth_store.unregisterPeer(peer_uuid)) {
+                LOG(BUG) << "Failed to unregister bandwidth data for client " << uuid_to_string(peer_uuid) <<
+                        "; This means the peer was already unregistered or never registered. This is a bug";
+                return false;
+            }
+        }
+
         // remove from all voting sets
-        votes_accept_new_peers.erase(it->second);
-        votes_sync_shared_state[peer_group].erase(it->second);
-        votes_sync_shared_state_complete[peer_group].erase(it->second);
+        votes_accept_new_peers.erase(peer_uuid);
+        votes_optimize_topology.erase(peer_uuid);
+        votes_complete_topology_optimization.erase(peer_uuid);
+        votes_sync_shared_state[peer_group].erase(peer_uuid);
+        votes_sync_shared_state_complete[peer_group].erase(peer_uuid);
         client_uuids.erase(it);
 
-        peer_list_changed = true;
+        // set all callsites in peer_list_changed to true
+        for (auto &[_, has_changed]: peer_list_changed) {
+            has_changed = true;
+        }
     } else {
         LOG(WARN) << "Client " << ccoip_sockaddr_to_str(client_address) << " not found";
     }
@@ -112,6 +146,73 @@ bool ccoip::CCoIPMasterState::voteAcceptNewPeers(const ccoip_uuid_t &peer_uuid) 
     if (auto [_, inserted] = votes_accept_new_peers.insert(info.client_uuid); !inserted) {
         LOG(BUG) << "Client " << ccoip_sockaddr_to_str(info.socket_address) <<
                 " found in votes_accept_new_peers set, but was in IDLE state before voting. This is a bug";
+        return false;
+    }
+    return true;
+}
+
+bool ccoip::CCoIPMasterState::voteOptimizeTopology(const ccoip_uuid_t &peer_uuid) {
+    const auto info_opt = getClientInfo(peer_uuid);
+    if (!info_opt) {
+        LOG(WARN) << "Cannot vote to optimize topology for unregistered client " << uuid_to_string(peer_uuid);
+        return false;
+    }
+    auto &info = info_opt->get();
+
+    // if the client is not yet accepted, it cannot vote to optimize the topology
+    if (info.connection_phase != PEER_ACCEPTED) {
+        LOG(WARN) << "Client " << ccoip_sockaddr_to_str(info.socket_address) <<
+                " cannot vote to optimize topology in phase "
+                << info.connection_phase;
+        return false;
+    }
+
+    // in order to vote to optimize the topology, the client must be idle or in the OPTIMIZE_TOPOLOGY_FAILED state
+    if (info.connection_state != IDLE && info.connection_state != OPTIMIZE_TOPOLOGY_FAILED) {
+        LOG(WARN) << "Client " << ccoip_sockaddr_to_str(info.socket_address) <<
+                " cannot vote to optimize topology in state "
+                << info.connection_state;
+        return false;
+    }
+
+    // set the client state to vote to optimize the topology
+    info.connection_state = VOTE_OPTIMIZE_TOPOLOGY;
+    if (auto [_, inserted] = votes_optimize_topology.insert(info.client_uuid); !inserted) {
+        LOG(BUG) << "Client " << ccoip_sockaddr_to_str(info.socket_address) <<
+                " found in votes_optimize_topology set, but was in IDLE state before voting. This is a bug";
+        return false;
+    }
+
+    return true;
+}
+
+bool ccoip::CCoIPMasterState::voteTopologyOptimizationComplete(const ccoip_uuid_t &peer_uuid) {
+    const auto info_opt = getClientInfo(peer_uuid);
+    if (!info_opt) {
+        LOG(WARN) << "Cannot vote to optimize topology for unregistered client " << uuid_to_string(peer_uuid);
+        return false;
+    }
+    auto &info = info_opt->get();
+
+    // if the client is not yet accepted, it cannot vote to complete the topology optimization phase
+    if (info.connection_phase != PEER_ACCEPTED) {
+        LOG(WARN) << "Client " << ccoip_sockaddr_to_str(info.socket_address) <<
+                " cannot vote to optimize topology in phase " << info.connection_phase;
+        return false;
+    }
+
+    // in order to vote to complete the topology optimization phase, the client must be in the OPTIMIZE_TOPOLOGY state
+    if (info.connection_state != OPTIMIZE_TOPOLOGY) {
+        LOG(WARN) << "Client " << ccoip_sockaddr_to_str(info.socket_address) <<
+                " cannot vote to complete topology optimization in state " << info.connection_state;
+        return false;
+    }
+
+    // set the client state to vote to end the topology optimization phase
+    info.connection_state = VOTE_COMPLETE_TOPOLOGY_OPTIMIZATION;
+    if (auto [_, inserted] = votes_complete_topology_optimization.insert(info.client_uuid); !inserted) {
+        LOG(BUG) << "Client " << ccoip_sockaddr_to_str(info.socket_address) <<
+                " found in votes_complete_topology_optimization set, but was in OPTIMIZE_TOPOLOGY state before voting. This is a bug";
         return false;
     }
     return true;
@@ -168,7 +269,7 @@ bool ccoip::CCoIPMasterState::voteDistSharedStateComplete(const ccoip_uuid_t &pe
         return false;
     }
 
-    // in order to vote to distribute shared state, the client must be in either
+    // in order to vote to complete the distribute shared state phase, the client must be in either
     // the DISTRIBUTE_SHARED_STATE or REQUEST_SHARED_STATE state
     if (info.connection_state != DISTRIBUTE_SHARED_STATE && info.connection_state != REQUEST_SHARED_STATE) {
         LOG(WARN) << "Client " << ccoip_sockaddr_to_str(info.socket_address) <<
@@ -178,7 +279,7 @@ bool ccoip::CCoIPMasterState::voteDistSharedStateComplete(const ccoip_uuid_t &pe
 
     const uint32_t peer_group = info.peer_group;
 
-    // set the client state to vote to distribute shared state
+    // set the client state to vote to end the distribute shared state phase
     info.connection_state = VOTE_COMPLETE_SHARED_STATE_SYNC;
     if (auto [_, inserted] = votes_sync_shared_state_complete[peer_group].insert(info.client_uuid); !inserted) {
         LOG(BUG) << "Client " << ccoip_sockaddr_to_str(info.socket_address) <<
@@ -281,7 +382,7 @@ bool ccoip::CCoIPMasterState::voteCollectiveCommsComplete(const ccoip_uuid_t &pe
     return true;
 }
 
-bool ccoip::CCoIPMasterState::markP2PConnectionsEstablished(const ccoip_uuid_t &client_uuid, bool success) {
+bool ccoip::CCoIPMasterState::markP2PConnectionsEstablished(const ccoip_uuid_t &client_uuid, const bool success) {
     const auto info_opt = getClientInfo(client_uuid);
     if (!info_opt) {
         LOG(WARN) << "Cannot vote to accept new peers for unregistered client " << uuid_to_string(client_uuid);
@@ -312,7 +413,8 @@ bool ccoip::CCoIPMasterState::transitionToP2PConnectionsEstablishedPhase(const b
                 info.connection_state = CONNECTING_TO_PEERS_FAILED;
             } else if (info.connection_state != CONNECTING_TO_PEERS_FAILED) {
                 LOG(WARN) << "Client " << ccoip_sockaddr_to_str(info.socket_address) <<
-                        " in state " << info.connection_state << " but expected WAITING_FOR_OTHER_PEERS or CONNECTING_TO_PEERS_FAILED";
+                        " in state " << info.connection_state <<
+                        " but expected WAITING_FOR_OTHER_PEERS or CONNECTING_TO_PEERS_FAILED";
                 return false;
             }
         } else {
@@ -320,6 +422,7 @@ bool ccoip::CCoIPMasterState::transitionToP2PConnectionsEstablishedPhase(const b
                 info.connection_state = IDLE;
                 if (info.connection_phase == PEER_REGISTERED) {
                     info.connection_phase = PEER_ACCEPTED; // update connection phase to PEER_ACCEPTED
+                    onPeerAccepted(info);
                 }
             } else {
                 LOG(WARN) << "Client " << ccoip_sockaddr_to_str(info.socket_address) <<
@@ -358,6 +461,29 @@ bool ccoip::CCoIPMasterState::endSharedStateSyncPhase(const uint32_t peer_group)
     return true;
 }
 
+
+bool ccoip::CCoIPMasterState::endTopologyOptimizationPhase(const bool failed) {
+    for (auto &[_, info]: client_info) {
+        if (info.connection_phase != PEER_ACCEPTED) {
+            continue;
+        }
+        if (info.connection_state == VOTE_COMPLETE_TOPOLOGY_OPTIMIZATION) {
+            if (failed) {
+                info.connection_state = OPTIMIZE_TOPOLOGY_FAILED;
+            } else {
+                info.connection_state = IDLE;
+            }
+        } else {
+            LOG(WARN) << "Client " << ccoip_sockaddr_to_str(info.socket_address) <<
+                    " in state " << info.connection_state <<
+                    " while terminating topology optimization phase.";
+            return false;
+        }
+    }
+    votes_complete_topology_optimization.clear();
+    return true;
+}
+
 bool ccoip::CCoIPMasterState::p2pConnectionsEstablishConsensus() const {
     size_t num_connecting_peers = 0;
     size_t num_voting_peers = 0;
@@ -365,7 +491,8 @@ bool ccoip::CCoIPMasterState::p2pConnectionsEstablishConsensus() const {
         if (info.connection_state == WAITING_FOR_OTHER_PEERS || info.connection_state == CONNECTING_TO_PEERS_FAILED) {
             num_voting_peers++;
         }
-        if (info.connection_state == WAITING_FOR_OTHER_PEERS || info.connection_state == CONNECTING_TO_PEERS || info.connection_state == CONNECTING_TO_PEERS_FAILED) {
+        if (info.connection_state == WAITING_FOR_OTHER_PEERS || info.connection_state == CONNECTING_TO_PEERS || info.
+            connection_state == CONNECTING_TO_PEERS_FAILED) {
             num_connecting_peers++;
         }
     }
@@ -426,12 +553,6 @@ bool ccoip::CCoIPMasterState::collectiveCommsCompleteConsensus(const uint32_t pe
         if (info.peer_group != peer_group) {
             continue;
         }
-        /*if (info.collective_coms_failure_states[tag]) {
-            LOG(DEBUG) << "Client " << ccoip_sockaddr_to_str(info.socket_address) <<
-                    " has marked the collective communications operation for tag " << tag <<
-                    " as failed; Considering the operation complete";
-            return true;
-        }*/
         auto ccomms_state_it = info.collective_coms_states.find(tag);
         if (ccomms_state_it != info.collective_coms_states.end()) {
             if (ccomms_state_it->second == VOTE_COMPLETE_COLLECTIVE_COMMS) {
@@ -559,28 +680,84 @@ bool ccoip::CCoIPMasterState::syncSharedStateConsensus(const uint32_t peer_group
     return voting_clients == n_accepted_peers;
 }
 
-void ccoip::CCoIPMasterState::transitionToP2PEstablishmentPhase() {
+bool ccoip::CCoIPMasterState::transitionToP2PEstablishmentPhase() {
     // set connection state of all peers to connecting to peers
     for (auto &[_, info]: client_info) {
+        // No client, REGISTER or ACCEPTED is exempt from being set to CONNECTING_TO_PEERS here.
+        // If you are REGISTERED when we do this transition, good. If you are ACCEPTED, you had to have voted to accept new peers.
         info.connection_state = CONNECTING_TO_PEERS;
     }
     // clear all votes to accept new peers
     votes_accept_new_peers.clear();
+    return true;
+}
+
+bool ccoip::CCoIPMasterState::transitionToTopologyOptimizationPhase() {
+    // set connection state of all peers to optimize topology
+    for (auto &[_, info]: client_info) {
+        if (info.connection_phase != PEER_ACCEPTED) {
+            // clients that are not accepted cannot vote to optimize topology, hence they are not considered here.
+            continue;
+        }
+        if (info.connection_state != VOTE_OPTIMIZE_TOPOLOGY) {
+            // all clients should be in the VOTE_OPTIMIZE_TOPOLOGY state when transitioning to the OPTIMIZE_TOPOLOGY state
+            return false;
+        }
+        info.connection_state = OPTIMIZE_TOPOLOGY;
+    }
+    // clear all votes to optimize topology
+    votes_optimize_topology.clear();
+    return true;
 }
 
 std::vector<ccoip::ClientInfo>
-ccoip::CCoIPMasterState::getPeersForClient(const ccoip_socket_address_t &client_address) const {
+ccoip::CCoIPMasterState::getPeersForClient(const ccoip_socket_address_t &client_address) {
     // get the UUID of the client
     const auto client_uuid = client_uuids.at(ccoip_socket_to_internal(client_address));
 
     std::vector<ClientInfo> peers{};
 
     // for now, simply return all clients except the client itself
-    // TODO: in the future, this should be based on the topology
-    for (const auto &[uuid, info]: client_info) {
-        if (uuid != client_uuid) {
-            peers.push_back(info);
+    const auto ring_topology = getRingTopology();
+    if (ring_topology.empty()) {
+        LOG(WARN) << "Ring topology is empty";
+        return peers;
+    }
+
+    // find the index of the client in the ring topology
+    size_t client_index = 0;
+    for (size_t i = 0; i < ring_topology.size(); i++) {
+        if (ring_topology[i] == client_uuid) {
+            client_index = i;
+            break;
         }
+    }
+
+    if (ring_topology.size() == 1) {
+        return peers;
+    }
+
+    const size_t previous = client_index == 0 ? ring_topology.size() - 1 : client_index - 1;
+    const size_t next = client_index == ring_topology.size() - 1 ? 0 : client_index + 1;
+
+    const ccoip_uuid_t &previous_uuid = ring_topology[previous];
+    const ccoip_uuid_t &next_uuid = ring_topology[next];
+
+    // find the client info for the previous and next clients
+    const auto previous_info_it = client_info.find(previous_uuid);
+    if (previous_info_it == client_info.end()) {
+        LOG(WARN) << "Client " << uuid_to_string(previous_uuid) << " not found";
+        return peers;
+    }
+    const auto next_info_it = client_info.find(next_uuid);
+    if (next_info_it == client_info.end()) {
+        LOG(WARN) << "Client " << uuid_to_string(next_uuid) << " not found";
+        return peers;
+    }
+    peers.push_back(previous_info_it->second);
+    if (next != previous) {
+        // prevent adding the same peer twice
+        peers.push_back(next_info_it->second);
     }
     return peers;
 }
@@ -594,8 +771,8 @@ std::vector<ccoip_socket_address_t> ccoip::CCoIPMasterState::getClientSocketAddr
     return addresses;
 }
 
-std::vector<std::pair<ccoip_uuid_t, ccoip_socket_address_t> > ccoip::CCoIPMasterState::getClientEntrySet() {
-    std::vector<std::pair<ccoip_uuid_t, ccoip_socket_address_t> > entries{};
+std::vector<std::pair<ccoip_uuid_t, ccoip_socket_address_t>> ccoip::CCoIPMasterState::getClientEntrySet() {
+    std::vector<std::pair<ccoip_uuid_t, ccoip_socket_address_t>> entries{};
     entries.reserve(client_uuids.size());
     for (const auto &[internal_address, uuid]: client_uuids) {
         entries.emplace_back(uuid, internal_to_ccoip_sockaddr(internal_address));
@@ -603,16 +780,29 @@ std::vector<std::pair<ccoip_uuid_t, ccoip_socket_address_t> > ccoip::CCoIPMaster
     return entries;
 }
 
-bool ccoip::CCoIPMasterState::hasPeerListChanged() {
-    const bool changed = peer_list_changed;
-    peer_list_changed = false;
-    return changed;
+bool ccoip::CCoIPMasterState::hasPeerListChanged(const uint32_t callsite) {
+    auto &changed = peer_list_changed[callsite];
+    if (changed) {
+        changed = false;
+        return true;
+    }
+    return false;
+}
+
+std::unordered_set<ccoip_uuid_t> ccoip::CCoIPMasterState::getCurrentlyAcceptedPeers() {
+    // get current accepted peers
+    std::unordered_set<ccoip_uuid_t> current_accepted_peers{};
+    for (const auto &[_, info]: client_info) {
+        if (info.connection_phase == PEER_ACCEPTED) {
+            current_accepted_peers.insert(info.client_uuid);
+        }
+    }
+    return current_accepted_peers;
 }
 
 ccoip::CCoIPMasterState::SharedStateMismatchStatus ccoip::CCoIPMasterState::isNewRevisionLegal(
-    const ccoip_uuid_t &peer_uuid,
-    const uint64_t revision
-) {
+        const ccoip_uuid_t &peer_uuid,
+        const uint64_t revision) {
     SharedStateMismatchStatus status = SUCCESSFUL_MATCH;
     const auto info_it = client_info.find(peer_uuid);
 
@@ -632,8 +822,8 @@ ccoip::CCoIPMasterState::SharedStateMismatchStatus ccoip::CCoIPMasterState::isNe
 }
 
 ccoip::CCoIPMasterState::SharedStateMismatchStatus ccoip::CCoIPMasterState::sharedStateMatches(
-    const ccoip_uuid_t &peer_uuid, const std::vector<SharedStateHashEntry> &entries
-) {
+        const ccoip_uuid_t &peer_uuid, const std::vector<SharedStateHashEntry> &entries
+        ) {
     SharedStateMismatchStatus status = SUCCESSFUL_MATCH;
     const auto info_it = client_info.find(peer_uuid);
 
@@ -694,8 +884,8 @@ end:
 }
 
 void ccoip::CCoIPMasterState::voteSharedStateMask(
-    const ccoip_uuid_t &peer_uuid,
-    const std::vector<SharedStateHashEntry> &entries) {
+        const ccoip_uuid_t &peer_uuid,
+        const std::vector<SharedStateHashEntry> &entries) {
     const auto info_it = client_info.find(peer_uuid);
     if (info_it == client_info.end()) {
         LOG(WARN) << "Client " << uuid_to_string(peer_uuid) << " not found";
@@ -810,9 +1000,28 @@ bool ccoip::CCoIPMasterState::checkMaskSharedStateMismatches(const uint32_t peer
     return true;
 }
 
+void ccoip::CCoIPMasterState::storePeerBandwidth(const ccoip_uuid_t from, const ccoip_uuid_t to,
+                                                 const double send_bandwidth_mpbs) {
+    if (!bandwidth_store.storeBandwidth(from, to, send_bandwidth_mpbs)) {
+        LOG(BUG) << "Failed to store bandwidth for client " << uuid_to_string(from) << " to " << uuid_to_string(to) <<
+                ". This likely means the peer was never registered. This is a bug.";
+    }
+}
+
+std::optional<double> ccoip::CCoIPMasterState::getPeerBandwidthMbps(const ccoip_uuid_t from, const ccoip_uuid_t to) {
+    return bandwidth_store.getBandwidthMbps(from, to);
+}
+
+std::vector<ccoip::bandwidth_entry> ccoip::CCoIPMasterState::getMissingBandwidthEntries(const ccoip_uuid_t peer) {
+    return bandwidth_store.getMissingBandwidthEntries(peer);
+}
+
+bool ccoip::CCoIPMasterState::isBandwidthStoreFullyPopulated() {
+    return bandwidth_store.isBandwidthStoreFullyPopulated();
+}
 
 std::optional<ccoip::CCoIPMasterState::SharedStateMismatchStatus> ccoip::CCoIPMasterState::getSharedStateMismatchStatus(
-    const ccoip_uuid_t &peer_uuid) {
+        const ccoip_uuid_t &peer_uuid) {
     const auto info_opt = client_info.find(peer_uuid);
     if (info_opt == client_info.end()) {
         LOG(WARN) << "Client " << uuid_to_string(peer_uuid) << " not found";
@@ -876,8 +1085,34 @@ bool ccoip::CCoIPMasterState::acceptNewPeersConsensus() const {
     return voting_peers.size() == client_uuids.size();
 }
 
-std::optional<std::reference_wrapper<ccoip::ClientInfo> > ccoip::CCoIPMasterState::getClientInfo(
-    const ccoip_uuid_t &client_uuid) {
+bool ccoip::CCoIPMasterState::optimizeTopologyConsensus() const {
+    std::unordered_set<ccoip_uuid_t> voting_peers{};
+    for (const auto &[_, info]: client_info) {
+        if (info.connection_state == VOTE_OPTIMIZE_TOPOLOGY || info.connection_phase == PEER_REGISTERED) {
+            // if the client is in the PEER_REGISTERED state, it is not yet accepted
+            // by the other peers, so it cannot vote to optimize the topology.
+            // However, to reach the total of all clients, we need to include it in the count.
+            voting_peers.insert(info.client_uuid);
+        }
+    }
+    return voting_peers.size() == client_uuids.size();
+}
+
+bool ccoip::CCoIPMasterState::topologyOptimizationCompleteConsensus() const {
+    std::unordered_set<ccoip_uuid_t> voting_peers{};
+    for (const auto &[_, info]: client_info) {
+        if (info.connection_state == VOTE_COMPLETE_TOPOLOGY_OPTIMIZATION || info.connection_phase == PEER_REGISTERED) {
+            // if the client is in the PEER_REGISTERED state, it is not yet accepted
+            // by the other peers, so it cannot vote to complete the topology optimization.
+            // However, to reach the total of all clients, we need to include it in the count.
+            voting_peers.insert(info.client_uuid);
+        }
+    }
+    return voting_peers.size() == client_uuids.size();
+}
+
+std::optional<std::reference_wrapper<ccoip::ClientInfo>> ccoip::CCoIPMasterState::getClientInfo(
+        const ccoip_uuid_t &client_uuid) {
     const auto it = client_info.find(client_uuid);
     if (it == client_info.end()) {
         return std::nullopt;
@@ -929,4 +1164,54 @@ std::vector<uint64_t> ccoip::CCoIPMasterState::getOngoingCollectiveComsOpTags(co
         }
     }
     return tags;
+}
+
+void ccoip::CCoIPMasterState::performTopologyOptimization() {
+    auto topology = getRingTopology();
+    if (!TopologyOptimizer::OptimizeTopology(bandwidth_store, topology)) {
+        LOG(WARN) << "Failed to optimize topology";
+    }
+    ring_topology = topology;
+}
+
+std::vector<ccoip_uuid_t> ccoip::CCoIPMasterState::buildBasicRingTopology() {
+    std::vector<ccoip_uuid_t> topology{};
+    for (const auto &[peer_uuid, _]: getClientEntrySet()) {
+        const auto peer_info_opt = getClientInfo(peer_uuid);
+        if (!peer_info_opt) {
+            LOG(WARN) << "Client " << uuid_to_string(peer_uuid) << " not found";
+            continue;
+        }
+        if (const auto &peer_info = peer_info_opt->get();
+            peer_info.connection_phase != PEER_ACCEPTED && peer_info.connection_state != CONNECTING_TO_PEERS) {
+            // if the peer is not accepted and is not in the process of connecting to peers, ignore it
+            // a newly joined peer will be in the REGISTERED state, but will be part of the new topology.
+            // To make sure it is included in the ring topology, there is an exception to the PEER_ACCEPTED rule:
+            // To move from REGISTERED to ACCEPTED, the peer must first establish p2p connections with the other peers.
+            // In order for the new peer to be included on the list of connections, it must be part of the ring topology,
+            // hence the CONNECTING_TO_PEERS state also allows the peer to be included in the ring topology.
+            // It doesn't make sense to include other states after CONNECTING_TO_PEERS, as this peer will move to the
+            // REGISTERED state shortly, if p2p connection establishment succeeds.
+            continue;
+        }
+        topology.push_back(peer_uuid);
+    }
+    std::ranges::sort(topology, [](const ccoip_uuid_t &a, const ccoip_uuid_t &b) {
+        int cmp = 0;
+        for (size_t i = 0; i < CCOIP_UUID_N_BYTES; i++) {
+            cmp = a.data[i] - b.data[i];
+            if (cmp != 0) {
+                return cmp < 0;
+            }
+        }
+        return false;
+    });
+    return topology;
+}
+
+std::vector<ccoip_uuid_t> ccoip::CCoIPMasterState::getRingTopology() {
+    if (ring_topology.size() != client_info.size()) {
+        ring_topology = buildBasicRingTopology();
+    }
+    return ring_topology;
 }

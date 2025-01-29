@@ -104,7 +104,27 @@ def log_info(msg: str):
 
 HOST: str = '127.0.0.1:48148'
 RANK: int = int(os.getenv('RANK', "0"))
-CREATE_RANK_0_REV_50: int = int(os.getenv('CREATE_RANK_0_REV_50', "0"))
+
+
+def generate_random_vectors_64(d: int,
+                               device=None,
+                               dtype=torch.float32):
+    """
+    Generate 64 random vectors each of dimension d.
+    Shape: (64, d).
+    """
+    gen = torch.Generator()
+    gen.manual_seed(42)
+    return torch.randn((64, d), device=device, dtype=dtype, generator=gen)
+
+
+def random_projection_64(weights: torch.Tensor) -> torch.Tensor:
+    """
+    Project 'weights' (shape [d]) onto the 64 random vectors (shape [64, d]).
+
+    Returns a tensor of shape (64,) which is the 64D random projection.
+    """
+    return generate_random_vectors_64(len(weights)) @ weights
 
 
 def main():
@@ -152,17 +172,18 @@ def main():
     # Training loop
     train_it = enumerate(train_loader)
     try:
-        i = 0
+        it = 0
+        num_syncs = 0
         while True:
-            i += 1
-            if i > 1:
-                log_debug(f"(RANK={RANK}, it={i}) update_topology()")
+            it += 1
+            if it > 1:
+                log_debug(f"(RANK={RANK}, it={it}) update_topology()")
                 while True:
                     try:
                         communicator.update_topology()
                         break
                     except PCCLError as e:
-                        log_debug(f"(RANK={RANK}, it={i}) update_topology() failed: {e}; retrying...")
+                        log_debug(f"(RANK={RANK}, it={it}) update_topology() failed: {e}; retrying...")
                         continue
 
             world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
@@ -171,18 +192,34 @@ def main():
                 sleep(1)
                 continue
 
-            log_debug(f"(RANK={RANK}, it={i}, ws={world_size}) sync_shared_state()")
+            params = torch.cat([p.view(-1) for p in model.parameters()])
+            #log_debug(f"(RANK={RANK}, it={i}, ws={world_size}) [pre shared state sync] params crc32 hash: {compute_crc32(params)}, lindenstrauss: {random_projection_64(params)}")
+            log_debug(f"(RANK={RANK}, it={it}, ws={world_size}) [pre shared state sync] params crc32 hash: {compute_crc32(params)}")
+
             sync_info = communicator.sync_shared_state(shared_state)
+            num_syncs += 1
             log_debug(
-                f"(RANK={RANK}, it={i}) shared_state.revision: {shared_state.revision}, sync_info (tx_bytes={sync_info.tx_bytes}, rx_bytes={sync_info.rx_bytes})")
+                f"(RANK={RANK}, it={it}) shared_state.revision: {shared_state.revision}, sync_info (tx_bytes={sync_info.tx_bytes}, rx_bytes={sync_info.rx_bytes})")
             if shared_state.revision >= max_steps:
-                log_debug(f"(RANK={RANK}, it={i}) Training completed")
+                log_debug(f"(RANK={RANK}, it={it}) Training completed")
                 break
+
+            # collect model parameters in one contiguous tensor
+            params = torch.cat([p.view(-1) for p in model.parameters()])
+            log_debug(
+                f"(RANK={RANK}, it={it}) [post shared state sync] params crc32 hash: {compute_crc32(params)}")
+            # log_debug(f"(RANK={RANK}, it={i}) [post shared state sync] params crc32 hash: {compute_crc32(params)}, lindenstrauss: {random_projection_64(params)}")
+
+            assert sync_info is not None
+            if num_syncs > 1:
+                assert sync_info.tx_bytes == 0
+                assert sync_info.rx_bytes == 0
+
 
             try:
                 batch_idx, (images, labels) = next(train_it)
             except StopIteration:
-                log_debug(f"(RANK={RANK}, it={i}) End of epoch")
+                log_debug(f"(RANK={RANK}, it={it}) End of epoch")
                 train_it = enumerate(train_loader)
                 batch_idx, (images, labels) = next(train_it)
 
@@ -200,28 +237,28 @@ def main():
             grads = torch.cat([p.grad.view(-1) for p in model.parameters() if p.grad is not None])
 
             while True:
-                log_debug(f"(RANK={RANK}, it={i}) all_reduce_async()")
+                log_debug(f"(RANK={RANK}, it={it}) all_reduce_async()")
                 op_desc = ReduceOperandDescriptor(
                     datatype=DataType.FLOAT,
                     distribution_hint=DistributionHint.NORMAL
                 )
                 quant_desc = QuantizationOptions(
-                    quantized_datatype=DataType.UINT8,
-                    algorithm=pccl.QuantizationAlgorithm.MIN_MAX
+                    quantized_datatype=DataType.FLOAT,
+                    algorithm=pccl.QuantizationAlgorithm.NONE
                 )
                 handle = communicator.all_reduce_async(grads, grads, operand_descriptor=op_desc,
                                                        quantization_options=quant_desc, op=ReduceOp.SUM)
                 is_success, status, info = handle.wait()
                 if not is_success:
-                    log_debug(f"(RANK={RANK}, it={i}) all_reduce_async() failed: {status}; retrying...")
+                    log_debug(f"(RANK={RANK}, it={it}) all_reduce_async() failed: {status}; retrying...")
                     continue
                 assert info is not None
                 log_debug(
-                    f"(RANK={RANK}, it={i}) Reduce completed RX: {info.rx_bytes}, TX: {info.tx_bytes}; world_size: {info.world_size}")
+                    f"(RANK={RANK}, it={it}) Reduce completed RX: {info.rx_bytes}, TX: {info.tx_bytes}; world_size: {info.world_size}")
                 break
 
             # print hash of the gradients tensor content
-            log_debug(f"(RANK={RANK}, it={i}) grads hash: {compute_crc32(grads)}")
+            log_debug(f"(RANK={RANK}, it={it}) grads hash: {compute_crc32(grads)}")
 
             # scatter gradients back to model parameters
             offset = 0
@@ -236,15 +273,10 @@ def main():
             optimizer.step()
             shared_state.revision += 1
 
-            log_debug(f"(RANK={RANK}, it={i}) loss: {loss.item()}, revision: {shared_state.revision}")
+            log_debug(f"(RANK={RANK}, it={it}) loss: {loss.item()}, revision: {shared_state.revision}")
 
             if shared_state.revision % 5 == 0:
-                log_info(f"(RANK={RANK}, it={i}) loss: {loss.item()}, revision: {shared_state.revision}")
-
-            if RANK == 0 and CREATE_RANK_0_REV_50 == 1 and shared_state.revision == 50:
-                rev50_signal_file = os.path.join(os.path.dirname(__file__), 'RANK_0_REV_50')
-                with open(rev50_signal_file, 'w') as f:
-                    f.write('')
+                log_info(f"(RANK={RANK}, it={it}) loss: {loss.item()}, revision: {shared_state.revision}")
 
     except Exception as e:
         print(f"Training aborted with exception: {e}")
