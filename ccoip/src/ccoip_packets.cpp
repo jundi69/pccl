@@ -173,13 +173,13 @@ static void writeSocketAddress(PacketWriteBuffer &buffer, const ccoip_socket_add
 }
 
 // M2CPacketNewPeers
-void ccoip::M2CPacketNewPeers::serialize(PacketWriteBuffer &buffer) const {
+void ccoip::M2CPacketP2PConnectionInfo::serialize(PacketWriteBuffer &buffer) const {
     buffer.write<boolean>(unchanged);
     if (unchanged) {
         return;
     }
-    buffer.write<uint64_t>(new_peers.size());
-    for (auto &new_peer: new_peers) {
+    buffer.write<uint64_t>(all_peers.size());
+    for (auto &new_peer: all_peers) {
         writeSocketAddress(buffer, new_peer.p2p_listen_addr);
         buffer.writeFixedArray(new_peer.peer_uuid.data);
     }
@@ -204,21 +204,21 @@ static ccoip_socket_address_t readSocketAddress(PacketReadBuffer &buffer) {
     return address;
 }
 
-bool ccoip::M2CPacketNewPeers::deserialize(PacketReadBuffer &buffer) {
+bool ccoip::M2CPacketP2PConnectionInfo::deserialize(PacketReadBuffer &buffer) {
     unchanged = buffer.read<boolean>();
     if (unchanged) {
         return true;
     }
     const auto n_peers = buffer.read<uint64_t>();
-    new_peers.reserve(n_peers);
+    all_peers.reserve(n_peers);
     for (size_t i = 0; i < n_peers; i++) {
-        M2CPacketNewPeerInfo peer_info{};
+        PeerInfo peer_info{};
         peer_info.p2p_listen_addr = readSocketAddress(buffer);
 
         for (unsigned char &byte: peer_info.peer_uuid.data) {
             byte = buffer.read<uint8_t>();
         }
-        new_peers.push_back(peer_info);
+        all_peers.push_back(peer_info);
     }
     return true;
 }
@@ -462,8 +462,8 @@ bool ccoip::S2CPacketSharedStateResponse::deserialize(PacketReadBuffer &buffer) 
 }
 
 
-// M2CPacketNewPeers
-ccoip::packetId_t ccoip::M2CPacketNewPeers::packet_id = M2C_PACKET_NEW_PEERS_ID;
+// M2CPacketP2PConnectionInfo
+ccoip::packetId_t ccoip::M2CPacketP2PConnectionInfo::packet_id = M2C_PACKET_P2P_CONNECTION_INFO_ID;
 
 // P2PPacketHelloAck
 ccoip::packetId_t ccoip::P2PPacketHelloAck::packet_id = P2P_PACKET_HELLO_ACK_ID;

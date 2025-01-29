@@ -789,6 +789,15 @@ bool ccoip::CCoIPMasterState::hasPeerListChanged(const uint32_t callsite) {
     return false;
 }
 
+bool ccoip::CCoIPMasterState::hasTopologyChanged(const uint32_t callsite) {
+    auto &changed = topology_changed[callsite];
+    if (changed) {
+        changed = false;
+        return true;
+    }
+    return false;
+}
+
 std::unordered_set<ccoip_uuid_t> ccoip::CCoIPMasterState::getCurrentlyAcceptedPeers() {
     // get current accepted peers
     std::unordered_set<ccoip_uuid_t> current_accepted_peers{};
@@ -1166,7 +1175,9 @@ std::vector<uint64_t> ccoip::CCoIPMasterState::getOngoingCollectiveComsOpTags(co
     return tags;
 }
 
-void ccoip::CCoIPMasterState::performTopologyOptimization(const bool moonshot) {
+bool ccoip::CCoIPMasterState::performTopologyOptimization(const bool moonshot,
+                                                          std::vector<ccoip_uuid_t> &new_topology,
+                                                          bool &is_optimal, bool &has_improved) {
     if (moonshot) {
         auto topology = getRingTopology();
         bool topology_has_improved = false;
@@ -1175,14 +1186,11 @@ void ccoip::CCoIPMasterState::performTopologyOptimization(const bool moonshot) {
             if (!TopologyOptimizer::ImproveTopologyMoonshot(bandwidth_store, topology, topology_is_optimal,
                                                             topology_has_improved)) {
                 LOG(WARN) << "Failed to optimize topology";
+                return false;
             }
-
-            // set the new ring topology
-            if (topology_has_improved) {
-                std::unique_lock lock{ring_topology_mutex};
-                ring_topology = topology;
-                this->topology_is_optimal = topology_is_optimal;
-            }
+            new_topology = topology;
+            is_optimal = topology_is_optimal;
+            has_improved = topology_has_improved;
         }
     } else {
         auto topology = getRingTopology();
@@ -1191,16 +1199,35 @@ void ccoip::CCoIPMasterState::performTopologyOptimization(const bool moonshot) {
             bool topology_is_optimal = false;
             if (!TopologyOptimizer::OptimizeTopology(bandwidth_store, topology, topology_is_optimal)) {
                 LOG(WARN) << "Failed to optimize topology";
-            }
-
-            // set the new ring topology
-            {
-                std::unique_lock lock{ring_topology_mutex};
-                ring_topology = topology;
-                this->topology_is_optimal = topology_is_optimal;
+                return false;
             }
         }
+        new_topology = topology;
+        is_optimal = topology_is_optimal;
+        has_improved = false;
     }
+    return true;
+}
+
+bool ccoip::CCoIPMasterState::updateTopology(const std::vector<ccoip_uuid_t> &new_topology, const bool is_optimal) {
+    if (topology_is_optimal) {
+        if (new_topology.size() != ring_topology.size()) {
+            topology_is_optimal = false;
+        }
+    }
+    if (topology_is_optimal) {
+        LOG(WARN) << "Update topology called when topology is already optimal!";
+        return false;
+    }
+    this->ring_topology = new_topology;
+    this->topology_is_optimal = is_optimal;
+
+    // mark topology changed
+    for (auto &[_, changed]: topology_changed) {
+        changed = true;
+    }
+
+    return true;
 }
 
 bool ccoip::CCoIPMasterState::isTopologyOptimal() const {
@@ -1243,13 +1270,14 @@ std::vector<ccoip_uuid_t> ccoip::CCoIPMasterState::buildBasicRingTopology() {
 }
 
 std::vector<ccoip_uuid_t> ccoip::CCoIPMasterState::getRingTopology() {
-    std::vector<ccoip_uuid_t> copy{}; {
-        std::unique_lock lock{ring_topology_mutex};
-        if (ring_topology.size() != client_info.size()) {
-            ring_topology = buildBasicRingTopology();
-            topology_is_optimal = false;
+    if (ring_topology.size() != client_info.size()) {
+        ring_topology = buildBasicRingTopology();
+        topology_is_optimal = false;
+
+        // mark topology changed
+        for (auto &[_, changed]: topology_changed) {
+            changed = true;
         }
-        copy = ring_topology;
     }
-    return copy;
+    return ring_topology;
 }

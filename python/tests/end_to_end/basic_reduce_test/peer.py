@@ -34,6 +34,8 @@ def main():
     n_performed_steps = 0
     while n_performed_steps < STEPS:
         if n_performed_steps > 0 or world_size == 1:
+            if world_size > 1:
+                communicator.optimize_topology()
             logging.info(f"(RANK={RANK}, it={n_performed_steps}) update_topology()")
             communicator.update_topology()
         world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
@@ -41,8 +43,6 @@ def main():
         if world_size < 2:
             sleep(1)
             continue
-
-        communicator.optimize_topology()
 
         logging.info(f"(RANK={RANK}, it={n_performed_steps}) sync_shared_state()")
         communicator.sync_shared_state(shared_state)

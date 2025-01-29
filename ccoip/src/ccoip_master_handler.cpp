@@ -378,15 +378,33 @@ bool ccoip::CCoIPMasterHandler::checkTopologyOptimizationCompletionConsensus() {
 
         if (success) {
             if (server_state.hasPeerListChanged(CALLSITE_TOPOLOGY_OPTIMIZATION_COMPLETE)) {
-                server_state.performTopologyOptimization(false);
+                std::vector<ccoip_uuid_t> new_topology{};
+                bool is_optimal = false;
+                bool has_improved = false;
+                if (!server_state.performTopologyOptimization(false, new_topology, is_optimal, has_improved)) {
+                    LOG(WARN) << "Failed to perform topology optimization!";
+                    return false;
+                }
+                if (has_improved) {
+                    if (!server_state.updateTopology(new_topology, is_optimal)) [[unlikely]] {
+                        LOG(BUG) <<
+                                "Failed to update topology. This means we tried to update a topology when it was already optimal. This is a bug!";
+                        return false;
+                    }
+                }
             } else if (!server_state.isTopologyOptimal()) {
                 // check if moon shot optimization is already running
                 if (!topology_optimization_moonshot_thread_running) {
 
                     // wait for the previous moon shot optimization to complete if one is running
-                    if (topology_optimization_moonshot_thread.has_value() && topology_optimization_moonshot_thread->
-                        joinable()) {
+                    if (topology_optimization_moonshot_thread.has_value() &&
+                        topology_optimization_moonshot_thread->joinable()) {
                         topology_optimization_moonshot_thread->join();
+                    }
+
+                    if (!server_state.updateTopology(next_ring_topology, next_ring_is_optimal)) {
+                        LOG(WARN) << "Failed to update topology with moon shot optimization result!";
+                        return false;
                     }
 
                     // start another moonshot optimization if the topology is still not optimal
@@ -395,10 +413,18 @@ bool ccoip::CCoIPMasterHandler::checkTopologyOptimizationCompletionConsensus() {
                         topology_optimization_moonshot_thread = std::thread([this] {
                             LOG(INFO) << "Starting moon shot topology optimization...";
 
-                            // this will concurrently modify the topology in a thread-safe manner
-                            server_state.performTopologyOptimization(true);
+                            std::vector<ccoip_uuid_t> new_topology{};
+                            bool is_optimal = false;
+                            bool has_improved = false;
+                            if (!server_state.
+                                performTopologyOptimization(true, new_topology, is_optimal, has_improved)) {
+                                LOG(WARN) << "Failed to perform moon shot topology optimization!";
+                                return;
+                            }
 
                             LOG(INFO) << "Moon shot topology optimization complete.";
+                            next_ring_is_optimal = is_optimal;
+                            next_ring_topology = new_topology;
                             topology_optimization_moonshot_thread_running = false;
                         });
                     }
@@ -1185,7 +1211,8 @@ ccoip::CCoIPMasterHandler::~CCoIPMasterHandler() = default;
 #define CALLSITE_P2P_CONNECTION_INFORMATION __COUNTER__
 
 void ccoip::CCoIPMasterHandler::sendP2PConnectionInformation() {
-    const bool unchanged = !server_state.hasPeerListChanged(CALLSITE_P2P_CONNECTION_INFORMATION);
+    const bool changed = server_state.hasPeerListChanged(CALLSITE_P2P_CONNECTION_INFORMATION) ||
+                         server_state.hasTopologyChanged(CALLSITE_P2P_CONNECTION_INFORMATION);
 
     // send establish new peers packets to all clients
     for (auto &[peer_uuid, peer_address]: server_state.getClientEntrySet()) {
@@ -1200,20 +1227,22 @@ void ccoip::CCoIPMasterHandler::sendP2PConnectionInformation() {
         }
 
         // for all connected clients
-        M2CPacketNewPeers new_peers{};
-        new_peers.unchanged = unchanged;
+        M2CPacketP2PConnectionInfo new_peers{};
+        new_peers.unchanged = !changed;
 
-        auto peers = server_state.getPeersForClient(peer_address); // get the peers for the client
-        new_peers.new_peers.reserve(peers.size());
-        for (const auto &client_info: peers) {
-            // construct a new peers packet
-            new_peers.new_peers.push_back({
-                    .p2p_listen_addr = ccoip_socket_address_t{
-                            .inet = client_info.socket_address.inet,
-                            .port = client_info.variable_ports.p2p_listen_port
-                    },
-                    .peer_uuid = client_info.client_uuid
-            });
+        if (changed) {
+            auto peers = server_state.getPeersForClient(peer_address); // get the peers for the client
+            new_peers.all_peers.reserve(peers.size());
+            for (const auto &client_info: peers) {
+                // construct a new peers packet
+                new_peers.all_peers.push_back({
+                        .p2p_listen_addr = ccoip_socket_address_t{
+                                .inet = client_info.socket_address.inet,
+                                .port = client_info.variable_ports.p2p_listen_port
+                        },
+                        .peer_uuid = client_info.client_uuid
+                });
+            }
         }
 
         if (!server_socket.sendPacket(peer_address, new_peers)) {

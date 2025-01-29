@@ -113,7 +113,7 @@ bool ccoip::CCoIPClientHandler::connect() {
                     }
                 } else {
                     // if the benchmark is not complete, tell the incoming client to go away
-                    LOG(INFO) << "Rejecting incoming benchmark connection from " << ccoip_sockaddr_to_str(
+                    LOG(DEBUG) << "Rejecting incoming benchmark connection from " << ccoip_sockaddr_to_str(
                             client_address) << " because a benchmark is already running. Telling it to retry later...";
                     B2CPacketBenchmarkServerIsBusy packet{};
                     packet.is_busy = true;
@@ -544,20 +544,20 @@ bool ccoip::CCoIPClientHandler::isInterrupted() const {
 ccoip::CCoIPClientHandler::~CCoIPClientHandler() = default;
 
 bool ccoip::CCoIPClientHandler::establishP2PConnections() {
-    // wait for new peers packet
-    const auto new_peers = master_socket.receivePacket<M2CPacketNewPeers>();
-    if (!new_peers) {
+    // wait for connection info packet
+    const auto connection_info_packet = master_socket.receivePacket<M2CPacketP2PConnectionInfo>();
+    if (!connection_info_packet) {
         LOG(ERR) << "Failed to receive new peers packet";
         return false;
     }
     LOG(DEBUG) << "Received M2CPacketNewPeers from master";
 
     bool all_peers_connected = true;
-    if (!new_peers->unchanged) {
+    if (!connection_info_packet->unchanged) {
         LOG(DEBUG) << "New peers list has changed";
 
         // establish p2p connections
-        for (auto &peer: new_peers->new_peers) {
+        for (auto &peer: connection_info_packet->all_peers) {
             // check if connection already exists
             if (p2p_connections_tx.contains(peer.peer_uuid)) {
                 LOG(DEBUG) << "P2P connection with peer " << uuid_to_string(peer.peer_uuid) << " already exists";
@@ -571,10 +571,10 @@ bool ccoip::CCoIPClientHandler::establishP2PConnections() {
         }
         // close p2p connections that are no longer needed
         for (auto it = p2p_connections_tx.begin(); it != p2p_connections_tx.end();) {
-            if (std::ranges::find_if(new_peers->new_peers,
-                                     [&it](const M2CPacketNewPeerInfo &peer) {
+            if (std::ranges::find_if(connection_info_packet->all_peers,
+                                     [&it](const PeerInfo &peer) {
                                          return peer.peer_uuid == it->first;
-                                     }) == new_peers->new_peers.end()) {
+                                     }) == connection_info_packet->all_peers.end()) {
                 LOG(DEBUG) << "Closing p2p connection with peer " << uuid_to_string(it->first);
                 if (!closeP2PConnection(it->first, *it->second)) {
                     LOG(WARN) << "Failed to close p2p connection with peer " << uuid_to_string(it->first);
@@ -613,7 +613,7 @@ bool ccoip::CCoIPClientHandler::establishP2PConnections() {
     return all_peers_connected;
 }
 
-bool ccoip::CCoIPClientHandler::establishP2PConnection(const M2CPacketNewPeerInfo &peer) {
+bool ccoip::CCoIPClientHandler::establishP2PConnection(const PeerInfo &peer) {
     LOG(DEBUG) << "Establishing P2P connection with peer " << uuid_to_string(peer.peer_uuid);
     auto [it, inserted] = p2p_connections_tx.emplace(peer.peer_uuid,
                                                      std::make_unique<tinysockets::BlockingIOSocket>(

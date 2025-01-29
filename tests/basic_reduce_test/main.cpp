@@ -61,9 +61,11 @@ int main() {
     size_t i = 0;
     while (true) {
         if (i > 0 || world_size == 1) {
+            if (world_size > 1) {
+                PCCL_CHECK(pcclOptimizeTopology(communicator));
+            }
             PCCL_CHECK(pcclUpdateTopology(communicator));
         }
-        PCCL_CHECK(pcclOptimizeTopology(communicator));
         pcclGetAttribute(communicator, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size);
 
         if (world_size < 2) {

@@ -4,6 +4,7 @@
 #include <ccoip_master_state.hpp>
 #include <ccoip_packets.hpp>
 #include <tinysockets.hpp>
+#include <vector>
 #include <thread>
 
 namespace ccoip {
@@ -26,6 +27,15 @@ namespace ccoip {
 
         /// Flag to indicate if the topology optimization moonshot thread is running.
         std::atomic_bool topology_optimization_moonshot_thread_running = false;
+
+        /// Temporary exchange variable used by the moonshot topology optimization thread to deposit the new topology.
+        /// Will be used to update the real topology in the master state afterward.
+        std::vector<ccoip_uuid_t> next_ring_topology{};
+
+        /// Temporary exchange variable used by the moonshot topology optimization thread to deposit the new topology.
+        /// Will be used to update the real topology in the master state afterward.
+        /// Indicates whether @code next_ring_topology@endcode is optimal.
+        bool next_ring_is_optimal = false;
 
     public:
         volatile bool running = false;

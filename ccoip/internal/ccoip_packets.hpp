@@ -42,7 +42,7 @@ namespace ccoip {
 
     // M2C packets:
 #define M2C_PACKET_SESSION_REGISTRATION_RESPONSE_ID 1
-#define M2C_PACKET_NEW_PEERS_ID 2
+#define M2C_PACKET_P2P_CONNECTION_INFO_ID 2
 #define M2C_PACKET_P2P_CONNECTIONS_ESTABLISHED_ID 3
 #define M2C_PACKET_GET_TOPOLOGY_RESPONSE_ID 4
 #define M2C_PACKET_OPTIMIZE_TOPOLOGY_RESPONSE_ID 5
@@ -215,19 +215,19 @@ namespace ccoip {
         [[nodiscard]] bool deserialize(PacketReadBuffer &buffer) override;
     };
 
-    // M2CPacketNewPeers
-    struct M2CPacketNewPeerInfo {
+    // M2CPacketP2PConnectionInfo
+    struct PeerInfo {
         ccoip_socket_address_t p2p_listen_addr;
         ccoip_uuid_t peer_uuid;
     };
 
-    class M2CPacketNewPeers final : public Packet {
+    class M2CPacketP2PConnectionInfo final : public Packet {
     public:
         static packetId_t packet_id;
 
         bool unchanged = false;
 
-        std::vector<M2CPacketNewPeerInfo> new_peers;
+        std::vector<PeerInfo> all_peers;
 
         void serialize(PacketWriteBuffer &buffer) const override;
 

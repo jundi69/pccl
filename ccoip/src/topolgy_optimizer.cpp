@@ -134,7 +134,7 @@ bool ccoip::TopologyOptimizer::ImproveTopologyMoonshot(const BandwidthStore &ban
             .seed = 42,
             .num_iterations = 128,
             .tabu_tenure = 4,
-            .num_restarts = 26,
+            .num_restarts = 16,
             .time_limit_ms = 30000,
             .initial_heuristic = TSP_INIT_RANDOM_STRATEGY,
             .ant_colony_num_samples = 2048,
@@ -154,16 +154,16 @@ bool ccoip::TopologyOptimizer::ImproveTopologyMoonshot(const BandwidthStore &ban
     TspSolutionDescriptor output_descriptor{};
     if (tspAsymmetricImproveSolution(&input_graph, &initial_solution, &solver_options, &output_descriptor) !=
         TSP_STATUS_SUCCESS) {
-        LOG(BUG) << "Failed to run ATSP solver for topology optimization! This should never happen.";
+        LOG(BUG) << "Failed to run ATSP solver to improve topology! This should never happen.";
         return false;
     }
 
-    LOG(INFO) << "Optimized topology with cost: " << output_descriptor.solution_cost << "; Solution is " << (
+    LOG(INFO) << "Improve topology yielded solution cost: " << output_descriptor.solution_cost << "; Solution is " << (
         output_descriptor.solution_type == TSP_SOLUTION_TYPE_OPTIMAL
             ? "OPTIMAL"
-            : output_descriptor.solution_type == TSP_SOLUTION_TYPE_APPROXIMATE
-            ? "APPROXIMATE"
-            : "TSP_SOLUTION_TYPE_???");
+            : output_descriptor.solution_type == TSP_SOLUTION_TYPE_IMPROVED
+            ? "IMPROVED"
+            : "NO_IMPROVEMENT");
 
     // populate the new ring topology
     ring_topology.clear();

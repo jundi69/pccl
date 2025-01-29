@@ -88,7 +88,7 @@ namespace ccoip {
     private:
         [[nodiscard]] bool establishP2PConnections();
 
-        [[nodiscard]] bool establishP2PConnection(const M2CPacketNewPeerInfo &peer);
+        [[nodiscard]] bool establishP2PConnection(const PeerInfo &peer);
 
         [[nodiscard]] bool closeP2PConnection(const ccoip_uuid_t &uuid, tinysockets::BlockingIOSocket &socket);
 

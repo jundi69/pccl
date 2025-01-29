@@ -193,12 +193,11 @@ pcclResult_t pcclOptimizeTopology(const pcclComm_t *communicator) {
     PCCL_VALIDATE(communicator->ccoip_client != nullptr, pcclInvalidUsage);
 
     // optimize the topology
-    if (!communicator->ccoip_client->optimizeTopology()) {
-        return pcclInvalidUsage;
-    }
-
-    // update the topology
-    if (!communicator->ccoip_client->updateTopology()) [[unlikely]] {
+    if (communicator->ccoip_client->getWorldSize() > 1) {
+        if (!communicator->ccoip_client->optimizeTopology()) {
+            return pcclInvalidUsage;
+        }
+    } else {
         return pcclInvalidUsage;
     }
 
@@ -409,4 +408,3 @@ pcclResult_t pcclDestroyMaster(pcclMasterInstance_t *master_instance) {
     delete master_instance;
     return pcclSuccess;
 }
-
