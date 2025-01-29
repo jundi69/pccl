@@ -229,13 +229,13 @@ bool tinysockets::BlockingIOSocket::sendLtvPacket(const ccoip::packetId_t packet
 void tinysockets::BlockingIOSocket::maximizeSendBuffer() const {
     // request insanely large send and receive buffer sizes and let the kernel clamp them
     constexpr int desired_size = 64 * 1024 * 1024; // 64 MB
-    setsockopt(socket_fd, SOL_SOCKET, SO_SNDBUF, &desired_size, sizeof(desired_size));
+    setsockoptvp(socket_fd, SOL_SOCKET, SO_SNDBUF, &desired_size, sizeof(desired_size));
 }
 
 void tinysockets::BlockingIOSocket::maximizeReceiveBuffer() const {
     // request insanely large send and receive buffer sizes and let the kernel clamp them
     constexpr int desired_size = 64 * 1024 * 1024; // 64 MB
-    setsockopt(socket_fd, SOL_SOCKET, SO_RCVBUF, &desired_size, sizeof(desired_size));
+    setsockoptvp(socket_fd, SOL_SOCKET, SO_RCVBUF, &desired_size, sizeof(desired_size));
 }
 
 std::optional<size_t> tinysockets::BlockingIOSocket::receivePacketLength(const bool no_wait) const {
