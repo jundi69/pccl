@@ -48,16 +48,17 @@ bool ccoip::TopologyOptimizer::OptimizeTopology(const BandwidthStore &bandwidth_
             .num_edges = edges.size()
     };
     constexpr TspSolverOptionsDescriptor solver_options{
-            .initial_heuristic = TSP_INIT_RANDOM_STRATEGY,
-            .ant_colony_num_samples = 2048,
-            .num_restarts = 4,
-            .num_iterations = 100,
-            .exact_upper_bound = 16,
-            .tabu_tenure = 5,
-            .time_limit_ms = 1000,
             .attempt_exact = true,
+            .exact_upper_bound = 16,
+            .seed = 42,
+            .num_iterations = 100,
+            .tabu_tenure = 5,
+            .num_restarts = 4,
+            .time_limit_ms = 1000,
+            .initial_heuristic = TSP_INIT_RANDOM_STRATEGY,
             .enable_3opt = true,
-            .enable_4opt = false
+            .enable_4opt = false,
+            .ant_colony_num_samples = 2048,
     };
     TspSolutionDescriptor output_descriptor{};
     if (tspAsymmetricSolve(&input_graph, &solver_options, &output_descriptor) != TSP_STATUS_SUCCESS) {
