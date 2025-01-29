@@ -378,7 +378,31 @@ bool ccoip::CCoIPMasterHandler::checkTopologyOptimizationCompletionConsensus() {
 
         if (success) {
             if (server_state.hasPeerListChanged(CALLSITE_TOPOLOGY_OPTIMIZATION_COMPLETE)) {
-                server_state.performTopologyOptimization();
+                server_state.performTopologyOptimization(false);
+            } else if (!server_state.isTopologyOptimal()) {
+                // check if moon shot optimization is already running
+                if (!topology_optimization_moonshot_thread_running) {
+
+                    // wait for the previous moon shot optimization to complete if one is running
+                    if (topology_optimization_moonshot_thread.has_value() && topology_optimization_moonshot_thread->
+                        joinable()) {
+                        topology_optimization_moonshot_thread->join();
+                    }
+
+                    // start another moonshot optimization if the topology is still not optimal
+                    if (!server_state.isTopologyOptimal()) {
+                        topology_optimization_moonshot_thread_running = true;
+                        topology_optimization_moonshot_thread = std::thread([this] {
+                            LOG(INFO) << "Starting moon shot topology optimization...";
+
+                            // this will concurrently modify the topology in a thread-safe manner
+                            server_state.performTopologyOptimization(true);
+
+                            LOG(INFO) << "Moon shot topology optimization complete.";
+                            topology_optimization_moonshot_thread_running = false;
+                        });
+                    }
+                }
             }
         }
 

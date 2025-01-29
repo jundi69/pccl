@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <optional>
+#include <mutex>
 
 namespace ccoip {
     enum ConnectionPhase {
@@ -296,8 +297,17 @@ namespace ccoip {
 
         // TODO: THIS IS SUBJECT TO CHANGE:
 
+        /// Mutex for the ring topology. This is used to ensure that the ring topology is not modified while it is being optimized.
+        /// The ring topology must only every be accessed in a copy-on-read manner via @code getRingTopology()@endcode.
+        std::mutex ring_topology_mutex{};
+
         /// the current ring topology in the order of the ring
         std::vector<ccoip_uuid_t> ring_topology{};
+
+        /// whether the current topology is optimal as determined by the topology optimizer.
+        /// If we reach optimal topology, we stop continuous optimization.
+        bool topology_is_optimal = false;
+
     public:
         /// Registers a client
         [[nodiscard]] auto registerClient(const ccoip_socket_address_t &client_address,
@@ -556,8 +566,12 @@ namespace ccoip {
         /// Returns the set of ongoing collective communications operation tags for a particular peer group
         [[nodiscard]] std::vector<uint64_t> getOngoingCollectiveComsOpTags(uint32_t peer_group);
 
-        /// Performs topology optimization on the current topology
-        void performTopologyOptimization();
+        /// Performs topology optimization on the current topology. This function is thread-safe and may be called concurrently.
+        /// @param moonshot if true, the topology will be optimized with a moonshot approach, which will take longer but may yield better results.
+        void performTopologyOptimization(bool moonshot);
+
+        /// Returns true if the current topology is optimal
+        [[nodiscard]] bool isTopologyOptimal() const;
 
         // TODO: THIS IS SUBJECT TO CHANGE, AS IT ASSERTS THAT THE TOPOLOGY IS A RING ALWAYS
 

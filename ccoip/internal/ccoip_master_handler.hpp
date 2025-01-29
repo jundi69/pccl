@@ -4,6 +4,7 @@
 #include <ccoip_master_state.hpp>
 #include <ccoip_packets.hpp>
 #include <tinysockets.hpp>
+#include <thread>
 
 namespace ccoip {
     class CCoIPMasterHandler {
@@ -18,6 +19,13 @@ namespace ccoip {
         /// Encapsulates the state of the master node
         /// All administrative state and transactions are encapsulated in this object
         CCoIPMasterState server_state;
+
+        /// Topology optimization moonshot thread.
+        /// This thread is launched to asynchronously optimize the topology as well as possible.
+        std::optional<std::thread> topology_optimization_moonshot_thread = std::nullopt;
+
+        /// Flag to indicate if the topology optimization moonshot thread is running.
+        std::atomic_bool topology_optimization_moonshot_thread_running = false;
 
     public:
         volatile bool running = false;

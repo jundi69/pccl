@@ -106,9 +106,11 @@ bool ccoip::CCoIPClientHandler::connect() {
             // if there is an ongoing benchmark
             if (benchmark_thread_opt.has_value()) {
                 // and said benchmark is complete
-                if (benchmark_complete_promise.load()) {
+                if (benchmark_complete_state) {
                     // join the thread
-                    benchmark_thread_opt->join();
+                    if (benchmark_thread_opt->joinable()) {
+                        benchmark_thread_opt->join();
+                    }
                 } else {
                     // if the benchmark is not complete, tell the incoming client to go away
                     LOG(INFO) << "Rejecting incoming benchmark connection from " << ccoip_sockaddr_to_str(
@@ -120,7 +122,8 @@ bool ccoip::CCoIPClientHandler::connect() {
                                 client_address);
                     }
                     if (!socket->closeConnection()) {
-                        LOG(WARN) << "Failed to close connection to " << ccoip_sockaddr_to_str(client_address) << " after rejecting benchmark connection with busy signal";
+                        LOG(WARN) << "Failed to close connection to " << ccoip_sockaddr_to_str(client_address) <<
+                                " after rejecting benchmark connection with busy signal";
                     }
                     return;
                 }
@@ -134,14 +137,14 @@ bool ccoip::CCoIPClientHandler::connect() {
                         client_address);
             }
 
-            benchmark_complete_promise.store(false);
+            benchmark_complete_state.store(false);
             std::thread benchmark_thread([client_address, socket_fd, this] {
                 NetworkBenchmarkHandler handler{};
                 if (!handler.runBlocking(socket_fd)) {
                     // we have an accept backlog of 1, so this is fine and intended.
                     LOG(WARN) << "Failed to run network benchmark with " << ccoip_sockaddr_to_str(client_address);
                 }
-                benchmark_complete_promise.store(true);
+                benchmark_complete_state.store(true);
             });
 
             benchmark_thread_opt = std::move(benchmark_thread);

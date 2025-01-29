@@ -46,7 +46,7 @@ namespace ccoip {
         std::optional<std::thread> benchmark_thread_opt = std::nullopt;
 
         /// Atomic bool to be set when the benchmark is complete by the benchmark thread
-        std::atomic_bool benchmark_complete_promise{};
+        std::atomic_bool benchmark_complete_state{};
 
     public:
         explicit CCoIPClientHandler(const ccoip_socket_address_t &address, uint32_t peer_group);

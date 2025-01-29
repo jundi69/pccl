@@ -1166,12 +1166,45 @@ std::vector<uint64_t> ccoip::CCoIPMasterState::getOngoingCollectiveComsOpTags(co
     return tags;
 }
 
-void ccoip::CCoIPMasterState::performTopologyOptimization() {
-    auto topology = getRingTopology();
-    if (!TopologyOptimizer::OptimizeTopology(bandwidth_store, topology)) {
-        LOG(WARN) << "Failed to optimize topology";
+void ccoip::CCoIPMasterState::performTopologyOptimization(const bool moonshot) {
+    if (moonshot) {
+        auto topology = getRingTopology();
+        bool topology_has_improved = false;
+        if (!topology_is_optimal) {
+            bool topology_is_optimal = false;
+            if (!TopologyOptimizer::ImproveTopologyMoonshot(bandwidth_store, topology, topology_is_optimal,
+                                                            topology_has_improved)) {
+                LOG(WARN) << "Failed to optimize topology";
+            }
+
+            // set the new ring topology
+            if (topology_has_improved) {
+                std::unique_lock lock{ring_topology_mutex};
+                ring_topology = topology;
+                this->topology_is_optimal = topology_is_optimal;
+            }
+        }
+    } else {
+        auto topology = getRingTopology();
+
+        if (!topology_is_optimal) {
+            bool topology_is_optimal = false;
+            if (!TopologyOptimizer::OptimizeTopology(bandwidth_store, topology, topology_is_optimal)) {
+                LOG(WARN) << "Failed to optimize topology";
+            }
+
+            // set the new ring topology
+            {
+                std::unique_lock lock{ring_topology_mutex};
+                ring_topology = topology;
+                this->topology_is_optimal = topology_is_optimal;
+            }
+        }
     }
-    ring_topology = topology;
+}
+
+bool ccoip::CCoIPMasterState::isTopologyOptimal() const {
+    return topology_is_optimal;
 }
 
 std::vector<ccoip_uuid_t> ccoip::CCoIPMasterState::buildBasicRingTopology() {
@@ -1210,8 +1243,13 @@ std::vector<ccoip_uuid_t> ccoip::CCoIPMasterState::buildBasicRingTopology() {
 }
 
 std::vector<ccoip_uuid_t> ccoip::CCoIPMasterState::getRingTopology() {
-    if (ring_topology.size() != client_info.size()) {
-        ring_topology = buildBasicRingTopology();
+    std::vector<ccoip_uuid_t> copy{}; {
+        std::unique_lock lock{ring_topology_mutex};
+        if (ring_topology.size() != client_info.size()) {
+            ring_topology = buildBasicRingTopology();
+            topology_is_optimal = false;
+        }
+        copy = ring_topology;
     }
-    return ring_topology;
+    return copy;
 }
