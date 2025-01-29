@@ -403,6 +403,14 @@ class Communicator:
         """
         PCCLError.check(C.pcclUpdateTopology(self._comm[0]), "pcclUpdateTopology")
 
+    def optimize_topology(self):
+        """
+        Optimize the topology of a communicator.
+        This is recommended after the topology has changed after new peers join or leave.
+        This function will block until the topology optimization is complete.
+        """
+        PCCLError.check(C.pcclOptimizeTopology(self._comm[0]), "pcclOptimizeTopology")
+
     def sync_shared_state(self, shared_state: SharedState) -> SharedStateSyncInfo:
         """
         Synchronizes the shared state between all peers that are currently accepted.
@@ -484,7 +492,7 @@ class Communicator:
         sendbuff: ffi.CData = ffi.cast('void*', send.ctypes.data)
         recvbuff: ffi.CData = ffi.cast('void*', recv.ctypes.data)
         num_elements: int = recv.size
-        
+
         dtype: DataType = DataType.from_numpy_dtype(send.dtype)
 
         if operand_descriptor is None:

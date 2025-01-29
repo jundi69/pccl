@@ -528,6 +528,9 @@ bool ccoip::CCoIPClientHandler::join() {
     shared_state_socket.join();
     benchmark_socket.join();
     master_socket.join();
+    if (benchmark_thread_opt.has_value()) {
+        benchmark_thread_opt->join();
+    }
     return true;
 }
 

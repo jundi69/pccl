@@ -42,6 +42,8 @@ def main():
             sleep(1)
             continue
 
+        communicator.optimize_topology()
+
         logging.info(f"(RANK={RANK}, it={n_performed_steps}) sync_shared_state()")
         communicator.sync_shared_state(shared_state)
 
