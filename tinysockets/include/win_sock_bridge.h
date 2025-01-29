@@ -149,7 +149,7 @@ inline ssize_t sendvp_nb(const int socket_fd, const void *buffer, const size_t l
         LOG(ERR) << "Failed to set socket into non-blocking mode";
         return std::nullopt;
     }
-    bytes_sent = sendvp(socket_fd, data.data(), data.size_bytes(), flags);
+    bytes_sent = sendvp(socket_fd, buffer, length, flags);
 
     // set socket back to blocking mode
     mode = 0;
@@ -181,7 +181,7 @@ inline ssize_t sendvp_nb(const int socket_fd, const void *buffer, const size_t l
         return -1;
     }
 #else
-    bytes_sent = sendvp(socket_fd, data.data(), data.size_bytes(), flags | MSG_DONTWAIT);
+    bytes_sent = sendvp(socket_fd, buffer, length, flags | MSG_DONTWAIT);
 #endif
 
     return bytes_sent;
