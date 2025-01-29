@@ -2,6 +2,7 @@
 
 #include <ccoip_packets.hpp>
 #include <pccl_log.hpp>
+#include <topology_optimizer.hpp>
 
 bool ccoip::CCoIPMasterState::registerClient(const ccoip_socket_address_t &client_address,
                                              const CCoIPClientVariablePorts &variable_ports,
@@ -1165,7 +1166,15 @@ std::vector<uint64_t> ccoip::CCoIPMasterState::getOngoingCollectiveComsOpTags(co
     return tags;
 }
 
-std::vector<ccoip_uuid_t> ccoip::CCoIPMasterState::getRingTopology() {
+void ccoip::CCoIPMasterState::performTopologyOptimization() {
+    auto topology = getRingTopology();
+    if (!TopologyOptimizer::OptimizeTopology(bandwidth_store, topology)) {
+        LOG(WARN) << "Failed to optimize topology";
+    }
+    ring_topology = topology;
+}
+
+std::vector<ccoip_uuid_t> ccoip::CCoIPMasterState::buildBasicRingTopology() {
     std::vector<ccoip_uuid_t> topology{};
     for (const auto &[peer_uuid, _]: getClientEntrySet()) {
         const auto peer_info_opt = getClientInfo(peer_uuid);
@@ -1198,4 +1207,11 @@ std::vector<ccoip_uuid_t> ccoip::CCoIPMasterState::getRingTopology() {
         return false;
     });
     return topology;
+}
+
+std::vector<ccoip_uuid_t> ccoip::CCoIPMasterState::getRingTopology() {
+    if (ring_topology.size() != client_info.size()) {
+        ring_topology = buildBasicRingTopology();
+    }
+    return ring_topology;
 }

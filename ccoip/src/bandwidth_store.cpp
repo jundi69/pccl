@@ -17,7 +17,7 @@ bool ccoip::BandwidthStore::storeBandwidth(const ccoip_uuid_t from, const ccoip_
     return true;
 }
 
-std::optional<double> ccoip::BandwidthStore::getBandwidthMbps(const ccoip_uuid_t from, const ccoip_uuid_t to) {
+std::optional<double> ccoip::BandwidthStore::getBandwidthMbps(const ccoip_uuid_t from, const ccoip_uuid_t to) const {
     const auto from_it = bandwidth_map.find(from);
     if (from_it == bandwidth_map.end()) {
         return std::nullopt;
@@ -29,7 +29,7 @@ std::optional<double> ccoip::BandwidthStore::getBandwidthMbps(const ccoip_uuid_t
     return to_it->second;
 }
 
-std::vector<ccoip::bandwidth_entry> ccoip::BandwidthStore::getMissingBandwidthEntries(const ccoip_uuid_t peer) {
+std::vector<ccoip::bandwidth_entry> ccoip::BandwidthStore::getMissingBandwidthEntries(const ccoip_uuid_t peer) const {
     std::vector<bandwidth_entry> missing_entries;
 
     // add all entries A -> B where A is any peer and B is the specified peer
@@ -37,7 +37,7 @@ std::vector<ccoip::bandwidth_entry> ccoip::BandwidthStore::getMissingBandwidthEn
         if (distinct_peer == peer) {
             continue;
         }
-        if (!bandwidth_map[distinct_peer].contains(peer)) {
+        if (!bandwidth_map.contains(distinct_peer) || !bandwidth_map.at(distinct_peer).contains(peer)) {
             missing_entries.push_back({distinct_peer, peer});
         }
     }
@@ -47,24 +47,31 @@ std::vector<ccoip::bandwidth_entry> ccoip::BandwidthStore::getMissingBandwidthEn
         if (distinct_peer == peer) {
             continue;
         }
-        if (!bandwidth_map[peer].contains(distinct_peer)) {
+        if (!bandwidth_map.contains(peer) || !bandwidth_map.at(peer).contains(distinct_peer)) {
             missing_entries.push_back({peer, distinct_peer});
         }
     }
     return missing_entries;
 }
 
-bool ccoip::BandwidthStore::isBandwidthStoreFullyPopulated() {
+bool ccoip::BandwidthStore::isBandwidthStoreFullyPopulated() const {
     if (registered_peers.size() == 1) {
         return true;
     }
 
     bool fully_populated = true;
     for (const auto &peer: registered_peers) {
-        fully_populated &= bandwidth_map[peer].size() == registered_peers.size() - 1;
+        if (!bandwidth_map.contains(peer)) {
+            return false;
+        }
+        fully_populated &= bandwidth_map.at(peer).size() == registered_peers.size() - 1;
     }
     fully_populated &= bandwidth_map.size() == registered_peers.size();
     return fully_populated;
+}
+
+size_t ccoip::BandwidthStore::getNumberOfRegisteredPeers() const {
+    return registered_peers.size();
 }
 
 

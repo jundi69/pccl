@@ -60,19 +60,24 @@ namespace ccoip {
          * @param to to peer
          * @return the bandwidth in mbit/s that the "from" peer can send to the "to" peer. If the bandwidth is not stored, returns std::nullopt.
          */
-        std::optional<double> getBandwidthMbps(ccoip_uuid_t from, ccoip_uuid_t to);
+        [[nodiscard]] std::optional<double> getBandwidthMbps(ccoip_uuid_t from, ccoip_uuid_t to) const;
 
         /**
          * Determines the list of missing bandwidth entries that a particular peer is part of.
          * @param peer the uuid of the peer
          * @return the list of bandwidth entries that are missing for the specified peer. This means all edges to and from the peer to others that are not populated with bandwidth data.
          */
-        std::vector<bandwidth_entry> getMissingBandwidthEntries(ccoip_uuid_t peer);
+        [[nodiscard]] std::vector<bandwidth_entry> getMissingBandwidthEntries(ccoip_uuid_t peer) const;
 
         /**
          * @return true if the bandwidth store is fully populated with all possible entries for all registered peers. false otherwise.
          */
-        bool isBandwidthStoreFullyPopulated();
+        [[nodiscard]] bool isBandwidthStoreFullyPopulated() const;
+
+        /**
+         * @return the number of registered peers in the bandwidth store.
+         */
+        [[nodiscard]] size_t getNumberOfRegisteredPeers() const;
 
         /**
          * Unregisters the given peer and deletes all bandwidth data associated with a peer.

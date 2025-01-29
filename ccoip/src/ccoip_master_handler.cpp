@@ -5,6 +5,7 @@
 #include <ccoip_packets.hpp>
 #include <thread_guard.hpp>
 #include <tinysockets.hpp>
+#include <topology_optimizer.hpp>
 #include <uuid_utils.hpp>
 
 ccoip::CCoIPMasterHandler::CCoIPMasterHandler(const ccoip_socket_address_t &listen_address) :
@@ -357,6 +358,8 @@ bool ccoip::CCoIPMasterHandler::checkTopologyOptimizationConsensus() {
     return true;
 }
 
+#define CALLSITE_TOPOLOGY_OPTIMIZATION_COMPLETE __COUNTER__
+
 bool ccoip::CCoIPMasterHandler::checkTopologyOptimizationCompletionConsensus() {
     // check if at least one client is waiting for topology optimization to complete
     if (server_state.topologyOptimizationCompleteConsensus()) {
@@ -371,6 +374,12 @@ bool ccoip::CCoIPMasterHandler::checkTopologyOptimizationCompletionConsensus() {
         if (!server_state.endTopologyOptimizationPhase(!success)) {
             LOG(BUG) << "Failed to end topology optimization phase. This is a bug!";
             return false;
+        }
+
+        if (success) {
+            if (server_state.hasPeerListChanged(CALLSITE_TOPOLOGY_OPTIMIZATION_COMPLETE)) {
+                server_state.performTopologyOptimization();
+            }
         }
 
         // send topology optimization complete packets to all clients

@@ -294,6 +294,10 @@ namespace ccoip {
         /// Bandwidth store for all clients
         BandwidthStore bandwidth_store{};
 
+        // TODO: THIS IS SUBJECT TO CHANGE:
+
+        /// the current ring topology in the order of the ring
+        std::vector<ccoip_uuid_t> ring_topology{};
     public:
         /// Registers a client
         [[nodiscard]] auto registerClient(const ccoip_socket_address_t &client_address,
@@ -374,7 +378,6 @@ namespace ccoip {
         /// Once all peers have declared that they have established p2p connections,
         /// clients return back to the @code IDLE@endcode state.
         [[nodiscard]] bool markP2PConnectionsEstablished(const ccoip_uuid_t &peer_uuid, bool success);
-
 
         /// Transition to the p2p connections established phase
         /// Triggered after all clients have declared that they have established p2p connections either successfully or not.
@@ -553,13 +556,18 @@ namespace ccoip {
         /// Returns the set of ongoing collective communications operation tags for a particular peer group
         [[nodiscard]] std::vector<uint64_t> getOngoingCollectiveComsOpTags(uint32_t peer_group);
 
+        /// Performs topology optimization on the current topology
+        void performTopologyOptimization();
+
         // TODO: THIS IS SUBJECT TO CHANGE, AS IT ASSERTS THAT THE TOPOLOGY IS A RING ALWAYS
 
         /// Returns the ring topology
         [[nodiscard]] std::vector<ccoip_uuid_t> getRingTopology();
 
-
     private:
         void onPeerAccepted(const ClientInfo &info);
+
+        /// Builds a default non-optimized ring topology
+        [[nodiscard]] std::vector<ccoip_uuid_t> buildBasicRingTopology();
     };
 }

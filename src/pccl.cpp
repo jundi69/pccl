@@ -192,6 +192,7 @@ pcclResult_t pcclOptimizeTopology(const pcclComm_t *communicator) {
     PCCL_VALIDATE(communicator != nullptr, pcclInvalidArgument);
     PCCL_VALIDATE(communicator->ccoip_client != nullptr, pcclInvalidUsage);
 
+    // optimize the topology
     if (!communicator->ccoip_client->optimizeTopology()) {
         return pcclInvalidUsage;
     }

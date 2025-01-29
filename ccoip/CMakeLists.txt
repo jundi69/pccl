@@ -1,5 +1,6 @@
 add_library(ccoip_private STATIC
-        src/ccoip_master.cpp src/ccoip_client_handler.cpp src/ccoip_master_handler.cpp src/bandwidth_store.cpp src/benchmark_runner.cpp
+        src/ccoip_master.cpp src/ccoip_client_handler.cpp src/ccoip_master_handler.cpp
+        src/bandwidth_store.cpp src/benchmark_runner.cpp src/topolgy_optimizer.cpp
         src/ccoip_packets.cpp src/ccoip_packet_buffer.cpp src/ccoip_client.cpp src/uuid_utils.cpp src/crc32.cpp
         src/ccoip_master_state.cpp src/ccoip_client_state.cpp src/reduce_kernels.cpp src/reduce.cpp src/quantize.cpp
         src/quantize_kernels.cpp)
@@ -24,5 +25,6 @@ target_link_libraries(ccoip_private PUBLIC ccoip_public)
 target_include_directories(ccoip_private PRIVATE internal)
 
 target_link_libraries(ccoip_private PRIVATE pccl_log)
+target_link_libraries(ccoip_private PRIVATE tsp)
 
 add_subdirectory(tests)
