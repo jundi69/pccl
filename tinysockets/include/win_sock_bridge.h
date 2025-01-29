@@ -147,7 +147,7 @@ inline ssize_t sendvp_nb(const int socket_fd, const void *buffer, const size_t l
     u_long mode = 1;
     if (ioctlsocket(socket_fd, FIONBIO, &mode) != NO_ERROR) {
         LOG(ERR) << "Failed to set socket into non-blocking mode";
-        return std::nullopt;
+        return -1;
     }
     bytes_sent = sendvp(socket_fd, buffer, length, flags);
 
@@ -155,7 +155,7 @@ inline ssize_t sendvp_nb(const int socket_fd, const void *buffer, const size_t l
     mode = 0;
     if (ioctlsocket(socket_fd, FIONBIO, &mode) != NO_ERROR) {
         LOG(ERR) << "Failed to set socket back to blocking mode";
-        return std::nullopt;
+        return -1;
     }
 #elif __APPLE__
     // MacOS does not support MSG_DONTWAIT, so we have to use ioctl to set the socket to non-blocking mode
