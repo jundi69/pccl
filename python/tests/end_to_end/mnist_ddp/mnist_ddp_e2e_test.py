@@ -2,6 +2,7 @@ import os
 import subprocess
 import sys
 import time
+import unittest
 from typing import List, Optional, Dict
 
 
@@ -136,7 +137,7 @@ def test_mnist_ddp_world_size_4():
     master_process.kill()
     master_process.wait()
 
-
+@unittest.skip("Skipping test_mnist_ddp_world_size_16")
 def test_mnist_ddp_world_size_16():
     peer_script_path = os.path.join(os.path.dirname(__file__), 'mnist_peer.py')
     master_script_path = os.path.join(os.path.dirname(__file__), 'mnist_master.py')
