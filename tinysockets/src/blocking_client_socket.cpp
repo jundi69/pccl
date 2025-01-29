@@ -107,7 +107,7 @@ bool tinysockets::BlockingIOSocket::closeConnection() {
     timeval tv{};
     tv.tv_sec = 1;
     tv.tv_usec = 0;
-    setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    setsockoptvp(socket_fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 
     // do the half-close then drain trick
     shutdown(socket_fd, SHUT_WR);
