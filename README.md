@@ -1,10 +1,11 @@
 # Prime Collective Communications Library (PCCL)
 
-The Prime Collective Communications Library (PCCL) implements efficient and fault tolerant collective communications
+The Prime Collective Communications Library (PCCL) implements efficient and fault-tolerant collective communications
 operations such as reductions over IP and provides shared state synchronization mechanisms to keep peers in sync and
-allow for the dynamic joining and leaving of peers at any point during training.
-PCCL implements a novel TCP based network protocol "Collective Communications over IP" (CCoIP). A specification for this
-protocol will be released upon stabilization of the feature set.
+allow for the dynamic joining and leaving of peers at any point during training along with automatic bandwidth-aware
+topology optimization.
+PCCL implements a novel TCP based network protocol "Collective Communications over IP" (CCoIP).
+
 
 ## Prerequisites
 
