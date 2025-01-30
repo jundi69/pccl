@@ -85,7 +85,7 @@ namespace {
         const auto &rx_socket = peer_rx_sockets.at(rx_peer);
 
         // 1) Send our local de-quant metadata to next peer
-        {
+        if (quantized_type != data_type) {
             ccoip::P2PPacketDequantizationMeta packet{};
             packet.tag = tag;
             packet.dequantization_meta = (meta_data_self
@@ -100,7 +100,8 @@ namespace {
         }
 
         // 2) Receive their metadata from the previous peer
-        DeQuantizationMetaData received_meta_data{}; {
+        DeQuantizationMetaData received_meta_data{};
+        if (quantized_type != data_type) {
             const auto packet = rx_socket->receivePacket<ccoip::P2PPacketDequantizationMeta>();
             if (!packet) {
                 LOG(WARN) << "Failed to receive de-quantization meta data!";
@@ -189,7 +190,6 @@ namespace {
         }
     }
 
-
     /**
      * \brief Perform the "allgather" stage of the ring for one step (send chunk / receive chunk / copy in).
      *
@@ -212,6 +212,7 @@ namespace {
             const std::vector<ccoip_uuid_t> &ring_order,
 
             const std::optional<ccoip::internal::quantize::DeQuantizationMetaData> &meta_data_self,
+            ccoip::internal::quantize::DeQuantizationMetaData &received_meta_data_out,
 
             const std::unordered_map<ccoip_uuid_t,
                                      std::unique_ptr<tinysockets::BlockingIOSocket>> &peer_tx_sockets,
@@ -234,7 +235,7 @@ namespace {
         const auto &rx_socket = peer_rx_sockets.at(rx_peer);
 
         // 1) Exchange metadata for consistency
-        {
+        if (quantized_type != data_type) {
             ccoip::P2PPacketDequantizationMeta packet{};
             packet.tag = tag;
             packet.dequantization_meta = (meta_data_self
@@ -248,7 +249,8 @@ namespace {
             client_state.trackCollectiveComsTxBytes(tag, ltv_header + packet.serializedSize());
         }
 
-        DeQuantizationMetaData received_meta_data{}; {
+        DeQuantizationMetaData received_meta_data{};
+        if (quantized_type != data_type) {
             const auto packet = rx_socket->receivePacket<ccoip::P2PPacketDequantizationMeta>();
             if (!packet) {
                 LOG(WARN) << "Failed to receive de-quant meta in allgather!";
@@ -258,6 +260,7 @@ namespace {
             constexpr size_t ltv_header = sizeof(uint64_t) + sizeof(ccoip::packetId_t);
             client_state.trackCollectiveComsRxBytes(tag, ltv_header + packet->serializedSize());
         }
+        received_meta_data_out = received_meta_data;
 
         // 2) Full-duplex send/recv
         size_t bytes_sent = 0;
@@ -330,7 +333,6 @@ namespace {
             }
         }
     }
-
 } // end anonymous namespace
 
 
@@ -461,6 +463,23 @@ void ccoip::reduce::pipelineRingReduce(
     // Each rank pipeline-broadcasts the chunk it owns; eventually,
     // all ranks have all chunks in dst_buf.
     //----------------------------------------------------------------------
+
+    // NOTE: we only quantize the chunk we "own". Subsequent chunks we get to own are received quantized and forwarded as such.
+    // This is to prevent double-quantization of the same data, which would lead to loss of precision.
+    // We don't want to guarantee q = Q(x); Q(D(q)) = q for Q(x) being the quantization function and D(q) being the de-quantization function.
+    std::unique_ptr<std::byte[]> owned_data_ptr = nullptr;
+    std::span<std::byte> owned_data_span{};
+    DeQuantizationMetaData prev_meta_data{};
+
+    // compute the maximum chunk size across all ranks
+    size_t max_chunk_size_el = 0;
+    for (const auto [start_el, end_el]: boundaries) {
+        const auto chunk_size_el = (end_el > start_el) ? (end_el - start_el) : 0;
+        if (chunk_size_el > max_chunk_size_el) {
+            max_chunk_size_el = chunk_size_el;
+        }
+    }
+
     // Start with the chunk we "own" = (rank+1) mod world_size
     size_t current_chunk_idx = (rank + 1) % world_size;
     for (int step = 0; step < static_cast<int>(world_size) - 1; ++step) {
@@ -468,8 +487,10 @@ void ccoip::reduce::pipelineRingReduce(
         const auto [tx_start_el, tx_end_el] = boundaries[current_chunk_idx];
         const size_t tx_size_el = (tx_end_el > tx_start_el ? tx_end_el - tx_start_el : 0);
 
-        std::span<const std::byte> tx_span =
+        std::span<std::byte> orig_tx_span =
                 dst_buf.subspan(tx_start_el * data_type_el_size, tx_size_el * data_type_el_size);
+
+        std::span<const std::byte> tx_span = orig_tx_span;
 
         // The chunk we will receive is:
         // inc_idx = (current_chunk_idx - 1 + world_size) % world_size
@@ -481,17 +502,33 @@ void ccoip::reduce::pipelineRingReduce(
                 dst_buf.subspan(rx_start_el * data_type_el_size, rx_size_el * data_type_el_size);
 
         // Possibly quantize
-        std::unique_ptr<std::byte[]> quantized_data;
         std::optional<DeQuantizationMetaData> meta_data;
+        std::unique_ptr<std::byte[]> quantized_data;
         if (quantized_type != data_type && quantization_algorithm != ccoipQuantizationNone && tx_size_el > 0) {
-            quantized_data = std::make_unique<std::byte[]>(tx_size_el * quant_type_el_size);
-            std::span q_span(quantized_data.get(), tx_size_el * quant_type_el_size);
-            meta_data = performQuantization(q_span,
-                                            tx_span,
-                                            quantization_algorithm,
-                                            quantized_type,
-                                            data_type);
-            tx_span = std::span<const std::byte>(q_span.data(), q_span.size());
+            if (owned_data_ptr == nullptr) {
+                // if this is the first stage, we quantize our own finished chunk.
+                assert(step == 0); // only in stage 0 should this ever happen.
+
+                quantized_data = std::make_unique<std::byte[]>(tx_size_el * quant_type_el_size);
+                std::span q_span(quantized_data.get(), tx_size_el * quant_type_el_size);
+                meta_data = performQuantization(q_span,
+                                                tx_span,
+                                                quantization_algorithm,
+                                                quantized_type,
+                                                data_type);
+                tx_span = std::span<const std::byte>(q_span.data(), q_span.size());
+
+                // If quantization is enabled, this peer technically has a "higher precision accumulator" than what
+                // other peers have, and it would propagate into the final result array.
+                // And again, we need to actively destroy information for the sake of parity with other
+                // peers. What the other peer would have de-quantized, is what we need to set out data to as well.
+                performReduction(orig_tx_span, tx_span, data_type, quantized_type,
+                                 quantization_algorithm, ccoipOpSet, *meta_data);
+            } else {
+                // forward the quantized data we received in the previous step
+                tx_span = std::span<const std::byte>(owned_data_span.data(), tx_size_el * quant_type_el_size);
+                meta_data = prev_meta_data;
+            }
         }
 
         // We'll receive into the front of recv_buffer_span
@@ -504,7 +541,15 @@ void ccoip::reduce::pipelineRingReduce(
                           data_type, quantized_type, quantization_algorithm,
                           rank, world_size, ring_order,
                           meta_data,
+                          prev_meta_data, // out
                           peer_tx_sockets, peer_rx_sockets);
+
+        // we will hold on to the quantized data we just received and forward it verbatim in the next step.
+        if (owned_data_ptr == nullptr) {
+            owned_data_ptr = std::make_unique<std::byte[]>(max_chunk_size_el * quant_type_el_size);
+            owned_data_span = std::span(owned_data_ptr.get(), max_chunk_size_el * quant_type_el_size);
+        }
+        std::memcpy(owned_data_span.data(), recv_sub.data(), owned_data_span.size_bytes());
 
         // The newly received chunk (inc_idx) becomes our "owned" chunk for the next step
         current_chunk_idx = inc_idx;

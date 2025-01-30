@@ -16,12 +16,29 @@ ccoip::internal::quantize::DeQuantizationMetaData ccoip::internal::quantize::per
             return {};
         }
         case ccoipQuantizationMinMax: {
-            // perform uniform quantization
             return performMinMaxQuantization(dst_span, src_span, quantized_type, data_type);
         }
         default: {
             LOG(BUG) << "Unsupported quantization algorithm: " << quantization_algorithm;
             return {};
+        }
+    }
+}
+
+void ccoip::internal::quantize::performQuantizationAndDequantization(const std::span<std::byte> &dst_span,
+        const std::span<const std::byte> &src_span, const ccoip_quantization_algorithm_t quantization_algorithm,
+        const ccoip_data_type_t quantized_type, const ccoip_data_type_t data_type) {
+    switch (quantization_algorithm) {
+        case ccoipQuantizationNone: {
+            LOG(BUG) << "performQuantization should never be called with ccoipQuantizationNone.";
+            return;
+        }
+        case ccoipQuantizationMinMax: {
+            performMinMaxQuantizationAndDequantization(dst_span, src_span, quantized_type, data_type);
+            return;
+        }
+        default: {
+            LOG(BUG) << "Unsupported quantization algorithm: " << quantization_algorithm;
         }
     }
 }

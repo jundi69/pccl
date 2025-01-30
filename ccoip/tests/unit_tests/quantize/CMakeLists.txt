@@ -1,0 +1,3 @@
+# test quantization
+add_sanitized_gtest(quantize_test quantization_test.cpp)
+target_link_libraries(quantize_test PRIVATE ccoip_internal)

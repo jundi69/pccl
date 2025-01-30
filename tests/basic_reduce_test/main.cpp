@@ -11,8 +11,7 @@ void panic(const int exit_code) {
 #define PCCL_CHECK(status) { pcclResult_t status_val = status; if (status_val != pcclSuccess) { std::cerr << "Error: " << status_val << std::endl; panic(1); } }
 
 void fill_uniform(float *data, const size_t count) {
-    std::random_device rd;
-    std::mt19937 gen(rd());
+    std::mt19937 gen(42);
     std::uniform_real_distribution dis(0.0f, 1.0f);
     for (size_t i = 0; i < count; ++i) {
         data[i] = dis(gen);
@@ -62,7 +61,7 @@ int main() {
     while (true) {
         if (i > 0 || world_size == 1) {
             if (world_size > 1) {
-                PCCL_CHECK(pcclOptimizeTopology(communicator));
+                // PCCL_CHECK(pcclOptimizeTopology(communicator));
             }
             PCCL_CHECK(pcclUpdateTopology(communicator));
         }
@@ -90,13 +89,20 @@ int main() {
                     .op = pcclSum,
                     .tag = 0,
                     .src_descriptor = {.datatype = pcclFloat, .distribution_hint = PCCL_DISTRIBUTION_HINT_NONE},
-                    .quantization_options = {.quantized_datatype = pcclFloat, .algorithm = pcclQuantNone},
-                    // .quantization_options = {.quantized_datatype = pcclUint8, .algorithm = pcclQuantMinMax},
+                    // .quantization_options = {.quantized_datatype = pcclFloat, .algorithm = pcclQuantNone},
+                    .quantization_options = {.quantized_datatype = pcclUint8, .algorithm = pcclQuantMinMax},
             };
             pcclAllReduceAsync(gradients, weights, &desc, communicator, &async_op);
         } while (pcclAwaitAsyncReduce(&async_op, &reduce_info) != pcclSuccess);
         std::cout << "All reduce finished: " << shared_state.revision << "; Rx-Bytes:" << reduce_info.rx_bytes <<
                 "; Tx-Bytes:" << reduce_info.tx_bytes << std::endl;
+
+        // print first 10 elements of the result
+        for (size_t j = 0; j < 10; ++j) {
+            std::cout << weights[j] << " ";
+        }
+        std::cout << std::endl;
+
         shared_state.revision++;
         i++;
     }

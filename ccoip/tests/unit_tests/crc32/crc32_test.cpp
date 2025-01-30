@@ -4,6 +4,7 @@
 #include <array>
 #include <chrono>
 
+
 uint32_t CRC32Ref(const void *data, const size_t size) {
     auto* buf = static_cast<const std::uint8_t*>(data);
     static constexpr std::array<std::uint32_t, 256> crc_lut = {

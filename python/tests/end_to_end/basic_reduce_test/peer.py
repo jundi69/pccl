@@ -2,7 +2,8 @@ from time import sleep
 import os
 import logging
 import torch
-from pccl import SharedState, TensorInfo, Communicator, Attribute, ReduceOp
+from pccl import SharedState, TensorInfo, Communicator, Attribute, ReduceOp, QuantizationOptions, DataType, \
+    QuantizationAlgorithm
 
 HOST: str = '127.0.0.1:48148'
 STEPS: int = 1000
@@ -12,6 +13,7 @@ NUM_ELEMENTS: int = 1024
 RANK: int = int(os.getenv('RANK', "0"))
 
 logging.basicConfig(level=logging.INFO)
+
 
 def main():
     logging.info(f"(RANK={RANK}) Starting peer node connecting to {HOST}")
@@ -45,17 +47,25 @@ def main():
             continue
 
         logging.info(f"(RANK={RANK}, it={n_performed_steps}) sync_shared_state()")
-        communicator.sync_shared_state(shared_state)
+        info = communicator.sync_shared_state(shared_state)
+        assert info is not None
+        if n_performed_steps > 1:
+            assert info.tx_bytes == 0 and info.rx_bytes == 0
 
         # Create gradients tensors
         grad: torch.Tensor = torch.rand(NUM_ELEMENTS, dtype=torch.float32)
         while True:
             logging.info(f"(RANK={RANK}, it={n_performed_steps}) all_reduce_async()")
-            handle = communicator.all_reduce_async(grad, weights, op=ReduceOp.SUM)
+            handle = communicator.all_reduce_async(grad, weights,
+                                                   op=ReduceOp.SUM,
+                                                   quantization_options=QuantizationOptions(DataType.UINT8,
+                                                                                            QuantizationAlgorithm.MIN_MAX))
+
             is_success, status, info = handle.wait()
             assert is_success, f"All reduce failed with stats: {status}"
             assert info is not None
-            logging.info(f"((RANK={RANK}, it={n_performed_steps}) Reduce completed RX: {info.rx_bytes}, TX: {info.tx_bytes}")
+            logging.info(
+                f"((RANK={RANK}, it={n_performed_steps}) Reduce completed RX: {info.rx_bytes}, TX: {info.tx_bytes}")
             break
 
         shared_state.revision += 1

@@ -9,8 +9,6 @@
 #include <network_order_utils.hpp>
 
 namespace ccoip::internal::quantize {
-
-
     /// Contains meta-data needed for de-quantization.
     struct DeQuantizationMetaData {
         /// Defines the data type for how to interpret @code min_value@endcode and @code max_value@endcode.
@@ -22,7 +20,7 @@ namespace ccoip::internal::quantize {
         /// Maximum value summary statistic
         std::vector<uint8_t> max_value;
 
-        template<typename T, typename = std::enable_if_t<std::is_arithmetic_v<T> > >
+        template<typename T, typename = std::enable_if_t<std::is_arithmetic_v<T>>>
         [[nodiscard]]
         static DeQuantizationMetaData Make(T min_value, T max_value) {
             constexpr ccoip_data_type_t data_type = ccoip_data_type_from_type<T>();
@@ -55,4 +53,15 @@ namespace ccoip::internal::quantize {
                                                              ccoip_quantization_algorithm_t quantization_algorithm,
                                                              ccoip_data_type_t quantized_type,
                                                              ccoip_data_type_t data_type);
+
+    // This method is needed because we need a fast way to pretend we quantized and de-quantized.
+    // The reason for this is that to ensure the result is the same for all peers, we need to
+    // pretend the peer that has access to the original un-quantized data also just receives
+    // the same quantized data as other peers. For this reason, we need to quantize and de-quantize locally.
+    // However, we want to just do it fused and fast, hence this method.
+    void performQuantizationAndDequantization(const std::span<std::byte> &dst_span,
+                                              const std::span<const std::byte> &src_span,
+                                              ccoip_quantization_algorithm_t quantization_algorithm,
+                                              ccoip_data_type_t quantized_type,
+                                              ccoip_data_type_t data_type);
 };
