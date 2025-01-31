@@ -1,13 +1,37 @@
 add_library(ccoip_internal STATIC
-        src/ccoip_master.cpp src/ccoip_client_handler.cpp src/ccoip_master_handler.cpp
-        src/bandwidth_store.cpp src/benchmark_runner.cpp src/topolgy_optimizer.cpp
-        src/ccoip_packets.cpp src/ccoip_packet_buffer.cpp src/ccoip_client.cpp src/uuid_utils.cpp src/crc32.cpp
-        src/ccoip_master_state.cpp src/ccoip_client_state.cpp src/reduce_kernels.cpp src/reduce.cpp src/quantize.cpp
-        src/quantize_kernels.cpp)
+        src/cpp/ccoip_master.cpp src/cpp/ccoip_client_handler.cpp src/cpp/ccoip_master_handler.cpp
+        src/cpp/bandwidth_store.cpp src/cpp/benchmark_runner.cpp src/cpp/topolgy_optimizer.cpp
+        src/cpp/ccoip_packets.cpp src/cpp/ccoip_packet_buffer.cpp src/cpp/ccoip_client.cpp src/cpp/uuid_utils.cpp src/cpp/crc32_cpu.cpp
+        src/cpp/ccoip_master_state.cpp src/cpp/ccoip_client_state.cpp src/cpp/reduce_kernels.cpp src/cpp/reduce.cpp src/cpp/quantize.cpp
+        src/cpp/quantize_kernels.cpp
+        src/cpp/simplehash_cuda.cpp)
 
 target_link_libraries(ccoip_internal PRIVATE tinysockets)
 target_link_libraries(ccoip_internal PRIVATE pccl_log)
 target_link_libraries(ccoip_internal PRIVATE tsp)
+
+if (PCCL_BUILD_CUDA_SUPPORT)
+    target_link_libraries(ccoip_internal PUBLIC CUDA::cuda_driver)
+    target_compile_definitions(ccoip_internal PRIVATE PCCL_HAS_CUDA_SUPPORT)
+
+    add_library(simplehash_cuda STATIC src/cuda/simplehash_cuda.cu)
+    set_target_properties(simplehash_cuda PROPERTIES
+            CUDA_SEPARABLE_COMPILATION OFF)
+
+    # WARNING CAUTION WARNING: this line is WAY MORE IMPORTANT THEN YOU THINK:
+    # this sets the CUDA_ARCHITECTURES for the simplehash_cuda.
+    # change this string, and you break hash parity. If targeting a different set of architectures,
+    # the hash kernels will be compiled differently and hashes will look different for the same input.
+    # Only change this string when you know what you are doing. There is a test in CI enforcing the hashes
+    # aren't broken. If you want to add more targets/have to drop support for older architecture, change simplehash_cuda_test.cpp
+    # and make note of this important change in release notes!
+    # WARNING CAUTION WARNING: this line is WAY MORE IMPORTANT THEN YOU THINK:
+    set_target_properties(simplehash_cuda PROPERTIES
+            CUDA_ARCHITECTURES "50;52;53;60;61;62;70;72;75;80;86;87;89;90;90a"
+    )
+    target_link_libraries(simplehash_cuda PUBLIC CUDA::cuda_driver)
+    target_link_libraries(ccoip_internal PRIVATE simplehash_cuda)
+endif ()
 
 # Arch specific compilation options.
 # Excludes older x86-64 CPUs released before 2008 (Intel) or 2011 (AMD) and excludes ARM CPUs before 2013.

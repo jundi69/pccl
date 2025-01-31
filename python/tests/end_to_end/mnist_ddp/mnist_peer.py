@@ -102,7 +102,7 @@ def log_info(msg: str):
     print(msg)
 
 
-HOST: str = '127.0.0.1:48148'
+HOST: str = '127.0.0.1:28148'
 RANK: int = int(os.getenv('RANK', "0"))
 
 

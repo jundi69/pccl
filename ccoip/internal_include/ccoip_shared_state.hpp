@@ -12,11 +12,15 @@ struct ccoip_shared_state_entry_t {
     /// Data type of the shared state entry
     ccoip::ccoip_data_type_t data_type;
 
+    /// Device type of the shared state entry
+    ccoip::ccoip_device_type_t device_type;
+
     /// References memory for the shared state content.
     /// This memory is owned by the user of the library and will be read or written to
     /// during shared state synchronization depending on whether the peer is distributing
     /// or requesting shared state.
-    std::span<std::byte> value;
+    void *data_ptr = nullptr;
+    size_t data_size = 0;
 
     /// Whether to verify the identity of the shared state entry.
     /// If true, shared state can differ between peers for this entry.
@@ -31,7 +35,6 @@ struct ccoip_shared_state_t {
 /// Contains information about a performed shared state synchronization operation
 /// such as the number of bytes received
 struct ccoip_shared_state_sync_info_t {
-
     /// Number of bytes received during shared state synchronization
     /// If this value is > 0, that means this peer's shared state was outdated
     /// and thus needed to be updated.

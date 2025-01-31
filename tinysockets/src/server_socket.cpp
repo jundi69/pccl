@@ -233,7 +233,7 @@ struct write_req_t {
 };
 
 bool tinysockets::ServerSocket::sendRawPacket(const ccoip_socket_address_t &client_address,
-                                              const PacketWriteBuffer &buffer) {
+                                              const std::span<const std::byte> &buffer) {
     if (!running) {
         return false;
     }
@@ -248,8 +248,8 @@ bool tinysockets::ServerSocket::sendRawPacket(const ccoip_socket_address_t &clie
     }
 
     auto *wr = new write_req_t;
-    wr->buf = uv_buf_init(static_cast<char *>(std::malloc(buffer.size())), static_cast<unsigned int>(buffer.size()));
-    memcpy(wr->buf.base, buffer.data(), buffer.size());
+    wr->buf = uv_buf_init(static_cast<char *>(std::malloc(buffer.size_bytes())), static_cast<unsigned int>(buffer.size_bytes()));
+    std::memcpy(wr->buf.base, buffer.data(), buffer.size_bytes());
     wr->req.data = this;
 
     // free memory and delete write_req_t on write completion

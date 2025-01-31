@@ -1,2 +1,3 @@
 add_subdirectory(crc32)
+add_subdirectory(simple_hash)
 add_subdirectory(quantize)

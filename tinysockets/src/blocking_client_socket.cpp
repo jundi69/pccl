@@ -310,16 +310,21 @@ std::optional<size_t> tinysockets::BlockingIOSocket::receivePacketLength(const b
     return net_u64_to_host(length);
 }
 
-bool tinysockets::BlockingIOSocket::receivePacketData(std::span<std::uint8_t> &dst) const {
-    size_t n_received = 0;
+ssize_t tinysockets::BlockingIOSocket::receiveRawData(std::span<std::byte> &dst, const size_t n_bytes) const {
+    // check if dst has enough space for n_bytes
+    if (dst.size_bytes() < n_bytes) {
+        LOG(BUG) << "Insufficient buffer size provided to receiveRawData!";
+        return -1;
+    }
+    ssize_t n_received = 0;
     do {
         const ssize_t i = recvvp(socket_fd, dst.data() + n_received, dst.size_bytes() - n_received, 0);
         if (i == -1) {
             const std::string error_message = std::strerror(errno);
             LOG(INFO) << "Failed to receive packet data with error: " << error_message;
-            return false;
+            return -1;
         }
         n_received += i;
     } while (n_received < dst.size_bytes());
-    return true;
+    return n_received;
 }

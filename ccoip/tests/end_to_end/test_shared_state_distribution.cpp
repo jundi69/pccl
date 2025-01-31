@@ -69,7 +69,9 @@ TEST(SharedStateDistribution, TestBasic) {
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
             .key = "key1",
             .data_type = ccoip::ccoipUint8,
-            .value = std::span(reinterpret_cast<std::byte *>(value1.get()), value_size),
+            .device_type = ccoip::ccoipDeviceCpu,
+            .data_ptr = value1.get(),
+            .data_size = value_size,
             .allow_content_inequality = false
         });
         shared_state.revision = 0;
@@ -97,7 +99,9 @@ TEST(SharedStateDistribution, TestBasic) {
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
             .key = "key1",
             .data_type = ccoip::ccoipUint8,
-            .value = std::span(reinterpret_cast<std::byte *>(value2.get()), value_size),
+            .device_type = ccoip::ccoipDeviceCpu,
+            .data_ptr = value2.get(),
+            .data_size = value_size,
             .allow_content_inequality = false
         });
         shared_state.revision = 0;
@@ -163,7 +167,9 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedState) {
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
             .key = "key1",
             .data_type = ccoip::ccoipUint8,
-            .value = std::span(reinterpret_cast<std::byte *>(value1.get()), value_size),
+            .device_type = ccoip::ccoipDeviceCpu,
+            .data_ptr = value1.get(),
+            .data_size = value_size,
             .allow_content_inequality = false
         });
         shared_state.revision = 0;
@@ -186,7 +192,9 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedState) {
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
             .key = "key1",
             .data_type = ccoip::ccoipUint8,
-            .value = std::span(reinterpret_cast<std::byte *>(value2.get()), value_size),
+            .device_type = ccoip::ccoipDeviceCpu,
+            .data_ptr = value2.get(),
+            .data_size = value_size,
             .allow_content_inequality = false
         });
         shared_state.revision = 0;
@@ -258,13 +266,17 @@ TEST(SharedStateDistribution, TestPartialSyncPartiallyDirtyState) {
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
             .key = "key1",
             .data_type = ccoip::ccoipUint8,
-            .value = std::span(reinterpret_cast<std::byte *>(value1_p1.get()), value_size),
+            .device_type = ccoip::ccoipDeviceCpu,
+            .data_ptr = value1_p1.get(),
+            .data_size = value_size,
             .allow_content_inequality = false
         });
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
             .key = "key2",
             .data_type = ccoip::ccoipUint8,
-            .value = std::span(reinterpret_cast<std::byte *>(value2_p1.get()), value_size),
+            .device_type = ccoip::ccoipDeviceCpu,
+            .data_ptr = value2_p1.get(),
+            .data_size = value_size,
             .allow_content_inequality = false
         });
         shared_state.revision = 0;
@@ -291,13 +303,17 @@ TEST(SharedStateDistribution, TestPartialSyncPartiallyDirtyState) {
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
             .key = "key1",
             .data_type = ccoip::ccoipUint8,
-            .value = std::span(reinterpret_cast<std::byte *>(value1_p2.get()), value_size),
+            .device_type = ccoip::ccoipDeviceCpu,
+            .data_ptr = value1_p2.get(),
+            .data_size = value_size,
             .allow_content_inequality = false
         });
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
             .key = "key2",
             .data_type = ccoip::ccoipUint8,
-            .value = std::span(reinterpret_cast<std::byte *>(value2_p2.get()), value_size),
+            .device_type = ccoip::ccoipDeviceCpu,
+            .data_ptr = value2_p2.get(),
+            .data_size = value_size,
             .allow_content_inequality = false
         });
         shared_state.revision = 0;
@@ -387,7 +403,9 @@ TEST(SharedStateDistribution, TestPopularHashPrevelance) {
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
             .key = "key1",
             .data_type = ccoip::ccoipUint8,
-            .value = std::span(reinterpret_cast<std::byte *>(value1.get()), value_size),
+            .device_type = ccoip::ccoipDeviceCpu,
+            .data_ptr = value1.get(),
+            .data_size = value_size,
             .allow_content_inequality = false
         });
         shared_state.revision = 0;
@@ -403,7 +421,9 @@ TEST(SharedStateDistribution, TestPopularHashPrevelance) {
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
             .key = "key1",
             .data_type = ccoip::ccoipUint8,
-            .value = std::span(reinterpret_cast<std::byte *>(value2.get()), value_size),
+            .device_type = ccoip::ccoipDeviceCpu,
+            .data_ptr = value2.get(),
+            .data_size = value_size,
             .allow_content_inequality = false
         });
         shared_state.revision = 0;
@@ -419,7 +439,9 @@ TEST(SharedStateDistribution, TestPopularHashPrevelance) {
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
             .key = "key1",
             .data_type = ccoip::ccoipUint8,
-            .value = std::span(reinterpret_cast<std::byte *>(value3.get()), value_size),
+            .device_type = ccoip::ccoipDeviceCpu,
+            .data_ptr = value3.get(),
+            .data_size = value_size,
             .allow_content_inequality = false
         });
         shared_state.revision = 0;
@@ -530,7 +552,9 @@ TEST(SharedStateDistribution, TestPopularHashPrevalenceWithMultipleKeys) {
             shared_state.entries.push_back(ccoip_shared_state_entry_t{
                 .key = "key" + std::to_string(i + 1),
                 .data_type = ccoip::ccoipUint8,
-                .value = std::span(reinterpret_cast<std::byte *>(values[i].get()), value_size),
+                .device_type = ccoip::ccoipDeviceCpu,
+                .data_ptr = values[i].get(),
+                .data_size = value_size,
                 .allow_content_inequality = false
             });
         }
@@ -650,7 +674,9 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedStateMultiplePeerGroups) 
             shared_state.entries.push_back(ccoip_shared_state_entry_t{
                 .key = "key1",
                 .data_type = ccoip::ccoipUint8,
-                .value = std::span(reinterpret_cast<std::byte *>(value1.get()), value_size),
+                .device_type = ccoip::ccoipDeviceCpu,
+                .data_ptr = value1.get(),
+                .data_size = value_size,
                 .allow_content_inequality = false
             });
             shared_state.revision = 0;
@@ -672,7 +698,9 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedStateMultiplePeerGroups) 
             shared_state.entries.push_back(ccoip_shared_state_entry_t{
                 .key = "key1",
                 .data_type = ccoip::ccoipUint8,
-                .value = std::span(reinterpret_cast<std::byte *>(value2.get()), value_size),
+                .device_type = ccoip::ccoipDeviceCpu,
+                .data_ptr = value2.get(),
+                .data_size = value_size,
                 .allow_content_inequality = false
             });
             shared_state.revision = 0;
@@ -756,7 +784,9 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedStateMultiplePeerGroupsDi
             shared_state.entries.push_back(ccoip_shared_state_entry_t{
                 .key = peer_group == 1 ? "key1" : "key2",
                 .data_type = ccoip::ccoipUint8,
-                .value = std::span(reinterpret_cast<std::byte *>(value1.get()), value_size),
+                .device_type = ccoip::ccoipDeviceCpu,
+                .data_ptr = value1.get(),
+                .data_size = value_size,
                 .allow_content_inequality = false
             });
             shared_state.revision = 0;
@@ -778,7 +808,9 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedStateMultiplePeerGroupsDi
             shared_state.entries.push_back(ccoip_shared_state_entry_t{
                 .key = peer_group == 1 ? "key1" : "key2",
                 .data_type = ccoip::ccoipUint8,
-                .value = std::span(reinterpret_cast<std::byte *>(value2.get()), value_size),
+                .device_type = ccoip::ccoipDeviceCpu,
+                .data_ptr = value2.get(),
+                .data_size = value_size,
                 .allow_content_inequality = false
             });
             shared_state.revision = 0;
@@ -867,7 +899,9 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedStateMultiplePeerGroupsDi
                     shared_state.entries.push_back(ccoip_shared_state_entry_t{
                         .key = "key1",
                         .data_type = ccoip::ccoipUint8,
-                        .value = std::span(reinterpret_cast<std::byte *>(value1_g1.get()), value_size),
+                        .device_type = ccoip::ccoipDeviceCpu,
+                        .data_ptr = value1_g1.get(),
+                        .data_size = value_size,
                         .allow_content_inequality = false
                     });
                     shared_state.revision = 0;
@@ -886,7 +920,9 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedStateMultiplePeerGroupsDi
                     shared_state.entries.push_back(ccoip_shared_state_entry_t{
                         .key = "key2",
                         .data_type = ccoip::ccoipUint8,
-                        .value = std::span(reinterpret_cast<std::byte *>(value1_g2.get()), value_size),
+                        .device_type = ccoip::ccoipDeviceCpu,
+                        .data_ptr = value1_g2.get(),
+                        .data_size = value_size,
                         .allow_content_inequality = false
                     });
                     shared_state.revision = 0;
@@ -915,7 +951,9 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedStateMultiplePeerGroupsDi
                 shared_state.entries.push_back(ccoip_shared_state_entry_t{
                     .key = "key1",
                     .data_type = ccoip::ccoipUint8,
-                    .value = std::span(reinterpret_cast<std::byte *>(value1_g1.get()), value_size),
+                    .device_type = ccoip::ccoipDeviceCpu,
+                    .data_ptr = value1_g1.get(),
+                    .data_size = value_size,
                     .allow_content_inequality = false
                 });
                 shared_state.revision = 0;
@@ -933,7 +971,9 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedStateMultiplePeerGroupsDi
                 shared_state.entries.push_back(ccoip_shared_state_entry_t{
                     .key = "key2",
                     .data_type = ccoip::ccoipUint8,
-                    .value = std::span(reinterpret_cast<std::byte *>(value1_g2.get()), value_size),
+                    .device_type = ccoip::ccoipDeviceCpu,
+                    .data_ptr = value1_g2.get(),
+                    .data_size = value_size,
                     .allow_content_inequality = false
                 });
                 shared_state.revision = 0;
@@ -1009,7 +1049,9 @@ TEST(SharedStateDistribution, TestMultiStepAdvancement) {
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
             .key = "key1",
             .data_type = ccoip::ccoipUint8,
-            .value = std::span(reinterpret_cast<std::byte *>(value), value_size),
+            .device_type = ccoip::ccoipDeviceCpu,
+            .data_ptr = value,
+            .data_size = value_size,
             .allow_content_inequality = false
         });
         shared_state.revision = 0;
@@ -1099,7 +1141,9 @@ TEST(SharedStateDistribution, TestDragAlongClient) {
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
             .key = "key1",
             .data_type = ccoip::ccoipUint8,
-            .value = std::span(reinterpret_cast<std::byte *>(value1.get()), value_size),
+            .device_type = ccoip::ccoipDeviceCpu,
+            .data_ptr = value1.get(),
+            .data_size = value_size,
             .allow_content_inequality = false
         });
         shared_state.revision = 0;
@@ -1129,7 +1173,9 @@ TEST(SharedStateDistribution, TestDragAlongClient) {
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
             .key = "key1",
             .data_type = ccoip::ccoipUint8,
-            .value = std::span(reinterpret_cast<std::byte *>(value2.get()), value_size),
+            .device_type = ccoip::ccoipDeviceCpu,
+            .data_ptr = value2.get(),
+            .data_size = value_size,
             .allow_content_inequality = false
         });
         shared_state.revision = 0;
@@ -1159,7 +1205,9 @@ TEST(SharedStateDistribution, TestDragAlongClient) {
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
             .key = "key1",
             .data_type = ccoip::ccoipUint8,
-            .value = std::span(reinterpret_cast<std::byte *>(value3.get()), value_size),
+            .device_type = ccoip::ccoipDeviceCpu,
+            .data_ptr = value3.get(),
+            .data_size = value_size,
             .allow_content_inequality = false
         });
         shared_state.revision = 0; // Client 2 does not update revision
@@ -1239,7 +1287,9 @@ TEST(SharedStateDistribution, TestOneIncrementRuleViolationSimple) {
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
             .key = "key1",
             .data_type = ccoip::ccoipUint8,
-            .value = std::span(reinterpret_cast<std::byte *>(value1.get()), value_size),
+            .device_type = ccoip::ccoipDeviceCpu,
+            .data_ptr = value1.get(),
+            .data_size = value_size,
             .allow_content_inequality = false
         });
         shared_state.revision = 0;
@@ -1269,7 +1319,9 @@ TEST(SharedStateDistribution, TestOneIncrementRuleViolationSimple) {
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
             .key = "key1",
             .data_type = ccoip::ccoipUint8,
-            .value = std::span(reinterpret_cast<std::byte *>(value2.get()), value_size),
+            .device_type = ccoip::ccoipDeviceCpu,
+            .data_ptr = value2.get(),
+            .data_size = value_size,
             .allow_content_inequality = false
         });
         shared_state.revision = 0; // Client 2 does not update revision
@@ -1335,7 +1387,9 @@ TEST(SharedStateDistribution, TestOneIncrementRuleViolationFirstStepRev1) {
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
             .key = "key1",
             .data_type = ccoip::ccoipUint8,
-            .value = std::span(reinterpret_cast<std::byte *>(value1.get()), value_size),
+            .device_type = ccoip::ccoipDeviceCpu,
+            .data_ptr = value1.get(),
+            .data_size = value_size,
             .allow_content_inequality = false
         });
 
@@ -1355,7 +1409,9 @@ TEST(SharedStateDistribution, TestOneIncrementRuleViolationFirstStepRev1) {
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
             .key = "key1",
             .data_type = ccoip::ccoipUint8,
-            .value = std::span(reinterpret_cast<std::byte *>(value2.get()), value_size),
+            .device_type = ccoip::ccoipDeviceCpu,
+            .data_ptr = value2.get(),
+            .data_size = value_size,
             .allow_content_inequality = false
         });
         shared_state.revision = 0; // Client 2 does not update revision
@@ -1427,7 +1483,9 @@ TEST(SharedStateDistribution, TestSharedStateMaskMismatchKick) {
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
             .key = "key1",
             .data_type = ccoip::ccoipUint8,
-            .value = std::span(reinterpret_cast<std::byte *>(value1.get()), value_size),
+            .device_type = ccoip::ccoipDeviceCpu,
+            .data_ptr = value1.get(),
+            .data_size = value_size,
             .allow_content_inequality = false
         });
         shared_state.revision = 0;
@@ -1442,7 +1500,9 @@ TEST(SharedStateDistribution, TestSharedStateMaskMismatchKick) {
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
             .key = "key1",
             .data_type = ccoip::ccoipUint8,
-            .value = std::span(reinterpret_cast<std::byte *>(value2.get()), value_size),
+            .device_type = ccoip::ccoipDeviceCpu,
+            .data_ptr = value2.get(),
+            .data_size = value_size,
             .allow_content_inequality = false
         });
         shared_state.revision = 0;
@@ -1457,7 +1517,9 @@ TEST(SharedStateDistribution, TestSharedStateMaskMismatchKick) {
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
             .key = "key3", // Mismatched key
             .data_type = ccoip::ccoipUint8,
-            .value = std::span(reinterpret_cast<std::byte *>(value3.get()), value_size),
+            .device_type = ccoip::ccoipDeviceCpu,
+            .data_ptr = value3.get(),
+            .data_size = value_size,
             .allow_content_inequality = false
         });
         shared_state.revision = 0; // Same revision, but keyset is different
@@ -1528,7 +1590,9 @@ TEST(SharedStateDistribution, TestConcurrentAdvancementWithinPeerGroups) {
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
             .key = key,
             .data_type = ccoip::ccoipUint8,
-            .value = std::span(reinterpret_cast<std::byte *>(value), value_size),
+            .device_type = ccoip::ccoipDeviceCpu,
+            .data_ptr = value,
+            .data_size = value_size,
             .allow_content_inequality = false
         });
         shared_state.revision = 0;
@@ -1669,7 +1733,9 @@ TEST(SharedStateDistribution, TestConcurrentDragAlongAcrossPeerGroups) {
                 shared_state.entries.push_back(ccoip_shared_state_entry_t{
                     .key = "drag_key_" + std::to_string(group),
                     .data_type = ccoip::ccoipUint8,
-                    .value = std::span(reinterpret_cast<std::byte *>(leader_value.get()), value_size),
+                    .device_type = ccoip::ccoipDeviceCpu,
+                    .data_ptr = leader_value.get(),
+                    .data_size = value_size,
                     .allow_content_inequality = false
                 });
                 shared_state.revision = 0;
@@ -1706,7 +1772,9 @@ TEST(SharedStateDistribution, TestConcurrentDragAlongAcrossPeerGroups) {
             shared_state.entries.push_back(ccoip_shared_state_entry_t{
                 .key = "drag_key_" + std::to_string(group),
                 .data_type = ccoip::ccoipUint8,
-                .value = std::span(reinterpret_cast<std::byte *>(follower_value.get()), value_size),
+                .device_type = ccoip::ccoipDeviceCpu,
+                .data_ptr = follower_value.get(),
+                .data_size = value_size,
                 .allow_content_inequality = false
             });
             shared_state.revision = 0; // Does not update its own revision
@@ -1816,7 +1884,9 @@ TEST(SharedStateDistribution, TestConflictOverlappingKeysAcrossPeerGroups) {
             shared_state.entries.push_back(ccoip_shared_state_entry_t{
                 .key = key,
                 .data_type = ccoip::ccoipUint8,
-                .value = std::span(reinterpret_cast<std::byte *>(value1.get()), value_size),
+                .device_type = ccoip::ccoipDeviceCpu,
+                .data_ptr = value1.get(),
+                .data_size = value_size,
                 .allow_content_inequality = false
             });
             shared_state.revision = 0;
@@ -1838,7 +1908,9 @@ TEST(SharedStateDistribution, TestConflictOverlappingKeysAcrossPeerGroups) {
             shared_state.entries.push_back(ccoip_shared_state_entry_t{
                 .key = key,
                 .data_type = ccoip::ccoipUint8,
-                .value = std::span(reinterpret_cast<std::byte *>(value2.get()), value_size),
+                .device_type = ccoip::ccoipDeviceCpu,
+                .data_ptr = value2.get(),
+                .data_size = value_size,
                 .allow_content_inequality = false
             });
             shared_state.revision = 0;
@@ -1937,7 +2009,9 @@ TEST(SharedStateDistribution, TestChangingPeerGroupMembershipBetweenSynchronizat
             shared_state.entries.push_back(ccoip_shared_state_entry_t{
                 .key = "key",
                 .data_type = ccoip::ccoipUint8,
-                .value = std::span(reinterpret_cast<std::byte *>(value1.get()), value_size),
+                .device_type = ccoip::ccoipDeviceCpu,
+                .data_ptr = value1.get(),
+                .data_size = value_size,
                 .allow_content_inequality = false
             });
             shared_state.revision = step;
@@ -1986,7 +2060,9 @@ TEST(SharedStateDistribution, TestChangingPeerGroupMembershipBetweenSynchronizat
             shared_state.entries.push_back(ccoip_shared_state_entry_t{
                 .key = "key",
                 .data_type = ccoip::ccoipUint8,
-                .value = std::span(reinterpret_cast<std::byte *>(value2.get()), value_size),
+                .device_type = ccoip::ccoipDeviceCpu,
+                .data_ptr = value2.get(),
+                .data_size = value_size,
                 .allow_content_inequality = false
             });
             shared_state.revision = step;
@@ -2022,7 +2098,9 @@ TEST(SharedStateDistribution, TestChangingPeerGroupMembershipBetweenSynchronizat
             shared_state.entries.push_back(ccoip_shared_state_entry_t{
                 .key = "key",
                 .data_type = ccoip::ccoipUint8,
-                .value = std::span(reinterpret_cast<std::byte *>(value2.get()), value_size),
+                .device_type = ccoip::ccoipDeviceCpu,
+                .data_ptr = value2.get(),
+                .data_size = value_size,
                 .allow_content_inequality = false
             });
             shared_state.revision = step;

@@ -16,13 +16,13 @@ inline ccoip_socket_address_t create_ipv4_address(const uint8_t a, const uint8_t
 }
 
 TEST(TestServerSocket, test_bind_valid) {
-    const ccoip_socket_address_t listen_address = create_ipv4_address(0, 0, 0, 0, 48148);
+    const ccoip_socket_address_t listen_address = create_ipv4_address(0, 0, 0, 0, 28148);
     tinysockets::ServerSocket server_socket(listen_address);
     EXPECT_TRUE(server_socket.listen());
 }
 
 TEST(TestServerSocket, test_bind_loopback) {
-    const ccoip_socket_address_t listen_address = create_ipv4_address(127, 0, 0, 1, 48148);
+    const ccoip_socket_address_t listen_address = create_ipv4_address(127, 0, 0, 1, 28148);
     tinysockets::ServerSocket server_socket(listen_address);
     EXPECT_TRUE(server_socket.listen());
 }
@@ -41,7 +41,7 @@ TEST(TestServerSocket, test_bind_valid_ipv6) {
                 .data = {},
             },
         },
-        .port = 48148,
+        .port = 28148,
     };
     tinysockets::ServerSocket server_socket(listen_address);
     EXPECT_TRUE(server_socket.listen());
@@ -63,7 +63,7 @@ TEST(TestServerSocket, test_bind_invalid_ipv6) {
 
 // Test binding an already bound socket
 TEST(TestServerSocket, test_bind_already_bound) {
-    const auto listen_address = create_ipv4_address(0, 0, 0, 0, 48149);
+    const auto listen_address = create_ipv4_address(0, 0, 0, 0, 28149);
     tinysockets::ServerSocket server_socket1(listen_address);
     EXPECT_TRUE(server_socket1.listen());
 
@@ -73,14 +73,14 @@ TEST(TestServerSocket, test_bind_already_bound) {
 
 // Test listening on a bound socket
 TEST(TestServerSocket, test_listen_after_bind) {
-    const auto listen_address = create_ipv4_address(0, 0, 0, 0, 48150);
+    const auto listen_address = create_ipv4_address(0, 0, 0, 0, 28150);
     tinysockets::ServerSocket server_socket(listen_address);
     EXPECT_TRUE(server_socket.listen());
 }
 
 // Test running the server asynchronously
 TEST(TestServerSocket, test_run_async) {
-    const auto listen_address = create_ipv4_address(0, 0, 0, 0, 48152);
+    const auto listen_address = create_ipv4_address(0, 0, 0, 0, 28152);
     tinysockets::ServerSocket server_socket(listen_address);
     EXPECT_TRUE(server_socket.listen());
     EXPECT_TRUE(server_socket.runAsync());
@@ -94,7 +94,7 @@ TEST(TestServerSocket, test_run_async) {
 
 // Test running async when already running
 TEST(TestServerSocket, test_run_async_already_running) {
-    const auto listen_address = create_ipv4_address(0, 0, 0, 0, 48153);
+    const auto listen_address = create_ipv4_address(0, 0, 0, 0, 28153);
     tinysockets::ServerSocket server_socket(listen_address);
     EXPECT_TRUE(server_socket.listen());
     EXPECT_TRUE(server_socket.runAsync());
@@ -106,7 +106,7 @@ TEST(TestServerSocket, test_run_async_already_running) {
 
 // Test interrupting and joining the server
 TEST(TestServerSocket, test_interrupt_and_join) {
-    const auto listen_address = create_ipv4_address(0, 0, 0, 0, 48154);
+    const auto listen_address = create_ipv4_address(0, 0, 0, 0, 28154);
     tinysockets::ServerSocket server_socket(listen_address);
     EXPECT_TRUE(server_socket.listen());
     EXPECT_TRUE(server_socket.runAsync());
@@ -135,7 +135,7 @@ struct DummyPacket final : ccoip::Packet {
 
 // Test handling client connections and callbacks
 TEST(TestServerSocket, test_client_connection_and_callbacks) {
-    const auto listen_address = create_ipv4_address(127, 0, 0, 1, 48155);
+    const auto listen_address = create_ipv4_address(127, 0, 0, 1, 28155);
     tinysockets::ServerSocket server_socket(listen_address);
 
     // Variables to verify callbacks
@@ -206,7 +206,7 @@ TEST(TestServerSocket, test_client_connection_and_callbacks) {
 
 // Test closing a client connection
 TEST(TestServerSocket, test_close_client_connection) {
-    const auto listen_address = create_ipv4_address(127, 0, 0, 1, 48156);
+    const auto listen_address = create_ipv4_address(127, 0, 0, 1, 28156);
     tinysockets::ServerSocket server_socket(listen_address);
 
     // add a read callback to the server
@@ -260,7 +260,7 @@ TEST(TestServerSocket, test_close_client_connection) {
 
 // Test binding the same socket twice
 TEST(TestServerSocket, test_bind_twice) {
-    const auto listen_address = create_ipv4_address(0, 0, 0, 0, 48158);
+    const auto listen_address = create_ipv4_address(0, 0, 0, 0, 28158);
     tinysockets::ServerSocket server_socket(listen_address);
     EXPECT_TRUE(server_socket.listen());
     EXPECT_FALSE(server_socket.listen()); // Second bind should fail
@@ -268,7 +268,7 @@ TEST(TestServerSocket, test_bind_twice) {
 
 // Test listening twice
 TEST(TestServerSocket, test_listen_twice) {
-    const auto listen_address = create_ipv4_address(0, 0, 0, 0, 48159);
+    const auto listen_address = create_ipv4_address(0, 0, 0, 0, 28159);
     tinysockets::ServerSocket server_socket(listen_address);
     EXPECT_TRUE(server_socket.listen());
     EXPECT_FALSE(server_socket.listen()); // Second listen should fail
@@ -276,7 +276,7 @@ TEST(TestServerSocket, test_listen_twice) {
 
 // Test run async after server interrupted
 TEST(TestServerSocket, test_run_async_after_interrupt) {
-    const auto listen_address = create_ipv4_address(0, 0, 0, 0, 48160);
+    const auto listen_address = create_ipv4_address(0, 0, 0, 0, 28160);
     tinysockets::ServerSocket server_socket(listen_address);
     EXPECT_TRUE(server_socket.listen());
     EXPECT_TRUE(server_socket.runAsync());
@@ -290,7 +290,7 @@ TEST(TestServerSocket, test_run_async_after_interrupt) {
 
 // Test multiple clients connecting simultaneously
 TEST(TestServerSocket, test_multiple_clients) {
-    const auto listen_address = create_ipv4_address(127, 0, 0, 1, 48161);
+    const auto listen_address = create_ipv4_address(127, 0, 0, 1, 28161);
     tinysockets::ServerSocket server_socket(listen_address);
 
     std::atomic packets_received(0);
@@ -332,7 +332,7 @@ TEST(TestServerSocket, test_multiple_clients) {
 
 // Test sending a large packet
 TEST(TestServerSocket, test_large_packet) {
-    const auto listen_address = create_ipv4_address(127, 0, 0, 1, 48162);
+    const auto listen_address = create_ipv4_address(127, 0, 0, 1, 28162);
     tinysockets::ServerSocket server_socket(listen_address);
 
     std::atomic read_callback_called(false);
@@ -370,7 +370,7 @@ TEST(TestServerSocket, test_large_packet) {
 
 // Test closing a non-existent client connection
 TEST(TestServerSocket, test_close_non_existent_client) {
-    const auto listen_address = create_ipv4_address(127, 0, 0, 1, 48163);
+    const auto listen_address = create_ipv4_address(127, 0, 0, 1, 28163);
     tinysockets::ServerSocket server_socket(listen_address);
     EXPECT_TRUE(server_socket.listen());
     EXPECT_TRUE(server_socket.runAsync());
@@ -385,7 +385,7 @@ TEST(TestServerSocket, test_close_non_existent_client) {
 
 // Test adding multiple callbacks
 TEST(TestServerSocket, test_multiple_callbacks) {
-    const auto listen_address = create_ipv4_address(127, 0, 0, 1, 48164);
+    const auto listen_address = create_ipv4_address(127, 0, 0, 1, 28164);
     tinysockets::ServerSocket server_socket(listen_address);
 
     std::atomic read_calls(0);

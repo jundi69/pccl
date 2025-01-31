@@ -34,7 +34,7 @@ struct DummyPacket final : ccoip::Packet {
 
 
 TEST(TestQueuedSocket, test_recv_matching_packet_ignore_others) {
-    const ccoip_socket_address_t listen_address = create_ipv4_address(127, 0, 0, 1, 48148);
+    const ccoip_socket_address_t listen_address = create_ipv4_address(127, 0, 0, 1, 28148);
     tinysockets::ServerSocket server_socket(listen_address);
     EXPECT_TRUE(server_socket.listen());
 
@@ -106,7 +106,7 @@ struct DummyPacketUnique final : ccoip::Packet {
 };
 
 TEST(TestQueuedSocket, test_recv_matching_packet_none_lost__inorder) {
-    const ccoip_socket_address_t listen_address = create_ipv4_address(127, 0, 0, 1, 48148);
+    const ccoip_socket_address_t listen_address = create_ipv4_address(127, 0, 0, 1, 28148);
     tinysockets::ServerSocket server_socket(listen_address);
     EXPECT_TRUE(server_socket.listen());
 
@@ -154,7 +154,7 @@ TEST(TestQueuedSocket, test_recv_matching_packet_none_lost__inorder) {
 
 
 TEST(TestQueuedSocket, test_recv_matching_packet_none_lost__outoforder) {
-    const ccoip_socket_address_t listen_address = create_ipv4_address(127, 0, 0, 1, 48148);
+    const ccoip_socket_address_t listen_address = create_ipv4_address(127, 0, 0, 1, 28148);
     tinysockets::ServerSocket server_socket(listen_address);
     EXPECT_TRUE(server_socket.listen());
 
@@ -202,7 +202,7 @@ TEST(TestQueuedSocket, test_recv_matching_packet_none_lost__outoforder) {
 
 
 TEST(TestQueuedSocket, test_recv_matching_packet_none_lost__multiple_threads) {
-    const ccoip_socket_address_t listen_address = create_ipv4_address(127, 0, 0, 1, 48148);
+    const ccoip_socket_address_t listen_address = create_ipv4_address(127, 0, 0, 1, 28148);
     tinysockets::ServerSocket server_socket(listen_address);
     EXPECT_TRUE(server_socket.listen());
 
@@ -271,7 +271,7 @@ TEST(TestQueuedSocket, test_recv_matching_packet_none_lost__multiple_threads) {
 }
 
 TEST(TestQueuedSocket, test_recv_matching_packet_none_lost__multiple_threads__many_packets) {
-    const ccoip_socket_address_t listen_address = create_ipv4_address(127, 0, 0, 1, 48148);
+    const ccoip_socket_address_t listen_address = create_ipv4_address(127, 0, 0, 1, 28148);
     tinysockets::ServerSocket server_socket(listen_address);
     EXPECT_TRUE(server_socket.listen());
 
@@ -370,7 +370,7 @@ struct AnotherDummyPacket final : ccoip::Packet {
 
 TEST(TestQueuedSocket, test_minimal_interleaved_two_packets) {
     // 1) Server setup
-    const ccoip_socket_address_t listen_address = create_ipv4_address(127, 0, 0, 1, 48148);
+    const ccoip_socket_address_t listen_address = create_ipv4_address(127, 0, 0, 1, 28148);
     tinysockets::ServerSocket server_socket(listen_address);
     EXPECT_TRUE(server_socket.listen());
 
@@ -502,8 +502,8 @@ TEST(TestQueuedSocket, test_minimal_interleaved_two_packets) {
 }
 
 TEST(TestQueuedSocket, test_interleaved_packet_types) {
-    // 1) Set up a server socket on localhost:48148
-    const ccoip_socket_address_t listen_address = create_ipv4_address(127, 0, 0, 1, 48148);
+    // 1) Set up a server socket on localhost:28148
+    const ccoip_socket_address_t listen_address = create_ipv4_address(127, 0, 0, 1, 28148);
     tinysockets::ServerSocket server_socket(listen_address);
     EXPECT_TRUE(server_socket.listen());
 

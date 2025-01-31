@@ -4,16 +4,32 @@ project(pccl)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "(x86)|(X86)|(amd64)|(AMD64)")
+# Detect CPU architecture
+if (CMAKE_SYSTEM_PROCESSOR MATCHES "(x86)|(X86)|(amd64)|(AMD64)")
     set(IS_AMD64 TRUE)
-else()
+else ()
     set(IS_AMD64 FALSE)
-endif()
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "(aarch64)|(arm64)")
+endif ()
+if (CMAKE_SYSTEM_PROCESSOR MATCHES "(aarch64)|(arm64)")
     set(IS_ARM64 TRUE)
-else()
+else ()
     set(IS_ARM64 FALSE)
-endif()
+endif ()
+
+# Handle CUDA build
+option(PCCL_BUILD_CUDA_SUPPORT "Build PCCL with CUDA support" OFF)
+
+if (PCCL_BUILD_CUDA_SUPPORT)
+    find_package(CUDAToolkit REQUIRED)
+
+    set(CMAKE_CUDA_STANDARD 20)
+
+    # target sm_50 as a lower bound. We override this in a target specific way when necessary.
+    set(CMAKE_CUDA_ARCHITECTURES "50")
+
+    # enable cuda language
+    enable_language(CUDA)
+endif ()
 
 # add third party libraries
 add_subdirectory(third_party)
@@ -33,7 +49,12 @@ add_subdirectory(tinysockets)
 add_library(pccl SHARED src/pccl.cpp)
 if (NOT WIN32)
     target_compile_options(pccl PRIVATE -Wall -Wextra -Werror -Wpedantic -Wno-unused-parameter)
-endif()
+endif ()
+
+if (PCCL_BUILD_CUDA_SUPPORT)
+    target_compile_definitions(pccl PRIVATE PCCL_HAS_CUDA_SUPPORT)
+endif ()
+
 target_include_directories(pccl PUBLIC include)
 target_include_directories(pccl PRIVATE internal)
 

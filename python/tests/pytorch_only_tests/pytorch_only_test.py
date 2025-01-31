@@ -14,7 +14,7 @@ assert get_module_by_name("numpy") is None, "numpy module should not be availabl
 import pccl
 from pccl import MasterNode, Communicator
 
-HOST = "127.0.0.1:48148"
+HOST = "127.0.0.1:28148"
 
 
 def test_pytorch_only():

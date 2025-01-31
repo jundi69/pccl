@@ -2,5 +2,6 @@ torch
 torchvision
 transformers
 wandb
+tqdm
 tiktoken
 datasets

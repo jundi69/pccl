@@ -18,6 +18,11 @@ namespace ccoip {
         ccoipDouble = 9,
     };
 
+    enum ccoip_device_type_t {
+        ccoipDeviceCpu = 0,
+        ccoipDeviceCuda = 1,
+    };
+
     enum ccoip_reduce_op_t {
         ccoipOpSet = 0,
         ccoipOpSum = 1,

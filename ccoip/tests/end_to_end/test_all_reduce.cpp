@@ -425,7 +425,7 @@ TEST(AllReduceTest, TestNoSharedStateSyncDuringConcurrentReduce) {
             ccoip_shared_state_t shared_state{
                     .revision = 1,
                     .entries = {
-                            ccoip_shared_state_entry_t{"key1", ccoip::ccoipUint8, shared_value_span, false},
+                            ccoip_shared_state_entry_t{.key = "key1", .data_type = ccoip::ccoipUint8, .device_type = ccoip::ccoipDeviceCpu, .data_ptr = shared_value_span.data(), .data_size = shared_value_span.size_bytes(), .allow_content_inequality=false},
                     }
             };
             ccoip_shared_state_sync_info_t info{};
@@ -453,7 +453,7 @@ TEST(AllReduceTest, TestNoSharedStateSyncDuringConcurrentReduce) {
             ccoip_shared_state_t shared_state{
                     .revision = 1,
                     .entries = {
-                            ccoip_shared_state_entry_t{"key1", ccoip::ccoipUint8, shared_value_span, false},
+                            ccoip_shared_state_entry_t{.key = "key1", .data_type = ccoip::ccoipUint8, .device_type = ccoip::ccoipDeviceCpu, .data_ptr = shared_value_span.data(), .data_size = shared_value_span.size_bytes(), .allow_content_inequality = false},
                     }
             };
             ccoip_shared_state_sync_info_t info{};

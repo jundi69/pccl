@@ -132,8 +132,20 @@ static std::optional<ccoip::ccoip_data_type_t> getCCoIPDataType(const pcclDataTy
             return ccoip::ccoipFloat;
         case pcclDouble:
             return ccoip::ccoipDouble;
+        default:
+            return std::nullopt;
     }
-    return std::nullopt;
+}
+
+static std::optional<ccoip::ccoip_device_type_t> getCCoIPDeviceType(const pcclDeviceType_t device_type) {
+    switch (device_type) {
+        case pcclDeviceCpu:
+            return ccoip::ccoipDeviceCpu;
+        case pcclDeviceCuda:
+            return ccoip::ccoipDeviceCuda;
+        default:
+            return std::nullopt;
+    }
 }
 
 static std::optional<ccoip::ccoip_quantization_algorithm_t>
@@ -159,8 +171,9 @@ static std::optional<ccoip::ccoip_reduce_op_t> getCCoIPReduceOp(const pcclRedOp_
             return ccoip::ccoip_reduce_op_t::ccoipOpMax;
         case pcclMin:
             return ccoip::ccoip_reduce_op_t::ccoipOpMin;
+        default:
+            return std::nullopt;
     }
-    return std::nullopt;
 }
 
 // ReSharper disable once CppParameterMayBeConstPtrOrRef
@@ -245,8 +258,8 @@ pcclResult_t pcclAllReduceAsync(const void *sendbuff, void *recvbuff,
     }
 
     *reduce_handle_out = pcclAsyncReduceOp_t{
-            .comm = const_cast<pcclComm_t *>(communicator),
-            .tag = tag,
+        .comm = const_cast<pcclComm_t *>(communicator),
+        .tag = tag,
     };
     return pcclSuccess;
 }
@@ -335,11 +348,25 @@ pcclResult_t pcclSynchronizeSharedState(const pcclComm_t *communicator, pcclShar
         if (!ccoip_data_type) {
             return pcclInvalidArgument;
         }
+        auto device_type = getCCoIPDeviceType(entry.device_type);
+        if (!device_type) {
+            return pcclInvalidArgument;
+        }
+
+#ifndef PCCL_HAS_CUDA_SUPPORT
+    if (device_type == pcclDeviceCuda) {
+        LOG(WARN) << "PCCL is not built with CUDA support. Please use a cuda-enabled distribution of PCCL to use cuda tensors with PCCL!";
+        return pcclInvalidArgument;
+    }
+#endif
+
         shared_state_internal.entries.push_back(ccoip_shared_state_entry_t{
-                .key = entry.name,
-                .data_type = *ccoip_data_type,
-                .value = std::span(static_cast<std::byte *>(entry.data), entry_bytes),
-                .allow_content_inequality = entry.allow_content_inequality
+            .key = entry.name,
+            .data_type = *ccoip_data_type,
+            .device_type = *device_type,
+            .data_ptr = entry.data,
+            .data_size = entry_bytes,
+            .allow_content_inequality = entry.allow_content_inequality
         });
     }
     ccoip_shared_state_sync_info_t info{};
@@ -352,8 +379,8 @@ pcclResult_t pcclSynchronizeSharedState(const pcclComm_t *communicator, pcclShar
 
     if (sync_info_out != nullptr) {
         *sync_info_out = pcclSharedStateSyncInfo_t{
-                .tx_bytes = info.tx_bytes,
-                .rx_bytes = info.rx_bytes,
+            .tx_bytes = info.tx_bytes,
+            .rx_bytes = info.rx_bytes,
         };
     }
     return pcclSuccess;
@@ -366,7 +393,7 @@ struct pcclMasterInstanceState_t {
 pcclResult_t pcclCreateMaster(ccoip_socket_address_t listen_address, pcclMasterInstance_t **p_master_handle_out) {
     PCCL_VALIDATE(p_master_handle_out != nullptr, pcclInvalidArgument);
     *p_master_handle_out = new pcclMasterInstance_t{
-            .master_handler = std::make_unique<ccoip::CCoIPMaster>(listen_address),
+        .master_handler = std::make_unique<ccoip::CCoIPMaster>(listen_address),
     };
     return pcclSuccess;
 }

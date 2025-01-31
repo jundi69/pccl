@@ -416,23 +416,9 @@ namespace ccoip {
         /// The key of the shared state entry
         std::string key;
 
-        /// References memory from which the shared state entry will be copied.
-        /// The span points to user-controlled memory that the user ensures is valid until the packet is sent.
-        /// This variable should be used when SENDING a @code S2CPacketSharedStateResponse @endcode packet.
-        /// This variable will not be populated while receiving a @code S2CPacketSharedStateResponse @endcode packet.
-        /// @see dst_buffer for receiving shared state entries.
-        std::span<uint8_t> src_buffer;
-
-        /// The buffer that will be populated with the shared state entry data.
-        /// Points to memory that will be allocated during packet decoding. The user is responsible for
-        /// std::move'ing the buffer to prevent it from being deallocated.
-        /// This variable should be used when RECEIVING a @code S2CPacketSharedStateResponse @endcode packet.
-        /// For sending shared state entries, use @code src_buffer @endcode.
-        std::unique_ptr<uint8_t[]> dst_buffer;
-
         /// The size of @code dst_buffer@encode in bytes.
         /// Only used when receiving shared state entries.
-        size_t dst_size;
+        size_t size_bytes;
     };
 
     class S2CPacketSharedStateResponse final : public Packet {

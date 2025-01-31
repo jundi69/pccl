@@ -49,6 +49,11 @@ typedef enum pcclDataType_t {
     pcclDouble = 9
 } pcclDataType_t;
 
+typedef enum pcclDeviceType_t {
+    pcclDeviceCpu = 0,
+    pcclDeviceCuda = 1,
+} pcclDeviceType_t;
+
 typedef enum pcclRedOp_t {
     pcclSum,
     pcclAvg,
@@ -133,6 +138,7 @@ typedef struct pcclTensorInfo_t {
     void *data;
     size_t count;
     pcclDataType_t datatype;
+    pcclDeviceType_t device_type;
     bool allow_content_inequality;
 } pcclTensorInfo_t;
 

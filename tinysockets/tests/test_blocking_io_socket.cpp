@@ -33,7 +33,7 @@ struct DummyPacket final : ccoip::Packet {
 };
 
 TEST(TestBlockingIOSocket, test_basic_send_to_server) {
-    const ccoip_socket_address_t listen_address = create_ipv4_address(127, 0, 0, 1, 48148);
+    const ccoip_socket_address_t listen_address = create_ipv4_address(127, 0, 0, 1, 28148);
     tinysockets::ServerSocket server_socket(listen_address);
     EXPECT_TRUE(server_socket.listen());
 
@@ -70,7 +70,7 @@ TEST(TestBlockingIOSocket, test_basic_send_to_server) {
 }
 
 TEST(TestBlockingIOSocket, test_send_and_receive) {
-    const ccoip_socket_address_t listen_address = create_ipv4_address(127, 0, 0, 1, 48148);
+    const ccoip_socket_address_t listen_address = create_ipv4_address(127, 0, 0, 1, 28148);
     tinysockets::ServerSocket server_socket(listen_address);
     EXPECT_TRUE(server_socket.listen());
 
@@ -102,7 +102,7 @@ TEST(TestBlockingIOSocket, test_send_and_receive) {
 }
 
 TEST(TestBlockingIOSocket, test_send_and_receive_large_packet) {
-    const ccoip_socket_address_t listen_address = create_ipv4_address(127, 0, 0, 1, 48148);
+    const ccoip_socket_address_t listen_address = create_ipv4_address(127, 0, 0, 1, 28148);
     tinysockets::ServerSocket server_socket(listen_address);
     EXPECT_TRUE(server_socket.listen());
 
@@ -134,7 +134,7 @@ TEST(TestBlockingIOSocket, test_send_and_receive_large_packet) {
 }
 
 TEST(TestBlockingIOSocket, test_send_and_receive_multiple_clients) {
-    const ccoip_socket_address_t listen_address = create_ipv4_address(127, 0, 0, 1, 48148);
+    const ccoip_socket_address_t listen_address = create_ipv4_address(127, 0, 0, 1, 28148);
     tinysockets::ServerSocket server_socket(listen_address);
     EXPECT_TRUE(server_socket.listen());
 
@@ -176,7 +176,7 @@ TEST(TestBlockingIOSocket, test_send_and_receive_multiple_clients) {
 }
 
 TEST(TestBlockingIOSocket, test_send_and_receive_large_packets_concurrently) {
-    const ccoip_socket_address_t listen_address = create_ipv4_address(127, 0, 0, 1, 48148);
+    const ccoip_socket_address_t listen_address = create_ipv4_address(127, 0, 0, 1, 28148);
     tinysockets::ServerSocket server_socket(listen_address);
     EXPECT_TRUE(server_socket.listen());
 
@@ -232,7 +232,7 @@ TEST(TestBlockingIOSocket, test_send_and_receive_large_packets_concurrently) {
 }
 
 TEST(TestBlockingIOSocket, test_concurrent_clients_send_large_packets) {
-    const ccoip_socket_address_t listen_address = create_ipv4_address(127, 0, 0, 1, 48148);
+    const ccoip_socket_address_t listen_address = create_ipv4_address(127, 0, 0, 1, 28148);
     tinysockets::ServerSocket server_socket(listen_address);
     EXPECT_TRUE(server_socket.listen());
 

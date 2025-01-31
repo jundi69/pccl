@@ -430,10 +430,9 @@ void ccoip::S2CPacketSharedStateResponse::serialize(PacketWriteBuffer &buffer) c
 
     // write entries
     buffer.write<uint64_t>(entries.size());
-    for (const auto &entry: entries) {
-        buffer.writeString(entry.key);
-        buffer.write<uint64_t>(entry.src_buffer.size_bytes());
-        buffer.writeContents(entry.src_buffer.data(), entry.src_buffer.size_bytes());
+    for (const auto &[key, size_bytes]: entries) {
+        buffer.writeString(key);
+        buffer.write<uint64_t>(size_bytes);
     }
 }
 
@@ -446,16 +445,10 @@ bool ccoip::S2CPacketSharedStateResponse::deserialize(PacketReadBuffer &buffer) 
     entries.reserve(n_entries);
     for (size_t i = 0; i < n_entries; i++) {
         const std::string key = buffer.readString();
-        const auto length = buffer.read<uint64_t>();
-        if (length > buffer.remaining()) {
-            return false;
-        }
-        auto dst_buffer = std::unique_ptr<uint8_t[]>(new uint8_t[length]);
-        buffer.readContents(dst_buffer.get(), length);
+        const auto size_bytes = buffer.read<uint64_t>();
         entries.push_back(SharedStateEntry{
                 .key = key,
-                .dst_buffer = std::move(dst_buffer),
-                .dst_size = length
+                .size_bytes = size_bytes
         });
     }
     return true;

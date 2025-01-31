@@ -46,7 +46,7 @@ int main() {
 
     constexpr size_t count = 1;
     pcclTensorInfo_t infos[count] = {
-            {"weights", weights, n_weights, pcclFloat, false}
+            {"weights", weights, n_weights, pcclFloat, pcclDeviceCpu, false}
     };
     pcclSharedState_t shared_state = {
             .revision = 0,

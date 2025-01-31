@@ -172,6 +172,20 @@ class DataType(Enum):
         return dtype_map[dtype_clazz]
 
 
+class DeviceType(Enum):
+    CPU = C.pcclDeviceCpu
+    CUDA = C.pcclDeviceCuda
+
+    @classmethod
+    def from_torch_device_type(cls, device_type: str):
+        """Converts a PyTorch device type to the corresponding DeviceType."""
+        device_map = {
+            'cpu': cls.CPU,
+            'cuda': cls.CUDA,
+        }
+        return device_map.get(device_type, None)
+
+
 class DistributionHint(Enum):
     """PCCL distribution hints."""
     NONE = C.PCCL_DISTRIBUTION_HINT_NONE
@@ -234,22 +248,25 @@ class ReduceDescriptor:
 
 # Define TensorInfo and SharedState Classes
 class TensorInfo:
-    def __init__(self, name: str, data_ptr: int, *, numel: int, dtype: DataType, allow_content_inequality: bool):
+    def __init__(self, name: str, data_ptr: int, *, numel: int, dtype: DataType, device_type: DeviceType,
+                 allow_content_inequality: bool):
         self.name = name
         self.data_ptr = data_ptr
         self.numel = numel
         self.dtype = dtype
+        self.device_type = device_type
         self.allow_content_inequality = allow_content_inequality
 
     @classmethod
     def from_torch(cls, tensor: 'torch.Tensor', name: str, *, allow_content_inequality: bool = False):
         """Creates a TensorInfo from a PyTorch tensor."""
         assert tensor.is_contiguous(), 'Input tensor must be contiguous'
-        assert tensor.device.type == 'cpu', 'Only CPU tensors are supported'
         numel: int = tensor.numel()
         data_ptr: int = tensor.data_ptr()
         dtype: DataType = DataType.from_torch_dtype(tensor.dtype)
-        return cls(name, data_ptr, numel=numel, dtype=dtype, allow_content_inequality=allow_content_inequality)
+        device_type: DeviceType = DeviceType.from_torch_device_type(tensor.device.type)
+        return cls(name, data_ptr, numel=numel, dtype=dtype, device_type=device_type,
+                   allow_content_inequality=allow_content_inequality)
 
     @classmethod
     def from_numpy(cls, tensor: 'np.ndarray', name: str, *, allow_content_inequality: bool = False):
@@ -277,6 +294,7 @@ class SharedState:
             self._infos[i].data = ffi.cast('void*', info.data_ptr)
             self._infos[i].count = ffi.cast('size_t', info.numel)
             self._infos[i].datatype = ffi.cast('pcclDataType_t', info.dtype.value)
+            self._infos[i].device_type = ffi.cast('pcclDeviceType_t', info.device_type.value)
             self._infos[i].allow_content_inequality = info.allow_content_inequality
         self._state = ffi.new('pcclSharedState_t*', {
             'revision': 0,

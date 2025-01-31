@@ -26,10 +26,13 @@ import math
 import pickle
 import json
 import argparse
+import pccl
 from contextlib import nullcontext
 
 import numpy as np
 import torch
+from pccl import Communicator, Attribute, SharedState, TensorInfo, DataType, ReduceOperandDescriptor, DistributionHint, \
+    QuantizationOptions, ReduceOp
 from torch.nn.parallel import DistributedDataParallel
 from torch.distributed import init_process_group, destroy_process_group
 
@@ -266,9 +269,8 @@ def main():
     model.to(device)
 
     # -------------------------------------------------------------------------
-    # 6) Setup optimizer and scaler
+    # 6) Setup optimizer
     # -------------------------------------------------------------------------
-    scaler = torch.cuda.amp.GradScaler(enabled=(config["dtype"] == 'float16')) if torch.cuda.is_available() else None
     optimizer = model.configure_optimizers(
         config["weight_decay"],
         config["learning_rate"],
@@ -297,6 +299,42 @@ def main():
             config=config
         )
 
+    # Initialize PCCL
+    communicator: Communicator = Communicator(config["ccoip_host"], 0)
+    communicator.connect(n_attempts=15)
+    print("Connected to master.")
+
+    # Build PCCL shared state
+
+    # perform a dummy forward pass to initialize the optimizer state
+    for p in model.parameters():
+        p.grad = torch.zeros_like(p)  # set all gradients to zero
+    optimizer.step()
+
+    shared_state_dict = {}
+
+    # Reference model and optimizer state from shared state struct
+    for name, param in model.named_parameters():
+        shared_state_dict[name] = param
+
+        # Access optimizer state
+        state = optimizer.state[param]
+        exp_avg = state.get('exp_avg')
+        exp_avg_sq = state.get('exp_avg_sq')
+        step_tensor = state.get('step')
+
+        if exp_avg is None or exp_avg_sq is None or step_tensor is None:
+            raise ValueError(f"Optimizer state for parameter '{name}' is not initialized.")
+
+        # Add optimizer state tensors with associated names
+        shared_state_dict[f"{name}_m1"] = exp_avg
+        shared_state_dict[f"{name}_m2"] = exp_avg_sq
+        shared_state_dict[f"{name}_step"] = step_tensor
+
+    entries = [TensorInfo.from_torch(tensor, name, allow_content_inequality=False) for name, tensor in
+               shared_state_dict.items()]
+    shared_state: SharedState = SharedState(entries)
+
     # -------------------------------------------------------------------------
     # 7) Training loop
     # -------------------------------------------------------------------------
@@ -309,11 +347,29 @@ def main():
     x, y = get_batch_fn('train', config, device_type, device)
     t0 = time.time()
 
+    world_size: int = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
+    n_performed_steps = 0
     while True:
+        if n_performed_steps > 0 or world_size == 1:
+            # if world_size > 1:
+            #    communicator.optimize_topology()
+            communicator.update_topology()
+        world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
+
+        if world_size < 2:
+            print("Waiting for more workers to join...")
+            time.sleep(1)
+            continue
+
         # Determine and set learning rate
         lr = get_lr(iter_num, config)
         for param_group in optimizer.param_groups:
             param_group['lr'] = lr
+
+        info = communicator.sync_shared_state(shared_state)
+        assert info is not None
+        if n_performed_steps > 1:
+            assert info.tx_bytes == 0 and info.rx_bytes == 0
 
         # Evaluate and save checkpoint
         if iter_num % config["eval_interval"] == 0 and master_process:
@@ -363,23 +419,46 @@ def main():
             x, y = get_batch_fn('train', config, device_type, device)
 
             # backward pass
-            if scaler is not None:
-                scaler.scale(loss).backward()
-            else:
-                loss.backward()
+            loss.backward()
 
-        # clip gradients if needed
+        # Clip gradients BEFORE all reduce to ensure peer synchronization!
         if config["grad_clip"] != 0.0:
-            if scaler is not None:
-                scaler.unscale_(optimizer)
             torch.nn.utils.clip_grad_norm_(model.parameters(), config["grad_clip"])
 
-        if scaler is not None:
-            scaler.step(optimizer)
-            scaler.update()
-        else:
-            optimizer.step()
+        # All reduce gradients with PCCL
+        while True:
+            grads = torch.cat([p.grad.view(-1) for p in model.parameters() if p.grad is not None]).to(device='cpu')
+            op_desc = ReduceOperandDescriptor(
+                datatype=DataType.FLOAT,
+                distribution_hint=DistributionHint.NORMAL
+            )
+            quant_desc = QuantizationOptions(
+                quantized_datatype=DataType.FLOAT,
+                algorithm=pccl.QuantizationAlgorithm.NONE
+            )
+            start = time.time()
+            handle = communicator.all_reduce_async(grads, grads, operand_descriptor=op_desc,
+                                                   quantization_options=quant_desc, op=ReduceOp.SUM)
+            is_success, status, info = handle.wait()
+            end = time.time()
+            if not is_success:
+                continue  # retry, this can happen e.g. if peers leave
+            assert info is not None
+            total_bytes = info.tx_bytes + info.rx_bytes
+            print(
+                f"step {iter_num}: all reduce completed in {end - start:.2f}s, bandwidth {total_bytes / (end - start) / 1e6:.2f} MB/s")
+            break
 
+        # scatter gradients back to model parameters
+        offset = 0
+        for p in model.parameters():
+            if p.grad is None:
+                continue
+            numel = p.numel()
+            p.grad.data.copy_(grads[offset:offset + numel].view_as(p.grad))
+            offset += numel
+
+        optimizer.step()
         optimizer.zero_grad(set_to_none=True)
 
         # Logging / timing

@@ -11,6 +11,7 @@ jobs:
     runs-on: ${{ matrix.runs-on }}
     env:
       IS_CI: 1
+      IS_CPU_CI: 1
       LSAN_OPTIONS: suppressions=${{ github.workspace }}/.github/workflows/lsan.supp
       PCCL_LOG_LEVEL: DEBUG  # Global log level set to DEBUG
 

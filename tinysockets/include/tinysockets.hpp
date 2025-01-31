@@ -139,8 +139,13 @@ namespace tinysockets {
             complete_packet.write<uint64_t>(buffer.size() + sizeof(ccoip::packetId_t));
             complete_packet.write(packet_id);
             complete_packet.writeContents(buffer.data(), buffer.size());
-            return sendRawPacket(client_address, complete_packet);
+            return sendRawPacket(client_address,
+                                 std::span(reinterpret_cast<const std::byte *>(complete_packet.data()),
+                                           complete_packet.size()));
         }
+
+        [[nodiscard]] bool sendRawPacket(const ccoip_socket_address_t &client_address,
+                                         const std::span<const std::byte> &buffer);
 
     private:
         void onAsyncSignal() const;
@@ -154,9 +159,6 @@ namespace tinysockets {
         [[nodiscard]] std::optional<ccoip_socket_address_t> getUvStreamAddressCached(uv_stream_s *stream) const;
 
         void performLoopShutdown() const;
-
-        [[nodiscard]] bool sendRawPacket(const ccoip_socket_address_t &client_address,
-                                         const PacketWriteBuffer &buffer);
     };
 
     class BlockingIOSocket final {
@@ -217,11 +219,12 @@ namespace tinysockets {
         /// Attempts to grow the receive-buffer to the maximum size
         void maximizeReceiveBuffer() const;
 
+        /// Receives n bytes from the socket and writes them into dst
+        [[nodiscard]] ssize_t receiveRawData(std::span<std::byte> &dst, size_t n_bytes) const;
+
     private:
         // Packet decoding / encoding functions
         [[nodiscard]] std::optional<size_t> receivePacketLength(bool no_wait) const;
-
-        [[nodiscard]] bool receivePacketData(std::span<std::uint8_t> &dst) const;
 
         template<typename T> requires std::is_base_of_v<ccoip::Packet, T>
         [[nodiscard]] std::optional<T> receiveLtvPacket(const ccoip::packetId_t packet_id, const bool no_wait) {
@@ -230,14 +233,14 @@ namespace tinysockets {
                 return std::nullopt;
             }
             const size_t length = *length_opt;
-            const std::unique_ptr<uint8_t[]> data_ptr{new uint8_t[length]};
+            const std::unique_ptr<std::byte[]> data_ptr{new std::byte[length]};
             std::span data{data_ptr.get(), length};
-            if (!receivePacketData(data)) {
+            if (receiveRawData(data, data.size_bytes()) != data.size_bytes()) {
                 LOG(ERR) << "Failed to receive packet data for packet ID " << packet_id << " with length " << data.
                         size();
                 return std::nullopt;
             }
-            PacketReadBuffer buffer{data.data(), data.size()};
+            PacketReadBuffer buffer{reinterpret_cast<uint8_t *>(data.data()), data.size()};
             if (const auto actual_packet_id = buffer.read<ccoip::packetId_t>(); actual_packet_id != packet_id) {
                 LOG(ERR) << "Expected packet ID " << packet_id << " but received " << actual_packet_id;
                 return std::nullopt;
@@ -325,11 +328,11 @@ namespace tinysockets {
 
         [[nodiscard]] bool receivePacketData(std::span<std::uint8_t> &dst) const;
 
-        [[nodiscard]] std::optional<std::pair<std::unique_ptr<uint8_t[]>, std::span<uint8_t>>> pollNextPacketBuffer(
+        [[nodiscard]] std::optional<std::pair<std::unique_ptr<uint8_t[]>, std::span<uint8_t> > > pollNextPacketBuffer(
             ccoip::packetId_t packet_id,
             bool no_wait) const;
 
-        [[nodiscard]] std::optional<std::pair<std::unique_ptr<uint8_t[]>, std::span<uint8_t>>>
+        [[nodiscard]] std::optional<std::pair<std::unique_ptr<uint8_t[]>, std::span<uint8_t> > >
         pollNextMatchingPacketBuffer(
             ccoip::packetId_t packet_id, const std::function<bool(const std::span<uint8_t> &)> &predicate,
             bool no_wait) const;
