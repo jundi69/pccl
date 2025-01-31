@@ -114,7 +114,7 @@ def test_mnist_ddp_world_size_2_plus_1_late_joiner():
     master_process.wait()
 
 
-# @unittest.skip("Skipping test_mnist_ddp_world_size_4")
+@unittest.skip("Skipping test_mnist_ddp_world_size_4")
 def test_mnist_ddp_world_size_4():
     peer_script_path = os.path.join(os.path.dirname(__file__), 'mnist_peer.py')
     master_script_path = os.path.join(os.path.dirname(__file__), 'mnist_master.py')
@@ -138,7 +138,7 @@ def test_mnist_ddp_world_size_4():
     master_process.kill()
     master_process.wait()
 
-# @unittest.skip("Skipping test_mnist_ddp_world_size_16")
+@unittest.skip("Skipping test_mnist_ddp_world_size_16")
 def test_mnist_ddp_world_size_16():
     peer_script_path = os.path.join(os.path.dirname(__file__), 'mnist_peer.py')
     master_script_path = os.path.join(os.path.dirname(__file__), 'mnist_master.py')

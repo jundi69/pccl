@@ -9,4 +9,4 @@ from pccl._pccl import *
 
 __all__ = ["Communicator", "MasterNode", "ReduceOp", "Attribute", "DataType", "DistributionHint",
            "QuantizationAlgorithm", "ReduceOperandDescriptor", "QuantizationOptions", "ReduceDescriptor",
-           "TensorInfo", "SharedState", "SharedStateSyncInfo", "ReduceInfo", "AsyncReduceHandle"]
+           "TensorInfo", "SharedState", "SharedStateSyncInfo", "ReduceInfo", "AsyncReduceHandle", "PCCLError"]
