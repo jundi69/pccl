@@ -774,7 +774,7 @@ end:
 #ifndef PCCL_HAS_CUDA_SUPPORT
                 if (entry.device_type == ccoipDeviceCuda) {
                     LOG(BUG) << "PCCL is not built with CUDA support. We shouldn't even have gotten so far without CUDA support when referencing CUDA tensors. This is a bug!";
-                    return false;
+                    return;
                 }
 #endif
             std::unique_ptr<std::byte[]> host_buffer(new std::byte[entry.data_size]);
