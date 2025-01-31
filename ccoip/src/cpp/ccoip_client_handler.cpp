@@ -784,10 +784,10 @@ end:
                         "Failed to copy cuda device memory to host while serving shared state transmission request! Is shared state referenced memory still valid?";
                 return;
             }
-#endif
             if (!shared_state_socket.sendRawPacket(client_address, std::span(host_buffer.get(), entry.data_size))) {
                 LOG(ERR) << "Failed to send shared state data to client " << ccoip_sockaddr_to_str(client_address);
             }
+#endif
         } else {
             LOG(BUG) << "Unknown device type " << entry.device_type <<
                     " encountered while serving shared state transmission request. This should have been caught earlier and is a bug.";
