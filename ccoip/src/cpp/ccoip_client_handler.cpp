@@ -265,8 +265,9 @@ bool ccoip::CCoIPClientHandler::syncSharedState(ccoip_shared_state_t &shared_sta
 #ifndef PCCL_HAS_CUDA_SUPPORT
                 LOG(BUG) << "PCCL is not built with CUDA support. We shouldn't even have gotten so far without CUDA support when referencing CUDA tensors. This is a bug!";
                 return false;
-#endif
+#else
                 hash = hash_utils::simplehash_cuda(entry.data_ptr, entry.data_size);
+#endif
             } else {
                 LOG(BUG) << "Unknown device type: " << entry.device_type <<
                         " encountered during shared state hash preparation. This should have been caught earlier and is a bug.";
@@ -399,7 +400,7 @@ bool ccoip::CCoIPClientHandler::syncSharedState(ccoip_shared_state_t &shared_sta
                             LOG(BUG) << "PCCL is not built with CUDA support. We shouldn't even have gotten so far without CUDA support when referencing CUDA tensors. This is a bug!";
                             return false;
                         }
-#endif
+#else
                         std::unique_ptr<std::byte> dst_ptr(new std::byte[dst_entry.data_size]);
                         std::span dst_span(dst_ptr.get(), dst_entry.data_size);
                         if (req_socket.receiveRawData(dst_span, new_entry->size_bytes) != new_entry->size_bytes) {
@@ -413,6 +414,7 @@ bool ccoip::CCoIPClientHandler::syncSharedState(ccoip_shared_state_t &shared_sta
                                     "Failed to copy host to device memory while trying to write out shared state transmission response content! Is shared state referenced memory still valid?";
                             return false;
                         }
+#endif
                     } else {
                         LOG(BUG) <<
                                 "Unknown device type encountered while trying to write out shared state transmission response content. This should have been caught earlier and is a bug.";
