@@ -395,7 +395,7 @@ bool ccoip::CCoIPClientHandler::syncSharedState(ccoip_shared_state_t &shared_sta
                         }
                     } else if (dst_entry.device_type == ccoipDeviceCuda) {
 #ifndef PCCL_HAS_CUDA_SUPPORT
-                        if (device_type == pcclDeviceCuda) {
+                        if (dst_entry.device_type == pcclDeviceCuda) {
                             LOG(BUG) << "PCCL is not built with CUDA support. We shouldn't even have gotten so far without CUDA support when referencing CUDA tensors. This is a bug!";
                             return;
                         }
@@ -770,7 +770,7 @@ end:
             }
         } else if (entry.device_type == ccoipDeviceCuda) {
 #ifndef PCCL_HAS_CUDA_SUPPORT
-                if (device_type == pcclDeviceCuda) {
+                if (entry.device_type == pcclDeviceCuda) {
                     LOG(BUG) << "PCCL is not built with CUDA support. We shouldn't even have gotten so far without CUDA support when referencing CUDA tensors. This is a bug!";
                     return;
                 }
