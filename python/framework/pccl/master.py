@@ -9,7 +9,7 @@ def main():
     parser.add_argument(
         '--listen-address',
         type=str,
-        default='0.0.0.0:28148',
+        default='0.0.0.0:48148',
         help='Address for the master node to listen on (format: host:port)'
     )
     

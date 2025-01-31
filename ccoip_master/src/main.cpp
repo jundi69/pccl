@@ -18,7 +18,7 @@ void signal_handler(const int signal) {
 int main() {
     ccoip_socket_address_t listen_address {};
     listen_address.inet.ipv4 = {0, 0, 0, 0};
-    listen_address.port = 28148;
+    listen_address.port = 48148;
 
     // install signal handler for interrupt & termination signals
     signal(SIGINT, signal_handler);
