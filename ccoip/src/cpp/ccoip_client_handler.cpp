@@ -397,7 +397,7 @@ bool ccoip::CCoIPClientHandler::syncSharedState(ccoip_shared_state_t &shared_sta
 #ifndef PCCL_HAS_CUDA_SUPPORT
                         if (dst_entry.device_type == ccoipDeviceCuda) {
                             LOG(BUG) << "PCCL is not built with CUDA support. We shouldn't even have gotten so far without CUDA support when referencing CUDA tensors. This is a bug!";
-                            return;
+                            return false;
                         }
 #endif
                         std::unique_ptr<std::byte> dst_ptr(new std::byte[dst_entry.data_size]);
@@ -772,7 +772,7 @@ end:
 #ifndef PCCL_HAS_CUDA_SUPPORT
                 if (entry.device_type == ccoipDeviceCuda) {
                     LOG(BUG) << "PCCL is not built with CUDA support. We shouldn't even have gotten so far without CUDA support when referencing CUDA tensors. This is a bug!";
-                    return;
+                    return false;
                 }
 #endif
             std::unique_ptr<std::byte[]> host_buffer(new std::byte[entry.data_size]);
