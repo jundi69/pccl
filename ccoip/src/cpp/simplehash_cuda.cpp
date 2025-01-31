@@ -1,5 +1,5 @@
 #include "hash_utils.hpp"
-
+#include <pccl_log.hpp>
 
 extern "C" uint64_t simplehash_cuda_kernel(const void *data, size_t n_bytes);
 
