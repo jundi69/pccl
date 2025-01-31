@@ -776,7 +776,7 @@ end:
                     LOG(BUG) << "PCCL is not built with CUDA support. We shouldn't even have gotten so far without CUDA support when referencing CUDA tensors. This is a bug!";
                     return;
                 }
-#endif
+#else
             std::unique_ptr<std::byte[]> host_buffer(new std::byte[entry.data_size]);
             if (cuMemcpyDtoH_v2(host_buffer.get(), reinterpret_cast<CUdeviceptr>(entry.data_ptr), entry.data_size) !=
                 CUDA_SUCCESS) {
@@ -784,6 +784,7 @@ end:
                         "Failed to copy cuda device memory to host while serving shared state transmission request! Is shared state referenced memory still valid?";
                 return;
             }
+#endif
             if (!shared_state_socket.sendRawPacket(client_address, std::span(host_buffer.get(), entry.data_size))) {
                 LOG(ERR) << "Failed to send shared state data to client " << ccoip_sockaddr_to_str(client_address);
             }
