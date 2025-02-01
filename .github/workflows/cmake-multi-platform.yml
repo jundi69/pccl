@@ -21,7 +21,7 @@ jobs:
       matrix:
         include:
           # Linux configurations using self-hosted runners
-          - runs-on: [ self-hosted, Linux ]
+          - runs-on: [ self-hosted, Linux, cpu ]
             os: ubuntu-latest
             c_compiler: gcc
             cpp_compiler: g++
