@@ -20,7 +20,7 @@ endif ()
 option(PCCL_BUILD_CUDA_SUPPORT "Build PCCL with CUDA support" ON)
 
 if (PCCL_BUILD_CUDA_SUPPORT)
-    find_package(CUDAToolkit REQUIRED)
+    find_package(CUDAToolkit)
 
     # check if the cuda toolkit was found
     if(CUDAToolkit_FOUND)
