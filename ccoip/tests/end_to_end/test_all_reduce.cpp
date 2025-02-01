@@ -1,6 +1,7 @@
 #include <ccoip.h>
 #include <ccoip_client.hpp>
 #include <ccoip_master.hpp>
+#include <port_guard.h>
 #include <thread>
 #include <random>
 #include <typeindex>
@@ -80,6 +81,7 @@ void reduceTest(const ccoip::ccoip_reduce_op_t reduce_op,
                 const uint64_t seed,
                 const std::function<ValueType(ValueType, ValueType)> &op,
                 size_t num_clients, const bool init_random = true) {
+    GUARD_PORT(CCOIP_PROTOCOL_PORT_MASTER);
     // Launch master
     const auto ccoip_type = getCcoipDataType(typeid(ValueType));
     ccoip::CCoIPMaster master({
@@ -225,6 +227,8 @@ TEST(TypeAllReduceTest, TestSumWorldSize4NumElements2) {
 }
 
 TYPED_TEST(QuantizeTypedAllReduceTest, TestSumQuantizedWorldSize2) {
+    GUARD_PORT(CCOIP_PROTOCOL_PORT_MASTER);
+
     using ValueType = TypeParam;
     auto ccoipType = getCcoipDataType(typeid(TypeParam));
 
@@ -324,6 +328,8 @@ TYPED_TEST(TypeAllReduceTest, TestMaxWorldSize2) {
 
 
 TEST(AllReduceTest, TestNoAcceptNewPeersDuringConcurrentReduce) {
+    GUARD_PORT(CCOIP_PROTOCOL_PORT_MASTER);
+
     ccoip::CCoIPMaster master({
             .inet = {.protocol = inetIPv4, .ipv4 = {.data = {0, 0, 0, 0}}},
             .port = CCOIP_PROTOCOL_PORT_MASTER
@@ -388,6 +394,8 @@ TEST(AllReduceTest, TestNoAcceptNewPeersDuringConcurrentReduce) {
 
 
 TEST(AllReduceTest, TestNoSharedStateSyncDuringConcurrentReduce) {
+    GUARD_PORT(CCOIP_PROTOCOL_PORT_MASTER);
+
     ccoip::CCoIPMaster master({
             .inet = {.protocol = inetIPv4, .ipv4 = {.data = {0, 0, 0, 0}}},
             .port = CCOIP_PROTOCOL_PORT_MASTER

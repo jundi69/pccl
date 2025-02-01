@@ -3,9 +3,12 @@
 #include <ccoip_master.hpp>
 #include <thread>
 #include <atomic>
+#include <port_guard.h>
 #include <gtest/gtest.h>
 
 TEST(AcceptNewPeers, TestBasic) {
+    GUARD_PORT(CCOIP_PROTOCOL_PORT_MASTER);
+
     ccoip::CCoIPMaster master({
         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {0, 0, 0, 0}}},
         .port = CCOIP_PROTOCOL_PORT_MASTER

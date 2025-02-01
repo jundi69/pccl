@@ -6,6 +6,7 @@
 
 #include <thread>
 #include <cstring>
+#include <port_guard.h>
 #include <ranges>
 
 // Helper function to establish p2p connection between two clients
@@ -42,6 +43,8 @@ static void establishConnections(const std::vector<const ccoip::CCoIPClient *> &
 // This is a tie in terms of content hash prevalence, so we simply assert that one transfer from any client to the other
 // has occurred.
 TEST(SharedStateDistribution, TestBasic) {
+    GUARD_PORT(CCOIP_PROTOCOL_PORT_MASTER);
+
     ccoip::CCoIPMaster master({
         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {0, 0, 0, 0}}},
         .port = CCOIP_PROTOCOL_PORT_MASTER
@@ -139,6 +142,8 @@ TEST(SharedStateDistribution, TestBasic) {
 
 // Identical shared state should not trigger data transfer
 TEST(SharedStateDistribution, TestNoSyncIdenticalSharedState) {
+    GUARD_PORT(CCOIP_PROTOCOL_PORT_MASTER);
+
     ccoip::CCoIPMaster master({
         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {0, 0, 0, 0}}},
         .port = CCOIP_PROTOCOL_PORT_MASTER
@@ -227,6 +232,8 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedState) {
 
 // Partially dirty shared state should only trigger retransmission of the keys that are dirty
 TEST(SharedStateDistribution, TestPartialSyncPartiallyDirtyState) {
+    GUARD_PORT(CCOIP_PROTOCOL_PORT_MASTER);
+
     ccoip::CCoIPMaster master({
         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {0, 0, 0, 0}}},
         .port = CCOIP_PROTOCOL_PORT_MASTER
@@ -355,6 +362,8 @@ TEST(SharedStateDistribution, TestPartialSyncPartiallyDirtyState) {
 // This tests specifically tests whether client1 - which has the unpopular state, which hits the master >first< will
 // NOT be determining the accepted shared state hash. Client1 MUST receive the more popular shared state from client2 or client3.
 TEST(SharedStateDistribution, TestPopularHashPrevelance) {
+    GUARD_PORT(CCOIP_PROTOCOL_PORT_MASTER);
+
     ccoip::CCoIPMaster master({
         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {0, 0, 0, 0}}},
         .port = CCOIP_PROTOCOL_PORT_MASTER
@@ -478,6 +487,8 @@ TEST(SharedStateDistribution, TestPopularHashPrevelance) {
 
 // Test of shared state distribution with many keys
 TEST(SharedStateDistribution, TestPopularHashPrevalenceWithMultipleKeys) {
+    GUARD_PORT(CCOIP_PROTOCOL_PORT_MASTER);
+
     // Initialize the master with IPv4 settings
     ccoip::CCoIPMaster master({
         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {0, 0, 0, 0}}},
@@ -632,6 +643,8 @@ TEST(SharedStateDistribution, TestPopularHashPrevalenceWithMultipleKeys) {
 // from the shared state of the clients of the other peer group.
 // The asserted behavior is that no data is transferred during the two shared state synchronization processes.
 TEST(SharedStateDistribution, TestNoSyncIdenticalSharedStateMultiplePeerGroups) {
+    GUARD_PORT(CCOIP_PROTOCOL_PORT_MASTER);
+
     ccoip::CCoIPMaster master({
         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {0, 0, 0, 0}}},
         .port = CCOIP_PROTOCOL_PORT_MASTER
@@ -742,6 +755,8 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedStateMultiplePeerGroups) 
 // Same setup as TestNoSyncIdenticalSharedStateMultiplePeerGroups, but each peer group has a different shared state mask,
 // meaning they shared different keys. Within each group, all peers still contain the same peers.
 TEST(SharedStateDistribution, TestNoSyncIdenticalSharedStateMultiplePeerGroupsDifferentKeys) {
+    GUARD_PORT(CCOIP_PROTOCOL_PORT_MASTER);
+
     ccoip::CCoIPMaster master({
         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {0, 0, 0, 0}}},
         .port = CCOIP_PROTOCOL_PORT_MASTER
@@ -851,6 +866,8 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedStateMultiplePeerGroupsDi
 
 // Same setup as TestNoSyncIdenticalSharedStateMultiplePeerGroupsDifferentKeys, but both sync processes are launched concurrently
 TEST(SharedStateDistribution, TestNoSyncIdenticalSharedStateMultiplePeerGroupsDifferentKeysConcurrent) {
+    GUARD_PORT(CCOIP_PROTOCOL_PORT_MASTER);
+
     ccoip::CCoIPMaster master({
         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {0, 0, 0, 0}}},
         .port = CCOIP_PROTOCOL_PORT_MASTER
@@ -1014,6 +1031,8 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedStateMultiplePeerGroupsDi
 
 // Multistep advancement of shared state with identical updates
 TEST(SharedStateDistribution, TestMultiStepAdvancement) {
+    GUARD_PORT(CCOIP_PROTOCOL_PORT_MASTER);
+
     ccoip::CCoIPMaster master({
         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {0, 0, 0, 0}}},
         .port = CCOIP_PROTOCOL_PORT_MASTER
@@ -1099,6 +1118,8 @@ TEST(SharedStateDistribution, TestMultiStepAdvancement) {
 // Two clients distribute the same shared state to establish hash prevalence, and the third client does not update its own shared state but calls syncSharedState.
 // This tests whether the third client is "dragged along" by the other two clients and receives the correct shared state.
 TEST(SharedStateDistribution, TestDragAlongClient) {
+    GUARD_PORT(CCOIP_PROTOCOL_PORT_MASTER);
+
     ccoip::CCoIPMaster master({
         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {0, 0, 0, 0}}},
         .port = CCOIP_PROTOCOL_PORT_MASTER
@@ -1253,6 +1274,8 @@ TEST(SharedStateDistribution, TestDragAlongClient) {
 // Test violation of the one-increment rule
 // Clients must increment their shared state by exactly one before starting the next shared state synchronization
 TEST(SharedStateDistribution, TestOneIncrementRuleViolationSimple) {
+    GUARD_PORT(CCOIP_PROTOCOL_PORT_MASTER);
+
     ccoip::CCoIPMaster master({
         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {0, 0, 0, 0}}},
         .port = CCOIP_PROTOCOL_PORT_MASTER
@@ -1354,6 +1377,8 @@ TEST(SharedStateDistribution, TestOneIncrementRuleViolationSimple) {
 
 // Calling the first ever sync shared state with revision 1 also violates the one-increment rule
 TEST(SharedStateDistribution, TestOneIncrementRuleViolationFirstStepRev1) {
+    GUARD_PORT(CCOIP_PROTOCOL_PORT_MASTER);
+
     ccoip::CCoIPMaster master({
         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {0, 0, 0, 0}}},
         .port = CCOIP_PROTOCOL_PORT_MASTER
@@ -1442,6 +1467,8 @@ TEST(SharedStateDistribution, TestOneIncrementRuleViolationFirstStepRev1) {
 // but client 3 attempts to sync shared state with mismatched keys that differ from those of client 1 and 2.
 // Client 3 should be kicked.
 TEST(SharedStateDistribution, TestSharedStateMaskMismatchKick) {
+    GUARD_PORT(CCOIP_PROTOCOL_PORT_MASTER);
+
     ccoip::CCoIPMaster master({
         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {0, 0, 0, 0}}},
         .port = CCOIP_PROTOCOL_PORT_MASTER
@@ -1552,6 +1579,8 @@ TEST(SharedStateDistribution, TestSharedStateMaskMismatchKick) {
 
 // Multiple peer groups advance the shared state for multiple steps; synchronization should be local to each peer group
 TEST(SharedStateDistribution, TestConcurrentAdvancementWithinPeerGroups) {
+    GUARD_PORT(CCOIP_PROTOCOL_PORT_MASTER);
+
     ccoip::CCoIPMaster master({
         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {0, 0, 0, 0}}},
         .port = CCOIP_PROTOCOL_PORT_MASTER
@@ -1669,6 +1698,8 @@ TEST(SharedStateDistribution, TestConcurrentAdvancementWithinPeerGroups) {
 // Per peer group two leaders and one follower are established.
 // Leaders establish popularity for shared state mask & content and follower is dragged along.
 TEST(SharedStateDistribution, TestConcurrentDragAlongAcrossPeerGroups) {
+    GUARD_PORT(CCOIP_PROTOCOL_PORT_MASTER);
+
     ccoip::CCoIPMaster master({
         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {0, 0, 0, 0}}},
         .port = CCOIP_PROTOCOL_PORT_MASTER
@@ -1825,6 +1856,8 @@ TEST(SharedStateDistribution, TestConcurrentDragAlongAcrossPeerGroups) {
 
 // Overlapping keys across peer groups
 TEST(SharedStateDistribution, TestConflictOverlappingKeysAcrossPeerGroups) {
+    GUARD_PORT(CCOIP_PROTOCOL_PORT_MASTER);
+
     ccoip::CCoIPMaster master({
         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {0, 0, 0, 0}}},
         .port = CCOIP_PROTOCOL_PORT_MASTER
@@ -1956,6 +1989,8 @@ TEST(SharedStateDistribution, TestConflictOverlappingKeysAcrossPeerGroups) {
 // Changing peer group membership during synchronization
 // Tests the behavior when a new client is dynamically added to a peer group during ongoing synchronization.
 TEST(SharedStateDistribution, TestChangingPeerGroupMembershipBetweenSynchronizationSteps) {
+    GUARD_PORT(CCOIP_PROTOCOL_PORT_MASTER);
+
     ccoip::CCoIPMaster master({
         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {0, 0, 0, 0}}},
         .port = CCOIP_PROTOCOL_PORT_MASTER
