@@ -53,6 +53,15 @@ winget install Python.Python.3.12 --source winget # (if you want to use the Pyth
 After installing these packages, make sure to refresh your PATH by restarting your explorer.exe in the Task Manager and
 opening a new Terminal launched by said explorer.
 
+##### Installing CUDA on Windows
+
+Use the following link to download the CUDA installer and click through the installer: https://developer.nvidia.com/cuda-downloads
+It is CRUCIAL to do this installation process AFTER installing VisualStudio because the installer will install the "Visual Studio Integration" only if VisualStudio is installed
+at the point of running the installer.
+If you just freshly installed Visual Studio and still have an old CUDA Toolkit installation laying around, you will have to uninstall and reinstall CUDA afterwards.
+Make sure "Visual Studio Integration" is status "Installed" in the Install summary of the installer.
+Without the Visual Studio Integration from CUDA, the cmake generation phase will fail in a specific way that is documented in the build section below.
+
 #### macOS
 
 ```bash
@@ -134,6 +143,24 @@ cd build
 cmake -DCMAKE_BUILD_TYPE=Release -DPCCL_BUILD_CUDA_SUPPORT=ON .. # use -DPCCL_BUILD_CUDA_SUPPORT=OFF if building without cuda support
 cmake --build . --config Release --parallel
 ```
+
+**CAUTION:** When building on Windows, make sure to use the "x64 Native Tools Command Prompt for VS 2022". Make sure it is specifically the 'x64' variant!
+
+If you are getting the following error on **Windows**, the Visual Studio Integration from CUDA is missing, which is an indication that CUDA was installed BEFORE
+VisualStudio/MSVC was installed on the system:
+```
+-- CUDA Toolkit was found!
+CMake Error at C:/Program Files/CMake/share/cmake-3.31/Modules/CMakeDetermineCompilerId.cmake:614 (message):
+  No CUDA toolset found.
+Call Stack (most recent call first):
+  C:/Program Files/CMake/share/cmake-3.31/Modules/CMakeDetermineCompilerId.cmake:8 (CMAKE_DETERMINE_COMPILER_ID_BUILD)
+  C:/Program Files/CMake/share/cmake-3.31/Modules/CMakeDetermineCompilerId.cmake:53 (__determine_compiler_id_test)
+  C:/Program Files/CMake/share/cmake-3.31/Modules/CMakeDetermineCUDACompiler.cmake:131 (CMAKE_DETERMINE_COMPILER_ID)
+  CMakeLists.txt:10 (enable_language)
+```
+In this case, the CUDA Toolkit needs to be uninstalled and reinstalled while ensuring the Visual Studio integration is installed.
+Refer to section "Installing CUDA on Windows" for more information.
+
 
 ### Recommended way to use the pccl native library
 
