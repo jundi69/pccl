@@ -40,7 +40,7 @@ static __device__ __forceinline__
 uint32_t warpReduceHash(uint32_t val) {
 #pragma unroll
     for (int offset = 16; offset > 0; offset >>= 1) {
-        uint32_t v = __shfl_down_sync(0xFFFFFFFF, val, offset);
+        const uint32_t v = __shfl_down_sync(0xFFFFFFFF, val, offset);
         val = HashCombine()(val, v);
     }
     return val;
@@ -105,7 +105,7 @@ __global__ void big_reduce_kernel(const uint32_t *__restrict d_in,
     // Each thread in the block processes its share within the block’s segment.
 #pragma unroll 8
     for (uint32_t i = blockStart + threadIdx.x; i < blockEnd; i += blockDim.x) {
-        uint4 v = __ldg(d4 + i);
+        const uint4 v = __ldg(d4 + i);
         sum = HashCombine()(sum, v.x);
         sum = HashCombine()(sum, v.y);
         sum = HashCombine()(sum, v.z);

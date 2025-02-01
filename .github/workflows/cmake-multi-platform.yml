@@ -27,6 +27,12 @@ jobs:
             cpp_compiler: g++
             build_type: Release
 
+          - runs-on: [ self-hosted, Linux, cuda ]
+            os: ubuntu-latest
+            c_compiler: gcc
+            cpp_compiler: g++
+            build_type: Release
+
           # Windows configurations using GitHub-hosted runners
           - runs-on: windows-latest
             os: windows-latest
