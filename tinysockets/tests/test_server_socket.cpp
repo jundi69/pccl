@@ -1,6 +1,7 @@
 #include <tinysockets.hpp>
 #include <gtest/gtest.h>
 #include <future>
+#include <port_guard.h>
 
 inline ccoip_socket_address_t create_ipv4_address(const uint8_t a, const uint8_t b, const uint8_t c, const uint8_t d,
                                                   const uint16_t port) {
@@ -16,13 +17,15 @@ inline ccoip_socket_address_t create_ipv4_address(const uint8_t a, const uint8_t
 }
 
 TEST(TestServerSocket, test_bind_valid) {
-    const ccoip_socket_address_t listen_address = create_ipv4_address(0, 0, 0, 0, 28148);
+    GUARD_PORT(48148);
+    const ccoip_socket_address_t listen_address = create_ipv4_address(0, 0, 0, 0, 48148);
     tinysockets::ServerSocket server_socket(listen_address);
     EXPECT_TRUE(server_socket.listen());
 }
 
 TEST(TestServerSocket, test_bind_loopback) {
-    const ccoip_socket_address_t listen_address = create_ipv4_address(127, 0, 0, 1, 28148);
+    GUARD_PORT(48148);
+    const ccoip_socket_address_t listen_address = create_ipv4_address(127, 0, 0, 1, 48148);
     tinysockets::ServerSocket server_socket(listen_address);
     EXPECT_TRUE(server_socket.listen());
 }
@@ -63,7 +66,8 @@ TEST(TestServerSocket, test_bind_invalid_ipv6) {
 
 // Test binding an already bound socket
 TEST(TestServerSocket, test_bind_already_bound) {
-    const auto listen_address = create_ipv4_address(0, 0, 0, 0, 28149);
+    GUARD_PORT(48149);
+    const auto listen_address = create_ipv4_address(0, 0, 0, 0, 48149);
     tinysockets::ServerSocket server_socket1(listen_address);
     EXPECT_TRUE(server_socket1.listen());
 
@@ -73,14 +77,16 @@ TEST(TestServerSocket, test_bind_already_bound) {
 
 // Test listening on a bound socket
 TEST(TestServerSocket, test_listen_after_bind) {
-    const auto listen_address = create_ipv4_address(0, 0, 0, 0, 28150);
+    GUARD_PORT(48150);
+    const auto listen_address = create_ipv4_address(0, 0, 0, 0, 48150);
     tinysockets::ServerSocket server_socket(listen_address);
     EXPECT_TRUE(server_socket.listen());
 }
 
 // Test running the server asynchronously
 TEST(TestServerSocket, test_run_async) {
-    const auto listen_address = create_ipv4_address(0, 0, 0, 0, 28152);
+    GUARD_PORT(48152);
+    const auto listen_address = create_ipv4_address(0, 0, 0, 0, 48152);
     tinysockets::ServerSocket server_socket(listen_address);
     EXPECT_TRUE(server_socket.listen());
     EXPECT_TRUE(server_socket.runAsync());
@@ -94,7 +100,8 @@ TEST(TestServerSocket, test_run_async) {
 
 // Test running async when already running
 TEST(TestServerSocket, test_run_async_already_running) {
-    const auto listen_address = create_ipv4_address(0, 0, 0, 0, 28153);
+    GUARD_PORT(48153);
+    const auto listen_address = create_ipv4_address(0, 0, 0, 0, 48153);
     tinysockets::ServerSocket server_socket(listen_address);
     EXPECT_TRUE(server_socket.listen());
     EXPECT_TRUE(server_socket.runAsync());
@@ -106,7 +113,8 @@ TEST(TestServerSocket, test_run_async_already_running) {
 
 // Test interrupting and joining the server
 TEST(TestServerSocket, test_interrupt_and_join) {
-    const auto listen_address = create_ipv4_address(0, 0, 0, 0, 28154);
+    GUARD_PORT(48154);
+    const auto listen_address = create_ipv4_address(0, 0, 0, 0, 48154);
     tinysockets::ServerSocket server_socket(listen_address);
     EXPECT_TRUE(server_socket.listen());
     EXPECT_TRUE(server_socket.runAsync());
@@ -135,7 +143,8 @@ struct DummyPacket final : ccoip::Packet {
 
 // Test handling client connections and callbacks
 TEST(TestServerSocket, test_client_connection_and_callbacks) {
-    const auto listen_address = create_ipv4_address(127, 0, 0, 1, 28155);
+    GUARD_PORT(48155);
+    const auto listen_address = create_ipv4_address(127, 0, 0, 1, 48155);
     tinysockets::ServerSocket server_socket(listen_address);
 
     // Variables to verify callbacks
@@ -206,7 +215,8 @@ TEST(TestServerSocket, test_client_connection_and_callbacks) {
 
 // Test closing a client connection
 TEST(TestServerSocket, test_close_client_connection) {
-    const auto listen_address = create_ipv4_address(127, 0, 0, 1, 28156);
+    GUARD_PORT(48156);
+    const auto listen_address = create_ipv4_address(127, 0, 0, 1, 48156);
     tinysockets::ServerSocket server_socket(listen_address);
 
     // add a read callback to the server
@@ -260,7 +270,8 @@ TEST(TestServerSocket, test_close_client_connection) {
 
 // Test binding the same socket twice
 TEST(TestServerSocket, test_bind_twice) {
-    const auto listen_address = create_ipv4_address(0, 0, 0, 0, 28158);
+    GUARD_PORT(48158);
+    const auto listen_address = create_ipv4_address(0, 0, 0, 0, 48158);
     tinysockets::ServerSocket server_socket(listen_address);
     EXPECT_TRUE(server_socket.listen());
     EXPECT_FALSE(server_socket.listen()); // Second bind should fail
@@ -268,6 +279,7 @@ TEST(TestServerSocket, test_bind_twice) {
 
 // Test listening twice
 TEST(TestServerSocket, test_listen_twice) {
+    GUARD_PORT(28159);
     const auto listen_address = create_ipv4_address(0, 0, 0, 0, 28159);
     tinysockets::ServerSocket server_socket(listen_address);
     EXPECT_TRUE(server_socket.listen());
@@ -276,6 +288,7 @@ TEST(TestServerSocket, test_listen_twice) {
 
 // Test run async after server interrupted
 TEST(TestServerSocket, test_run_async_after_interrupt) {
+    GUARD_PORT(28160);
     const auto listen_address = create_ipv4_address(0, 0, 0, 0, 28160);
     tinysockets::ServerSocket server_socket(listen_address);
     EXPECT_TRUE(server_socket.listen());
@@ -290,6 +303,7 @@ TEST(TestServerSocket, test_run_async_after_interrupt) {
 
 // Test multiple clients connecting simultaneously
 TEST(TestServerSocket, test_multiple_clients) {
+    GUARD_PORT(28161);
     const auto listen_address = create_ipv4_address(127, 0, 0, 1, 28161);
     tinysockets::ServerSocket server_socket(listen_address);
 
@@ -332,6 +346,7 @@ TEST(TestServerSocket, test_multiple_clients) {
 
 // Test sending a large packet
 TEST(TestServerSocket, test_large_packet) {
+    GUARD_PORT(28162);
     const auto listen_address = create_ipv4_address(127, 0, 0, 1, 28162);
     tinysockets::ServerSocket server_socket(listen_address);
 
@@ -370,6 +385,7 @@ TEST(TestServerSocket, test_large_packet) {
 
 // Test closing a non-existent client connection
 TEST(TestServerSocket, test_close_non_existent_client) {
+    GUARD_PORT(28163);
     const auto listen_address = create_ipv4_address(127, 0, 0, 1, 28163);
     tinysockets::ServerSocket server_socket(listen_address);
     EXPECT_TRUE(server_socket.listen());
@@ -385,6 +401,7 @@ TEST(TestServerSocket, test_close_non_existent_client) {
 
 // Test adding multiple callbacks
 TEST(TestServerSocket, test_multiple_callbacks) {
+    GUARD_PORT(28164);
     const auto listen_address = create_ipv4_address(127, 0, 0, 1, 28164);
     tinysockets::ServerSocket server_socket(listen_address);
 
@@ -429,6 +446,7 @@ TEST(TestServerSocket, test_multiple_callbacks) {
 
 // Test connecting a client when the server is not listening
 TEST(TestServerSocket, test_client_connect_when_not_listening) {
+    GUARD_PORT(49100);
     const auto listen_address = create_ipv4_address(127, 0, 0, 1, 49100);
     tinysockets::ServerSocket server_socket(listen_address);
     // Notice we do not call listen()
@@ -438,6 +456,7 @@ TEST(TestServerSocket, test_client_connect_when_not_listening) {
 
 // Test multiple interrupts
 TEST(TestServerSocket, test_multiple_interrupts) {
+    GUARD_PORT(49102);
     const auto listen_address = create_ipv4_address(127, 0, 0, 1, 49102);
     tinysockets::ServerSocket server_socket(listen_address);
 
@@ -470,6 +489,7 @@ TEST(TestServerSocket, test_rerun_after_join) {
 
 // Test sending zero-length payload
 TEST(TestServerSocket, test_zero_length_packet) {
+    GUARD_PORT(49105);
     const auto listen_address = create_ipv4_address(127, 0, 0, 1, 49105);
     tinysockets::ServerSocket server_socket(listen_address);
 
@@ -520,6 +540,7 @@ struct UnknownPacket final : ccoip::Packet {
 };
 
 TEST(TestServerSocket, test_unknown_packet_id) {
+    GUARD_PORT(49106);
     const auto listen_address = create_ipv4_address(127, 0, 0, 1, 49106);
     tinysockets::ServerSocket server_socket(listen_address);
 
@@ -556,6 +577,7 @@ TEST(TestServerSocket, test_unknown_packet_id) {
 
 // Test concurrent client connections (attempting to connect multiple clients in parallel)
 TEST(TestServerSocket, test_concurrent_client_connections) {
+    GUARD_PORT(49107);
     const auto listen_address = create_ipv4_address(127, 0, 0, 1, 49107);
     tinysockets::ServerSocket server_socket(listen_address);
 
@@ -588,6 +610,7 @@ TEST(TestServerSocket, test_concurrent_client_connections) {
 
 // Test sending data from the client after the server has been stopped
 TEST(TestServerSocket, test_client_send_after_server_stop) {
+    GUARD_PORT(49108);
     const auto listen_address = create_ipv4_address(127, 0, 0, 1, 49108);
     tinysockets::ServerSocket server_socket(listen_address);
 
@@ -622,6 +645,7 @@ TEST(TestServerSocket, test_client_send_after_server_stop) {
 
 // Test attempting to close client connections after the server has stopped
 TEST(TestServerSocket, test_close_client_after_server_stopped) {
+    GUARD_PORT(49109);
     const auto listen_address = create_ipv4_address(127, 0, 0, 1, 49109);
     tinysockets::ServerSocket server_socket(listen_address);
     EXPECT_TRUE(server_socket.listen());
@@ -641,6 +665,7 @@ TEST(TestServerSocket, test_close_client_after_server_stopped) {
 
 // Test server sending data to client
 TEST(TestServerSocket, test_server_send_data) {
+    GUARD_PORT(49110);
     const auto listen_address = create_ipv4_address(127, 0, 0, 1, 49110);
     tinysockets::ServerSocket server_socket(listen_address);
 
@@ -690,6 +715,7 @@ TEST(TestServerSocket, test_server_send_data) {
 
 // Test sending data upon client connection
 TEST(TestServerSocket, test_server_send_on_client_connect) {
+    GUARD_PORT(49120);
     const auto listen_address = create_ipv4_address(127, 0, 0, 1, 49120);
     tinysockets::ServerSocket server_socket(listen_address);
 
@@ -732,6 +758,7 @@ TEST(TestServerSocket, test_server_send_on_client_connect) {
 
 // Test server sends response upon receiving client messages
 TEST(TestServerSocket, test_server_send_on_client_message) {
+    GUARD_PORT(49121);
     const auto listen_address = create_ipv4_address(127, 0, 0, 1, 49121);
     tinysockets::ServerSocket server_socket(listen_address);
 
@@ -777,6 +804,7 @@ TEST(TestServerSocket, test_server_send_on_client_message) {
 
 // Test server attempts to send after client disconnects
 TEST(TestServerSocket, test_server_send_after_client_disconnect) {
+    GUARD_PORT(49122);
     const auto listen_address = create_ipv4_address(127, 0, 0, 1, 49122);
     tinysockets::ServerSocket server_socket(listen_address);
 
@@ -824,6 +852,7 @@ TEST(TestServerSocket, test_server_send_after_client_disconnect) {
 
 // Test server sends large packets to clients
 TEST(TestServerSocket, test_server_send_large_packets) {
+    GUARD_PORT(49123);
     const auto listen_address = create_ipv4_address(127, 0, 0, 1, 49123);
     tinysockets::ServerSocket server_socket(listen_address);
 
@@ -869,6 +898,7 @@ TEST(TestServerSocket, test_server_send_large_packets) {
 
 // Test sending data to multiple clients
 TEST(TestServerSocket, test_server_send_to_multiple_clients) {
+    GUARD_PORT(49112);
     const auto listen_address = create_ipv4_address(127, 0, 0, 1, 49112);
     tinysockets::ServerSocket server_socket(listen_address);
 
@@ -916,6 +946,7 @@ TEST(TestServerSocket, test_server_send_to_multiple_clients) {
 
 // Test server attempts to send to non-existent clients
 TEST(TestServerSocket, test_server_send_to_non_existent_clients) {
+    GUARD_PORT(49125);
     const auto listen_address = create_ipv4_address(127, 0, 0, 1, 49125);
     tinysockets::ServerSocket server_socket(listen_address);
 
@@ -935,6 +966,7 @@ TEST(TestServerSocket, test_server_send_to_non_existent_clients) {
 
 // Test sending an extremely large packet to the server
 TEST(TestServerSocket, test_client_send_extremely_large_packet) {
+    GUARD_PORT(49127);
     const auto listen_address = create_ipv4_address(127, 0, 0, 1, 49127);
     tinysockets::ServerSocket server_socket(listen_address);
 
@@ -981,6 +1013,7 @@ TEST(TestServerSocket, test_client_send_extremely_large_packet) {
 
 // Test sending multiple large packets in succession to the server
 TEST(TestServerSocket, test_client_send_multiple_large_packets) {
+    GUARD_PORT(49128);
     const auto listen_address = create_ipv4_address(127, 0, 0, 1, 49128);
     tinysockets::ServerSocket server_socket(listen_address);
 
@@ -1032,6 +1065,7 @@ TEST(TestServerSocket, test_client_send_multiple_large_packets) {
 
 // Test sending a large packet in chunks to the server
 TEST(TestServerSocket, test_client_send_large_packet_in_chunks) {
+    GUARD_PORT(49129);
     const auto listen_address = create_ipv4_address(127, 0, 0, 1, 49129);
     tinysockets::ServerSocket server_socket(listen_address);
 
@@ -1081,6 +1115,7 @@ TEST(TestServerSocket, test_client_send_large_packet_in_chunks) {
 
 // Test stress by having multiple clients send large packets concurrently to the server
 TEST(TestServerSocket, test_concurrent_clients_send_large_packets) {
+    GUARD_PORT(49131);
     const auto listen_address = create_ipv4_address(127, 0, 0, 1, 49131);
     tinysockets::ServerSocket server_socket(listen_address);
 
@@ -1149,6 +1184,7 @@ TEST(TestServerSocket, test_concurrent_clients_send_large_packets) {
 
 // Test sending a packet exactly at the server's maximum allowed size
 TEST(TestServerSocket, test_client_send_exact_max_packet_size) {
+    GUARD_PORT(49132);
     const auto listen_address = create_ipv4_address(127, 0, 0, 1, 49132);
     tinysockets::ServerSocket server_socket(listen_address);
 
