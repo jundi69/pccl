@@ -55,12 +55,13 @@ opening a new Terminal launched by said explorer.
 
 ##### Installing CUDA on Windows
 
-Use the following link to download the CUDA installer and click through the installer: https://developer.nvidia.com/cuda-downloads
-It is CRUCIAL to do this installation process AFTER installing VisualStudio because the installer will install the "Visual Studio Integration" only if VisualStudio is installed
+Go to https://developer.nvidia.com/cuda-downloads and download & click through the CUDA Toolkit installer.
+
+**CAUTION:** It is crucial to do this installation process *after* installing Visual Studio because the installer will install the "Visual Studio Integration" only if VisualStudio is installed
 at the point of running the installer.
-If you just freshly installed Visual Studio and still have an old CUDA Toolkit installation laying around, you will have to uninstall and reinstall CUDA afterwards.
-Make sure "Visual Studio Integration" is status "Installed" in the Install summary of the installer.
-Without the Visual Studio Integration from CUDA, the cmake generation phase will fail in a specific way that is documented in the build section below.
+If you just freshly installed Visual Studio and still have an old CUDA Toolkit installation lying around, you will have to uninstall and reinstall CUDA afterwards.
+Make sure "Visual Studio Integration" is status "Installed" in the summary of the installer.
+Without the Visual Studio Integration of the CUDA Toolkit, the cmake generation phase will fail in a specific way that is documented in the build section below.
 
 #### macOS
 

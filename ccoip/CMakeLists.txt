@@ -18,14 +18,6 @@ if (PCCL_BUILD_CUDA_SUPPORT)
     set_target_properties(simplehash_cuda PROPERTIES
             CUDA_SEPARABLE_COMPILATION OFF)
 
-    # WARNING CAUTION WARNING: this line is WAY MORE IMPORTANT THEN YOU THINK:
-    # this sets the CUDA_ARCHITECTURES for the simplehash_cuda.
-    # change this string, and you break hash parity. If targeting a different set of architectures,
-    # the hash kernels will be compiled differently and hashes will look different for the same input.
-    # Only change this string when you know what you are doing. There is a test in CI enforcing the hashes
-    # aren't broken. If you want to add more targets/have to drop support for older architecture, change simplehash_cuda_test.cpp
-    # and make note of this important change in release notes!
-    # WARNING CAUTION WARNING: this line is WAY MORE IMPORTANT THEN YOU THINK:
     set_target_properties(simplehash_cuda PROPERTIES
             CUDA_ARCHITECTURES "50;52;53;60;61;62;70;72;75;80;86;87;89;90;90a"
     )
