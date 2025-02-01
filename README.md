@@ -13,6 +13,7 @@ PCCL implements a novel TCP based network protocol "Collective Communications ov
 - CMake (3.22.1 or higher)
 - C++ compiler with C++20 support (MSVC 17+, gcc 11+ or clang 12+)
 - Python 3.12+ (if bindings are used)
+- NVIDIA CUDA Computing Toolkit v12+ (if building with CUDA support)
 
 ## Supported Operating Systems
 
@@ -79,6 +80,46 @@ sudo apt install -y cmake
 
 # (if you want to use the Python bindings)
 sudo apt install -y python3.12 python3.12-venv python3-pip
+
+```
+
+##### Installing CUDA (if not already installed)
+
+The NVIDIA CUDA Computing Toolkit can be installed using any prevalent method as long as `nvcc` ends up in the system `PATH`
+of the shell that performs the cmake build.
+
+###### Install using nvidia provided apt repository
+This is the recommended way to install the CUDA toolkit on Ubuntu.
+If you do not have a good reason to deviate from this (such as custom drivers, as the p2p geohot driver), you should likely stick to this method.
+
+Go to https://developer.nvidia.com/cuda-downloads and follow the instructions provided.
+
+###### Install using .run file (not recommended on Ubuntu)
+It is also possible to install CUDA via the NVIDIA provided .run file.
+This is not the recommended way to install cuda, but there may be good reasons why not to use the system packages,
+such as using a custom-built nvidia driver, such as the p2p geohot driver.
+Any nvidia driver related package such as userspace libraries and the CUDA toolkit may bring kernel module dependencies
+which may be undesirable. When installing via this method, carefully validate the "kernel-module-version-like designation" (e.g. "565.57.01")
+of 1.) Your cuda installation against the that of your installed driver and 2.) Your installed userspace libraries.
+Your userspace libraries and kernel modules must match EXACTLY, whereas for cuda distributions the driver version must merely exceed the minimum stated by the distribution.
+Note that the .run file may replace your driver & user space library installation, if not explicitly disabled and can
+conflict with installed nvidia apt packages.
+Also note that seemingly innocent packages such as nvitop will bring in nvidia related apt dependencies which can result in
+broken system state and conflicts with your existing driver/userspace libraries/cuda libraries installation when using the .run file method.
+Use this method with caution and be aware that many packages are operating under the assumption that you are missing dependencies!
+
+```
+# search for "Driver Version" to find e.g. "565.57.01"; Ensure this matches everywhere.
+nvidia-smi
+
+# check version postfix to validate userspace library installation, e.g. "libnvidia-ml.so.565.57.01" -> "565.57.01"; this must match your driver version exactly.
+ls /usr/lib/x86_64-linux-gnu/ | grep libnvidia-ml.so
+
+# download cuda .run file; ensure the driver version is higher or equal to the designation, here (driver+userspacelibs) "565.57.01" > (cuda) "560.35.05", hence ok.
+wget https://developer.download.nvidia.com/compute/cuda/12.6.3/local_installers/cuda_12.6.3_560.35.05_linux.run
+sudo bash cuda_12.6.3_560.35.05_linux.run
+
+# finally, add /usr/local/cuda/bin to $PATH with your method of choice. nvcc should be invokable from the shell used for building.
 ```
 
 ### Building the native library & other targets
@@ -90,7 +131,7 @@ starting from the root directory of the repository:
 git submodule update --init --recursive
 mkdir build
 cd build
-cmake -DCMAKE_BUILD_TYPE=Release ..
+cmake -DCMAKE_BUILD_TYPE=Release -DPCCL_BUILD_CUDA_SUPPORT=ON .. # use -DPCCL_BUILD_CUDA_SUPPORT=OFF if building without cuda support
 cmake --build . --config Release --parallel
 ```
 
