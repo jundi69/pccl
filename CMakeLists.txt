@@ -17,11 +17,22 @@ else ()
 endif ()
 
 # Handle CUDA build
-option(PCCL_BUILD_CUDA_SUPPORT "Build PCCL with CUDA support" OFF)
+option(PCCL_BUILD_CUDA_SUPPORT "Build PCCL with CUDA support" ON)
 
 if (PCCL_BUILD_CUDA_SUPPORT)
     find_package(CUDAToolkit REQUIRED)
 
+    # check if the cuda toolkit was found
+    if(CUDAToolkit_FOUND)
+        message(STATUS "CUDA Toolkit was found!")
+        # You can now use CUDA-specific targets and include directories.
+    else()
+        message(WARNING "CUDA Toolkit not found! CUDA support will be disabled!")
+        set(PCCL_BUILD_CUDA_SUPPORT OFF)
+    endif()
+endif ()
+
+if (PCCL_BUILD_CUDA_SUPPORT)
     set(CMAKE_CUDA_STANDARD 20)
 
     # target sm_50 as a lower bound. We override this in a target specific way when necessary.
