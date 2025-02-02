@@ -80,6 +80,7 @@ void ccoip::C2MPacketSyncSharedState::serialize(PacketWriteBuffer &buffer) const
     for (const auto &entry: shared_state_hashes) {
         buffer.writeString(entry.key);
         buffer.write<uint64_t>(entry.hash);
+        buffer.write<uint8_t>(static_cast<uint8_t>(entry.hash_type));
         buffer.write<uint64_t>(entry.num_elements);
         buffer.write<uint8_t>(static_cast<uint8_t>(entry.data_type));
         buffer.write<boolean>(entry.allow_content_inequality);
@@ -94,6 +95,7 @@ bool ccoip::C2MPacketSyncSharedState::deserialize(PacketReadBuffer &buffer) {
         SharedStateHashEntry entry{};
         entry.key = buffer.readString();
         entry.hash = buffer.read<uint64_t>();
+        entry.hash_type = static_cast<ccoip_hash_type_t>(buffer.read<uint8_t>());
         entry.num_elements = buffer.read<uint64_t>();
         entry.data_type = static_cast<ccoip_data_type_t>(buffer.read<uint8_t>());
         entry.allow_content_inequality = buffer.read<boolean>();

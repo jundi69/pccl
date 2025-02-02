@@ -139,6 +139,7 @@ namespace ccoip {
     struct SharedStateHashEntry {
         std::string key;
         uint64_t hash;
+        ccoip_hash_type_t hash_type;
         size_t num_elements;
         ccoip_data_type_t data_type;
         bool allow_content_inequality;
@@ -146,6 +147,7 @@ namespace ccoip {
         friend bool operator==(const SharedStateHashEntry &lhs, const SharedStateHashEntry &rhs) {
             return lhs.key == rhs.key
                    && lhs.hash == rhs.hash
+                   && lhs.hash_type == rhs.hash_type
                    && lhs.num_elements == rhs.num_elements
                    && lhs.data_type == rhs.data_type
                    && lhs.allow_content_inequality == rhs.allow_content_inequality;

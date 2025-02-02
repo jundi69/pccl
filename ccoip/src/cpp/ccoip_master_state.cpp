@@ -17,12 +17,12 @@ bool ccoip::CCoIPMasterState::registerClient(const ccoip_socket_address_t &clien
     client_uuids[internal_address] = uuid;
     uuid_clients[uuid] = internal_address;
     client_info[uuid] = ClientInfo{
-            .client_uuid = uuid,
-            .connection_phase = PEER_REGISTERED,
-            .connection_state = IDLE,
-            .socket_address = client_address,
-            .variable_ports = variable_ports,
-            .peer_group = peer_group
+        .client_uuid = uuid,
+        .connection_phase = PEER_REGISTERED,
+        .connection_state = IDLE,
+        .socket_address = client_address,
+        .variable_ports = variable_ports,
+        .peer_group = peer_group
     };
 
     // set all callsites in peer_list_changed to true
@@ -771,8 +771,8 @@ std::vector<ccoip_socket_address_t> ccoip::CCoIPMasterState::getClientSocketAddr
     return addresses;
 }
 
-std::vector<std::pair<ccoip_uuid_t, ccoip_socket_address_t>> ccoip::CCoIPMasterState::getClientEntrySet() {
-    std::vector<std::pair<ccoip_uuid_t, ccoip_socket_address_t>> entries{};
+std::vector<std::pair<ccoip_uuid_t, ccoip_socket_address_t> > ccoip::CCoIPMasterState::getClientEntrySet() {
+    std::vector<std::pair<ccoip_uuid_t, ccoip_socket_address_t> > entries{};
     entries.reserve(client_uuids.size());
     for (const auto &[internal_address, uuid]: client_uuids) {
         entries.emplace_back(uuid, internal_to_ccoip_sockaddr(internal_address));
@@ -810,8 +810,8 @@ std::unordered_set<ccoip_uuid_t> ccoip::CCoIPMasterState::getCurrentlyAcceptedPe
 }
 
 ccoip::CCoIPMasterState::SharedStateMismatchStatus ccoip::CCoIPMasterState::isNewRevisionLegal(
-        const ccoip_uuid_t &peer_uuid,
-        const uint64_t revision) {
+    const ccoip_uuid_t &peer_uuid,
+    const uint64_t revision) {
     SharedStateMismatchStatus status = SUCCESSFUL_MATCH;
     const auto info_it = client_info.find(peer_uuid);
 
@@ -831,8 +831,8 @@ ccoip::CCoIPMasterState::SharedStateMismatchStatus ccoip::CCoIPMasterState::isNe
 }
 
 ccoip::CCoIPMasterState::SharedStateMismatchStatus ccoip::CCoIPMasterState::sharedStateMatches(
-        const ccoip_uuid_t &peer_uuid, const std::vector<SharedStateHashEntry> &entries
-        ) {
+    const ccoip_uuid_t &peer_uuid, const std::vector<SharedStateHashEntry> &entries
+) {
     SharedStateMismatchStatus status = SUCCESSFUL_MATCH;
     const auto info_it = client_info.find(peer_uuid);
 
@@ -866,6 +866,11 @@ ccoip::CCoIPMasterState::SharedStateMismatchStatus ccoip::CCoIPMasterState::shar
             }
 
             const auto &mask_entry = *mask_entry_it;
+            if (mask_entry.hash_type != entry.hash_type) {
+                status = KEY_SET_MISMATCH;
+                goto end;
+            }
+
             if (mask_entry.hash != entry.hash) {
                 status = CONTENT_HASH_MISMATCH;
                 dirty_content_keys.push_back(mask_entry.key);
@@ -893,8 +898,8 @@ end:
 }
 
 void ccoip::CCoIPMasterState::voteSharedStateMask(
-        const ccoip_uuid_t &peer_uuid,
-        const std::vector<SharedStateHashEntry> &entries) {
+    const ccoip_uuid_t &peer_uuid,
+    const std::vector<SharedStateHashEntry> &entries) {
     const auto info_it = client_info.find(peer_uuid);
     if (info_it == client_info.end()) {
         LOG(WARN) << "Client " << uuid_to_string(peer_uuid) << " not found";
@@ -1030,7 +1035,7 @@ bool ccoip::CCoIPMasterState::isBandwidthStoreFullyPopulated() {
 }
 
 std::optional<ccoip::CCoIPMasterState::SharedStateMismatchStatus> ccoip::CCoIPMasterState::getSharedStateMismatchStatus(
-        const ccoip_uuid_t &peer_uuid) {
+    const ccoip_uuid_t &peer_uuid) {
     const auto info_opt = client_info.find(peer_uuid);
     if (info_opt == client_info.end()) {
         LOG(WARN) << "Client " << uuid_to_string(peer_uuid) << " not found";
@@ -1120,8 +1125,8 @@ bool ccoip::CCoIPMasterState::topologyOptimizationCompleteConsensus() const {
     return voting_peers.size() == client_uuids.size();
 }
 
-std::optional<std::reference_wrapper<ccoip::ClientInfo>> ccoip::CCoIPMasterState::getClientInfo(
-        const ccoip_uuid_t &client_uuid) {
+std::optional<std::reference_wrapper<ccoip::ClientInfo> > ccoip::CCoIPMasterState::getClientInfo(
+    const ccoip_uuid_t &client_uuid) {
     const auto it = client_info.find(client_uuid);
     if (it == client_info.end()) {
         return std::nullopt;

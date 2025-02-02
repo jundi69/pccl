@@ -22,6 +22,10 @@ namespace ccoip {
         ccoipDeviceCpu = 0,
         ccoipDeviceCuda = 1,
     };
+    enum ccoip_hash_type_t {
+        ccoipHashSimple = 0,
+        ccoipHashCrc32 = 1,
+    };
 
     enum ccoip_reduce_op_t {
         ccoipOpSet = 0,

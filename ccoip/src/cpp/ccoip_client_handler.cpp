@@ -252,21 +252,44 @@ bool ccoip::CCoIPClientHandler::syncSharedState(ccoip_shared_state_t &shared_sta
         return false;
     }
 
+#ifdef PCCL_HAS_CUDA_SUPPORT
+    // convert CUDA runtime api pointers
+    for (auto &entry: shared_state.entries) {
+        if (entry.device_type == ccoipDeviceCuda) {
+            // make sure we have a driver api pointer, and not a runtime pointer.
+            // this method will for driver api pointers return the same pointer and for
+            // runtime api pointers obtain the driver api compatible device pointer.
+            CUdeviceptr device_ptr{};
+            if (cuPointerGetAttribute(&device_ptr, CU_POINTER_ATTRIBUTE_DEVICE_POINTER,
+                                      reinterpret_cast<CUdeviceptr>(entry.data_ptr)) != CUDA_SUCCESS) {
+                LOG(FATAL) <<
+                        "Could not convert CUDA runtime api pointer into a device pointer. Are you sure this address is valid? Supplied pointer: "
+                        << entry.data_ptr;
+                return false;
+            }
+            entry.data_ptr = reinterpret_cast<void *>(device_ptr);
+        }
+    }
+#endif
+
     // prepare shared state hashes
     std::vector<SharedStateHashEntry> shared_state_hashes{};
     shared_state_hashes.reserve(shared_state.entries.size());
     for (const auto &entry: shared_state.entries) {
         auto &key = entry.key;
         uint64_t hash = 0;
+        ccoip_hash_type_t hash_type{};
         if (!entry.allow_content_inequality) {
             if (entry.device_type == ccoipDeviceCpu) {
                 hash = hash_utils::CRC32(entry.data_ptr, entry.data_size);
+                hash_type = ccoipHashCrc32;
             } else if (entry.device_type == ccoipDeviceCuda) {
 #ifndef PCCL_HAS_CUDA_SUPPORT
                 LOG(BUG) << "PCCL is not built with CUDA support. We shouldn't even have gotten so far without CUDA support when referencing CUDA tensors. This is a bug!";
                 return false;
 #else
                 hash = hash_utils::simplehash_cuda(entry.data_ptr, entry.data_size);
+                hash_type = ccoipHashSimple;
 #endif
             } else {
                 LOG(BUG) << "Unknown device type: " << entry.device_type <<
@@ -277,6 +300,7 @@ bool ccoip::CCoIPClientHandler::syncSharedState(ccoip_shared_state_t &shared_sta
         shared_state_hashes.push_back(SharedStateHashEntry{
             .key = key,
             .hash = hash,
+            .hash_type = hash_type,
             .data_type = entry.data_type,
             .allow_content_inequality = entry.allow_content_inequality
         });
@@ -428,12 +452,21 @@ bool ccoip::CCoIPClientHandler::syncSharedState(ccoip_shared_state_t &shared_sta
                         continue;
                     }
                     if (i < response->expected_hashes.size()) {
+#ifndef PCCL_HAS_CUDA_SUPPORT
                         uint64_t actual_hash = hash_utils::CRC32(dst_entry.data_ptr, dst_entry.data_size);
                         if (uint64_t expected_hash = response->expected_hashes[i]; actual_hash != expected_hash) {
                             LOG(ERR) << "Shared state distributor transmitted incorrect shared state entry for key " <<
                                     dst_entry.key << ": Expected hash " << expected_hash << " but got " << actual_hash;
                             return false;
                         }
+#else
+                        uint64_t actual_hash = hash_utils::simplehash_cuda(dst_entry.data_ptr, dst_entry.data_size);
+                        if (uint64_t expected_hash = response->expected_hashes[i]; actual_hash != expected_hash) {
+                            LOG(ERR) << "Shared state distributor transmitted incorrect shared state entry for key " <<
+                                    dst_entry.key << ": Expected hash " << expected_hash << " but got " << actual_hash;
+                            return false;
+                        }
+#endif
                     } else {
                         LOG(WARN) << "Master did not transmit expected hash for shared state entry " << dst_entry.key <<
                                 "; Skipping hash check...";
@@ -762,6 +795,8 @@ end:
     if (!shared_state_socket.sendPacket(client_address, response)) {
         LOG(ERR) << "Failed to send shared state response to " << ccoip_sockaddr_to_str(client_address);
     }
+    uint32_t last_device_ordinal = -1;
+
     for (const auto &entry: entries_to_send) {
         if (entry.device_type == ccoipDeviceCpu) {
             // if the tensor is already on the cpu, send directly
@@ -777,11 +812,78 @@ end:
                     return;
                 }
 #else
-            std::unique_ptr<std::byte[]> host_buffer(new std::byte[entry.data_size]);
-            if (cuMemcpyDtoH_v2(host_buffer.get(), reinterpret_cast<CUdeviceptr>(entry.data_ptr), entry.data_size) !=
-                CUDA_SUCCESS) {
+            const auto device_ptr = reinterpret_cast<CUdeviceptr>(entry.data_ptr);
+
+            // get device the pointer is on
+            int device_ordinal{};
+            if (const CUresult result = cuPointerGetAttribute(&device_ordinal, CU_POINTER_ATTRIBUTE_DEVICE_ORDINAL,
+                                                              device_ptr); result != CUDA_SUCCESS) {
+                const char *error_name{};
+                cuGetErrorName(result, &error_name);
+                const char *error_string{};
+                cuGetErrorString(result, &error_string);
+
                 LOG(FATAL) <<
-                        "Failed to copy cuda device memory to host while serving shared state transmission request! Is shared state referenced memory still valid?";
+                        "Failed to get device ordinal for device pointer " << device_ptr << "; "
+                        << std::string(error_name) << ": " << std::string(error_string);
+                return;
+            }
+
+            if (device_ordinal != last_device_ordinal) {
+                last_device_ordinal = device_ordinal;
+
+                // get device from device ordinal
+                CUdevice device{};
+                if (const CUresult result = cuDeviceGet(&device, device_ordinal); result != CUDA_SUCCESS) {
+                    const char *error_name{};
+                    cuGetErrorName(result, &error_name);
+                    const char *error_string{};
+                    cuGetErrorString(result, &error_string);
+
+                    LOG(FATAL) <<
+                            "Failed to get device handle from ordinal for device ordinal " << device_ordinal << "; "
+                            << std::string(error_name) << ": " << std::string(error_string);
+                    return;
+                }
+                CUcontext primary_ctx{};
+
+                if (const CUresult result = cuDevicePrimaryCtxRetain(&primary_ctx, device); result != CUDA_SUCCESS) {
+                    const char *error_name{};
+                    cuGetErrorName(result, &error_name);
+                    const char *error_string{};
+                    cuGetErrorString(result, &error_string);
+
+                    LOG(FATAL) <<
+                            "Failed to retain primary context for device with ordinal " << device_ordinal << "; "
+                            << std::string(error_name) << ": " << std::string(error_string);
+                    return;
+                }
+
+                if (const CUresult result = cuCtxSetCurrent(primary_ctx); result != CUDA_SUCCESS) {
+                    const char *error_name{};
+                    cuGetErrorName(result, &error_name);
+                    const char *error_string{};
+                    cuGetErrorString(result, &error_string);
+
+                    LOG(FATAL) <<
+                            "Failed to set primary context for device with ordinal " << device_ordinal << "; "
+                            << std::string(error_name) << ": " << std::string(error_string);
+                    return;
+                }
+            }
+
+            std::unique_ptr<std::byte[]> host_buffer(new std::byte[entry.data_size]);
+            if (const auto result = cuMemcpyDtoH_v2(host_buffer.get(), device_ptr,
+                                                    entry.data_size);
+                result != CUDA_SUCCESS) {
+                const char *error_name{};
+                cuGetErrorName(result, &error_name);
+                const char *error_string{};
+                cuGetErrorString(result, &error_string);
+
+                LOG(FATAL) <<
+                        "Failed to copy cuda device memory to host while serving shared state transmission request; "
+                        << std::string(error_name) << ": " << std::string(error_string);
                 return;
             }
             if (!shared_state_socket.sendRawPacket(client_address, std::span(host_buffer.get(), entry.data_size))) {

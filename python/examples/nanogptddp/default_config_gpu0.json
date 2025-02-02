@@ -32,5 +32,5 @@
   "ccoip_host": "127.0.0.1:48148",
   "device": "cuda:0",
   "dtype": "float16",
-  "compile": true
+  "compile": false
 }

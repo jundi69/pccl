@@ -55,18 +55,27 @@ uint32_t warpReduceHash(uint32_t val) {
  * @return The final reduced hash value for the block.
  */
 __device__ uint32_t blockReduceHash(uint32_t val) {
+    // First, reduce within each warp.
     val = warpReduceHash(val);
-    __shared__ uint32_t warpResults[32]; // Supports up to 1024 threads (32 warps)
-    const uint32_t lane = threadIdx.x & 31;
-    const uint32_t warpId = threadIdx.x >> 5;
+
+    // Write each warp's result into shared memory.
+    __shared__ uint32_t warpResults[32];  // one per possible warp
+    const uint32_t lane = threadIdx.x & 31;     // lane index (0-31)
+    const uint32_t warpId = threadIdx.x >> 5;     // warp index
+
     if (lane == 0) {
         warpResults[warpId] = val;
     }
     __syncthreads();
 
+    // Now, only the first warp performs the final reduction.
+    // Compute how many warps actually participated.
+    const uint32_t nWarps = (blockDim.x + 31) / 32;
     uint32_t final_val = 0;
-    if (warpId == 0) {
-        final_val = warpResults[lane];
+    if (threadIdx.x < 32) {
+        // Only valid lanes (less than nWarps) load from shared memory.
+        final_val = lane < nWarps ? warpResults[lane] : 0;
+        // Do the warp–level reduction on these values.
         final_val = warpReduceHash(final_val);
     }
     return final_val;
@@ -163,8 +172,7 @@ extern "C" __host__ uint64_t simplehash_cuda_kernel(const void *data, const size
     }
 
     // Interpret the data as an array of 32–bit words.
-    const size_t n_words = n_bytes / 4;
-    const size_t tailBytes = n_bytes % 4;
+    const size_t n_words = n_bytes / sizeof(uint32_t);
 
     // Allocate device memory for the final result.
     CUdeviceptr d_out = 0;
@@ -173,66 +181,85 @@ extern "C" __host__ uint64_t simplehash_cuda_kernel(const void *data, const size
         abort();
     }
 
-    uint32_t finalHostVal = 0;
+    uint32_t final_host_val = 0;
 
     if (n_words > 0) {
         // Use vectorized elements (each uint4 covers 4 uint32_t's) to base grid dimensions.
-        constexpr int blockDim_x = 256;
-        const auto totalVec = static_cast<uint32_t>(n_words / 4);
-        uint32_t gridDim_x = (totalVec + blockDim_x - 1) / blockDim_x;
-        if (gridDim_x > 960) {
-            gridDim_x = 960;
+        const auto n_vec = static_cast<uint32_t>(n_words / 4);
+        const auto tail_ints = static_cast<uint32_t>(n_words % 4);
+        if (n_vec > 0) {
+            constexpr int blockDim_x = 256;
+            uint32_t gridDim_x = (n_vec + blockDim_x - 1) / blockDim_x;
+            if (gridDim_x > 960) {
+                gridDim_x = 960;
+            }
+
+            // Allocate an array for partial block results.
+            CUdeviceptr d_partial = 0;
+            res = cuMemAlloc(&d_partial, gridDim_x * sizeof(uint32_t));
+            if (res != CUDA_SUCCESS) {
+                abort();
+            }
+
+            // Launch the big–pass kernel.
+            const auto d_in_ptr = static_cast<const uint32_t *>(data);
+            auto *d_partial_ptr = reinterpret_cast<uint32_t *>(d_partial);
+            big_reduce_kernel<<<gridDim_x, blockDim_x>>>(d_in_ptr, d_partial_ptr, n_words);
+
+            // Launch the final–pass kernel (using one block).
+            final_reduce_kernel<<<1, blockDim_x>>>(d_partial_ptr,
+                                                   reinterpret_cast<uint32_t *>(d_out),
+                                                   gridDim_x);
+
+            res = cuStreamSynchronize(nullptr);
+            if (res != CUDA_SUCCESS) {
+                abort();
+            }
+
+            // Copy the final hash result back to the host.
+            res = cuMemcpyDtoH(&final_host_val, d_out, sizeof(uint32_t));
+            if (res != CUDA_SUCCESS) {
+                abort();
+            }
+
+            // Free the partial results array.
+            cuMemFree(d_partial);
         }
 
-        // Allocate an array for partial block results.
-        CUdeviceptr d_partial = 0;
-        res = cuMemAlloc(&d_partial, gridDim_x * sizeof(uint32_t));
-        if (res != CUDA_SUCCESS) {
-            abort();
+        // Process any left-over words that do not fit into a vector
+        if (tail_ints > 0) {
+            uint32_t tail_host[4] = {0, 0, 0, 0};
+            const CUdeviceptr tail_ptr = reinterpret_cast<uintptr_t>(data) + n_vec * 4 * sizeof(uint32_t);
+            res = cuMemcpyDtoH(tail_host, tail_ptr, tail_ints * sizeof(uint32_t));
+            if (res != CUDA_SUCCESS) {
+                abort();
+            }
+            uint32_t tailVal = 0;
+            for (size_t i = 0; i < tail_ints; ++i) {
+                tailVal |= tail_host[i] << (8 * i);
+            }
+            final_host_val = HashCombine()(final_host_val, tailVal);
         }
-
-        // Launch the big–pass kernel.
-        const auto d_in_ptr = static_cast<const uint32_t *>(data);
-        auto *d_partial_ptr = reinterpret_cast<uint32_t *>(d_partial);
-        big_reduce_kernel<<<gridDim_x, blockDim_x>>>(d_in_ptr, d_partial_ptr, n_words);
-
-        // Launch the final–pass kernel (using one block).
-        final_reduce_kernel<<<1, blockDim_x>>>(d_partial_ptr,
-                                               reinterpret_cast<uint32_t *>(d_out),
-                                               gridDim_x);
-
-        res = cuStreamSynchronize(nullptr);
-        if (res != CUDA_SUCCESS) {
-            abort();
-        }
-
-        // Copy the final hash result back to the host.
-        res = cuMemcpyDtoH(&finalHostVal, d_out, sizeof(uint32_t));
-        if (res != CUDA_SUCCESS) {
-            abort();
-        }
-
-        // Free the partial results array.
-        cuMemFree(d_partial);
     }
 
     // Process any leftover bytes (if n_bytes is not a multiple of 4).
-    if (tailBytes > 0) {
-        const CUdeviceptr tailPtr = reinterpret_cast<uintptr_t>(data) + n_words * 4;
-        uint8_t tailHost[4] = {0, 0, 0, 0};
+    const size_t tail_bytes = n_bytes % sizeof(uint32_t);
+    if (tail_bytes > 0) {
+        const CUdeviceptr tail_ptr = reinterpret_cast<uintptr_t>(data) + n_words * sizeof(uint32_t);
+        uint8_t tail_host[4] = {0, 0, 0, 0};
 
-        res = cuMemcpyDtoH(tailHost, tailPtr, tailBytes);
+        res = cuMemcpyDtoH(tail_host, tail_ptr, tail_bytes);
         if (res != CUDA_SUCCESS) {
             abort();
         }
 
         uint32_t tailVal = 0;
-        for (size_t i = 0; i < tailBytes; ++i) {
-            tailVal |= static_cast<uint32_t>(tailHost[i]) << (8 * i);
+        for (size_t i = 0; i < tail_bytes; ++i) {
+            tailVal |= static_cast<uint32_t>(tail_host[i]) << (8 * i);
         }
-        finalHostVal = HashCombine()(finalHostVal, tailVal);
+        final_host_val = HashCombine()(final_host_val, tailVal);
     }
 
     cuMemFree(d_out);
-    return finalHostVal;
+    return final_host_val;
 }

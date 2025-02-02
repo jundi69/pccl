@@ -354,10 +354,10 @@ pcclResult_t pcclSynchronizeSharedState(const pcclComm_t *communicator, pcclShar
         }
 
 #ifndef PCCL_HAS_CUDA_SUPPORT
-    if (device_type == pcclDeviceCuda) {
-        LOG(WARN) << "PCCL is not built with CUDA support. Please use a cuda-enabled distribution of PCCL to use cuda tensors with PCCL!";
-        return pcclInvalidArgument;
-    }
+        if (device_type == pcclDeviceCuda) {
+            LOG(WARN) << "PCCL is not built with CUDA support. Please use a cuda-enabled distribution of PCCL to use cuda tensors with PCCL!";
+            return pcclInvalidArgument;
+        }
 #endif
 
         shared_state_internal.entries.push_back(ccoip_shared_state_entry_t{
