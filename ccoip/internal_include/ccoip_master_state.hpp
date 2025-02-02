@@ -260,6 +260,12 @@ namespace ccoip {
         /// Peer group bin is cleared when the shared state distribution phase ends.
         std::unordered_map<uint32_t, std::unordered_map<std::string, uint64_t>> shared_state_hashes{};
 
+        /// Cache of the shared state hash types for all entries in the shared state mask for each peer group.
+        /// by their key string.
+        /// Peer group bin is cleared when the shared state distribution phase ends.
+        std::unordered_map<uint32_t, std::unordered_map<std::string, ccoip_hash_type_t>> shared_state_hash_types{};
+
+
         /// The next shared state revision that is expected from peers synchronizing shared state, intending to distribute.
         /// Shared state revisions that do not match this value will either be considered outdated or a violation of the
         /// one-increment-only rule.
@@ -563,6 +569,12 @@ namespace ccoip {
         /// For a key to be found, it must be present in the shared state mask.
         /// The shared state mask needs to be populated by @code sharedStateMatches@endcode before calling this function.
         [[nodiscard]] uint64_t getSharedStateEntryHash(uint32_t peer_group, const std::string &key);
+
+
+        /// Returns the shared state entry hash type for a particular key; returns std::nullopt if the key is not found
+        /// For a key to be found, it must be present in the shared state mask.
+        /// The shared state mask needs to be populated by @code sharedStateMatches@endcode before calling this function.
+        [[nodiscard]] std::optional<ccoip_hash_type_t> getSharedStateEntryHashType(uint32_t peer_group, const std::string &key);
 
         /// Returns the set of shared state keys
         [[nodiscard]] std::vector<std::string> getSharedStateKeys(uint32_t peer_group);

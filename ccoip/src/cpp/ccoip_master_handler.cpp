@@ -596,6 +596,12 @@ bool ccoip::CCoIPMasterHandler::checkSyncSharedStateConsensus(const uint32_t pee
 
                     for (const auto &key: outdated_keys) {
                         response.expected_hashes.push_back(server_state.getSharedStateEntryHash(peer_group, key));
+                        const auto hash_type_opt = server_state.getSharedStateEntryHashType(peer_group, key);
+                        if (!hash_type_opt) {
+                            LOG(BUG) << "Hash type for shared state entry " << key << " could not be found in peer group " << peer_group << " despite the fact that a hash has been recorded. This is a bug.";
+                            return false;
+                        }
+                        response.expected_hash_types.push_back(*hash_type_opt);
                     }
                 } else {
                     LOG(ERR) << "No peer found to distribute shared state to " << ccoip_sockaddr_to_str(peer_address) <<

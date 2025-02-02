@@ -302,6 +302,7 @@ namespace ccoip {
         ccoip_socket_address_t distributor_address;
         std::vector<std::string> outdated_keys;
         std::vector<uint64_t> expected_hashes;
+        std::vector<ccoip_hash_type_t> expected_hash_types;
 
         void serialize(PacketWriteBuffer &buffer) const override;
 

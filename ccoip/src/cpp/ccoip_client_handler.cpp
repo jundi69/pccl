@@ -452,21 +452,30 @@ bool ccoip::CCoIPClientHandler::syncSharedState(ccoip_shared_state_t &shared_sta
                         continue;
                     }
                     if (i < response->expected_hashes.size()) {
-#ifndef PCCL_HAS_CUDA_SUPPORT
-                        uint64_t actual_hash = hash_utils::CRC32(dst_entry.data_ptr, dst_entry.data_size);
-                        if (uint64_t expected_hash = response->expected_hashes[i]; actual_hash != expected_hash) {
-                            LOG(ERR) << "Shared state distributor transmitted incorrect shared state entry for key " <<
-                                    dst_entry.key << ": Expected hash " << expected_hash << " but got " << actual_hash;
-                            return false;
-                        }
-#else
-                        uint64_t actual_hash = hash_utils::simplehash_cuda(dst_entry.data_ptr, dst_entry.data_size);
-                        if (uint64_t expected_hash = response->expected_hashes[i]; actual_hash != expected_hash) {
-                            LOG(ERR) << "Shared state distributor transmitted incorrect shared state entry for key " <<
-                                    dst_entry.key << ": Expected hash " << expected_hash << " but got " << actual_hash;
-                            return false;
+                        uint64_t expected_hash = response->expected_hashes[i];
+                        ccoip_hash_type_t expected_hash_type = response->expected_hash_types[i];
+#ifdef PCCL_HAS_CUDA_SUPPORT
+                        if (expected_hash_type == ccoipHashSimple) {
+                            uint64_t actual_hash = hash_utils::simplehash_cuda(dst_entry.data_ptr, dst_entry.data_size);
+                            if (actual_hash != expected_hash) {
+                                LOG(ERR) << "Shared state distributor transmitted incorrect shared state entry for key " <<
+                                        dst_entry.key << ": Expected hash " << expected_hash << " but got " << actual_hash;
+                                return false;
+                            }
                         }
 #endif
+                        if (expected_hash_type == ccoipHashCrc32) {
+                            if (dst_entry.device_type == ccoipDeviceCuda) {
+                                LOG(FATAL) << "CRC32 is currently not supported on CUDA devices.";
+                                return false;
+                            }
+                            uint64_t actual_hash = hash_utils::CRC32(dst_entry.data_ptr, dst_entry.data_size);
+                            if (actual_hash != expected_hash) {
+                                LOG(ERR) << "Shared state distributor transmitted incorrect shared state entry for key " <<
+                                        dst_entry.key << ": Expected hash " << expected_hash << " but got " << actual_hash;
+                                return false;
+                            }
+                        }
                     } else {
                         LOG(WARN) << "Master did not transmit expected hash for shared state entry " << dst_entry.key <<
                                 "; Skipping hash check...";

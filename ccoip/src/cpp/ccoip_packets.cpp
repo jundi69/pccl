@@ -309,6 +309,9 @@ void ccoip::M2CPacketSyncSharedState::serialize(PacketWriteBuffer &buffer) const
     for (const auto &hash: expected_hashes) {
         buffer.write<uint64_t>(hash);
     }
+    for (const auto &hash_type: expected_hash_types) {
+        buffer.write<uint8_t>(hash_type);
+    }
 }
 
 bool ccoip::M2CPacketSyncSharedState::deserialize(PacketReadBuffer &buffer) {
@@ -322,6 +325,9 @@ bool ccoip::M2CPacketSyncSharedState::deserialize(PacketReadBuffer &buffer) {
     expected_hashes.reserve(n_keys);
     for (size_t i = 0; i < n_keys; i++) {
         expected_hashes.push_back(buffer.read<uint64_t>());
+    }
+    for (size_t i = 0; i < n_keys; i++) {
+        expected_hash_types.push_back(static_cast<ccoip_hash_type_t>(buffer.read<uint8_t>()));
     }
     return true;
 }
@@ -449,8 +455,8 @@ bool ccoip::S2CPacketSharedStateResponse::deserialize(PacketReadBuffer &buffer) 
         const std::string key = buffer.readString();
         const auto size_bytes = buffer.read<uint64_t>();
         entries.push_back(SharedStateEntry{
-                .key = key,
-                .size_bytes = size_bytes
+            .key = key,
+            .size_bytes = size_bytes
         });
     }
     return true;

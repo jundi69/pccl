@@ -455,6 +455,7 @@ bool ccoip::CCoIPMasterState::endSharedStateSyncPhase(const uint32_t peer_group)
     shared_state_mask[peer_group].clear();
     shared_state_mask_candidates[peer_group].clear();
     shared_state_hashes[peer_group].clear();
+    shared_state_hash_types[peer_group].clear();
     shared_state_statuses[peer_group].clear();
     shared_state_dirty_keys[peer_group].clear();
     votes_sync_shared_state_complete[peer_group].clear();
@@ -992,6 +993,11 @@ bool ccoip::CCoIPMasterState::checkMaskSharedStateMismatches(const uint32_t peer
                         " in peer group " << peer_group << " for key " << mask_entry.key;
                 status = KEY_SET_MISMATCH;
             }
+            if (mask_entry.hash_type != entry.hash_type) {
+                LOG(WARN) << "Shared state mask hash_type mismatch for client " << uuid_to_string(uuid) <<
+                        " in peer group " << peer_group << " for key " << mask_entry.key;
+                status = KEY_SET_MISMATCH;
+            }
             if (status != KEY_SET_MISMATCH && mask_entry.hash != entry.hash) {
                 LOG(WARN) << "Shared state mask content mismatch for client " << uuid_to_string(uuid) <<
                         " in peer group " << peer_group << " for key " << mask_entry.key;
@@ -999,6 +1005,7 @@ bool ccoip::CCoIPMasterState::checkMaskSharedStateMismatches(const uint32_t peer
 
                 // we actually need to catch & track all mismatches here for content hashes, so we can't break early when content hash mismatch occurs
                 shared_state_hashes[peer_group][mask_entry.key] = mask_entry.hash;
+                shared_state_hash_types[peer_group][mask_entry.key] = mask_entry.hash_type;
                 shared_state_dirty_keys[peer_group][uuid].push_back(mask_entry.key);
             }
 
@@ -1153,6 +1160,16 @@ uint64_t ccoip::CCoIPMasterState::getSharedStateEntryHash(const uint32_t peer_gr
     const auto it = group_state_hashes.find(key);
     if (it == group_state_hashes.end()) {
         return 0;
+    }
+    return it->second;
+}
+
+std::optional<ccoip::ccoip_hash_type_t> ccoip::CCoIPMasterState::getSharedStateEntryHashType(const uint32_t peer_group,
+    const std::string &key) {
+    auto &group_state_hashes = shared_state_hash_types[peer_group];
+    const auto it = group_state_hashes.find(key);
+    if (it == group_state_hashes.end()) {
+        return std::nullopt;
     }
     return it->second;
 }
