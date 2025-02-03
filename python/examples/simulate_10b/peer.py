@@ -5,6 +5,8 @@ import torch
 from pccl import Communicator, Attribute, ReduceOp, QuantizationOptions, DataType, \
     QuantizationAlgorithm
 
+from python.examples.simulate_10b.profiler import Profiler
+
 HOST: str = '127.0.0.1:48148'
 STEPS: int = 1_000_000
 PEERS: int = 1
@@ -30,33 +32,38 @@ def main():
 
     n_performed_steps = 0
     while n_performed_steps < STEPS:
-        if n_performed_steps > 0 or world_size == 1:
-            if world_size > 1:
-                communicator.optimize_topology()
-            logging.info(f"(NODE={NODE}, it={n_performed_steps}) update_topology()")
-            communicator.update_topology()
-        world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
+        profiler = Profiler()
+        with profiler.session("step"):
+            if n_performed_steps > 0 or world_size == 1:
+                if world_size > 1:
+                    with profiler.session("pccl::communicator.optimize_topology"):
+                        communicator.optimize_topology()
+                logging.info(f"(NODE={NODE}, it={n_performed_steps}) update_topology()")
+                with profiler.session("pccl::communicator.update_topology"):
+                    communicator.update_topology()
+            world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
 
-        if world_size < 2:
-            sleep(1)
-            continue
+            if world_size < 2:
+                sleep(1)
+                continue
 
-        # Create gradients tensors
-        grad: torch.Tensor = torch.rand(NUM_ELEMENTS, dtype=torch.float32)
-        while True:
-            logging.info(f"(NODE={NODE}, it={n_performed_steps}) all_reduce_async()")
-            handle = communicator.all_reduce_async(grad, weights,
-                                                   op=ReduceOp.SUM,
-                                                   quantization_options=QuantizationOptions(DataType.UINT8,
-                                                                                            QuantizationAlgorithm.MIN_MAX))
+            # Create gradients tensors
+            grad: torch.Tensor = torch.rand(NUM_ELEMENTS, dtype=torch.float32)
+            with profiler.session("pccl::communicator.all_reduce"):
+                while True:
+                    logging.info(f"(NODE={NODE}, it={n_performed_steps}) all_reduce_async()")
+                    handle = communicator.all_reduce_async(grad, weights,
+                                                           op=ReduceOp.SUM,
+                                                           quantization_options=QuantizationOptions(DataType.UINT8,
+                                                                                                    QuantizationAlgorithm.MIN_MAX))
 
-            is_success, status, info = handle.wait()
-            assert is_success, f"All reduce failed with stats: {status}"
-            assert info is not None
-            logging.info(
-                f"((NODE={NODE}, it={n_performed_steps}) Reduce completed RX: {info.rx_bytes}, TX: {info.tx_bytes}")
-            break
-        n_performed_steps += 1
+                    is_success, status, info = handle.wait()
+                    assert is_success, f"All reduce failed with stats: {status}"
+                    assert info is not None
+                    logging.info(
+                        f"((NODE={NODE}, it={n_performed_steps}) Reduce completed RX: {info.rx_bytes}, TX: {info.tx_bytes}")
+                    break
+            n_performed_steps += 1
 
     logging.info(f"(NODE={NODE}) Finished")
 
