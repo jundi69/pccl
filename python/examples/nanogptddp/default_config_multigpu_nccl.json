@@ -10,7 +10,7 @@
   "wandb_project": "owt",
   "wandb_run_name": "gpt2",
   "dataset": "openwebtext",
-  "gradient_accumulation_steps": 20,
+  "gradient_accumulation_steps": 40,
   "batch_size": 12,
   "block_size": 1024,
   "n_layer": 12,
@@ -30,8 +30,7 @@
   "min_lr": 0.00006,
   "backend": "nccl",
   "ccoip_host": "127.0.0.1:48148",
-  "device": "cuda:1",
+  "device": "cuda:0",
   "dtype": "float16",
-  "compile": false,
-  "is_master_process": false
+  "compile": false
 }

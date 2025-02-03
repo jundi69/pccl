@@ -170,6 +170,10 @@ extern "C" __host__ uint64_t simplehash_cuda_kernel(const void *data, const size
     if (n_bytes == 0) {
         return 0;
     }
+    // if not 16-byte alligned, fail
+    if (reinterpret_cast<uint64_t>(data) % 16 != 0) {
+        abort();
+    }
 
     // Interpret the data as an array of 32–bit words.
     const size_t n_words = n_bytes / sizeof(uint32_t);

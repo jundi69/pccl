@@ -3,17 +3,17 @@ This training script can be run both on a single gpu in debug mode,
 and also in a larger training run with distributed data parallel (ddp).
 
 Example single GPU:
-$ python train.py --config_path=default_config.json
+$ python train_pccl.py --config_path=default_config.json
 
 Example DDP on 4 GPUs on 1 node:
-$ torchrun --standalone --nproc_per_node=4 train.py --config_path=default_config.json
+$ torchrun --standalone --nproc_per_node=4 train_pccl.py --config_path=default_config.json
 
 Example DDP on 8 GPUs across 2 nodes:
 (Master node, IP 123.456.123.456)
-$ torchrun --nproc_per_node=8 --nnodes=2 --node_rank=0 --master_addr=123.456.123.456 --master_port=1234 train.py
+$ torchrun --nproc_per_node=8 --nnodes=2 --node_rank=0 --master_addr=123.456.123.456 --master_port=1234 train_pccl.py
 
 (Worker node)
-$ torchrun --nproc_per_node=8 --nnodes=2 --node_rank=1 --master_addr=123.456.123.456 --master_port=1234 train.py
+$ torchrun --nproc_per_node=8 --nnodes=2 --node_rank=1 --master_addr=123.456.123.456 --master_port=1234 train_pccl.py
 (If your cluster does not have Infiniband interconnect prepend NCCL_IB_DISABLE=1)
 
 All runtime configuration (hyperparameters, logging settings, etc.) is expected
@@ -27,6 +27,7 @@ import pickle
 import json
 import argparse
 import pccl
+import zlib
 from contextlib import nullcontext
 
 import numpy as np
@@ -37,6 +38,7 @@ from torch.nn.parallel import DistributedDataParallel
 from torch.distributed import init_process_group, destroy_process_group
 
 from model import GPTConfig, GPT
+from python.examples.nanogptddp.profiler import Profiler
 
 
 def get_batch(split, config, device_type, device):
@@ -68,6 +70,15 @@ def get_batch(split, config, device_type, device):
         y = y.to(device)
 
     return x, y
+
+
+def compute_crc32(tensor: torch.Tensor) -> int:
+    tensor_cpu = tensor.detach().cpu()
+    tensor_contiguous = tensor_cpu.contiguous()
+    tensor_np = tensor_contiguous.numpy()
+    tensor_bytes = tensor_np.tobytes()
+    checksum = zlib.crc32(tensor_bytes)
+    return checksum
 
 
 @torch.no_grad()
@@ -161,7 +172,7 @@ def main():
         )
         config["gradient_accumulation_steps"] = gas // ddp_world_size
     else:
-        master_process = True
+        master_process = config["is_master_process"]
         seed_offset = 0
         ddp_world_size = 1
         device = config["device"]
@@ -207,6 +218,7 @@ def main():
     # -------------------------------------------------------------------------
     # 5) Create or resume model
     # -------------------------------------------------------------------------
+    torch.manual_seed(1337 + seed_offset)
     model_args = dict(
         n_layer=config["n_layer"],
         n_head=config["n_head"],
@@ -349,135 +361,176 @@ def main():
 
     world_size: int = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
     n_performed_steps = 0
+
+    grads_dst = None
+    grads = None
     while True:
-        if n_performed_steps > 0 or world_size == 1:
-            # if world_size > 1:
-            #    communicator.optimize_topology()
-            communicator.update_topology()
-        world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
+        profiler = Profiler()
+        with profiler.session("step"):
+            if n_performed_steps > 0 or world_size == 1:
+                # if world_size > 1:
+                # communicator.optimize_topology()
+                with profiler.session("pccl::communicator::update_topology()"):
+                    communicator.update_topology()
+            world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
 
-        if world_size < 2:
-            print("Waiting for more workers to join...")
-            time.sleep(1)
-            continue
-
-        # Determine and set learning rate
-        lr = get_lr(iter_num, config)
-        for param_group in optimizer.param_groups:
-            param_group['lr'] = lr
-
-        info = communicator.sync_shared_state(shared_state)
-        assert info is not None
-        if n_performed_steps > 1:
-            assert info.tx_bytes == 0 and info.rx_bytes == 0
-
-        # Evaluate and save checkpoint
-        if iter_num % config["eval_interval"] == 0 and master_process:
-            losses = estimate_loss(raw_model, ctx, config, get_batch_fn, device_type, device)
-            print(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
-
-            if config["wandb_log"]:
-                import wandb
-                wandb.log({
-                    "iter": iter_num,
-                    "train/loss": losses['train'],
-                    "val/loss": losses['val'],
-                    "lr": lr,
-                    "mfu": running_mfu * 100,
-                })
-
-            if losses['val'] < best_val_loss or config["always_save_checkpoint"]:
-                best_val_loss = losses['val']
-                if iter_num > 0:
-                    ckpt = {
-                        'model': raw_model.state_dict(),
-                        'optimizer': optimizer.state_dict(),
-                        'model_args': model_args,
-                        'iter_num': iter_num,
-                        'best_val_loss': best_val_loss,
-                        'config': config,
-                    }
-                    ckpt_path = os.path.join(config["out_dir"], 'ckpt.pt')
-                    print(f"Saving checkpoint to {ckpt_path}")
-                    torch.save(ckpt, ckpt_path)
-
-        if iter_num == 0 and config["eval_only"]:
-            # If we're only doing evaluation, break right after the first eval
-            break
-
-        # Gradient accumulation
-        for micro_step in range(config["gradient_accumulation_steps"]):
-            if ddp:
-                # only sync gradients at last micro step in DDP
-                model.require_backward_grad_sync = (micro_step == config["gradient_accumulation_steps"] - 1)
-
-            with ctx:
-                logits, loss = model(x, y)
-                loss = loss / config["gradient_accumulation_steps"]
-
-            # prefetch next batch while GPU is busy
-            x, y = get_batch_fn('train', config, device_type, device)
-
-            # backward pass
-            loss.backward()
-
-        # Clip gradients BEFORE all reduce to ensure peer synchronization!
-        if config["grad_clip"] != 0.0:
-            torch.nn.utils.clip_grad_norm_(model.parameters(), config["grad_clip"])
-
-        # All reduce gradients with PCCL
-        while True:
-            grads = torch.cat([p.grad.view(-1) for p in model.parameters() if p.grad is not None]).to(device='cpu')
-            op_desc = ReduceOperandDescriptor(
-                datatype=DataType.FLOAT,
-                distribution_hint=DistributionHint.NORMAL
-            )
-            quant_desc = QuantizationOptions(
-                quantized_datatype=DataType.FLOAT,
-                algorithm=pccl.QuantizationAlgorithm.NONE
-            )
-            start = time.time()
-            handle = communicator.all_reduce_async(grads, grads, operand_descriptor=op_desc,
-                                                   quantization_options=quant_desc, op=ReduceOp.SUM)
-            is_success, status, info = handle.wait()
-            end = time.time()
-            if not is_success:
-                continue  # retry, this can happen e.g. if peers leave
-            assert info is not None
-            total_bytes = info.tx_bytes + info.rx_bytes
-            print(
-                f"step {iter_num}: all reduce completed in {end - start:.2f}s, bandwidth {total_bytes / (end - start) / 1e6:.2f} MB/s")
-            break
-
-        # scatter gradients back to model parameters
-        offset = 0
-        for p in model.parameters():
-            if p.grad is None:
+            if world_size < 2:
+                print("Waiting for more workers to join...")
+                time.sleep(1)
                 continue
-            numel = p.numel()
-            p.grad.data.copy_(grads[offset:offset + numel].view_as(p.grad))
-            offset += numel
 
-        optimizer.step()
-        optimizer.zero_grad(set_to_none=True)
+            # Determine and set learning rate
+            lr = get_lr(iter_num, config)
+            for param_group in optimizer.param_groups:
+                param_group['lr'] = lr
 
-        # Logging / timing
-        t1 = time.time()
-        dt = t1 - t0
-        t0 = t1
-        if iter_num % config["log_interval"] == 0 and master_process:
-            lossf = loss.item() * config["gradient_accumulation_steps"]  # approximate actual loss
-            if local_iter_num >= 5:  # let training loop warm up
-                mfu = raw_model.estimate_mfu(config["batch_size"] * config["gradient_accumulation_steps"], dt)
-                running_mfu = mfu if running_mfu < 0 else 0.9 * running_mfu + 0.1 * mfu
-            print(f"iter {iter_num}: loss {lossf:.4f}, time {dt * 1000:.2f}ms, mfu {running_mfu * 100:.2f}%")
+            torch.cuda.synchronize(device)
 
-        iter_num += 1
-        local_iter_num += 1
+            with profiler.session("pccl::communicator::sync_shared_state()"):
+                info = communicator.sync_shared_state(shared_state)
 
-        # Termination
-        if iter_num > config["max_iters"]:
-            break
+            assert info is not None
+            print(f"Shared state sync complete: Tx-Bytes: {info.tx_bytes}, Rx-Bytes: {info.rx_bytes}")
+
+            # Evaluate and save checkpoint
+            if iter_num % config["eval_interval"] == 0 and master_process:
+                with profiler.session("estimate_loss"):
+                    losses = estimate_loss(raw_model, ctx, config, get_batch_fn, device_type, device)
+
+                print(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
+
+                if config["wandb_log"]:
+                    import wandb
+                    wandb.log({
+                        "iter": iter_num,
+                        "train/loss": losses['train'],
+                        "val/loss": losses['val'],
+                        "lr": lr,
+                        "mfu": running_mfu * 100,
+                    })
+
+                if losses['val'] < best_val_loss or config["always_save_checkpoint"]:
+                    best_val_loss = losses['val']
+                    if iter_num > 0:
+                        ckpt = {
+                            'model': raw_model.state_dict(),
+                            'optimizer': optimizer.state_dict(),
+                            'model_args': model_args,
+                            'iter_num': iter_num,
+                            'best_val_loss': best_val_loss,
+                            'config': config,
+                        }
+                        ckpt_path = os.path.join(config["out_dir"], 'ckpt.pt')
+                        print(f"Saving checkpoint to {ckpt_path}")
+                        with profiler.session("save_checkpoint"):
+                            torch.save(ckpt, ckpt_path)
+
+            if iter_num == 0 and config["eval_only"]:
+                # If we're only doing evaluation, break right after the first eval
+                break
+
+            # Gradient accumulation
+            with profiler.session("grad_accum"):
+                for micro_step in range(config["gradient_accumulation_steps"]):
+                    if ddp:
+                        # only sync gradients at last micro step in DDP
+                        model.require_backward_grad_sync = (micro_step == config["gradient_accumulation_steps"] - 1)
+
+                    with ctx:
+                        with profiler.session("model::forward"):
+                            logits, loss = model(x, y)
+                        loss = loss / config["gradient_accumulation_steps"]
+
+                    # prefetch next batch while GPU is busy
+                    x, y = get_batch_fn('train', config, device_type, device)
+
+                    # backward pass
+                    with profiler.session("loss::backward"):
+                        loss.backward()
+
+            # Clip gradients BEFORE all reduce to ensure peer synchronization!
+            with profiler.session("gradient_clipping"):
+                if config["grad_clip"] != 0.0:
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), config["grad_clip"])
+
+            # All reduce gradients with PCCL
+            with profiler.session("collect_gradients"):
+                if grads is None:
+                    grads = torch.cat([p.grad.view(-1) for p in model.parameters() if p.grad is not None]).to(device='cpu')
+                else:
+                    # scatter grads into existing buffer
+                    offset = 0
+                    for p in model.parameters():
+                        if p.grad is None:
+                            continue
+                        numel = p.grad.numel()
+                        grads[offset:offset+numel].copy_(p.grad.view(-1).cpu())
+                        offset += numel
+
+            if grads_dst is None:
+                grads_dst = torch.zeros_like(grads)
+            else:
+                grads_dst.zero_()
+
+            with profiler.session("all_reduce"):
+                while True:
+                    op_desc = ReduceOperandDescriptor(
+                        datatype=DataType.FLOAT,
+                        distribution_hint=DistributionHint.NORMAL
+                    )
+                    quant_desc = QuantizationOptions(
+                        quantized_datatype=DataType.FLOAT,
+                        algorithm=pccl.QuantizationAlgorithm.NONE
+                    )
+
+                    start = time.time()
+                    with profiler.session("pccl::communicator::all_reduce"):
+                        handle = communicator.all_reduce_async(grads, grads_dst, operand_descriptor=op_desc,
+                                                               quantization_options=quant_desc, op=ReduceOp.SUM)
+                        is_success, status, info = handle.wait()
+
+                    end = time.time()
+                    if not is_success:
+                        continue  # retry, this can happen e.g. if peers leave
+                    assert info is not None
+                    total_bytes = info.tx_bytes + info.rx_bytes
+                    print(
+                        f"step {iter_num}: all reduce completed in {end - start:.2f}s, bandwidth {total_bytes / (end - start) / 1e6:.2f} MB/s")
+                    break
+
+            # scatter gradients back to model parameters
+            with profiler.session("scatter_gradients"):
+                offset = 0
+                for p in model.parameters():
+                    if p.grad is None:
+                        continue
+                    numel = p.numel()
+                    p.grad.data.copy_(grads_dst[offset:offset + numel].view_as(p.grad))
+                    offset += numel
+
+            with profiler.session("optimizer::step"):
+                optimizer.step()
+                with profiler.session("optimizer::zero_grad"):
+                    optimizer.zero_grad(set_to_none=True)
+
+            # Logging / timing
+            t1 = time.time()
+            dt = t1 - t0
+            t0 = t1
+            if iter_num % config["log_interval"] == 0 and master_process:
+                lossf = loss.item() * config["gradient_accumulation_steps"]  # approximate actual loss
+                if local_iter_num >= 5:  # let training loop warm up
+                    mfu = raw_model.estimate_mfu(config["batch_size"] * config["gradient_accumulation_steps"], dt)
+                    running_mfu = mfu if running_mfu < 0 else 0.9 * running_mfu + 0.1 * mfu
+                print(f"iter {iter_num}: loss {lossf:.4f}, time {dt * 1000:.2f}ms, mfu {running_mfu * 100:.2f}%")
+
+            iter_num += 1
+            local_iter_num += 1
+
+            # Termination
+            if iter_num > config["max_iters"]:
+                break
+        profiler.print_report()
 
     # -------------------------------------------------------------------------
     # 8) Cleanup DDP

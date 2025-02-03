@@ -8,6 +8,7 @@
 #include <quantize.hpp>
 #include <reduce_kernels.hpp>
 #include <tinysockets.hpp>
+#include <win_sock_bridge.h>
 
 namespace {
 
@@ -368,7 +369,10 @@ void ccoip::reduce::pipelineRingReduce(
     }
 
     // Handle potential overlap of src_buf and dst_buf:
-    std::optional<std::unique_ptr<std::byte[]>> maybe_src_copy; {
+    std::optional<std::unique_ptr<std::byte[]>> maybe_src_copy;
+
+    bool src_and_dest_identical_ptr = (src_buf.data() == dst_buf.data());
+    {
         const auto *src_beg = src_buf.data();
         const auto *src_end = src_beg + src_buf.size_bytes();
         const auto *dst_beg = dst_buf.data();
@@ -382,7 +386,13 @@ void ccoip::reduce::pipelineRingReduce(
     }
 
     // Copy local data into dst_buf so we can reduce in place
-    std::memcpy(dst_buf.data(), src_buf.data(), src_buf.size_bytes());
+    if (!src_and_dest_identical_ptr) {
+        std::memcpy(dst_buf.data(), src_buf.data(), src_buf.size_bytes());
+    } else {
+        // if src and dest are identical, they definitely overlap
+        // which means that we just created a copy of src buf and made it the src buf, leaving the original ptr in dst_buf,
+        // which contains the same data as src_buf.
+    }
 
     // Number of (unquantized) elements total
     const size_t data_type_el_size = ccoip_data_type_size(data_type);
@@ -482,6 +492,7 @@ void ccoip::reduce::pipelineRingReduce(
 
     // Start with the chunk we "own" = (rank+1) mod world_size
     size_t current_chunk_idx = (rank + 1) % world_size;
+    std::unique_ptr<std::byte[]> quantized_data = nullptr;
     for (int step = 0; step < static_cast<int>(world_size) - 1; ++step) {
         // We'll send chunk = current_chunk_idx
         const auto [tx_start_el, tx_end_el] = boundaries[current_chunk_idx];
@@ -503,13 +514,14 @@ void ccoip::reduce::pipelineRingReduce(
 
         // Possibly quantize
         std::optional<DeQuantizationMetaData> meta_data;
-        std::unique_ptr<std::byte[]> quantized_data;
         if (quantized_type != data_type && quantization_algorithm != ccoipQuantizationNone && tx_size_el > 0) {
             if (owned_data_ptr == nullptr) {
                 // if this is the first stage, we quantize our own finished chunk.
                 assert(step == 0); // only in stage 0 should this ever happen.
-
-                quantized_data = std::make_unique<std::byte[]>(tx_size_el * quant_type_el_size);
+                if (quantized_data == nullptr) {
+                    quantized_data = std::unique_ptr<std::byte[]>(new std::byte[tx_size_el * quant_type_el_size]);
+                    // only allocate once
+                }
                 std::span q_span(quantized_data.get(), tx_size_el * quant_type_el_size);
                 meta_data = performQuantization(q_span,
                                                 tx_span,
@@ -546,7 +558,7 @@ void ccoip::reduce::pipelineRingReduce(
 
         // we will hold on to the quantized data we just received and forward it verbatim in the next step.
         if (owned_data_ptr == nullptr) {
-            owned_data_ptr = std::make_unique<std::byte[]>(max_chunk_size_el * quant_type_el_size);
+            owned_data_ptr = std::unique_ptr<std::byte[]>(new std::byte[max_chunk_size_el * quant_type_el_size]);
             owned_data_span = std::span(owned_data_ptr.get(), max_chunk_size_el * quant_type_el_size);
         }
         std::memcpy(owned_data_span.data(), recv_sub.data(), owned_data_span.size_bytes());

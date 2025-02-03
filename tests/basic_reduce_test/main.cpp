@@ -40,7 +40,7 @@ int main() {
     int world_size{};
     pcclGetAttribute(communicator, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size);
 
-    constexpr size_t n_weights = 1024;
+    constexpr size_t n_weights = 124373760;
     const auto weights = new float[n_weights];
     fill_uniform(weights, n_weights);
 
@@ -54,8 +54,9 @@ int main() {
             .infos = infos,
     };
 
-    constexpr size_t n_elements = 1024;
+    constexpr size_t n_elements = 124373760;
     const auto gradients = new float[n_elements];
+    fill_uniform(gradients, n_elements);
 
     size_t i = 0;
     while (true) {
@@ -80,22 +81,26 @@ int main() {
 
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
-        fill_uniform(gradients, n_elements);
         pcclAsyncReduceOp_t async_op{};
         pcclReduceInfo_t reduce_info{};
+        auto start = std::chrono::high_resolution_clock::now();
         do {
             constexpr pcclReduceDescriptor_t desc{
                     .count = n_elements,
                     .op = pcclSum,
                     .tag = 0,
                     .src_descriptor = {.datatype = pcclFloat, .distribution_hint = PCCL_DISTRIBUTION_HINT_NONE},
-                    // .quantization_options = {.quantized_datatype = pcclFloat, .algorithm = pcclQuantNone},
-                    .quantization_options = {.quantized_datatype = pcclUint8, .algorithm = pcclQuantMinMax},
+                    .quantization_options = {.quantized_datatype = pcclFloat, .algorithm = pcclQuantNone},
+                    // .quantization_options = {.quantized_datatype = pcclUint8, .algorithm = pcclQuantMinMax},
             };
             pcclAllReduceAsync(gradients, weights, &desc, communicator, &async_op);
         } while (pcclAwaitAsyncReduce(&async_op, &reduce_info) != pcclSuccess);
+        auto end = std::chrono::high_resolution_clock::now();
+        auto time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
         std::cout << "All reduce finished: " << shared_state.revision << "; Rx-Bytes:" << reduce_info.rx_bytes <<
                 "; Tx-Bytes:" << reduce_info.tx_bytes << std::endl;
+        const double mb_per_second = static_cast<double>(reduce_info.rx_bytes + reduce_info.tx_bytes) / 1e6 / (static_cast<double>(time_ms) / 1e3);
+        std::cout << "Bandwidth: " << mb_per_second << " MB/s" << std::endl;
 
         // print first 10 elements of the result
         for (size_t j = 0; j < 10; ++j) {
