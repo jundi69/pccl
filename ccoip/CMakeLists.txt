@@ -3,8 +3,7 @@ add_library(ccoip_internal STATIC
         src/cpp/bandwidth_store.cpp src/cpp/benchmark_runner.cpp src/cpp/topolgy_optimizer.cpp
         src/cpp/ccoip_packets.cpp src/cpp/ccoip_packet_buffer.cpp src/cpp/ccoip_client.cpp src/cpp/uuid_utils.cpp src/cpp/crc32_cpu.cpp
         src/cpp/ccoip_master_state.cpp src/cpp/ccoip_client_state.cpp src/cpp/reduce_kernels.cpp src/cpp/reduce.cpp src/cpp/quantize.cpp
-        src/cpp/quantize_kernels.cpp
-        src/cpp/simplehash_cuda.cpp)
+        src/cpp/quantize_kernels.cpp src/cpp/simplehash_cuda.cpp)
 
 target_link_libraries(ccoip_internal PRIVATE tinysockets)
 target_link_libraries(ccoip_internal PRIVATE pccl_log)

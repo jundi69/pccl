@@ -48,8 +48,8 @@ bool ccoip::CCoIPClientHandler::connect() {
         p2p_socket.setJoinCallback([this](const ccoip_socket_address_t &client_address,
                                           std::unique_ptr<tinysockets::BlockingIOSocket> &socket) {
             // maximize send and receive buffer sizes
-            socket->maximizeSendBuffer();
-            socket->maximizeReceiveBuffer();
+            // socket->maximizeSendBuffer();
+            // socket->maximizeReceiveBuffer();
 
             const auto hello_packet_opt = socket->receivePacket<P2PPacketHello>();
             if (!hello_packet_opt) {
@@ -725,8 +725,8 @@ bool ccoip::CCoIPClientHandler::establishP2PConnection(const PeerInfo &peer) {
     }
 
     // maximize send and receive buffer sizes
-    socket->maximizeSendBuffer();
-    socket->maximizeReceiveBuffer();
+    // socket->maximizeSendBuffer();
+    // socket->maximizeReceiveBuffer();
 
     P2PPacketHello hello_packet{};
     hello_packet.peer_uuid = client_state.getAssignedUUID();

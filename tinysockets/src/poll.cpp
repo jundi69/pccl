@@ -95,10 +95,11 @@ std::optional<size_t> tinysockets::poll::send_nonblocking(const std::span<const 
     }
 
     const int socket_fd = poll_descriptor.socket_fd;
-    ssize_t bytes_sent = sendvp_nb(socket_fd, data.data(), data.size_bytes(), 0);
+    const size_t n_bytes = std::min(data.size_bytes(), static_cast<size_t>(INT_MAX - 1));
+    ssize_t bytes_sent = sendvp_nb(socket_fd, data.data(), n_bytes, 0);
     if (bytes_sent < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
         const std::string error_message = strerror(errno);
-        LOG(WARN) << "send() failed: " << error_message;
+        LOG(WARN) << "send() failed [poll::send_nonblocking]: " << error_message;
         return std::nullopt;
     }
     if (bytes_sent > 0) {
@@ -115,7 +116,8 @@ std::optional<size_t> tinysockets::poll::recv_nonblocking(const std::span<std::b
     }
 
     const int socket_fd = poll_descriptor.socket_fd;
-    ssize_t bytes_received = recvvp_nb(socket_fd, data.data(), data.size_bytes(), 0);
+    const size_t n_bytes = std::min(data.size_bytes(), static_cast<size_t>(INT_MAX - 1));
+    ssize_t bytes_received = recvvp_nb(socket_fd, data.data(), n_bytes, 0);
     if (bytes_received < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
         const std::string error_message = strerror(errno);
         LOG(WARN) << "recv() failed [poll::recv_nonblocking]: " << error_message;

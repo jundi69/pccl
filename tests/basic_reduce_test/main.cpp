@@ -28,7 +28,7 @@ int main() {
             .master_address = {
                     .inet = {
                             .protocol = inetIPv4,
-                            .ipv4 = {127, 0, 0, 1}
+                            .ipv4 = {10, 1, 2, 92}
                     },
                     .port = CCOIP_PROTOCOL_PORT_MASTER
             },
@@ -40,50 +40,35 @@ int main() {
     int world_size{};
     pcclGetAttribute(communicator, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size);
 
-    constexpr size_t n_weights = 124373760;
+    constexpr size_t n_weights = 1024 * 1024 * 128;
     const auto weights = new float[n_weights];
     fill_uniform(weights, n_weights);
 
-    constexpr size_t count = 1;
-    pcclTensorInfo_t infos[count] = {
-            {"weights", weights, n_weights, pcclFloat, pcclDeviceCpu, false}
-    };
-    pcclSharedState_t shared_state = {
-            .revision = 0,
-            .count = count,
-            .infos = infos,
-    };
-
-    constexpr size_t n_elements = 124373760;
+    constexpr size_t n_elements = 1024 * 1024 * 128;
     const auto gradients = new float[n_elements];
     fill_uniform(gradients, n_elements);
 
     size_t i = 0;
     while (true) {
-        if (i > 0 || world_size == 1) {
-            if (world_size > 1) {
-                // PCCL_CHECK(pcclOptimizeTopology(communicator));
-            }
+        pcclGetAttribute(communicator, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size);
+        if (world_size > 1) {
+            PCCL_CHECK(pcclOptimizeTopology(communicator));
+            PCCL_CHECK(pcclUpdateTopology(communicator));
+        } else if (i > 0) {
             PCCL_CHECK(pcclUpdateTopology(communicator));
         }
-        pcclGetAttribute(communicator, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size);
 
         if (world_size < 2) {
             std::this_thread::sleep_for(std::chrono::seconds(1));
             i++;
             continue;
         }
-
-        PCCL_CHECK(pcclSynchronizeSharedState(communicator, &shared_state, nullptr));
-        if (shared_state.revision >= MAX_STEPS) {
-            break;
-        }
-
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
         pcclAsyncReduceOp_t async_op{};
         pcclReduceInfo_t reduce_info{};
         auto start = std::chrono::high_resolution_clock::now();
+        pcclResult_t result;
         do {
             constexpr pcclReduceDescriptor_t desc{
                     .count = n_elements,
@@ -94,10 +79,11 @@ int main() {
                     // .quantization_options = {.quantized_datatype = pcclUint8, .algorithm = pcclQuantMinMax},
             };
             pcclAllReduceAsync(gradients, weights, &desc, communicator, &async_op);
-        } while (pcclAwaitAsyncReduce(&async_op, &reduce_info) != pcclSuccess);
+            result = pcclAwaitAsyncReduce(&async_op, &reduce_info);
+        } while (result != pcclSuccess);
         auto end = std::chrono::high_resolution_clock::now();
         auto time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-        std::cout << "All reduce finished: " << shared_state.revision << "; Rx-Bytes:" << reduce_info.rx_bytes <<
+        std::cout << "All reduce finished: Rx-Bytes:" << reduce_info.rx_bytes <<
                 "; Tx-Bytes:" << reduce_info.tx_bytes << std::endl;
         const double mb_per_second = static_cast<double>(reduce_info.rx_bytes + reduce_info.tx_bytes) / 1e6 / (static_cast<double>(time_ms) / 1e3);
         std::cout << "Bandwidth: " << mb_per_second << " MB/s" << std::endl;
@@ -107,8 +93,6 @@ int main() {
             std::cout << weights[j] << " ";
         }
         std::cout << std::endl;
-
-        shared_state.revision++;
         i++;
     }
 

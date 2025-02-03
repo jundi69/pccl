@@ -8,7 +8,7 @@ from pccl import Communicator, Attribute, ReduceOp, QuantizationOptions, DataTyp
 
 from python.examples.simulate_10b.profiler import Profiler
 
-HOST: str = '127.0.0.1:48148'
+HOST: str = '10.1.2.92:48148'
 STEPS: int = 1_000_000
 PEERS: int = 1
 NUM_ELEMENTS: int = 335544320
@@ -29,20 +29,18 @@ def main():
     communicator.connect(n_attempts=15)
     logging.info(f"(NODE={NODE}) Connected to the master node")
 
-    world_size: int = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
-
     n_performed_steps = 0
     while n_performed_steps < STEPS:
         profiler = Profiler()
         with profiler.session("step"):
+            world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
+            if world_size > 1:
+                with profiler.session("pccl::communicator::optimize_topology"):
+                    communicator.optimize_topology()
             if n_performed_steps > 0 or world_size == 1:
-                if world_size > 1:
-                    with profiler.session("pccl::communicator::optimize_topology"):
-                        communicator.optimize_topology()
                 logging.info(f"(NODE={NODE}, it={n_performed_steps}) update_topology()")
                 with profiler.session("pccl::communicator::update_topology"):
                     communicator.update_topology()
-            world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
 
             if world_size < 2:
                 sleep(1)
@@ -69,6 +67,7 @@ def main():
                         f"(NODE={NODE}; GPU={GPU}, it={n_performed_steps}) Reduce completed RX: {info.rx_bytes}, TX: {info.tx_bytes} in {end - start:.2f}s; Bandwidth: {bandwidth_mbps:.2f} mbit/s")
                     break
             n_performed_steps += 1
+        profiler.print_report()
 
     logging.info(f"(NODE={NODE}) Finished")
 

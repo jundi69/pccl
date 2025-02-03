@@ -7,8 +7,8 @@
 #include <tinysockets.hpp>
 #include "win_sock_bridge.h"
 
-ccoip::NetworkBenchmarkRunner::NetworkBenchmarkRunner(const ccoip_socket_address_t &benchmark_endpoint):
-    benchmark_endpoint(benchmark_endpoint) {
+ccoip::NetworkBenchmarkRunner::NetworkBenchmarkRunner(
+    const ccoip_socket_address_t &benchmark_endpoint): benchmark_endpoint(benchmark_endpoint) {
 }
 
 ccoip::NetworkBenchmarkRunner::BenchmarkResult ccoip::NetworkBenchmarkRunner::runBlocking() {
@@ -20,7 +20,7 @@ ccoip::NetworkBenchmarkRunner::BenchmarkResult ccoip::NetworkBenchmarkRunner::ru
     const auto packet_opt = socket.receivePacket<B2CPacketBenchmarkServerIsBusy>();
     if (!packet_opt) {
         LOG(ERR) << "Failed to receive B2CPacketBenchmarkServerIsBusy from " << ccoip_sockaddr_to_str(
-                benchmark_endpoint);
+            benchmark_endpoint);
         return BenchmarkResult::CONNECTION_FAILURE;
     }
     if (packet_opt->is_busy) {
@@ -65,16 +65,14 @@ ccoip::NetworkBenchmarkRunner::BenchmarkResult ccoip::NetworkBenchmarkRunner::ru
 
     const auto start_time = std::chrono::high_resolution_clock::now();
     while (std::chrono::high_resolution_clock::now() - start_time < std::chrono::seconds(10)) {
-        for (int i = 0; i < 32; ++i) {
-            // don't check time every iteration
-            // send data
-            const auto n_sent = sendvp(socket_fd, buffer.get(), send_buffer_size, MSG_NOSIGNAL);
-            if (n_sent < 0) {
-                LOG(ERR) << "Failed to send data to benchmark server: " << std::strerror(errno);
-                return BenchmarkResult::SEND_FAILURE;
-            }
-            total_bytes_sent += n_sent;
+        // don't check time every iteration
+        // send data
+        const auto n_sent = sendvp(socket_fd, buffer.get(), send_buffer_size, MSG_NOSIGNAL);
+        if (n_sent < 0) {
+            LOG(ERR) << "Failed to send data to benchmark server: " << std::strerror(errno);
+            return BenchmarkResult::SEND_FAILURE;
         }
+        total_bytes_sent += n_sent;
     }
 
     const auto now = std::chrono::high_resolution_clock::now();
@@ -87,7 +85,7 @@ ccoip::NetworkBenchmarkRunner::BenchmarkResult ccoip::NetworkBenchmarkRunner::ru
     const auto duration_seconds = static_cast<double>(duration_us) / 1e6;
     const auto bandwidth_mbits_per_second = static_cast<double>(total_bytes_sent * 8) / 1e6 / duration_seconds;
     LOG(DEBUG) << "Measured bandwidth: " << bandwidth_mbits_per_second << " Mbit/s to peer " << ccoip_sockaddr_to_str(
-            benchmark_endpoint);
+        benchmark_endpoint);
     output_bandwidth_mbps = bandwidth_mbits_per_second;
     return BenchmarkResult::SUCCESS;
 }
@@ -117,7 +115,7 @@ bool ccoip::NetworkBenchmarkHandler::runBlocking(const int socket_fd) {
     const std::unique_ptr<uint8_t[]> buffer(new uint8_t[buffer_size]);
     while (true) {
         std::vector descriptors = {
-                tinysockets::poll::PollDescriptor{socket_fd, tinysockets::poll::PollEvent::POLL_INPUT},
+            tinysockets::poll::PollDescriptor{socket_fd, tinysockets::poll::PollEvent::POLL_INPUT},
         };
         auto &rx_descriptor = descriptors[0];
         tinysockets::poll::poll(descriptors, 0);
