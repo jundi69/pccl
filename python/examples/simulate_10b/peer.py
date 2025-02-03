@@ -1,4 +1,5 @@
 from time import sleep
+import time
 import os
 import logging
 import torch
@@ -36,10 +37,10 @@ def main():
         with profiler.session("step"):
             if n_performed_steps > 0 or world_size == 1:
                 if world_size > 1:
-                    with profiler.session("pccl::communicator.optimize_topology"):
+                    with profiler.session("pccl::communicator::optimize_topology"):
                         communicator.optimize_topology()
                 logging.info(f"(NODE={NODE}, it={n_performed_steps}) update_topology()")
-                with profiler.session("pccl::communicator.update_topology"):
+                with profiler.session("pccl::communicator::update_topology"):
                     communicator.update_topology()
             world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
 
@@ -49,24 +50,27 @@ def main():
 
             # Create gradients tensors
             grad: torch.Tensor = torch.rand(NUM_ELEMENTS, dtype=torch.float32)
-            with profiler.session("pccl::communicator.all_reduce"):
+            with profiler.session("pccl::communicator::all_reduce"):
                 while True:
                     logging.info(f"(NODE={NODE}, it={n_performed_steps}) all_reduce_async()")
+                    start = time.time()
                     handle = communicator.all_reduce_async(grad, weights,
                                                            op=ReduceOp.SUM,
                                                            quantization_options=QuantizationOptions(DataType.UINT8,
                                                                                                     QuantizationAlgorithm.MIN_MAX))
 
                     is_success, status, info = handle.wait()
+                    end = time.time()
                     assert is_success, f"All reduce failed with stats: {status}"
                     assert info is not None
+
+                    bandwidth_mbps = ((info.rx_bytes + info.tx_bytes) * 8 / 1e6) / (end - start)
                     logging.info(
-                        f"((NODE={NODE}, it={n_performed_steps}) Reduce completed RX: {info.rx_bytes}, TX: {info.tx_bytes}")
+                        f"(NODE={NODE}; GPU={GPU}, it={n_performed_steps}) Reduce completed RX: {info.rx_bytes}, TX: {info.tx_bytes} in {end - start:.2f}s; Bandwidth: {bandwidth_mbps:.2f} mbit/s")
                     break
             n_performed_steps += 1
 
     logging.info(f"(NODE={NODE}) Finished")
-
 
 if __name__ == '__main__':
     try:
