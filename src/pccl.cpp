@@ -189,7 +189,7 @@ pcclResult_t pcclUpdateTopology(pcclComm_t *communicator) {
 
     // accept new peers; this will block until we have a valid connection to each peer
     if (!communicator->ccoip_client->acceptNewPeers()) {
-        return pcclInvalidUsage;
+        return pcclUpdateTopologyFailed;
     }
 
     // update the topology
@@ -208,7 +208,7 @@ pcclResult_t pcclOptimizeTopology(const pcclComm_t *communicator) {
     // optimize the topology
     if (communicator->ccoip_client->getWorldSize() > 1) {
         if (!communicator->ccoip_client->optimizeTopology()) {
-            return pcclInvalidUsage;
+            return pcclTopologyOptimizationFailed;
         }
     } else {
         return pcclInvalidUsage;

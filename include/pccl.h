@@ -33,7 +33,9 @@ typedef enum pcclResult_t {
     pcclRankConnectionFailed = 10,
     pcclRankConnectionLost = 11,
     pcclNoSharedStateAvailable = 12,
-    pcclPendingAsyncOps = 13
+    pcclPendingAsyncOps = 13,
+    pcclUpdateTopologyFailed = 15,
+    pcclTopologyOptimizationFailed = 14,
 } pcclResult_t;
 
 typedef enum pcclDataType_t {
@@ -161,7 +163,7 @@ typedef struct pcclMasterInstanceState_t pcclMasterInstance_t;
  * Initializes the pccl library.
  * Must be called before pccl library functions are used.
  */
-PCCL_EXPORT pcclResult_t pcclInit();
+PCCL_EXPORT pcclResult_t pcclInit(void);
 
 /**
  * Creates a new communicator.
@@ -238,7 +240,7 @@ PCCL_EXPORT pcclResult_t pcclConnect(pcclComm_t *communicator);
  * @param communicator The communicator to update the topology of.
  *
  * @return @code pcclSuccess@endcode if the topology was updated successfully.
- * @return @code pcclInternalError@endcode if an internal error occurred during the topology update.
+ * @return @code pcclUpdateTopologyFailed@endcode e.g. if p2p connections could not be established with new peers.
  * @return @code pcclNotInitialized@endcode if @code pcclInit@endcode has not been called yet.
  */
 PCCL_EXPORT pcclResult_t pcclUpdateTopology(pcclComm_t *communicator);
@@ -248,7 +250,7 @@ PCCL_EXPORT pcclResult_t pcclUpdateTopology(pcclComm_t *communicator);
  * After topology updates, it is recommended that the topology be optimized to improve performance of collective communications operations.
  * @param communicator the communicator
  * @return @code pcclSuccess@endcode if the topology was successfully optimized / unchanged without error.
- * @return @code pcclInternalError@endcode if an internal error occurred during the topology optimization.
+ * @return @code pcclTopologyOptimizationFailed@endcode if an internal error occurred during the topology optimization.
  * @return @code pcclNotInitialized@endcode if @code pcclInit@endcode has not been called yet.
  */
 PCCL_EXPORT pcclResult_t pcclOptimizeTopology(const pcclComm_t *communicator);

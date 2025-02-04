@@ -1,0 +1,101 @@
+# Implementation Notes
+
+This section offers a behind-the-scenes look at how PCCL is implemented. While most users won’t need these details to run or integrate PCCL, it can be useful for:
+- Debugging issues in cross-platform socket code
+- Understanding how concurrency is managed
+- Adapting the library for advanced or custom scenarios
+- Contributing to the PCCL codebase
+
+## TinySockets & Polling
+PCCL relies on standard TCP sockets for:
+- *Master* connections (long-lived to the orchestrator)
+- *Peer-to-Peer* ring connections (one or two per ring neighbor)
+- *Shared-State Distribution* “one-off” ephemeral connections (similar to HTTP GET/POST style transfers)
+- *Bandwidth Benchmark* connections (short-lived, used to measure throughput between pairs)
+
+### Queued Socket Mechanism
+For the master connection—and potentially any socket that might carry messages for multiple “logical” operations—PCCL uses a queued socket approach. That is, we maintain an internal queue of incoming packets, and let each part of the library read only the packets intended for it by consuming only packets that match a particular predicate. This helps avoid concurrency issues where multiple threads might accidentally consume each other’s data.
+
+
+## Firewalls & Ports
+- By default, the master listens on port `48148`
+- Each peer tries to bind to a small range ([48149..48151]) for p2p, shared-state distribution, and bandwidth test sockets.
+However, these ports are not defacto static as is the case with most network protocols. Rather, these ports are “bump allocated“ where initially the implementation tries to bind to the target port (e.g. `48151` for the benchmark socket, or `48149` for the shared state server), but if this fails, the next higher port is tried until a free port is found. This ensures multiple peers can run on the same machine without port conflicts. Peers will "find" each other by reporting their ports to the master, which will inturn share this information with other peers.
+
+- `Important`: For wide-area or internet usage, you must open these ports in your firewall & forward them to your computer when behind NAT. The recommended approach is to open ~200 consecutive ports above `48148`.
+
+
+## Master Orchestration
+
+The master runs a single-threaded event loop (currently using `libuv`) that listens for new clients, processes control packets (e.g. “vote to accept new peers,” “optimize topology,” etc.), and updates the central state machine in `CCoIPMasterState`.
+
+
+### Single-Threaded, Deterministic State
+Since the master is conceptually a big “authoritative state machine,” it does not attempt to parallelize. Each inbound request from a client (join, sync, etc.) triggers an update in that shared `client_info[]` table or in one of the vote sets (like `votes_accept_new_peers`). The result is then broadcast back to clients as needed. Because everything is done in a single thread, we avoid race conditions in the core run state.
+
+### Master Crash = End of Run
+If the master node process crashes or is forcibly killed, the peer side eventually sees “lost connection” errors. There is no built-in “master re-election” or replication. The recommended approach is to:
+
+1. Simply restart the master process
+2. Have peers automatically reconnect to the new master (e.g. fisrt panic the application & relaunch via a script on unsucessful exit code)
+3. Load from checkpoint to restore the shared state.
+
+It should be noted that CCoIP itself is not designed to "retain" shared state, simply to distribute it while a run is ongoing. If a run does indeed crawl to a halt, the shared state is lost. Therefore, it is recommended that peers save their own shared state to disk periodically, and reload it on restart.
+As PCCL guarantees bit-identical shared state among all peers at all times, it is expected that after peers load their saved shared state from disk and begin synchronizing the shared state again, that all previously connected peers will unanimously agree on the shared state hashes and continue from there.
+
+### Topology Optimization (Bandwidth Tests & TSP)
+One of PCCL’s features is `bandwidth-aware ring ordering`. Since ring-based reduce can be bottlenecked by the slowest link, it helps to measure peer-to-peer throughput and reorder accordingly.
+
+1. **Bandwidth Store**: The master keeps an asymmetric cost matrix (`BandwidthStore`) of measured bandwidth from peer A to peer B.
+2. **Benchmark Requests**: When a peer calls `pcclOptimizeTopology`, the master identifies missing edges (i.e., pairs not yet measured) and instructs the relevant peer(s) to do a quick TCP test.
+3. **TSP Heuristic:** The master uses a traveling-salesman “shortest path” (or “highest bandwidth”) approach to find a ring ordering that tries to maximize total link speed. For small problems `world_size <= 16` an exact solution will be attempted in a set timeout limit, for larger problems it might attempt a simpler heuristic (path of immediate “closest” peer, random tour or ant colony optimization with 2 Opt & 3 Opt local search, etc.). If an optimal solution cannot be found, the master may start a “moonshot” approach in the background to either target an optimal solution for higher `world_size` or to continue improving the current solution heuristically.
+Once a better ring is found, p2p connections will be re-established in that order (without letting brand-new peers in) the next time the client calls `pcclU pdateTopology`. The clients adopt the new ring as soon as they collectively vote and connect to each new neighbor.
+Solutions that are found immediately as part of the topology optimization phase without a background “moonshot” are adopted immediately by the peers as part of `pcclOptimizeTopology` in a fashion similar to `pcclUpdateTopology`, but without admitting newcomers into the run while still “going through the same motions” of voting to establish p2p connections by peers, followed by distribution of the p2p connection information by the master to said peers, along with subsequent connection establishment performed by the peers followed by subsequent confirmation of the connection establishment to the master.
+
+### Shared-State Hashing & Distribution
+
+When you call `pcclSynchronizeSharedState`, each peer does:
+
+1. **Hash Each Tensor**:
+- On CPU: Typically a CRC32-based approach (with SSE/AVX/ARM Neon optimizations if available).
+- On GPU: A custom deterministic kernel if compiled with CUDA support.
+
+2. **Report Revision & Hash**: The peer sends these to the master for that group’s “mask election.”
+3. **Master Chooses a Mask**: By popularity, it decides which set of (keys, hashes) is canonical. Peers that deviate are assigned to fetch the updated data from a designated “correct” peer via ephemeral connections.
+4. **One-Increment Rule**:
+The master checks that each new `shared_state->revision` is exactly 1 higher than before. If not, you see a `REVISION_INCREMENT_VIOLATION`.
+5. Dirty Keys: If a peer’s local hash for “weight_1” mismatches the mask, the peer sets up a direct ephemeral TCP connection to the distributing peer to its shared state distribution socket. After transmission, the content is hashed again and compared to the expected value. If the hash matches, the peer proceeds. On hash mismatch, the call to `pcclSynchronizeSharedState` will return an error code.
+
+In practice, if your model steps are *bitwise deterministic across* peers, the “dirty keys” scenario rarely happens. But it remains crucial for newly joining peers who need a full checkpoint or for accidental drift scenarios.
+In the ideal case, the training code may even assert that no data is ever *received* during shared state synchronization after the first local iteration, where it may obtain the current popular shared state from the set of pre-existing peers post joining the run.
+
+### Ring-Reduce Implementation
+PCCL’s All-Reduce uses a pipeline ring approach:
+
+1. `Reduce-Scatter`: `In world_size-1` steps, each peer’s chunk is successively passed around the ring and accumulated (e.g., sum).
+2. `Reduce-Gather`: Another `world_size-1` steps to distribute final chunks so everyone ends up with the fully reduced array.
+
+#### Chunking & Possibly Quantizing
+- The library divides the buffer among peers, so each rank “owns” a slice.
+- It optionally quantizes data if `pcclQuantMinMax` or others are selected. This can help reduce link usage on slower WAN connections. As quantization is also performed using optimized SIMD instructions, the overhead should be negligible for most WAN and even Ethernet connections.
+
+#### Current Limitations
+- **No True Concurrent Reduces**: The ring code currently does not multiplex multiple tags or concurrent operations. If you attempt to do two at once, you’ll likely see collisions. Future versions aim to fix this.
+
+
+## Concurrency and Threading Model
+
+### Master
+- **Single Thread**: The master’s event loop is not multi-threaded. This ensures consistent updates to `CCoIPMasterState`.
+
+### Client
+
+- **Blocking API**: By default, calls like `pcclAllReduce` or `pcclSynchronizeSharedState` block the caller until the operation finishes (or fails).
+- **Async All-Reduce**: `pcclAllReduceAsync` spawns an internal thread or creates a logical execution plan and returns immediately. The user can poll for completion or wait on a condition variable. This concurrency model is useful for overlapping computation with communication, or for running multiple operations in parallel.
+This will be intended API design in future versions of PCCL.
+- **Queued-Sockets:** If two internal threads might read from the same socket, PCCL enforces a queue mechanism to route matching packets to the correct consumer via predicate matching.
+
+### Overall Rule: One Operation at a Time (Per Group)
+Because the master enforces that the entire group do the same operation in lockstep, you **NEVER** need your own concurrency around these calls. Even though multiple threads might exist in your app, the library expects you not to overlap, say, an All-Reduce with a shared-state sync in the same communicator.
+PCCL is also **NOT THREADSAFE** and should only ever be used from one thread or accessed via a thread-safe wrapper.
+
