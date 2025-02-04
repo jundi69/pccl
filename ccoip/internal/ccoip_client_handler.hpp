@@ -53,7 +53,7 @@ namespace ccoip {
 
         [[nodiscard]] bool connect();
 
-        [[nodiscard]] bool acceptNewPeers();
+        [[nodiscard]] bool requestAndEstablishP2PConnections(bool accept_new_peers);
 
         [[nodiscard]] bool syncSharedState(ccoip_shared_state_t &shared_state,
                                            ccoip_shared_state_sync_info_t &info_out);

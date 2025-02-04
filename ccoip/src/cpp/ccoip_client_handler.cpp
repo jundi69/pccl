@@ -206,10 +206,10 @@ bool ccoip::CCoIPClientHandler::connect() {
     return true;
 }
 
-bool ccoip::CCoIPClientHandler::acceptNewPeers() {
+bool ccoip::CCoIPClientHandler::requestAndEstablishP2PConnections(const bool accept_new_peers) {
     if (!connected) {
         LOG(WARN) <<
-                "CCoIPClientHandler::acceptNewPeers() before CCoIPClientHandler::connect() was called. Establish master connection first before performing client actions.";
+                "CCoIPClientHandler::reestablishP2PConnections() before CCoIPClientHandler::connect() was called. Establish master connection first before performing client actions.";
         return false;
     }
 
@@ -223,7 +223,9 @@ bool ccoip::CCoIPClientHandler::acceptNewPeers() {
         return false;
     }
 
-    if (!master_socket.sendPacket<C2MPacketAcceptNewPeers>({})) {
+    C2MPacketRequestEstablishP2PConnections packet{};
+    packet.accept_new_peers = accept_new_peers;
+    if (!master_socket.sendPacket<C2MPacketRequestEstablishP2PConnections>(packet)) {
         return false;
     }
 
@@ -598,6 +600,10 @@ bool ccoip::CCoIPClientHandler::optimizeTopology() {
         }
         topology_optimization_complete = response->success;
     } while (!topology_optimization_complete);
+
+    if (!requestAndEstablishP2PConnections(false)) {
+        return false;
+    }
     return true;
 }
 

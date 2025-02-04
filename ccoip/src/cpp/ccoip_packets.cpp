@@ -32,8 +32,17 @@ bool ccoip::C2MPacketRequestSessionRegistration::deserialize(PacketReadBuffer &b
     return true;
 }
 
-// C2MPacketAcceptNewPeers
-ccoip::packetId_t ccoip::C2MPacketAcceptNewPeers::packet_id = C2M_PACKET_ACCEPT_NEW_PEERS_ID;
+// C2MPacketRequestEstablishP2PConnections
+ccoip::packetId_t ccoip::C2MPacketRequestEstablishP2PConnections::packet_id = C2M_PACKET_REQUEST_ESTABLISH_P2P_CONNECTIONS;
+
+void ccoip::C2MPacketRequestEstablishP2PConnections::serialize(PacketWriteBuffer &buffer) const {
+    buffer.write<boolean>(accept_new_peers);
+}
+
+bool ccoip::C2MPacketRequestEstablishP2PConnections::deserialize(PacketReadBuffer &buffer) {
+    accept_new_peers = buffer.read<boolean>();
+    return true;
+}
 
 // C2MPacketGetTopologyRequest
 ccoip::packetId_t ccoip::C2MPacketGetTopologyRequest::packet_id = C2M_PACKET_GET_TOPOLOGY_REQUEST_ID;

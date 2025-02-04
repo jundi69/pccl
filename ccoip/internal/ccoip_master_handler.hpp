@@ -54,9 +54,11 @@ namespace ccoip {
         ~CCoIPMasterHandler();
 
     private:
+        void sendP2PConnectionInformation(bool changed, const ClientInfo &client_info);
+
         void sendP2PConnectionInformation();
 
-        [[nodiscard]] bool checkAcceptNewPeersConsensus();
+        [[nodiscard]] bool checkEstablishP2PConnectionConsensus();
 
         [[nodiscard]] bool checkTopologyOptimizationConsensus();
 
@@ -77,8 +79,8 @@ namespace ccoip {
         std::optional<ccoip_socket_address_t> findBestSharedStateTxPeer(const ccoip_uuid_t &peer_uuid);
 
         // packet handling functions
-        void handleAcceptNewPeers(const ccoip_socket_address_t &client_address,
-                                  const C2MPacketAcceptNewPeers &packet);
+        void handleEstablishP2PConnections(const ccoip_socket_address_t &client_address,
+                                  const C2MPacketRequestEstablishP2PConnections &packet);
 
         void handleRequestSessionJoin(const ccoip_socket_address_t &client_address,
                                       const C2MPacketRequestSessionRegistration &packet);

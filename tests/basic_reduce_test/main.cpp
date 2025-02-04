@@ -28,7 +28,7 @@ int main() {
             .master_address = {
                     .inet = {
                             .protocol = inetIPv4,
-                            .ipv4 = {10, 1, 2, 92}
+                            .ipv4 = {127, 0, 0, 1}
                     },
                     .port = CCOIP_PROTOCOL_PORT_MASTER
             },
@@ -48,16 +48,16 @@ int main() {
     const auto gradients = new float[n_elements];
     fill_uniform(gradients, n_elements);
 
+    PCCL_CHECK(pcclGetAttribute(communicator, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size));
     size_t i = 0;
     while (true) {
-        pcclGetAttribute(communicator, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size);
+        if (i > 0) {
+            PCCL_CHECK(pcclUpdateTopology(communicator));
+            PCCL_CHECK(pcclGetAttribute(communicator, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size));
+        }
         if (world_size > 1) {
             PCCL_CHECK(pcclOptimizeTopology(communicator));
-            PCCL_CHECK(pcclUpdateTopology(communicator));
-        } else if (i > 0) {
-            PCCL_CHECK(pcclUpdateTopology(communicator));
         }
-
         if (world_size < 2) {
             std::this_thread::sleep_for(std::chrono::seconds(1));
             i++;
@@ -85,7 +85,8 @@ int main() {
         auto time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
         std::cout << "All reduce finished: Rx-Bytes:" << reduce_info.rx_bytes <<
                 "; Tx-Bytes:" << reduce_info.tx_bytes << std::endl;
-        const double mb_per_second = static_cast<double>(reduce_info.rx_bytes + reduce_info.tx_bytes) / 1e6 / (static_cast<double>(time_ms) / 1e3);
+        const double mb_per_second = static_cast<double>(reduce_info.rx_bytes + reduce_info.tx_bytes) / 1e6 / (
+                                         static_cast<double>(time_ms) / 1e3);
         std::cout << "Bandwidth: " << mb_per_second << " MB/s" << std::endl;
 
         // print first 10 elements of the result

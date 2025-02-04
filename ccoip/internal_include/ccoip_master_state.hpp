@@ -15,7 +15,7 @@ namespace ccoip {
         /// Initially, the client is in this state.
         /// It does not yet participate in collective communications operations
         /// or shared state distribution.
-        /// In this tate, the client is not allowed to request to participate in any of the above.
+        /// In this state, the client is not allowed to request to participate in any of the above.
         /// While in @code PEER_REGISTERED@endcode, the client is generally restricted to @code IDLE@endcode or the transitional states used for p2p establishment (@code CONNECTING_TO_PEERS@endcode or @code WAITING_FOR_OTHER_PEERS@endcode).
         /// The client is not allowed to request other phases.
         PEER_REGISTERED,
@@ -39,6 +39,11 @@ namespace ccoip {
         /// The client has voted to accept new peers.
         /// In this state, it waits for all peers to vote to accept new peers.
         VOTE_ACCEPT_NEW_PEERS,
+
+        /// The client has voted to establish p2p connections without accepting new peers.
+        /// In this state, it waits for all peers to vote to establish p2p connections without accepting new peers.
+        /// This is used to re-establish p2p connections after topology changes, where the client does not want to accept new peers.
+        VOTE_NO_NEW_PEERS_ESTABLISH_P2P_CONNECTIONS,
 
         /// When all peers have voted to accept new peers, the client
         /// will enter the p2p establishment phase.
@@ -209,6 +214,11 @@ namespace ccoip {
         /// Removed from on client leave/disconnect.
         std::unordered_set<ccoip_uuid_t> votes_accept_new_peers{};
 
+        /// set of all uuids that have voted to establish p2p connections without accepting new peers.
+        /// cleared once p2p connections establishment consensus is reached.
+        /// Removed from on client leave/disconnect.
+        std::unordered_set<ccoip_uuid_t> votes_establish_p2p_connections{};
+
         /// set of all uuids that have voted to optimize the topology.
         /// cleared once topology optimization consensus is reached.
         /// Removed from on client leave/disconnect.
@@ -329,7 +339,7 @@ namespace ccoip {
 
         /// Called when a client votes to accept new peers.
         /// All clients must vote to accept new peers before all clients start the p2p establishment phase.
-        [[nodiscard]] bool voteAcceptNewPeers(const ccoip_uuid_t &peer_uuid);
+        [[nodiscard]] bool voteEstablishP2PConnections(const ccoip_uuid_t &peer_uuid, bool accept_new_peers);
 
         /// Called when a client votes to optimize the topology
         /// All clients must vote to optimize the topology before topology optimization can begin.
@@ -373,6 +383,9 @@ namespace ccoip {
         /// Returns true if all clients have voted to accept new peers
         [[nodiscard]] bool acceptNewPeersConsensus() const;
 
+        /// Returns true if all clients have voted to establish p2p connections without accepting new peers
+        [[nodiscard]] bool noAcceptNewPeersEstablishP2PConnectionsConsensus() const;
+
         /// Returns true if all clients have voted to optimize the topology
         [[nodiscard]] bool optimizeTopologyConsensus() const;
 
@@ -381,7 +394,7 @@ namespace ccoip {
 
         /// Transition to the p2p establishment phase
         /// Triggered after unanimous voting to accept new peers
-        [[nodiscard]] bool transitionToP2PEstablishmentPhase();
+        [[nodiscard]] bool transitionToP2PEstablishmentPhase(bool accept_new_peers);
 
         /// Transition to the topology optimization phase
         /// Triggered after unanimous voting to optimize the topology

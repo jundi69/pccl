@@ -29,7 +29,7 @@ namespace ccoip {
 
     // C2M packets:
 #define C2M_PACKET_REQUEST_SESSION_REGISTRATION_ID 1
-#define C2M_PACKET_ACCEPT_NEW_PEERS_ID 2
+#define C2M_PACKET_REQUEST_ESTABLISH_P2P_CONNECTIONS 2
 #define C2M_PACKET_P2P_CONNECTIONS_ESTABLISHED_ID 3
 #define C2M_PACKET_GET_TOPOLOGY_REQUEST_ID 4
 #define C2M_PACKET_OPTIMIZE_TOPOLOGY_ID 5
@@ -85,10 +85,17 @@ namespace ccoip {
         [[nodiscard]] bool deserialize(PacketReadBuffer &buffer) override;
     };
 
-    // C2MPacketAcceptNewPeers
-    class C2MPacketAcceptNewPeers final : public EmptyPacket {
+    // C2MPacketRequestEstablishP2PConnections
+    class C2MPacketRequestEstablishP2PConnections final : public Packet {
     public:
         static packetId_t packet_id;
+
+        // if true, the master will accept new peers
+        bool accept_new_peers;
+
+        void serialize(PacketWriteBuffer &buffer) const override;
+
+        [[nodiscard]] bool deserialize(PacketReadBuffer &buffer) override;
     };
 
     // C2MPacketP2PConnectionsEstablished

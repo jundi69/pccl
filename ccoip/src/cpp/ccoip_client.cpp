@@ -12,7 +12,7 @@ bool ccoip::CCoIPClient::connect() const {
 }
 
 bool ccoip::CCoIPClient::acceptNewPeers() const {
-    return client->acceptNewPeers();
+    return client->requestAndEstablishP2PConnections(true);
 }
 
 bool ccoip::CCoIPClient::syncSharedState(ccoip_shared_state_t &shared_state,

@@ -26,14 +26,11 @@ import math
 import pickle
 import json
 import argparse
-import pccl
 import zlib
 from contextlib import nullcontext
 
 import numpy as np
 import torch
-from pccl import Communicator, Attribute, SharedState, TensorInfo, DataType, ReduceOperandDescriptor, DistributionHint, \
-    QuantizationOptions, ReduceOp
 from torch.nn.parallel import DistributedDataParallel
 from torch.distributed import init_process_group, destroy_process_group
 

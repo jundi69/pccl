@@ -117,6 +117,8 @@ inline ssize_t recvvp_nb(const int socket_fd, void *buffer, const size_t length,
         LOG(ERR) << "Failed to get socket flags";
         return -1;
     }
+    const int old_flags = socket_flags;
+
     // set to non-blocking mode
     socket_flags |= O_NONBLOCK;
     if (fcntl(socket_fd, F_SETFL, socket_flags) == -1) {
@@ -128,8 +130,7 @@ inline ssize_t recvvp_nb(const int socket_fd, void *buffer, const size_t length,
     bytes_received = recvvp(socket_fd, buffer, length, flags);
 
     // set back to blocking mode
-    socket_flags &= ~O_NONBLOCK;
-    if (fcntl(socket_fd, F_SETFL, socket_flags) == -1) {
+    if (fcntl(socket_fd, F_SETFL, old_flags) == -1) {
         LOG(ERR) << "Failed to set socket back to blocking mode";
         return -1;
     }

@@ -76,10 +76,17 @@ void ccoip::CCoIPMasterHandler::onClientRead(const ccoip_socket_address_t &clien
             return;
         }
         handleRequestSessionJoin(client_address, packet);
-    } else if (packet_type == C2MPacketAcceptNewPeers::packet_id) {
-        C2MPacketAcceptNewPeers packet{};
-        packet.deserialize(buffer);
-        handleAcceptNewPeers(client_address, packet);
+    } else if (packet_type == C2MPacketRequestEstablishP2PConnections::packet_id) {
+        C2MPacketRequestEstablishP2PConnections packet{};
+        if (!packet.deserialize(buffer)) {
+            LOG(ERR) << "Failed to deserialize C2MPacketRequestEstablishP2PConnections from " << ccoip_sockaddr_to_str(
+                    client_address);
+            if (!kickClient(client_address)) [[unlikely]] {
+                LOG(ERR) << "Failed to kick client " << ccoip_sockaddr_to_str(client_address);
+            }
+            return;
+        }
+        handleEstablishP2PConnections(client_address, packet);
     } else if (packet_type == C2MPacketP2PConnectionsEstablished::packet_id) {
         C2MPacketP2PConnectionsEstablished packet{};
         if (!packet.deserialize(buffer)) [[unlikely]] {
@@ -206,7 +213,7 @@ void ccoip::CCoIPMasterHandler::handleRequestSessionJoin(const ccoip_socket_addr
         sendP2PConnectionInformation();
     } else {
         // otherwise still check if we have consensus to accept new peers
-        if (!checkAcceptNewPeersConsensus()) [[unlikely]] {
+        if (!checkEstablishP2PConnectionConsensus()) [[unlikely]] {
             LOG(BUG) << "checkAcceptNewPeersConsensus() failed. This is a bug";
         }
     }
@@ -281,10 +288,19 @@ bool ccoip::CCoIPMasterHandler::checkP2PConnectionsEstablished() {
     return true;
 }
 
-bool ccoip::CCoIPMasterHandler::checkAcceptNewPeersConsensus() {
+bool ccoip::CCoIPMasterHandler::checkEstablishP2PConnectionConsensus() {
     // check if all clients have voted to accept new peers
     if (server_state.acceptNewPeersConsensus()) {
-        if (!server_state.transitionToP2PEstablishmentPhase()) [[unlikely]] {
+        if (!server_state.transitionToP2PEstablishmentPhase(true)) [[unlikely]] {
+            LOG(BUG) << "Failed to transition to P2P establishment phase. This is a bug!";
+            return false;
+        }
+        sendP2PConnectionInformation();
+    }
+
+    // check if all clients have voted to establish p2p connections without accepting new peers
+    if (server_state.noAcceptNewPeersEstablishP2PConnectionsConsensus()) {
+        if (!server_state.transitionToP2PEstablishmentPhase(false)) [[unlikely]] {
             LOG(BUG) << "Failed to transition to P2P establishment phase. This is a bug!";
             return false;
         }
@@ -598,7 +614,9 @@ bool ccoip::CCoIPMasterHandler::checkSyncSharedStateConsensus(const uint32_t pee
                         response.expected_hashes.push_back(server_state.getSharedStateEntryHash(peer_group, key));
                         const auto hash_type_opt = server_state.getSharedStateEntryHashType(peer_group, key);
                         if (!hash_type_opt) {
-                            LOG(BUG) << "Hash type for shared state entry " << key << " could not be found in peer group " << peer_group << " despite the fact that a hash has been recorded. This is a bug.";
+                            LOG(BUG) << "Hash type for shared state entry " << key <<
+                                    " could not be found in peer group " << peer_group <<
+                                    " despite the fact that a hash has been recorded. This is a bug.";
                             return false;
                         }
                         response.expected_hash_types.push_back(*hash_type_opt);
@@ -1156,7 +1174,7 @@ void ccoip::CCoIPMasterHandler::onClientDisconnect(const ccoip_socket_address_t 
     // the client disconnecting might result in consensus changes for ongoing votes;
     // If the client that left was the only outstanding vote to e.g. accept new peers, then we need to re-check
     // the consensus and send response packets as necessary.
-    if (!checkAcceptNewPeersConsensus()) [[unlikely]] {
+    if (!checkEstablishP2PConnectionConsensus()) [[unlikely]] {
         LOG(BUG) << "checkAcceptNewPeersConsensus() failed. This is a bug";
     }
     if (!checkP2PConnectionsEstablished()) {
@@ -1184,10 +1202,10 @@ void ccoip::CCoIPMasterHandler::onClientDisconnect(const ccoip_socket_address_t 
     }
 }
 
-void ccoip::CCoIPMasterHandler::handleAcceptNewPeers(const ccoip_socket_address_t &client_address,
-                                                     const C2MPacketAcceptNewPeers &) {
+void ccoip::CCoIPMasterHandler::handleEstablishP2PConnections(const ccoip_socket_address_t &client_address,
+                                                     const C2MPacketRequestEstablishP2PConnections &packet) {
     THREAD_GUARD(server_thread_id);
-    LOG(DEBUG) << "Received C2MPacketAcceptNewPeers from " << ccoip_sockaddr_to_str(client_address);
+    LOG(DEBUG) << "Received C2MPacketEstablishP2PConnections from " << ccoip_sockaddr_to_str(client_address);
 
     const auto client_uuid_opt = server_state.findClientUUID(client_address);
     if (!client_uuid_opt) {
@@ -1198,23 +1216,49 @@ void ccoip::CCoIPMasterHandler::handleAcceptNewPeers(const ccoip_socket_address_
         return;
     }
     if (const auto client_uuid = client_uuid_opt.value();
-        !server_state.voteAcceptNewPeers(client_uuid)) [[unlikely]] {
-        LOG(WARN) << "Failed to vote to accept new peers from " << ccoip_sockaddr_to_str(client_address);
+        !server_state.voteEstablishP2PConnections(client_uuid, packet.accept_new_peers)) [[unlikely]] {
+        LOG(WARN) << "Failed to vote to establish p2p connections (with or without accepting new peers) from " << ccoip_sockaddr_to_str(client_address);
         if (!kickClient(client_address)) [[unlikely]] {
             LOG(ERR) << "Failed to kick client " << ccoip_sockaddr_to_str(client_address);
         }
         return;
     }
 
-    if (!checkAcceptNewPeersConsensus()) [[unlikely]] {
+    if (!checkEstablishP2PConnectionConsensus()) [[unlikely]] {
         LOG(BUG) << "checkAcceptNewPeersConsensus() failed for " << ccoip_sockaddr_to_str(client_address) <<
-                " when handling accept new peers packet. This should never happen.";
+                " when handling request establish p2p connections packet. This should never happen.";
     }
 }
 
 ccoip::CCoIPMasterHandler::~CCoIPMasterHandler() = default;
 
 #define CALLSITE_P2P_CONNECTION_INFORMATION __COUNTER__
+
+void ccoip::CCoIPMasterHandler::sendP2PConnectionInformation(const bool changed, const ClientInfo &peer_info) {
+    M2CPacketP2PConnectionInfo new_peers{};
+    new_peers.unchanged = !changed;
+
+    const auto peer_address = peer_info.socket_address;
+
+    if (changed) {
+        const auto peers = server_state.getPeersForClient(peer_address); // get the peers for the client
+        new_peers.all_peers.reserve(peers.size());
+        for (const auto &client_info: peers) {
+            // construct a new peers packet
+            new_peers.all_peers.push_back({
+                    .p2p_listen_addr = ccoip_socket_address_t{
+                            .inet = client_info.socket_address.inet,
+                            .port = client_info.variable_ports.p2p_listen_port
+                    },
+                    .peer_uuid = client_info.client_uuid
+            });
+        }
+    }
+
+    if (!server_socket.sendPacket(peer_address, new_peers)) {
+        LOG(ERR) << "Failed to send M2CPacketNewPeers to " << ccoip_sockaddr_to_str(peer_address);
+    }
+}
 
 void ccoip::CCoIPMasterHandler::sendP2PConnectionInformation() {
     const bool changed = server_state.hasPeerListChanged(CALLSITE_P2P_CONNECTION_INFORMATION) ||
@@ -1233,26 +1277,6 @@ void ccoip::CCoIPMasterHandler::sendP2PConnectionInformation() {
         }
 
         // for all connected clients
-        M2CPacketP2PConnectionInfo new_peers{};
-        new_peers.unchanged = !changed;
-
-        if (changed) {
-            auto peers = server_state.getPeersForClient(peer_address); // get the peers for the client
-            new_peers.all_peers.reserve(peers.size());
-            for (const auto &client_info: peers) {
-                // construct a new peers packet
-                new_peers.all_peers.push_back({
-                        .p2p_listen_addr = ccoip_socket_address_t{
-                                .inet = client_info.socket_address.inet,
-                                .port = client_info.variable_ports.p2p_listen_port
-                        },
-                        .peer_uuid = client_info.client_uuid
-                });
-            }
-        }
-
-        if (!server_socket.sendPacket(peer_address, new_peers)) {
-            LOG(ERR) << "Failed to send M2CPacketNewPeers to " << ccoip_sockaddr_to_str(peer_address);
-        }
+        sendP2PConnectionInformation(changed, peer_info);
     }
 }
