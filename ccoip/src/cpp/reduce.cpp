@@ -152,7 +152,7 @@ namespace {
             // 3b) Receive if ready
             if (rx_desc && (*rx_desc)->hasEvent(poll::PollEvent::POLL_INPUT)) {
                 const auto recv_sub = recv_buffer_span.subspan(bytes_recvd);
-                if (auto recvd = recv_nonblocking(recv_sub, **rx_desc)) {
+                if (auto recvd = recv_nonblocking(recv_sub, **rx_desc, MSG_NOSIGNAL)) {
                     if (*recvd > 0) {
                         client_state.trackCollectiveComsRxBytes(tag, *recvd);
 
@@ -301,7 +301,7 @@ namespace {
             // Receive
             if (rx_desc && (*rx_desc)->hasEvent(poll::PollEvent::POLL_INPUT)) {
                 const auto recv_sub = recv_buffer_span.subspan(bytes_recvd);
-                if (auto recvd = recv_nonblocking(recv_sub, **rx_desc)) {
+                if (auto recvd = recv_nonblocking(recv_sub, **rx_desc, MSG_NOSIGNAL)) {
                     if (*recvd > 0) {
                         client_state.trackCollectiveComsRxBytes(tag, *recvd);
 
