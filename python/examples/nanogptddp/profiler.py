@@ -57,7 +57,7 @@ class Profiler:
             self,
             filename=None,
             width=2400,
-            row_height=80,
+            row_height=40,
             return_image=False
     ):
         """
@@ -216,113 +216,67 @@ class _SessionContextManager:
         self.profiler.end_session()
         # Returning False so that any exception is still raised
         return False
-
 class ProfilerCollection:
     """
-    Accumulates (profiler, label) frames. We can then export them
-    all to a video. If you call render_as_video multiple times with
-    'append=True', only new frames since the last invocation are
-    encoded, and we 'concat' them to the existing video.
+    Collects multiple Profiler instances and defers rendering them
+    until `render_as_video(...)` is called. Each Profiler is converted
+    to a PIL image (via profiler.export_timeline(return_image=True)) exactly
+    once (lazy rendering). If you add new profilers later and call
+    `render_as_video` again, it will only render the new ones.
     """
 
     def __init__(self):
-        self.frames = []  # list of (profiler, label)
-        self._rendered_up_to = 0  # how many frames we've already included in the output
+        """
+        We'll store a list of dicts with keys:
+         - 'profiler': the Profiler instance
+         - 'label': an optional string label
+         - 'image': a PIL Image cache (None until we actually render)
+        """
+        self.frames = []
 
     def add_profiler(self, profiler, label=None):
-        """Append a new frame (profiler snapshot) to the collection."""
+        """
+        Store this profiler for future rendering. We do NOT call export_timeline here,
+        so it's fully deferred. We only do the actual rendering on render_as_video().
+        """
         if label is None:
             label = f"Frame {len(self.frames)}"
-        self.frames.append((profiler, label))
+        entry = {
+            "profiler": profiler,
+            "label": label,
+            "image": None  # will be filled in when we do lazy rendering
+        }
+        self.frames.append(entry)
 
-    def render_as_video(self, out_filename="profiler_video.mp4", fps=2, append=True):
+    def render_as_video(self, out_filename="profiler_video.mp4", fps=2):
         """
-        Render frames as a video. If append=True and the output file already
-        exists, we do an incremental update:
-          - Encode only the new frames into a temporary mp4
-          - Use ffmpeg concat to merge it with the existing mp4
-        Otherwise, we just encode all frames from scratch.
+        Render all frames to a video. For each stored Profiler that hasn't been
+        rendered yet (image=None), we call export_timeline(return_image=True),
+        cache the result in memory, and then use that to build the final video.
+        If you call this multiple times, only newly added profilers get rendered.
         """
         if not self.frames:
-            print("No frames in ProfilerCollection; nothing to render.")
+            print("ProfilerCollection is empty; nothing to render.")
             return
 
-        start_index = 0
-        do_concat = False
+        # Open an imageio writer for the final video
+        with imageio.get_writer(out_filename, fps=fps) as writer:
+            # Go through each frame
+            for i, entry in enumerate(self.frames):
+                if entry["image"] is None:
+                    # We haven't rendered this profiler's timeline yet => do it now
+                    profiler = entry["profiler"]
+                    img = profiler.export_timeline(return_image=True)
+                    if img is None:
+                        # e.g. no sessions or 0 duration
+                        continue
+                    entry["image"] = img  # cache the PIL image in memory
 
-        if append and os.path.exists(out_filename):
-            # We'll only render new frames from self._rendered_up_to..end
-            if self._rendered_up_to >= len(self.frames):
-                print("No new frames to append.")
-                return
-            start_index = self._rendered_up_to
-            do_concat = True
-            print(f"Appending {len(self.frames) - start_index} frames to {out_filename}.")
-        else:
-            # (Re)write from scratch
-            print(f"Writing {len(self.frames)} frames from scratch to {out_filename}.")
+                # We now have a cached PIL image
+                image_pil = entry["image"]
 
-        # Encode partial video to a temp file
-        partial_filename = out_filename + ".partial.mp4"
-        self._encode_frames_to_video(partial_filename, fps, start_index, len(self.frames))
+                # Convert to a numpy array for imageio
+                frame_array = np.array(image_pil)
+                writer.append_data(frame_array)
 
-        if do_concat:
-            # Concat existing out_filename + partial_filename => final
-            merged_filename = out_filename + ".merged.mp4"
-            self._concat_videos_ffmpeg(out_filename, partial_filename, merged_filename)
-
-            # Move merged => out_filename
-            os.remove(out_filename)
-            os.rename(merged_filename, out_filename)
-            os.remove(partial_filename)
-
-            self._rendered_up_to = len(self.frames)
-            print(f"Appended new frames; final video: {out_filename}")
-        else:
-            # We just wrote the entire video from scratch
-            # move partial => out_filename
-            if os.path.exists(out_filename):
-                os.remove(out_filename)
-            os.rename(partial_filename, out_filename)
-
-            self._rendered_up_to = len(self.frames)
-            print(f"Video saved to {out_filename}")
-
-
-    def _encode_frames_to_video(self, tmp_filename, fps, start_idx, end_idx):
-        """
-        Writes frames [start_idx..end_idx) to tmp_filename using imageio.
-        """
-        with imageio.get_writer(tmp_filename, fps=fps) as writer:
-            for i in range(start_idx, end_idx):
-                profiler, label = self.frames[i]
-                # 1) Generate the timeline image
-                img = profiler.export_timeline(return_image=True)
-                if img is None:
-                    continue
-
-                # 2) Optional: overlay the label with PIL
-                draw = ImageDraw.Draw(img)
-                draw.text((10,10), label, fill=(0,0,0))
-
-                # 3) Convert to numpy array for imageio
-                frame = np.array(img)
-                writer.append_data(frame)
-
-    def _concat_videos_ffmpeg(self, video1, video2, output):
-        """
-        Use ffmpeg concat demuxer to merge video1 + video2 into 'output'.
-        Both must have identical encoding parameters.
-        """
-        list_file = "concat_list.txt"
-        with open(list_file, "w") as f:
-            f.write(f"file '{os.path.abspath(video1)}'\n")
-            f.write(f"file '{os.path.abspath(video2)}'\n")
-
-        cmd = [
-            "ffmpeg", "-y", "-f", "concat", "-safe", "0",
-            "-i", list_file, "-c", "copy", output
-        ]
-        print(" ".join(cmd))
-        subprocess.run(cmd, check=True)
-        os.remove(list_file)
+        print(f"Video rendered with {len(self.frames)} frames at {fps} FPS => {out_filename}")
