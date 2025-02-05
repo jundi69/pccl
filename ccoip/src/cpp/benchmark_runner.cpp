@@ -125,7 +125,7 @@ bool ccoip::NetworkBenchmarkHandler::runBlocking(const int socket_fd) {
         }
 
         std::span buffer_span(reinterpret_cast<std::byte *>(buffer.get()), buffer_size);
-        const auto n_received = recv_nonblocking(buffer_span, rx_descriptor, MSG_NOSIGNAL);
+        const auto n_received = recv_nonblocking(buffer_span, rx_descriptor, );
         if (!n_received) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 continue;

@@ -465,7 +465,6 @@ namespace tinysockets {
         std::optional<size_t> send_nonblocking(const std::span<const std::byte> &data,
                                                const PollDescriptor &poll_descriptor);
 
-        std::optional<size_t> recv_nonblocking(const std::span<std::byte> &data, const PollDescriptor &poll_descriptor,
-                                               int flags);
+        std::optional<size_t> recv_nonblocking(const std::span<std::byte> &data, const PollDescriptor &poll_descriptor);
     };
 };
