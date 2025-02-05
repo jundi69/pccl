@@ -62,6 +62,8 @@ Make sure "Visual Studio Integration" is status "Installed" in the summary of th
 Without the Visual Studio Integration of the CUDA Toolkit, the cmake generation phase will fail in a specific way that
 is documented in the build section below.
 
+![Verify CUDA Installation](../images/cuda_install_visualstudio_integration_confirmation.png)
+
 #### macOS
 
 ```bash
