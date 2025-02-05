@@ -1,5 +1,8 @@
+import os
 import time
 
+import imageio
+import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 import random
 
@@ -52,149 +55,131 @@ class Profiler:
     def export_timeline(
             self,
             filename=None,
-            width=1200,
-            row_height=40,
+            width=2400,
+            row_height=80,
             return_image=False
     ):
         """
-        Export (or return) a timeline image of this Profiler’s data.
-        If `return_image=True`, we return a PIL Image object instead of saving to a file.
-        If `filename` is given and `return_image=False`, we save to disk.
+        Draw a timeline image of this Profiler's data.
+        If return_image=True, return a PIL Image object instead of saving to a file.
+        If filename is provided and return_image=False, save the image to disk as filename.
         """
 
-        # 1) Gather all nodes (and their depths)
+        # Gather nodes
         all_nodes = []
         def collect_nodes(node, depth=0):
             all_nodes.append((node, depth))
             for c in node.children:
                 collect_nodes(c, depth+1)
-
         for root in self.root_sessions:
             collect_nodes(root)
 
         if not all_nodes:
-            print("No recorded sessions to draw.")
+            print("No recorded sessions.")
             return None
 
-        # 2) Time range
-        min_start = min(n.start_time for (n, _) in all_nodes)
-        max_end   = max(n.end_time   for (n, _) in all_nodes)
+        min_start = min(n.start_time for n,_ in all_nodes)
+        max_end   = max(n.end_time for n,_ in all_nodes)
         total_duration = max_end - min_start
         if total_duration <= 0:
-            print("Profiler data has no measurable duration; cannot draw timeline.")
+            print("Profiler data has no measurable duration.")
             return None
 
-        # 3) Layout
-        max_depth = max(depth for (_, depth) in all_nodes)
+        # Layout
+        max_depth = max(d for _,d in all_nodes)
         PADDING_X = 50
         PADDING_Y = 30
         TIMELINE_AXIS_HEIGHT = 40
         BARS_OFFSET = 15
+        effective_width = width - 2*PADDING_X
+        height = TIMELINE_AXIS_HEIGHT + BARS_OFFSET + (max_depth+1)*row_height + PADDING_Y
 
-        effective_width = width - 2 * PADDING_X
-        height = (
-                TIMELINE_AXIS_HEIGHT
-                + BARS_OFFSET
-                + (max_depth + 1) * row_height
-                + PADDING_Y
-        )
-
-        # 4) Create image
-        img = Image.new("RGB", (width, height), color=(250, 250, 250))
+        # Create image
+        img = Image.new("RGB", (width, height), (250,250,250))
         draw = ImageDraw.Draw(img)
 
-        # 5) Font
+        # Font
         try:
-            font = ImageFont.truetype("Arial.ttf", int(row_height / 3))
+            font = ImageFont.truetype("Arial.ttf", int(row_height/3))
         except OSError:
             font = ImageFont.load_default()
 
-        # 6) Deterministic color seeding (example)
+        # Make color generation deterministic
         random.seed(1234)
 
-        # Pastel color generator
         def pastel_color():
-            r = 150 + random.randint(0, 105)
-            g = 150 + random.randint(0, 105)
-            b = 150 + random.randint(0, 105)
-            return (r, g, b)
+            r = 150 + random.randint(0,105)
+            g = 150 + random.randint(0,105)
+            b = 150 + random.randint(0,105)
+            return (r,g,b)
 
-        # 7) Timeline axis
+        # Draw top timeline axis
         axis_y = TIMELINE_AXIS_HEIGHT // 2
-        draw.line(
-            [(PADDING_X, axis_y), (PADDING_X + effective_width, axis_y)],
-            fill=(0,0,0), width=1
-        )
+        draw.line([(PADDING_X, axis_y), (PADDING_X+effective_width, axis_y)], fill=(0,0,0), width=1)
 
         # Ticks
         num_ticks = 10
         step = total_duration / num_ticks
-        for i in range(num_ticks + 1):
+        for i in range(num_ticks+1):
             t = i * step
-            x_tick = PADDING_X + int((t / total_duration) * effective_width)
+            x_tick = PADDING_X + int((t/total_duration)*effective_width)
 
-            # Full gray line down
+            # Long gray line downward
             draw.line([(x_tick, axis_y), (x_tick, height)], fill=(180,180,180), width=1)
+
             # Short black tick
             tick_size = 5
             draw.line([(x_tick, axis_y - tick_size), (x_tick, axis_y + tick_size)], fill=(0,0,0), width=1)
 
             # Label
             label_text = f"{t:.2f}s"
-            bbox = draw.textbbox((0,0), label_text, font=font)
-            label_w = bbox[2] - bbox[0]
-            label_h = bbox[3] - bbox[1]
-            label_x = x_tick - label_w // 2
-            label_y = axis_y + tick_size + 2
-            draw.text((label_x, label_y), label_text, fill=(0,0,0), font=font)
+            bbox = draw.textbbox((0, 0), label_text, font=font)
+            w = bbox[2] - bbox[0]
+            h = bbox[3] - bbox[1]
+            draw.text((x_tick - w//2, axis_y + tick_size + 2), label_text, fill=(0,0,0), font=font)
 
         # Helper to truncate text if bar is too short
         def truncate_text_to_fit(original_text, max_width):
-            text = original_text
-            bbox = draw.textbbox((0,0), text, font=font)
+            bbox = draw.textbbox((0,0), original_text, font=font)
             text_w = bbox[2] - bbox[0]
             if text_w <= max_width:
-                return text
+                return original_text
 
-            base_text = text
-            while len(base_text) > 0:
-                trial_text = base_text + "..."
-                w = draw.textbbox((0,0), trial_text, font=font)
-                if (w[2] - w[0]) <= max_width:
-                    return trial_text
-                base_text = base_text[:-1]
+            base = original_text
+            while base:
+                trial = base + "..."
+                trial_w = draw.textbbox((0,0), trial, font=font)
+                if (trial_w[2] - trial_w[0]) <= max_width:
+                    return trial
+                base = base[:-1]
             return "..."
 
-        # 8) Draw session bars
-        for (node, depth) in all_nodes:
-            node_start_offset = node.start_time - min_start
-            node_end_offset   = node.end_time   - min_start
-
-            x1 = PADDING_X + int((node_start_offset / total_duration)*effective_width)
-            x2 = PADDING_X + int((node_end_offset   / total_duration)*effective_width)
-            y1 = TIMELINE_AXIS_HEIGHT + BARS_OFFSET + depth * row_height
-            y2 = y1 + (row_height - 10)
+        # Draw session bars
+        outline_color = (120,120,120)
+        for node, depth in all_nodes:
+            start_off = node.start_time - min_start
+            end_off   = node.end_time - min_start
+            x1 = PADDING_X + int((start_off/total_duration)*effective_width)
+            x2 = PADDING_X + int((end_off  /total_duration)*effective_width)
+            y1 = TIMELINE_AXIS_HEIGHT + BARS_OFFSET + depth*row_height
+            y2 = y1 + row_height - 10
 
             rect_color = pastel_color()
-            outline_color = (120,120,120)
-
-            draw.rectangle([x1, y1, x2, y2], fill=rect_color, outline=outline_color)
+            draw.rectangle([(x1,y1),(x2,y2)], fill=rect_color, outline=outline_color)
 
             # Label
-            raw_label = f"{node.name} ({node.duration:.4f}s)"
+            raw_text = f"{node.name} ({node.duration:.4f}s)"
             bar_width = (x2 - x1) - 10
-            label_text = truncate_text_to_fit(raw_label, bar_width)
+            label_text = truncate_text_to_fit(raw_text, bar_width)
             draw.text((x1+5, y1+5), label_text, fill=(0,0,0), font=font)
 
-        # 9) Output
+        # Return or save
         if return_image:
-            # Return the PIL image object
             return img
         else:
-            # Save to a file if filename is given
             if filename:
                 img.save(filename)
-                print(f"Timeline exported to {filename}.")
+                print(f"Timeline exported to {filename}")
             return None
 
 
@@ -231,50 +216,112 @@ class _SessionContextManager:
         # Returning False so that any exception is still raised
         return False
 
-
-import imageio
-import numpy as np
-
 class ProfilerCollection:
     """
-    A collection of Profiler snapshots, one per 'frame' or iteration.
-    You can push multiple fully-populated profilers into it, then
-    export them as a video showing how the profiling changed over time.
+    Accumulates (profiler, label) frames. We can then export them
+    all to a video. If you call render_as_video multiple times with
+    'append=True', only new frames since the last invocation are
+    encoded, and we 'concat' them to the existing video.
     """
+
     def __init__(self):
-        self.frames = []  # will hold (profiler, label) pairs
+        self.frames = []  # list of (profiler, label)
+        self._rendered_up_to = 0  # how many frames we've already included in the output
 
     def add_profiler(self, profiler, label=None):
-        """Store a profiler and optionally a textual label (e.g. 'Frame #12')."""
+        """Append a new frame (profiler snapshot) to the collection."""
         if label is None:
             label = f"Frame {len(self.frames)}"
         self.frames.append((profiler, label))
 
-    def render_as_video(self, out_filename="profiler_video.mp4", fps=2):
+    def render_as_video(self, out_filename="profiler_video.mp4", fps=2, append=True):
         """
-        Render all stored profilers as frames in a video (mp4) file.
-        Requires 'imageio' and 'imageio-ffmpeg' installed.
+        Render frames as a video. If append=True and the output file already
+        exists, we do an incremental update:
+          - Encode only the new frames into a temporary mp4
+          - Use ffmpeg concat to merge it with the existing mp4
+        Otherwise, we just encode all frames from scratch.
         """
         if not self.frames:
-            print("ProfilerCollection is empty; nothing to render.")
+            print("No frames in ProfilerCollection; nothing to render.")
             return
 
-        # We'll create a writer with the given fps.
-        with imageio.get_writer(out_filename, fps=fps) as writer:
-            for idx, (profiler, label) in enumerate(self.frames):
-                # Grab an in-memory image from the profiler
-                img = profiler.export_timeline(return_image=True)  # returns a PIL Image
+        start_index = 0
+        do_concat = False
+
+        if append and os.path.exists(out_filename):
+            # We'll only render new frames from self._rendered_up_to..end
+            if self._rendered_up_to >= len(self.frames):
+                print("No new frames to append.")
+                return
+            start_index = self._rendered_up_to
+            do_concat = True
+            print(f"Appending {len(self.frames) - start_index} frames to {out_filename}.")
+        else:
+            # (Re)write from scratch
+            print(f"Writing {len(self.frames)} frames from scratch to {out_filename}.")
+
+        # Encode partial video to a temp file
+        partial_filename = out_filename + ".partial.mp4"
+        self._encode_frames_to_video(partial_filename, fps, start_index, len(self.frames))
+
+        if do_concat:
+            # Concat existing out_filename + partial_filename => final
+            merged_filename = out_filename + ".merged.mp4"
+            self._concat_videos_ffmpeg(out_filename, partial_filename, merged_filename)
+
+            # Move merged => out_filename
+            os.remove(out_filename)
+            os.rename(merged_filename, out_filename)
+            os.remove(partial_filename)
+
+            self._rendered_up_to = len(self.frames)
+            print(f"Appended new frames; final video: {out_filename}")
+        else:
+            # We just wrote the entire video from scratch
+            # move partial => out_filename
+            if os.path.exists(out_filename):
+                os.remove(out_filename)
+            os.rename(partial_filename, out_filename)
+
+            self._rendered_up_to = len(self.frames)
+            print(f"Video saved to {out_filename}")
+
+
+    def _encode_frames_to_video(self, tmp_filename, fps, start_idx, end_idx):
+        """
+        Writes frames [start_idx..end_idx) to tmp_filename using imageio.
+        """
+        with imageio.get_writer(tmp_filename, fps=fps) as writer:
+            for i in range(start_idx, end_idx):
+                profiler, label = self.frames[i]
+                # 1) Generate the timeline image
+                img = profiler.export_timeline(return_image=True)
                 if img is None:
-                    # Possibly means no data or an error
                     continue
 
-                # If you want to overlay the label on the image, do it here:
-                # e.g. using PIL to draw text on `img` if desired
-                #  draw = ImageDraw.Draw(img)
-                #  draw.text((10,10), label, fill=(0,0,0))  # etc.
+                # 2) Optional: overlay the label with PIL
+                draw = ImageDraw.Draw(img)
+                draw.text((10,10), label, fill=(0,0,0))
 
-                # Convert the PIL image to a NumPy array for imageio
+                # 3) Convert to numpy array for imageio
                 frame = np.array(img)
                 writer.append_data(frame)
 
-        print(f"Video exported to {out_filename}, with {len(self.frames)} frames at {fps} fps.")
+    def _concat_videos_ffmpeg(self, video1, video2, output):
+        """
+        Use ffmpeg concat demuxer to merge video1 + video2 into 'output'.
+        Both must have identical encoding parameters.
+        """
+        list_file = "concat_list.txt"
+        with open(list_file, "w") as f:
+            f.write(f"file '{os.path.abspath(video1)}'\n")
+            f.write(f"file '{os.path.abspath(video2)}'\n")
+
+        cmd = [
+            "ffmpeg", "-y", "-f", "concat", "-safe", "0",
+            "-i", list_file, "-c", "copy", output
+        ]
+        print(" ".join(cmd))
+        subprocess.run(cmd, check=True)
+        os.remove(list_file)
