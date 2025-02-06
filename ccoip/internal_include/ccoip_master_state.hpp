@@ -314,7 +314,7 @@ namespace ccoip {
 
         /// Map of all peers that a given peer cannot reach.
         /// unreachability_map[a] is the list of peers that peer a cannot reach.
-        /// Populated on failed p2p connection establishment.
+        /// Populated on failed p2p connection establishment and when bandwidth benchmarking fails.
         std::unordered_map<ccoip_uuid_t, std::unordered_set<ccoip_uuid_t>> unreachability_map{};
 
         /// Bandwidth store for all clients
@@ -571,6 +571,10 @@ namespace ccoip {
 
         /// Returns the number of peers registered in the bandwidth store
         [[nodiscard]] size_t getNumBandwidthStoreRegisteredPeers() const;
+
+        /// Declares the following cost edge unreachable.
+        /// Unreachable bandwidth entries will not be included in the @code getMissingBandwidthEntries@endcode, despite having no entry in the bandwidth store.
+        void markBandwidthEntryUnreachable(const bandwidth_entry &bandwidth_entry);
 
         /// Finds the client UUID from the client address; returns std::nullopt if not found
         [[nodiscard]] std::optional<ccoip_uuid_t> findClientUUID(const ccoip_socket_address_t &client_address);

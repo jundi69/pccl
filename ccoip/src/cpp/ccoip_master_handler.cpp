@@ -395,6 +395,18 @@ bool ccoip::CCoIPMasterHandler::checkTopologyOptimizationCompletionConsensus() {
         // and find the optimal tour taking into account the routing limitations.
         constexpr bool success = true;
 
+        // Mark the edges that are still missing as unreachable so we don't try them again.
+        // if we don't do this, we would constantly be running a benchmark that will time out, only stalling
+        // the run with every invocation of optimize topology.
+        if (!server_state.isBandwidthStoreFullyPopulated()) {
+            for (const auto &peer_uuid : server_state.getCurrentlyAcceptedPeers()) {
+                const auto missing_entries = server_state.getMissingBandwidthEntries(peer_uuid);
+                for (const auto &missing_entry : missing_entries) {
+                    server_state.markBandwidthEntryUnreachable(missing_entry);
+                }
+            }
+        }
+
         if (!server_state.endTopologyOptimizationPhase(!success)) {
             LOG(BUG) << "Failed to end topology optimization phase. This is a bug!";
             return false;

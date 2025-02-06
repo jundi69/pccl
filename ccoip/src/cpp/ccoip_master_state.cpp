@@ -1,7 +1,7 @@
 #include "ccoip_master_state.hpp"
 
-#include <functional>
 #include <ccoip_packets.hpp>
+#include <functional>
 #include <pccl_log.hpp>
 #include <topology_optimizer.hpp>
 
@@ -426,7 +426,8 @@ bool ccoip::CCoIPMasterState::markP2PConnectionsEstablished(const ccoip_uuid_t &
                 // if we cannot build a tour anymore, client will be kicked
                 if (!topo_opt) {
                     LOG(WARN) << "Peer " << ccoip_sockaddr_to_str(info.socket_address)
-                              << " cannot communicate with enough peers such that any ring tour is possible! Peer will be kicked.";
+                              << " cannot communicate with enough peers such that any ring tour is possible! Peer will "
+                                 "be kicked.";
                     return false; // returning false here returns in a kick.
                 }
                 setRingTopology(*topo_opt, false);
@@ -1078,8 +1079,27 @@ std::optional<double> ccoip::CCoIPMasterState::getPeerBandwidthMbps(const ccoip_
 }
 
 std::vector<ccoip::bandwidth_entry> ccoip::CCoIPMasterState::getMissingBandwidthEntries(const ccoip_uuid_t peer) {
-    return bandwidth_store.getMissingBandwidthEntries(peer);
+    auto missing_entries = bandwidth_store.getMissingBandwidthEntries(peer);
+
+    // remove bandwidth entries that are considered unreachable
+    for (auto it = missing_entries.begin(); it != missing_entries.end(); ) {
+        const auto &[from_peer_uuid, to_peer_uuid] = *it;
+
+        // check if considered unreachable
+        if (unreachability_map[from_peer_uuid].contains(to_peer_uuid)) {
+            it = missing_entries.erase(it);
+        } else {
+            ++it;
+        }
+    }
+
+    return missing_entries;
 }
+
+void ccoip::CCoIPMasterState::markBandwidthEntryUnreachable(const bandwidth_entry &bandwidth_entry) {
+    unreachability_map[bandwidth_entry.from_peer_uuid].insert(bandwidth_entry.to_peer_uuid);
+}
+
 
 bool ccoip::CCoIPMasterState::isBandwidthStoreFullyPopulated() const {
     return bandwidth_store.isBandwidthStoreFullyPopulated();
@@ -1373,7 +1393,7 @@ std::optional<std::vector<ccoip_uuid_t>> ccoip::CCoIPMasterState::buildReachable
     // Edge case: if we have 0 or 1 peers, we can trivially return a "ring" or nothing
     if (remaining_peers.size() <= 1) {
         if (remaining_peers.empty()) {
-            return std::nullopt;  // No peers -> no ring
+            return std::nullopt; // No peers -> no ring
         }
         // A single peer could be considered a degenerate ring if that makes sense in your context
         return std::vector{remaining_peers.front()};
@@ -1383,8 +1403,8 @@ std::optional<std::vector<ccoip_uuid_t>> ccoip::CCoIPMasterState::buildReachable
     std::unordered_map<ccoip_uuid_t, std::unordered_set<ccoip_uuid_t>> adjacency;
     adjacency.reserve(remaining_peers.size());
 
-    for (const auto &u : remaining_peers) {
-        for (const auto &v : remaining_peers) {
+    for (const auto &u: remaining_peers) {
+        for (const auto &v: remaining_peers) {
             if (u == v) {
                 continue; // Skip self
             }
@@ -1406,9 +1426,7 @@ std::optional<std::vector<ccoip_uuid_t>> ccoip::CCoIPMasterState::buildReachable
     visited.reserve(remaining_peers.size());
 
     // Recursive function: returns true if it successfully forms a ring
-    std::function<bool(const ccoip_uuid_t&)> backtrack =
-        [&](const ccoip_uuid_t &current) -> bool
-    {
+    std::function<bool(const ccoip_uuid_t &)> backtrack = [&](const ccoip_uuid_t &current) -> bool {
         // If we've visited all peers, check if we can close the cycle
         if (path.size() == remaining_peers.size()) {
             // Check adjacency to the start to form a cycle
@@ -1422,7 +1440,7 @@ std::optional<std::vector<ccoip_uuid_t>> ccoip::CCoIPMasterState::buildReachable
         }
 
         // Otherwise, try each neighbor of the current node
-        for (const auto &neighbor : adjacency[current]) {
+        for (const auto &neighbor: adjacency[current]) {
             if (!visited.contains(neighbor)) {
                 // Mark neighbor visited, add to path, recurse
                 visited.insert(neighbor);
@@ -1441,7 +1459,7 @@ std::optional<std::vector<ccoip_uuid_t>> ccoip::CCoIPMasterState::buildReachable
     };
 
     // 4. Try each peer as a potential starting point
-    for (const auto &start : remaining_peers) {
+    for (const auto &start: remaining_peers) {
         path.clear();
         visited.clear();
 
