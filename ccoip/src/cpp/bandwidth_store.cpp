@@ -1,6 +1,5 @@
 #include "bandwidth_store.hpp"
 
-#include <bits/ranges_util.h>
 #include <iomanip>
 #include <pccl_log.hpp>
 
@@ -11,6 +10,10 @@ bool ccoip::BandwidthStore::registerPeer(const ccoip_uuid_t peer) {
 
 bool ccoip::BandwidthStore::storeBandwidth(const ccoip_uuid_t from, const ccoip_uuid_t to,
                                            const double send_bandwidth_mpbs) {
+    if (from == to) {
+        LOG(BUG) << "Cannot store bandwidth from self to itself in bandwidth store. This is a bug!";
+        return false;
+    }
     if (!registered_peers.contains(from)) {
         return false;
     }
@@ -74,9 +77,7 @@ bool ccoip::BandwidthStore::isBandwidthStoreFullyPopulated() const {
     return fully_populated;
 }
 
-size_t ccoip::BandwidthStore::getNumberOfRegisteredPeers() const {
-    return registered_peers.size();
-}
+size_t ccoip::BandwidthStore::getNumberOfRegisteredPeers() const { return registered_peers.size(); }
 
 
 bool ccoip::BandwidthStore::unregisterPeer(const ccoip_uuid_t peer) {
@@ -107,19 +108,13 @@ void ccoip::BandwidthStore::printBandwidthStore() {
         ss << " ";
     }
     ss << '\n';
-    std::vector<std::vector<double>> matrix{};
-    for (const auto &[from, to_bandwidth_map]: bandwidth_map) {
-        auto &row = matrix.emplace_back(peers.size(), -1.0);
-        for (const auto &[to, bandwidth]: to_bandwidth_map) {
-            const size_t to_index = std::ranges::find(peers, to) - peers.begin();
-            row[to_index] = bandwidth;
-        }
-    }
-    for (size_t from_index = 0; from_index < matrix.size(); from_index++) {
+    for (size_t from_index = 0; from_index < peers.size(); from_index++) {
+        const auto from = peers[from_index];
         ss << std::to_string(from_index) << " ";
-        const auto &row = matrix[from_index];
-        for (const double bandwidth : row) {
-            ss << std::setw(5) << std::setprecision(2) << std::fixed << (bandwidth / 2000.0) << " ";
+        for (const auto to : peers) {
+            const auto bandwidth_opt = getBandwidthMbps(from, to);
+            const auto bandwidth = bandwidth_opt.has_value() ? bandwidth_opt.value() / 1000.0 : -1;
+            ss << std::setw(5) << std::setprecision(2) << std::fixed << bandwidth << " ";
         }
         ss << "\n";
     }
