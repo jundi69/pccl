@@ -20,9 +20,10 @@ For the master connection—and potentially any socket that might carry messages
 ## Firewalls & Ports
 - By default, the master listens on port `48148`
 - Each peer tries to bind to a small range ([48149..48151]) for p2p, shared-state distribution, and bandwidth test sockets.
-However, these ports are not defacto static as is the case with most network protocols. Rather, these ports are “bump allocated“ where initially the implementation tries to bind to the target port (e.g. `48151` for the benchmark socket, or `48149` for the shared state server), but if this fails, the next higher port is tried until a free port is found. This ensures multiple peers can run on the same machine without port conflicts. Peers will "find" each other by reporting their ports to the master, which will inturn share this information with other peers.
+  However, these ports are not defacto static as is the case with most network protocols. Rather, these ports are “bump allocated“ where initially the implementation tries to bind to the target port (e.g. `48151` for the benchmark socket, or `48149` for the shared state server), but if this fails, the next higher port is tried until a free port is found. This ensures multiple peers can run on the same machine without port conflicts. Peers will "find" each other by reporting their ports to the master, which will inturn share this information with other peers.
 
-- `Important`: For wide-area or internet usage, you must open these ports in your firewall & forward them to your computer when behind NAT. The recommended approach is to open ~200 consecutive ports above `48148`.
+- `Important`: For wide-area or internet usage, you must open these ports in your firewall & forward them to your computer when behind NAT. When only hosting one peer per IP address, only opening port `48149`, `48150`, `48151` is required.
+  When hosting more peers per IP address (e.g behind NAT), the recommended approach is to open a port range above `48148` proportional to the amount of peers using this IP address.
 
 
 ## Master Orchestration
@@ -49,8 +50,8 @@ One of PCCL’s features is `bandwidth-aware ring ordering`. Since ring-based re
 1. **Bandwidth Store**: The master keeps an asymmetric cost matrix (`BandwidthStore`) of measured bandwidth from peer A to peer B.
 2. **Benchmark Requests**: When a peer calls `pcclOptimizeTopology`, the master identifies missing edges (i.e., pairs not yet measured) and instructs the relevant peer(s) to do a quick TCP test.
 3. **TSP Heuristic:** The master uses a traveling-salesman “shortest path” (or “highest bandwidth”) approach to find a ring ordering that tries to maximize total link speed. For small problems `world_size <= 16` an exact solution will be attempted in a set timeout limit, for larger problems it might attempt a simpler heuristic (path of immediate “closest” peer, random tour or ant colony optimization with 2 Opt & 3 Opt local search, etc.). If an optimal solution cannot be found, the master may start a “moonshot” approach in the background to either target an optimal solution for higher `world_size` or to continue improving the current solution heuristically.
-Once a better ring is found, p2p connections will be re-established in that order (without letting brand-new peers in) the next time the client calls `pcclU pdateTopology`. The clients adopt the new ring as soon as they collectively vote and connect to each new neighbor.
-Solutions that are found immediately as part of the topology optimization phase without a background “moonshot” are adopted immediately by the peers as part of `pcclOptimizeTopology` in a fashion similar to `pcclUpdateTopology`, but without admitting newcomers into the run while still “going through the same motions” of voting to establish p2p connections by peers, followed by distribution of the p2p connection information by the master to said peers, along with subsequent connection establishment performed by the peers followed by subsequent confirmation of the connection establishment to the master.
+   Once a better ring is found, p2p connections will be re-established in that order (without letting brand-new peers in) the next time the client calls `pcclU pdateTopology`. The clients adopt the new ring as soon as they collectively vote and connect to each new neighbor.
+   Solutions that are found immediately as part of the topology optimization phase without a background “moonshot” are adopted immediately by the peers as part of `pcclOptimizeTopology` in a fashion similar to `pcclUpdateTopology`, but without admitting newcomers into the run while still “going through the same motions” of voting to establish p2p connections by peers, followed by distribution of the p2p connection information by the master to said peers, along with subsequent connection establishment performed by the peers followed by subsequent confirmation of the connection establishment to the master.
 
 ### Shared-State Hashing & Distribution
 
@@ -63,7 +64,7 @@ When you call `pcclSynchronizeSharedState`, each peer does:
 2. **Report Revision & Hash**: The peer sends these to the master for that group’s “mask election.”
 3. **Master Chooses a Mask**: By popularity, it decides which set of (keys, hashes) is canonical. Peers that deviate are assigned to fetch the updated data from a designated “correct” peer via ephemeral connections.
 4. **One-Increment Rule**:
-The master checks that each new `shared_state->revision` is exactly 1 higher than before. If not, you see a `REVISION_INCREMENT_VIOLATION`.
+   The master checks that each new `shared_state->revision` is exactly 1 higher than before. If not, you see a `REVISION_INCREMENT_VIOLATION`.
 5. Dirty Keys: If a peer’s local hash for “weight_1” mismatches the mask, the peer sets up a direct ephemeral TCP connection to the distributing peer to its shared state distribution socket. After transmission, the content is hashed again and compared to the expected value. If the hash matches, the peer proceeds. On hash mismatch, the call to `pcclSynchronizeSharedState` will return an error code.
 
 In practice, if your model steps are *bitwise deterministic across* peers, the “dirty keys” scenario rarely happens. But it remains crucial for newly joining peers who need a full checkpoint or for accidental drift scenarios.
@@ -92,7 +93,7 @@ PCCL’s All-Reduce uses a pipeline ring approach:
 
 - **Blocking API**: By default, calls like `pcclAllReduce` or `pcclSynchronizeSharedState` block the caller until the operation finishes (or fails).
 - **Async All-Reduce**: `pcclAllReduceAsync` spawns an internal thread or creates a logical execution plan and returns immediately. The user can poll for completion or wait on a condition variable. This concurrency model is useful for overlapping computation with communication, or for running multiple operations in parallel.
-This will be intended API design in future versions of PCCL.
+  This will be intended API design in future versions of PCCL.
 - **Queued-Sockets:** If two internal threads might read from the same socket, PCCL enforces a queue mechanism to route matching packets to the correct consumer via predicate matching.
 
 ### Overall Rule: One Operation at a Time (Per Group)
