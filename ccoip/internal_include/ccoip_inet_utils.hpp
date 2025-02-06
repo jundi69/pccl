@@ -30,11 +30,11 @@ inline ccoip_ipv4_address_t from_octets(const uint8_t octet1, const uint8_t octe
                 << static_cast<int>(addr.inet.ipv4.data[1]) << "."
                 << static_cast<int>(addr.inet.ipv4.data[2]) << "."
                 << static_cast<int>(addr.inet.ipv4.data[3]) << ":"
-                << ntohs((addr).port);
+                << addr.port;
     } else if (addr.inet.protocol == inetIPv6) {
         char ip_str[INET6_ADDRSTRLEN];
         inet_ntop(AF_INET6, &addr.inet.ipv6, ip_str, sizeof(ip_str));
-        oss << ip_str << ":" << std::to_string(ntohs(addr.port));
+        oss << ip_str << ":" << std::to_string(addr.port);
     } else {
         oss << "Unknown Protocol";
     }
