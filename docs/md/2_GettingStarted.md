@@ -542,6 +542,10 @@ advance to the same shared state. Thus, in the ideal case, shared state synchron
 mechanism for joining peers while being a no-op most of the time.
 As long as your optimizer is an element-wise expression - as is the case for most optimizers -
 not even GPUs will behave indeterministically here, and you are free to assert bit-parity among peers.
+You can be very certain that as long as you are using a well-known optimizer (such as `AdamW`) that all indeterminism
+that you are observing is caused by improper synchronization of optimizer state or learning rate scheduler associated state.
+Ensuring that a) your learning state scheduler behaves deterministically and b) all optimizer state is synchronized properly via shared state
+should result in bit-identical independent advancement of model parameters, eliminating the need for a shared state retransmission.
 
 ### Performing Collective Operations
 

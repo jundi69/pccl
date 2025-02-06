@@ -21,6 +21,7 @@ to come from a JSON file specified by --config_path (default_config.json by defa
 """
 
 import os
+import threading
 import time
 import math
 import pickle
@@ -38,7 +39,7 @@ from torch.nn.parallel import DistributedDataParallel
 from torch.distributed import init_process_group, destroy_process_group
 
 from model import GPTConfig, GPT
-from python.examples.nanogptddp.profiler import Profiler
+from python.examples.nanogptddp.profiler import Profiler, ProfilerCollection
 
 
 def get_batch(split, config, device_type, device):
@@ -127,6 +128,9 @@ def get_lr(it, config):
     decay_ratio = max(0, min(1, decay_ratio))
     coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio))
     return min_lr + coeff * (learning_rate - min_lr)
+
+
+EXPORT_PROFILER_VIDEO = True
 
 
 def main():
@@ -360,16 +364,15 @@ def main():
     t0 = time.time()
 
     world_size: int = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
-    n_performed_steps = 0
 
     grads_dst = None
     grads = None
+    profiler_collection = ProfilerCollection()
     while True:
+        t0 = time.time()
         profiler = Profiler()
         with profiler.session("step"):
-            if n_performed_steps > 0 or world_size == 1:
-                # if world_size > 1:
-                # communicator.optimize_topology()
+            if local_iter_num > 0 or world_size == 1:
                 with profiler.session("pccl::communicator::update_topology()"):
                     communicator.update_topology()
             world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
@@ -379,15 +382,20 @@ def main():
                 time.sleep(1)
                 continue
 
-            # Determine and set learning rate
-            lr = get_lr(iter_num, config)
-            for param_group in optimizer.param_groups:
-                param_group['lr'] = lr
+            communicator.optimize_topology()
 
             torch.cuda.synchronize(device)
 
             with profiler.session("pccl::communicator::sync_shared_state()"):
                 info = communicator.sync_shared_state(shared_state)
+                iter_num = shared_state.revision
+
+            # Determine and set learning rate
+            # make sure to use up-to-date shared state revision post sync_shared_state
+            # to make sure no learning rate differences between peers occur
+            lr = get_lr(iter_num, config)
+            for param_group in optimizer.param_groups:
+                param_group['lr'] = lr
 
             assert info is not None
             print(f"Shared state sync complete: Tx-Bytes: {info.tx_bytes}, Rx-Bytes: {info.rx_bytes}")
@@ -456,7 +464,8 @@ def main():
             # All reduce gradients with PCCL
             with profiler.session("collect_gradients"):
                 if grads is None:
-                    grads = torch.cat([p.grad.view(-1) for p in model.parameters() if p.grad is not None]).to(device='cpu')
+                    grads = torch.cat([p.grad.view(-1) for p in model.parameters() if p.grad is not None]).to(
+                        device='cpu')
                 else:
                     # scatter grads into existing buffer
                     offset = 0
@@ -464,7 +473,7 @@ def main():
                         if p.grad is None:
                             continue
                         numel = p.grad.numel()
-                        grads[offset:offset+numel].copy_(p.grad.view(-1).cpu())
+                        grads[offset:offset + numel].copy_(p.grad.view(-1).cpu())
                         offset += numel
 
             if grads_dst is None:
@@ -495,7 +504,7 @@ def main():
                     assert info is not None
                     total_bytes = info.tx_bytes + info.rx_bytes
                     print(
-                        f"step {iter_num}: all reduce completed in {end - start:.2f}s, bandwidth {total_bytes / (end - start) / 1e6:.2f} MB/s")
+                        f"step {iter_num}: all reduce completed in {end - start:.2f}s, bandwidth {(total_bytes / 1e6) / (end - start):.2f} MB/s")
                     break
 
             # scatter gradients back to model parameters
@@ -511,12 +520,11 @@ def main():
             with profiler.session("optimizer::step"):
                 optimizer.step()
                 with profiler.session("optimizer::zero_grad"):
-                    optimizer.zero_grad(set_to_none=True)
+                    optimizer.zero_grad(set_to_none=False)
 
             # Logging / timing
             t1 = time.time()
             dt = t1 - t0
-            t0 = t1
             if iter_num % config["log_interval"] == 0 and master_process:
                 lossf = loss.item() * config["gradient_accumulation_steps"]  # approximate actual loss
                 if local_iter_num >= 5:  # let training loop warm up
@@ -526,11 +534,19 @@ def main():
 
             iter_num += 1
             local_iter_num += 1
+            shared_state.revision = iter_num
 
             # Termination
             if iter_num > config["max_iters"]:
                 break
+
+        # profiler management
         profiler.print_report()
+        if EXPORT_PROFILER_VIDEO:
+            profiler_collection.add_profiler(profiler, f"Step {iter_num}")
+            if iter_num % 100 == 0:
+                profiler_collection.render_as_video(f'timeline_{iter_num}.mp4', fps=15)
+                print("Done rendering profiler video")
 
     # -------------------------------------------------------------------------
     # 8) Cleanup DDP

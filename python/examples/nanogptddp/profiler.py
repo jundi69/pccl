@@ -1,11 +1,9 @@
-import os
+import random
 import time
-from asyncio import subprocess
 
 import imageio
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
-import random
 
 
 class Profiler:
