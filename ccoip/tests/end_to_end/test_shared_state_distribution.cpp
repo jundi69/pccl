@@ -22,7 +22,7 @@ static void establishConnections(const std::vector<const ccoip::CCoIPClient *> &
             ++clients_connected;
             while (clients_connected < n_clients) {
                 EXPECT_TRUE(client->acceptNewPeers());
-                EXPECT_TRUE(client->updateTopology());
+                EXPECT_TRUE(client->obtainTopology());
                 std::this_thread::sleep_for(std::chrono::milliseconds(150));
             }
         });

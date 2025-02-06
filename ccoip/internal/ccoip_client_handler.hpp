@@ -60,7 +60,7 @@ namespace ccoip {
 
         [[nodiscard]] bool interrupt();
 
-        [[nodiscard]] bool updateTopology();
+        [[nodiscard]] bool obtainTopology();
 
         [[nodiscard]] bool optimizeTopology();
 

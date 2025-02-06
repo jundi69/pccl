@@ -24,8 +24,8 @@ bool ccoip::CCoIPClient::interrupt() const {
     return client->interrupt();
 }
 
-bool ccoip::CCoIPClient::updateTopology() const {
-    return client->updateTopology();
+bool ccoip::CCoIPClient::obtainTopology() const {
+    return client->obtainTopology();
 }
 
 bool ccoip::CCoIPClient::optimizeTopology() const {

@@ -25,7 +25,7 @@ bool ccoip::TopologyOptimizer::OptimizeTopology(const BandwidthStore &bandwidth_
             }
             const auto bandwidth = bandwidth_store.getBandwidthMbps(from, to);
             if (!bandwidth.has_value()) {
-                return false;
+                continue; // we don't assert a fully populated bandwidth store, some peers may not have p2p connectivity
             }
 
             const nodeid_t from_id = peer_to_id.try_emplace(from, peer_to_id.size()).first->second;
@@ -60,9 +60,11 @@ bool ccoip::TopologyOptimizer::OptimizeTopology(const BandwidthStore &bandwidth_
             .enable_3opt = true,
             .enable_4opt = false
     };
+
     TspSolutionDescriptor output_descriptor{};
-    if (tspAsymmetricSolve(&input_graph, &solver_options, &output_descriptor) != TSP_STATUS_SUCCESS) {
-        LOG(BUG) << "Failed to run ATSP solver for topology optimization! This should never happen.";
+    const TSPStatus status = tspAsymmetricSolve(&input_graph, &solver_options, &output_descriptor);
+    if (status != TSP_STATUS_SUCCESS) {
+        LOG(BUG) << "Failed to run ATSP solver for topology optimization! " << status << " This should never happen.";
         return false;
     }
 

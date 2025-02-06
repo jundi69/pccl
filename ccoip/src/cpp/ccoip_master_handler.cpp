@@ -181,7 +181,7 @@ void ccoip::CCoIPMasterHandler::handleRequestSessionJoin(const ccoip_socket_addr
     const uint16_t shared_state_listen_port = packet.shared_state_listen_port;
     const uint16_t bandwidth_benchmark_listen_port = packet.bandwidth_benchmark_listen_port;
 
-    LOG(DEBUG) << "handleRequestSessionJoin: bandwidth_benchmark_listen_port: " << bandwidth_benchmark_listen_port;
+
 
     // generate uuid for new peer
     ccoip_uuid_t new_uuid{};

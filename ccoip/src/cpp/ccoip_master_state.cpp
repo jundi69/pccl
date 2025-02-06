@@ -499,7 +499,9 @@ bool ccoip::CCoIPMasterState::endSharedStateSyncPhase(const uint32_t peer_group)
 
 
 bool ccoip::CCoIPMasterState::endTopologyOptimizationPhase(const bool failed) {
-    bandwidth_store.printBandwidthStore();
+    if (failed) {
+        bandwidth_store.printBandwidthStore();
+    }
     for (auto &[_, info]: client_info) {
         if (info.connection_phase != PEER_ACCEPTED) {
             continue;

@@ -99,7 +99,7 @@ pcclResult_t pcclConnect(pcclComm_t *communicator) {
         status = pcclMasterConnectionFailed;
         goto failure;
     }
-    if (!communicator->ccoip_client->updateTopology()) [[unlikely]] {
+    if (!communicator->ccoip_client->obtainTopology()) {
         LOG(ERR) << "Failed to update topology after connecting to master";
         status = pcclMasterConnectionFailed;
         goto failure;
@@ -193,7 +193,7 @@ pcclResult_t pcclUpdateTopology(pcclComm_t *communicator) {
     }
 
     // update the topology
-    if (!communicator->ccoip_client->updateTopology()) [[unlikely]] {
+    if (!communicator->ccoip_client->obtainTopology()) {
         return pcclInvalidUsage;
     }
 
@@ -209,6 +209,10 @@ pcclResult_t pcclOptimizeTopology(const pcclComm_t *communicator) {
     if (communicator->ccoip_client->getWorldSize() > 1) {
         if (!communicator->ccoip_client->optimizeTopology()) {
             return pcclTopologyOptimizationFailed;
+        }
+        // get the updated topology
+        if (!communicator->ccoip_client->obtainTopology()) {
+            return pcclInvalidUsage;
         }
     } else {
         return pcclInvalidUsage;
@@ -370,7 +374,7 @@ pcclResult_t pcclSynchronizeSharedState(const pcclComm_t *communicator, pcclShar
         });
     }
     ccoip_shared_state_sync_info_t info{};
-    if (!communicator->ccoip_client->syncSharedState(shared_state_internal, info)) [[unlikely]] {
+    if (!communicator->ccoip_client->syncSharedState(shared_state_internal, info)) {
         return pcclInvalidUsage;
     }
 

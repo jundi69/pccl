@@ -31,7 +31,7 @@ TEST(AcceptNewPeers, TestBasic) {
     std::thread client1_thread([&client1] {
         while (!client1.isInterrupted()) {
             ASSERT_TRUE(client1.acceptNewPeers());
-            ASSERT_TRUE(client1.updateTopology());
+            ASSERT_TRUE(client1.obtainTopology());
             const auto world_size = client1.getWorldSize();
             ASSERT_LT(world_size, 3);
             if (world_size == 2) {

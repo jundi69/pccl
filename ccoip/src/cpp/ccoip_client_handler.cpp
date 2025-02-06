@@ -1,40 +1,34 @@
 #include "ccoip_client_handler.hpp"
-#include "ccoip_types.hpp"
-#include <pccl_log.hpp>
 #include <ccoip.h>
 #include <future>
 #include <hash_utils.hpp>
+#include <pccl_log.hpp>
+#include "ccoip_types.hpp"
 
+#include <benchmark_runner.hpp>
+#include <guard_utils.hpp>
+#include <list>
+#include <reduce.hpp>
+#include <reduce_kernels.hpp>
+#include <thread_guard.hpp>
+#include <win_sock_bridge.h>
 #include "ccoip_inet_utils.hpp"
 #include "ccoip_packets.hpp"
-#include <thread_guard.hpp>
-#include <guard_utils.hpp>
-#include <reduce_kernels.hpp>
-#include <reduce.hpp>
-#include <benchmark_runner.hpp>
-#include <list>
-#include <win_sock_bridge.h>
 
 #ifdef PCCL_HAS_CUDA_SUPPORT
 #include <cuda.h>
 #endif
 
-ccoip::CCoIPClientHandler::CCoIPClientHandler(const ccoip_socket_address_t &address,
-                                              const uint32_t peer_group) : master_socket(address),
-                                                                           // Both p2p_socket and shared_state_socket listen to the first free port above the specified port number
-                                                                           // as the constructor with inet_addr and above_port is called, which will bump on failure to bind.
-                                                                           // this is by design and the chosen ports will be communicated to the master, which will then distribute
-                                                                           // this information to clients to then correctly establish connections. The protocol does not assert these
-                                                                           // ports to be static; The only asserted static port is the master listening port.
-                                                                           p2p_socket({address.inet.protocol, {}, {}},
-                                                                               CCOIP_PROTOCOL_PORT_P2P),
-                                                                           shared_state_socket(
-                                                                               {address.inet.protocol, {}, {}},
-                                                                               CCOIP_PROTOCOL_PORT_SHARED_STATE),
-                                                                           benchmark_socket(
-                                                                               {address.inet.protocol, {}, {}},
-                                                                               CCOIP_PROTOCOL_PORT_BANDWIDTH_BENCHMARK),
-                                                                           peer_group(peer_group) {
+ccoip::CCoIPClientHandler::CCoIPClientHandler(const ccoip_socket_address_t &address, const uint32_t peer_group) :
+    master_socket(address),
+    // Both p2p_socket and shared_state_socket listen to the first free port above the specified port number
+    // as the constructor with inet_addr and above_port is called, which will bump on failure to bind.
+    // this is by design and the chosen ports will be communicated to the master, which will then distribute
+    // this information to clients to then correctly establish connections. The protocol does not assert these
+    // ports to be static; The only asserted static port is the master listening port.
+    p2p_socket({address.inet.protocol, {}, {}}, CCOIP_PROTOCOL_PORT_P2P),
+    shared_state_socket({address.inet.protocol, {}, {}}, CCOIP_PROTOCOL_PORT_SHARED_STATE),
+    benchmark_socket({address.inet.protocol, {}, {}}, CCOIP_PROTOCOL_PORT_BANDWIDTH_BENCHMARK), peer_group(peer_group) {
 }
 
 bool ccoip::CCoIPClientHandler::connect() {
@@ -85,9 +79,9 @@ bool ccoip::CCoIPClientHandler::connect() {
     // start listening with shared state distribution server
     {
         shared_state_socket.addReadCallback(
-            [this](const ccoip_socket_address_t &client_address, const std::span<std::uint8_t> &data) {
-                onSharedStateClientRead(client_address, data);
-            });
+                [this](const ccoip_socket_address_t &client_address, const std::span<std::uint8_t> &data) {
+                    onSharedStateClientRead(client_address, data);
+                });
         if (!shared_state_socket.listen()) {
             LOG(ERR) << "Failed to bind shared state socket " << shared_state_socket.getListenPort();
             return false;
@@ -116,17 +110,18 @@ bool ccoip::CCoIPClientHandler::connect() {
                     }
                 } else {
                     // if the benchmark is not complete, tell the incoming client to go away
-                    LOG(DEBUG) << "Rejecting incoming benchmark connection from " << ccoip_sockaddr_to_str(
-                        client_address) << " because a benchmark is already running. Telling it to retry later...";
+                    LOG(DEBUG) << "Rejecting incoming benchmark connection from "
+                               << ccoip_sockaddr_to_str(client_address)
+                               << " because a benchmark is already running. Telling it to retry later...";
                     B2CPacketBenchmarkServerIsBusy packet{};
                     packet.is_busy = true;
                     if (!socket->sendPacket<B2CPacketBenchmarkServerIsBusy>(packet)) {
-                        LOG(WARN) << "Failed to send B2CPacketBenchmarkServerIsBusy to " << ccoip_sockaddr_to_str(
-                            client_address);
+                        LOG(WARN) << "Failed to send B2CPacketBenchmarkServerIsBusy to "
+                                  << ccoip_sockaddr_to_str(client_address);
                     }
                     if (!socket->closeConnection()) {
-                        LOG(WARN) << "Failed to close connection to " << ccoip_sockaddr_to_str(client_address) <<
-                                " after rejecting benchmark connection with busy signal";
+                        LOG(WARN) << "Failed to close connection to " << ccoip_sockaddr_to_str(client_address)
+                                  << " after rejecting benchmark connection with busy signal";
                     }
                     return;
                 }
@@ -136,8 +131,8 @@ bool ccoip::CCoIPClientHandler::connect() {
             B2CPacketBenchmarkServerIsBusy packet{};
             packet.is_busy = false;
             if (!socket->sendPacket<B2CPacketBenchmarkServerIsBusy>(packet)) {
-                LOG(WARN) << "Failed to send B2CPacketBenchmarkServerIsBusy to " << ccoip_sockaddr_to_str(
-                    client_address);
+                LOG(WARN) << "Failed to send B2CPacketBenchmarkServerIsBusy to "
+                          << ccoip_sockaddr_to_str(client_address);
             }
 
             benchmark_complete_state.store(false);
@@ -160,8 +155,8 @@ bool ccoip::CCoIPClientHandler::connect() {
             LOG(ERR) << "Failed to start bandwidth benchmark socket thread";
             return false;
         }
-        LOG(INFO) << "Network bandwidth benchmark socket listening on port " << benchmark_socket.getListenPort() <<
-                "...";
+        LOG(INFO) << "Network bandwidth benchmark socket listening on port " << benchmark_socket.getListenPort()
+                  << "...";
     }
 
     if (!master_socket.establishConnection()) {
@@ -208,14 +203,14 @@ bool ccoip::CCoIPClientHandler::connect() {
 
 bool ccoip::CCoIPClientHandler::requestAndEstablishP2PConnections(const bool accept_new_peers) {
     if (!connected) {
-        LOG(WARN) <<
-                "CCoIPClientHandler::reestablishP2PConnections() before CCoIPClientHandler::connect() was called. Establish master connection first before performing client actions.";
+        LOG(WARN) << "CCoIPClientHandler::reestablishP2PConnections() before CCoIPClientHandler::connect() was called. "
+                     "Establish master connection first before performing client actions.";
         return false;
     }
 
     if (!master_socket.isOpen()) {
-        LOG(ERR) <<
-                "Failed to accept new peers: Client socket has been closed; This may mean the client was kicked by the master";
+        LOG(ERR) << "Failed to accept new peers: Client socket has been closed; This may mean the client was kicked by "
+                    "the master";
         return false;
     }
 
@@ -239,14 +234,14 @@ bool ccoip::CCoIPClientHandler::requestAndEstablishP2PConnections(const bool acc
 bool ccoip::CCoIPClientHandler::syncSharedState(ccoip_shared_state_t &shared_state,
                                                 ccoip_shared_state_sync_info_t &info_out) {
     if (!connected) {
-        LOG(WARN) <<
-                "CCoIPClientHandler::syncSharedState() before CCoIPClientHandler::connect() was called. Establish master connection first before performing client actions.";
+        LOG(WARN) << "CCoIPClientHandler::syncSharedState() before CCoIPClientHandler::connect() was called. Establish "
+                     "master connection first before performing client actions.";
         return false;
     }
 
     if (!master_socket.isOpen()) {
-        LOG(ERR) <<
-                "Failed to sync shared state: Client socket has been closed; This may mean the client was kicked by the master";
+        LOG(ERR) << "Failed to sync shared state: Client socket has been closed; This may mean the client was kicked "
+                    "by the master";
         return false;
     }
 
@@ -264,9 +259,9 @@ bool ccoip::CCoIPClientHandler::syncSharedState(ccoip_shared_state_t &shared_sta
             CUdeviceptr device_ptr{};
             if (cuPointerGetAttribute(&device_ptr, CU_POINTER_ATTRIBUTE_DEVICE_POINTER,
                                       reinterpret_cast<CUdeviceptr>(entry.data_ptr)) != CUDA_SUCCESS) {
-                LOG(FATAL) <<
-                        "Could not convert CUDA runtime api pointer into a device pointer. Are you sure this address is valid? Supplied pointer: "
-                        << entry.data_ptr;
+                LOG(FATAL) << "Could not convert CUDA runtime api pointer into a device pointer. Are you sure this "
+                              "address is valid? Supplied pointer: "
+                           << entry.data_ptr;
                 return false;
             }
             entry.data_ptr = reinterpret_cast<void *>(device_ptr);
@@ -287,25 +282,25 @@ bool ccoip::CCoIPClientHandler::syncSharedState(ccoip_shared_state_t &shared_sta
                 hash_type = ccoipHashCrc32;
             } else if (entry.device_type == ccoipDeviceCuda) {
 #ifndef PCCL_HAS_CUDA_SUPPORT
-                LOG(BUG) << "PCCL is not built with CUDA support. We shouldn't even have gotten so far without CUDA support when referencing CUDA tensors. This is a bug!";
+                LOG(BUG) << "PCCL is not built with CUDA support. We shouldn't even have gotten so far without CUDA "
+                            "support when referencing CUDA tensors. This is a bug!";
                 return false;
 #else
                 hash = hash_utils::simplehash_cuda(entry.data_ptr, entry.data_size);
                 hash_type = ccoipHashSimple;
 #endif
             } else {
-                LOG(BUG) << "Unknown device type: " << entry.device_type <<
-                        " encountered during shared state hash preparation. This should have been caught earlier and is a bug.";
+                LOG(BUG) << "Unknown device type: " << entry.device_type
+                         << " encountered during shared state hash preparation. This should have been caught earlier "
+                            "and is a bug.";
                 return false;
             }
         }
-        shared_state_hashes.push_back(SharedStateHashEntry{
-            .key = key,
-            .hash = hash,
-            .hash_type = hash_type,
-            .data_type = entry.data_type,
-            .allow_content_inequality = entry.allow_content_inequality
-        });
+        shared_state_hashes.push_back(SharedStateHashEntry{.key = key,
+                                                           .hash = hash,
+                                                           .hash_type = hash_type,
+                                                           .data_type = entry.data_type,
+                                                           .allow_content_inequality = entry.allow_content_inequality});
     }
 
     // inside this block, we are guaranteed in the shared state distribution phase
@@ -313,17 +308,17 @@ bool ccoip::CCoIPClientHandler::syncSharedState(ccoip_shared_state_t &shared_sta
         // As long as we are inside this block, client_state.isSyncingSharedState() will return true
 
         // ATTENTION: We create this guard even before we vote to enter the shared state sync state on the server side.
-        // So on the client side this phase either means that we have already successfully voted to enter the shared state sync phase
-        // or that we would want to be in the shared state sync phase.
-        // This is necessary because we check this state of being in the shared state sync phase during shared state distribution.
-        // We turn down requests that come in while we are not in the shared state sync phase.
-        // However, if we were to start the shared state sync phase AFTER sending the shared state sync vote packet,
-        // not all clients receive the confirmation packet from the master after a successful vote at the same time.
-        // If you are unlucky, this discrepancy can be so bad that some clients even handle this packet and send a shared
-        // state request to a shared state distributor that is not yet aware that the shared state sync phase has started.
-        // It will then respond with state SHARED_STATE_NOT_DISTRIBUTED.
-        // Because we are basically only using this phase state for this purpose anyway, this is a good solution to
-        // avoid yet another vote that would only really solve a conceptual problem, not a problem introduced by data dependencies.
+        // So on the client side this phase either means that we have already successfully voted to enter the shared
+        // state sync phase or that we would want to be in the shared state sync phase. This is necessary because we
+        // check this state of being in the shared state sync phase during shared state distribution. We turn down
+        // requests that come in while we are not in the shared state sync phase. However, if we were to start the
+        // shared state sync phase AFTER sending the shared state sync vote packet, not all clients receive the
+        // confirmation packet from the master after a successful vote at the same time. If you are unlucky, this
+        // discrepancy can be so bad that some clients even handle this packet and send a shared state request to a
+        // shared state distributor that is not yet aware that the shared state sync phase has started. It will then
+        // respond with state SHARED_STATE_NOT_DISTRIBUTED. Because we are basically only using this phase state for
+        // this purpose anyway, this is a good solution to avoid yet another vote that would only really solve a
+        // conceptual problem, not a problem introduced by data dependencies.
         guard_utils::phase_guard guard([this, &shared_state] { client_state.beginSyncSharedStatePhase(shared_state); },
                                        [this] { client_state.endSyncSharedStatePhase(); });
 
@@ -344,13 +339,11 @@ bool ccoip::CCoIPClientHandler::syncSharedState(ccoip_shared_state_t &shared_sta
 
         if (response->is_outdated) {
             // check if distributor address is empty
-            if (response->distributor_address.port == 0 &&
-                response->distributor_address.inet.protocol == inetIPv4 &&
+            if (response->distributor_address.port == 0 && response->distributor_address.inet.protocol == inetIPv4 &&
                 response->distributor_address.inet.ipv4.data[0] == 0 &&
                 response->distributor_address.inet.ipv4.data[1] == 0 &&
                 response->distributor_address.inet.ipv4.data[2] == 0 &&
-                response->distributor_address.inet.ipv4.data[3] == 0
-            ) {
+                response->distributor_address.inet.ipv4.data[3] == 0) {
                 LOG(ERR) << "Failed to sync shared state: Shared state distributor address is empty";
                 return false;
             }
@@ -358,9 +351,9 @@ bool ccoip::CCoIPClientHandler::syncSharedState(ccoip_shared_state_t &shared_sta
             // if shared state is outdated, request shared state from master
             tinysockets::BlockingIOSocket req_socket(response->distributor_address);
             if (!req_socket.establishConnection()) {
-                LOG(ERR) <<
-                        "Failed to sync shared state: Failed to establish connection with shared state distributor: " <<
-                        ccoip_sockaddr_to_str(response->distributor_address);
+                LOG(ERR)
+                        << "Failed to sync shared state: Failed to establish connection with shared state distributor: "
+                        << ccoip_sockaddr_to_str(response->distributor_address);
                 return false;
             }
             C2SPacketRequestSharedState request{};
@@ -374,13 +367,13 @@ bool ccoip::CCoIPClientHandler::syncSharedState(ccoip_shared_state_t &shared_sta
             }
             const auto shared_state_response = req_socket.receivePacket<S2CPacketSharedStateResponse>();
             if (!shared_state_response) {
-                LOG(ERR) <<
-                        "Failed to sync shared state: Failed to receive S2CPacketSharedStateResponse from distributor";
+                LOG(ERR) << "Failed to sync shared state: Failed to receive S2CPacketSharedStateResponse from "
+                            "distributor";
                 return false;
             }
             if (shared_state_response->status != SUCCESS) {
-                LOG(ERR) << "Failed to sync shared state: Shared state distributor returned status " <<
-                        shared_state_response->status;
+                LOG(ERR) << "Failed to sync shared state: Shared state distributor returned status "
+                         << shared_state_response->status;
                 return false;
             }
             // update shared state
@@ -408,42 +401,44 @@ bool ccoip::CCoIPClientHandler::syncSharedState(ccoip_shared_state_t &shared_sta
                 if (new_entries.contains(outdated_key_name)) {
                     const auto &new_entry = new_entries[outdated_key_name];
                     if (new_entry->size_bytes != dst_entry.data_size) {
-                        LOG(ERR) << "Failed to sync shared state: Shared state entry size mismatch for key " <<
-                                dst_entry.key;
+                        LOG(ERR) << "Failed to sync shared state: Shared state entry size mismatch for key "
+                                 << dst_entry.key;
                         return false;
                     }
                     if (dst_entry.device_type == ccoipDeviceCpu) {
                         // if cpu, receive directly into the cpu buffer
                         std::span dst_span(static_cast<std::byte *>(dst_entry.data_ptr), dst_entry.data_size);
                         if (req_socket.receiveRawData(dst_span, new_entry->size_bytes) != new_entry->size_bytes) {
-                            LOG(ERR) <<
-                                    "Failed receive all bytes expected for shared state entry during shared state content transmission! Did peer disconnect unexpectedly?";
+                            LOG(ERR) << "Failed receive all bytes expected for shared state entry during shared state "
+                                        "content transmission! Did peer disconnect unexpectedly?";
                             return false;
                         }
                     } else if (dst_entry.device_type == ccoipDeviceCuda) {
 #ifndef PCCL_HAS_CUDA_SUPPORT
                         if (dst_entry.device_type == ccoipDeviceCuda) {
-                            LOG(BUG) << "PCCL is not built with CUDA support. We shouldn't even have gotten so far without CUDA support when referencing CUDA tensors. This is a bug!";
+                            LOG(BUG) << "PCCL is not built with CUDA support. We shouldn't even have gotten so far "
+                                        "without CUDA support when referencing CUDA tensors. This is a bug!";
                             return false;
                         }
 #else
                         std::unique_ptr<std::byte> dst_ptr(new std::byte[dst_entry.data_size]);
                         std::span dst_span(dst_ptr.get(), dst_entry.data_size);
                         if (req_socket.receiveRawData(dst_span, new_entry->size_bytes) != new_entry->size_bytes) {
-                            LOG(ERR) <<
-                                    "Failed receive all bytes expected for shared state entry during shared state content transmission! Did peer disconnect unexpectedly?";
+                            LOG(ERR) << "Failed receive all bytes expected for shared state entry during shared state "
+                                        "content transmission! Did peer disconnect unexpectedly?";
                             return false;
                         }
                         if (cuMemcpyHtoD_v2(reinterpret_cast<CUdeviceptr>(dst_entry.data_ptr), dst_ptr.get(),
                                             dst_entry.data_size) != CUDA_SUCCESS) {
-                            LOG(FATAL) <<
-                                    "Failed to copy host to device memory while trying to write out shared state transmission response content! Is shared state referenced memory still valid?";
+                            LOG(FATAL)
+                                    << "Failed to copy host to device memory while trying to write out shared state "
+                                       "transmission response content! Is shared state referenced memory still valid?";
                             return false;
                         }
 #endif
                     } else {
-                        LOG(BUG) <<
-                                "Unknown device type encountered while trying to write out shared state transmission response content. This should have been caught earlier and is a bug.";
+                        LOG(BUG) << "Unknown device type encountered while trying to write out shared state "
+                                    "transmission response content. This should have been caught earlier and is a bug.";
                         return false;
                     }
 
@@ -460,8 +455,9 @@ bool ccoip::CCoIPClientHandler::syncSharedState(ccoip_shared_state_t &shared_sta
                         if (expected_hash_type == ccoipHashSimple) {
                             uint64_t actual_hash = hash_utils::simplehash_cuda(dst_entry.data_ptr, dst_entry.data_size);
                             if (actual_hash != expected_hash) {
-                                LOG(ERR) << "Shared state distributor transmitted incorrect shared state entry for key " <<
-                                        dst_entry.key << ": Expected hash " << expected_hash << " but got " << actual_hash;
+                                LOG(ERR) << "Shared state distributor transmitted incorrect shared state entry for key "
+                                         << dst_entry.key << ": Expected hash " << expected_hash << " but got "
+                                         << actual_hash;
                                 return false;
                             }
                         }
@@ -473,14 +469,15 @@ bool ccoip::CCoIPClientHandler::syncSharedState(ccoip_shared_state_t &shared_sta
                             }
                             uint64_t actual_hash = hash_utils::CRC32(dst_entry.data_ptr, dst_entry.data_size);
                             if (actual_hash != expected_hash) {
-                                LOG(ERR) << "Shared state distributor transmitted incorrect shared state entry for key " <<
-                                        dst_entry.key << ": Expected hash " << expected_hash << " but got " << actual_hash;
+                                LOG(ERR) << "Shared state distributor transmitted incorrect shared state entry for key "
+                                         << dst_entry.key << ": Expected hash " << expected_hash << " but got "
+                                         << actual_hash;
                                 return false;
                             }
                         }
                     } else {
-                        LOG(WARN) << "Master did not transmit expected hash for shared state entry " << dst_entry.key <<
-                                "; Skipping hash check...";
+                        LOG(WARN) << "Master did not transmit expected hash for shared state entry " << dst_entry.key
+                                  << "; Skipping hash check...";
                     }
                 }
             }
@@ -494,8 +491,8 @@ bool ccoip::CCoIPClientHandler::syncSharedState(ccoip_shared_state_t &shared_sta
         // wait for confirmation from master that all peers have synced the shared state
         if (const auto sync_response = master_socket.receivePacket<M2CPacketSyncSharedStateComplete>();
             !sync_response) {
-            LOG(ERR) <<
-                    "Failed to sync shared state: Failed to receive M2CPacketSyncSharedStateComplete response from master";
+            LOG(ERR) << "Failed to sync shared state: Failed to receive M2CPacketSyncSharedStateComplete response from "
+                        "master";
             return false;
         }
         info_out.tx_bytes = client_state.getSharedStateSyncTxBytes();
@@ -504,7 +501,7 @@ bool ccoip::CCoIPClientHandler::syncSharedState(ccoip_shared_state_t &shared_sta
     return true;
 }
 
-bool ccoip::CCoIPClientHandler::updateTopology() {
+bool ccoip::CCoIPClientHandler::obtainTopology() {
     if (!master_socket.sendPacket<C2MPacketGetTopologyRequest>({})) {
         return false;
     }
@@ -527,9 +524,8 @@ bool ccoip::CCoIPClientHandler::optimizeTopology() {
             return false;
         }
         if (!optimize_response->bw_benchmark_requests.empty()) {
-            auto remaining_requests = std::list(
-                optimize_response->bw_benchmark_requests.begin(), optimize_response->bw_benchmark_requests.end()
-            );
+            auto remaining_requests = std::list(optimize_response->bw_benchmark_requests.begin(),
+                                                optimize_response->bw_benchmark_requests.end());
             auto iterator = remaining_requests.begin();
 
             // back off if we have already attempted to benchmark this peer recently to avoid spamming a busy server
@@ -538,22 +534,20 @@ bool ccoip::CCoIPClientHandler::optimizeTopology() {
             while (!remaining_requests.empty()) {
                 if (iterator == remaining_requests.end()) {
                     // if we have recent attempts for all peers, wait for a bit
-                    if (std::ranges::all_of(remaining_requests,
-                                            [&last_attempt](const BenchmarkRequest &request) {
-                                                return last_attempt.contains(request.to_peer_uuid) &&
-                                                       std::chrono::steady_clock::now() - last_attempt[request.
-                                                           to_peer_uuid] < std::chrono::seconds(1);
-                                            })) {
+                    if (std::ranges::all_of(remaining_requests, [&last_attempt](const BenchmarkRequest &request) {
+                            return last_attempt.contains(request.to_peer_uuid) &&
+                                   std::chrono::steady_clock::now() - last_attempt[request.to_peer_uuid] <
+                                           std::chrono::seconds(1);
+                        })) {
                         std::this_thread::sleep_for(std::chrono::milliseconds(250));
                     }
                     iterator = remaining_requests.begin();
                 }
                 auto request = *iterator;
                 if (request.from_peer_uuid != client_state.getAssignedUUID()) {
-                    LOG(ERR) << "Received bandwidth benchmark request for peer " << uuid_to_string(
-                                request.from_peer_uuid)
-                            <<
-                            " but this peer is not the target of the request. Ignoring...";
+                    LOG(ERR) << "Received bandwidth benchmark request for peer "
+                             << uuid_to_string(request.from_peer_uuid)
+                             << " but this peer is not the target of the request. Ignoring...";
                     iterator = remaining_requests.erase(iterator);
                     continue;
                 }
@@ -584,8 +578,9 @@ bool ccoip::CCoIPClientHandler::optimizeTopology() {
                     last_attempt[request.to_peer_uuid] = std::chrono::steady_clock::now();
                 } else {
                     // benchmark failed, simply log and continue
-                    LOG(WARN) << "Failed to run network benchmark on endpoint " << ccoip_sockaddr_to_str(
-                        request.to_peer_benchmark_endpoint) << ". Ignoring and continuing...";
+                    LOG(WARN) << "Failed to run network benchmark on endpoint "
+                              << ccoip_sockaddr_to_str(request.to_peer_benchmark_endpoint)
+                              << ". Ignoring and continuing...";
                     iterator = remaining_requests.erase(iterator);
                 }
             }
@@ -638,9 +633,7 @@ bool ccoip::CCoIPClientHandler::join() {
     return true;
 }
 
-bool ccoip::CCoIPClientHandler::isInterrupted() const {
-    return interrupted;
-}
+bool ccoip::CCoIPClientHandler::isInterrupted() const { return interrupted; }
 
 ccoip::CCoIPClientHandler::~CCoIPClientHandler() = default;
 
@@ -674,15 +667,27 @@ bool ccoip::CCoIPClientHandler::establishP2PConnections() {
         }
         // close p2p connections that are no longer needed
         for (auto it = p2p_connections_tx.begin(); it != p2p_connections_tx.end();) {
-            if (std::ranges::find_if(connection_info_packet->all_peers,
-                                     [&it](const PeerInfo &peer) {
-                                         return peer.peer_uuid == it->first;
-                                     }) == connection_info_packet->all_peers.end()) {
+            if (std::ranges::find_if(connection_info_packet->all_peers, [&it](const PeerInfo &peer) {
+                    return peer.peer_uuid == it->first;
+                }) == connection_info_packet->all_peers.end()) {
                 LOG(DEBUG) << "Closing p2p connection with peer " << uuid_to_string(it->first);
                 if (!closeP2PConnection(it->first, *it->second)) {
-                    LOG(WARN) << "Failed to close p2p connection with peer " << uuid_to_string(it->first);
+                    LOG(WARN) << "Failed to close p2p tx connection with peer " << uuid_to_string(it->first);
                 }
                 it = p2p_connections_tx.erase(it);
+            } else {
+                ++it;
+            }
+        }
+        for (auto it = p2p_connections_rx.begin(); it != p2p_connections_rx.end();) {
+            if (std::ranges::find_if(connection_info_packet->all_peers, [&it](const PeerInfo &peer) {
+                    return peer.peer_uuid == it->first;
+                }) == connection_info_packet->all_peers.end()) {
+                LOG(DEBUG) << "Closing p2p rx connection with peer " << uuid_to_string(it->first);
+                if (!it->second->closeConnection()) [[unlikely]] {
+                    LOG(WARN) << "Failed to close p2p rx connection with peer " << uuid_to_string(it->first);
+                }
+                it = p2p_connections_rx.erase(it);
             } else {
                 ++it;
             }
@@ -717,8 +722,8 @@ bool ccoip::CCoIPClientHandler::establishP2PConnections() {
         return false;
     }
     if (!all_peers_connected && response->success) {
-        LOG(BUG) <<
-                "Master indicated that all peers have established their p2p connections, but this peer has not and should have reported this to the master. This is a bug!";
+        LOG(BUG) << "Master indicated that all peers have established their p2p connections, but this peer has not and "
+                    "should have reported this to the master. This is a bug!";
         return false;
     }
     if (!response->success) {
@@ -730,9 +735,8 @@ bool ccoip::CCoIPClientHandler::establishP2PConnections() {
 
 bool ccoip::CCoIPClientHandler::establishP2PConnection(const PeerInfo &peer) {
     LOG(DEBUG) << "Establishing P2P connection with peer " << uuid_to_string(peer.peer_uuid);
-    auto [it, inserted] = p2p_connections_tx.emplace(peer.peer_uuid,
-                                                     std::make_unique<tinysockets::BlockingIOSocket>(
-                                                         peer.p2p_listen_addr));
+    auto [it, inserted] = p2p_connections_tx.emplace(
+            peer.peer_uuid, std::make_unique<tinysockets::BlockingIOSocket>(peer.p2p_listen_addr));
     if (!inserted) {
         LOG(ERR) << "P2P connection with peer " << uuid_to_string(peer.peer_uuid) << " already exists";
         return false;
@@ -770,8 +774,8 @@ bool ccoip::CCoIPClientHandler::closeP2PConnection(const ccoip_uuid_t &uuid, tin
         return false;
     }
     if (!client_state.unregisterPeer(socket.getConnectSockAddr())) [[unlikely]] {
-        LOG(BUG) << "Failed to unregister peer " << uuid_to_string(uuid) <<
-                ". This means the client was already unregistered; This is a bug!";
+        LOG(BUG) << "Failed to unregister peer " << uuid_to_string(uuid)
+                 << ". This means the client was already unregistered; This is a bug!";
         return false;
     }
     return true;
@@ -789,8 +793,8 @@ void ccoip::CCoIPClientHandler::handleSharedStateRequest(const ccoip_socket_addr
 
     // check if we are in shared state sync phase
     if (!client_state.isSyncingSharedState()) {
-        LOG(WARN) << "Received shared state request from " << ccoip_sockaddr_to_str(client_address) <<
-                " while not in shared state sync phase; Responding with status=SHARED_STATE_NOT_DISTRIBUTED";
+        LOG(WARN) << "Received shared state request from " << ccoip_sockaddr_to_str(client_address)
+                  << " while not in shared state sync phase; Responding with status=SHARED_STATE_NOT_DISTRIBUTED";
         response.status = SHARED_STATE_NOT_DISTRIBUTED;
         goto end;
     }
@@ -801,20 +805,16 @@ void ccoip::CCoIPClientHandler::handleSharedStateRequest(const ccoip_socket_addr
         const auto &shared_state = client_state.getCurrentSharedState();
         response.revision = shared_state.revision;
         for (const auto &requested_key: packet.requested_keys) {
-            const auto it = std::ranges::find_if(shared_state.entries,
-                                                 [&requested_key](const ccoip_shared_state_entry_t &entry) {
-                                                     return entry.key == requested_key;
-                                                 });
+            const auto it = std::ranges::find_if(
+                    shared_state.entries,
+                    [&requested_key](const ccoip_shared_state_entry_t &entry) { return entry.key == requested_key; });
             if (it == shared_state.entries.end()) {
                 response.entries.clear();
                 entries_to_send.clear();
                 response.status = UNKNOWN_SHARED_STATE_KEY;
                 goto end;
             }
-            response.entries.push_back(SharedStateEntry{
-                .key = requested_key,
-                .size_bytes = it->data_size
-            });
+            response.entries.push_back(SharedStateEntry{.key = requested_key, .size_bytes = it->data_size});
             entries_to_send.push_back(*it);
             client_state.trackSharedStateTxBytes(it->data_size);
         }
@@ -829,32 +829,32 @@ end:
     for (const auto &entry: entries_to_send) {
         if (entry.device_type == ccoipDeviceCpu) {
             // if the tensor is already on the cpu, send directly
-            if (!shared_state_socket.sendRawPacket(client_address,
-                                                   std::span(static_cast<const std::byte *>(entry.data_ptr),
-                                                             entry.data_size))) {
+            if (!shared_state_socket.sendRawPacket(
+                        client_address, std::span(static_cast<const std::byte *>(entry.data_ptr), entry.data_size))) {
                 LOG(ERR) << "Failed to send shared state data to client " << ccoip_sockaddr_to_str(client_address);
             }
         } else if (entry.device_type == ccoipDeviceCuda) {
 #ifndef PCCL_HAS_CUDA_SUPPORT
-                if (entry.device_type == ccoipDeviceCuda) {
-                    LOG(BUG) << "PCCL is not built with CUDA support. We shouldn't even have gotten so far without CUDA support when referencing CUDA tensors. This is a bug!";
-                    return;
-                }
+            if (entry.device_type == ccoipDeviceCuda) {
+                LOG(BUG) << "PCCL is not built with CUDA support. We shouldn't even have gotten so far without CUDA "
+                            "support when referencing CUDA tensors. This is a bug!";
+                return;
+            }
 #else
             const auto device_ptr = reinterpret_cast<CUdeviceptr>(entry.data_ptr);
 
             // get device the pointer is on
             int device_ordinal{};
-            if (const CUresult result = cuPointerGetAttribute(&device_ordinal, CU_POINTER_ATTRIBUTE_DEVICE_ORDINAL,
-                                                              device_ptr); result != CUDA_SUCCESS) {
+            if (const CUresult result =
+                        cuPointerGetAttribute(&device_ordinal, CU_POINTER_ATTRIBUTE_DEVICE_ORDINAL, device_ptr);
+                result != CUDA_SUCCESS) {
                 const char *error_name{};
                 cuGetErrorName(result, &error_name);
                 const char *error_string{};
                 cuGetErrorString(result, &error_string);
 
-                LOG(FATAL) <<
-                        "Failed to get device ordinal for device pointer " << device_ptr << "; "
-                        << std::string(error_name) << ": " << std::string(error_string);
+                LOG(FATAL) << "Failed to get device ordinal for device pointer " << device_ptr << "; "
+                           << std::string(error_name) << ": " << std::string(error_string);
                 return;
             }
 
@@ -869,9 +869,8 @@ end:
                     const char *error_string{};
                     cuGetErrorString(result, &error_string);
 
-                    LOG(FATAL) <<
-                            "Failed to get device handle from ordinal for device ordinal " << device_ordinal << "; "
-                            << std::string(error_name) << ": " << std::string(error_string);
+                    LOG(FATAL) << "Failed to get device handle from ordinal for device ordinal " << device_ordinal
+                               << "; " << std::string(error_name) << ": " << std::string(error_string);
                     return;
                 }
                 CUcontext primary_ctx{};
@@ -882,9 +881,8 @@ end:
                     const char *error_string{};
                     cuGetErrorString(result, &error_string);
 
-                    LOG(FATAL) <<
-                            "Failed to retain primary context for device with ordinal " << device_ordinal << "; "
-                            << std::string(error_name) << ": " << std::string(error_string);
+                    LOG(FATAL) << "Failed to retain primary context for device with ordinal " << device_ordinal << "; "
+                               << std::string(error_name) << ": " << std::string(error_string);
                     return;
                 }
 
@@ -894,24 +892,22 @@ end:
                     const char *error_string{};
                     cuGetErrorString(result, &error_string);
 
-                    LOG(FATAL) <<
-                            "Failed to set primary context for device with ordinal " << device_ordinal << "; "
-                            << std::string(error_name) << ": " << std::string(error_string);
+                    LOG(FATAL) << "Failed to set primary context for device with ordinal " << device_ordinal << "; "
+                               << std::string(error_name) << ": " << std::string(error_string);
                     return;
                 }
             }
 
             std::unique_ptr<std::byte[]> host_buffer(new std::byte[entry.data_size]);
-            if (const auto result = cuMemcpyDtoH_v2(host_buffer.get(), device_ptr,
-                                                    entry.data_size);
+            if (const auto result = cuMemcpyDtoH_v2(host_buffer.get(), device_ptr, entry.data_size);
                 result != CUDA_SUCCESS) {
                 const char *error_name{};
                 cuGetErrorName(result, &error_name);
                 const char *error_string{};
                 cuGetErrorString(result, &error_string);
 
-                LOG(FATAL) <<
-                        "Failed to copy cuda device memory to host while serving shared state transmission request; "
+                LOG(FATAL)
+                        << "Failed to copy cuda device memory to host while serving shared state transmission request; "
                         << std::string(error_name) << ": " << std::string(error_string);
                 return;
             }
@@ -920,8 +916,9 @@ end:
             }
 #endif
         } else {
-            LOG(BUG) << "Unknown device type " << entry.device_type <<
-                    " encountered while serving shared state transmission request. This should have been caught earlier and is a bug.";
+            LOG(BUG) << "Unknown device type " << entry.device_type
+                     << " encountered while serving shared state transmission request. This should have been caught "
+                        "earlier and is a bug.";
             return;
         }
     }
@@ -931,12 +928,11 @@ void ccoip::CCoIPClientHandler::onSharedStateClientRead(const ccoip_socket_addre
                                                         const std::span<std::uint8_t> &data) {
     THREAD_GUARD(shared_state_server_thread_id);
     PacketReadBuffer buffer = PacketReadBuffer::wrap(data);
-    if (const auto packet_type = buffer.read<uint16_t>();
-        packet_type == C2SPacketRequestSharedState::packet_id) {
+    if (const auto packet_type = buffer.read<uint16_t>(); packet_type == C2SPacketRequestSharedState::packet_id) {
         C2SPacketRequestSharedState packet{};
         if (!packet.deserialize(buffer)) {
-            LOG(ERR) << "Failed to deserialize C2SPacketRequestSharedState from " <<
-                    ccoip_sockaddr_to_str(client_address);
+            LOG(ERR) << "Failed to deserialize C2SPacketRequestSharedState from "
+                     << ccoip_sockaddr_to_str(client_address);
             return;
         }
         handleSharedStateRequest(client_address, packet);
@@ -959,9 +955,8 @@ bool ccoip::CCoIPClientHandler::allReduceAsync(const void *sendbuff, void *recvb
         return false;
     }
 
-    if (!client_state.launchAsyncCollectiveOp(
-        tag, [this, sendbuff, recvbuff, count, datatype, quantized_data_type, quantization_algorithm, op, tag](
-    std::promise<bool> &promise) {
+    if (!client_state.launchAsyncCollectiveOp(tag, [this, sendbuff, recvbuff, count, datatype, quantized_data_type,
+                                                    quantization_algorithm, op, tag](std::promise<bool> &promise) {
             LOG(DEBUG) << "Vote to commence all reduce operation with tag " << tag;
 
             const bool abort_packet_received = false;
@@ -979,25 +974,23 @@ bool ccoip::CCoIPClientHandler::allReduceAsync(const void *sendbuff, void *recvb
                         return false;
                     }
 
-                    // As long as we do not expect packets of types here that the main thread also expects and claims for normal operation
-                    // (such as commencing other concurrent collective comms operations), we can safely use receiveMatchingPacket packet here
-                    // to receive packets from the master socket.
-                    // Given that M2CPacketCollectiveCommsCommence is only expected in this context, we will never "steal" anyone else's packet
-                    // nor will the main thread steal our packet.
+                    // As long as we do not expect packets of types here that the main thread also expects and claims
+                    // for normal operation (such as commencing other concurrent collective comms operations), we can
+                    // safely use receiveMatchingPacket packet here to receive packets from the master socket. Given
+                    // that M2CPacketCollectiveCommsCommence is only expected in this context, we will never "steal"
+                    // anyone else's packet nor will the main thread steal our packet.
                     const auto response = master_socket.receiveMatchingPacket<M2CPacketCollectiveCommsCommence>(
-                        [tag](const M2CPacketCollectiveCommsCommence &packet) {
-                            return packet.tag == tag;
-                        });
+                            [tag](const M2CPacketCollectiveCommsCommence &packet) { return packet.tag == tag; });
 
                     if (!response) {
                         return false;
                     }
-                    LOG(DEBUG) << "Received M2CPacketCollectiveCommsCommence for tag " << tag <<
-                            "; Collective communications consensus reached";
+                    LOG(DEBUG) << "Received M2CPacketCollectiveCommsCommence for tag " << tag
+                               << "; Collective communications consensus reached";
                     if (response->require_topology_update) {
-                        if (!updateTopology()) {
-                            LOG(ERR) <<
-                                    "Failed to update topology after collective comms commence indicated dirty topology";
+                        if (!obtainTopology()) {
+                            LOG(ERR) << "Failed to update topology after collective comms commence indicated dirty "
+                                        "topology";
                         }
                     }
                 }
@@ -1023,61 +1016,54 @@ bool ccoip::CCoIPClientHandler::allReduceAsync(const void *sendbuff, void *recvb
                 const std::span recv_span(static_cast<std::byte *>(recvbuff), byte_size);
 
                 // perform pipeline ring reduce
-                reduce::pipelineRingReduce(
-                    client_state,
-                    tag,
-                    send_span, recv_span,
-                    datatype, quantized_data_type,
-                    op, quantization_algorithm, position, ring_order.size(),
-                    ring_order, p2p_connections_tx, p2p_connections_rx
-                );
+                reduce::pipelineRingReduce(client_state, tag, send_span, recv_span, datatype, quantized_data_type, op,
+                                           quantization_algorithm, position, ring_order.size(), ring_order,
+                                           p2p_connections_tx, p2p_connections_rx);
 
                 return true;
             };
             auto success = reduce_fun();
             if (![&] {
-                const auto &ring_order = client_state.getRingOrder();
+                    const auto &ring_order = client_state.getRingOrder();
 
-                // vote collective comms operation complete and await consensus
-                C2MPacketCollectiveCommsComplete complete_packet{};
-                complete_packet.tag = tag;
-                complete_packet.was_aborted = success == false && ring_order.size() > 1;
+                    // vote collective comms operation complete and await consensus
+                    C2MPacketCollectiveCommsComplete complete_packet{};
+                    complete_packet.tag = tag;
+                    complete_packet.was_aborted = success == false && ring_order.size() > 1;
 
-                if (!master_socket.sendPacket<C2MPacketCollectiveCommsComplete>(complete_packet)) {
-                    return false;
-                }
-                LOG(DEBUG) << "Sent C2MPacketCollectiveCommsComplete for tag " << tag;
-
-                if (!abort_packet_received) {
-                    const auto abort_response = master_socket.receiveMatchingPacket<M2CPacketCollectiveCommsAbort>(
-                        [tag](const M2CPacketCollectiveCommsAbort &packet) {
-                            return packet.tag == tag;
-                        });
-                    if (!abort_response) {
+                    if (!master_socket.sendPacket<C2MPacketCollectiveCommsComplete>(complete_packet)) {
                         return false;
                     }
-                    aborted = abort_response->aborted;
-                }
+                    LOG(DEBUG) << "Sent C2MPacketCollectiveCommsComplete for tag " << tag;
 
-                const auto complete_response = master_socket.receiveMatchingPacket<
-                    M2CPacketCollectiveCommsComplete>(
-                    [tag](const M2CPacketCollectiveCommsComplete &packet) {
-                        return packet.tag == tag;
-                    });
-
-                if (!complete_response) {
-                    return false;
-                }
-                if (aborted) {
-                    // abort=true is considered a failure, where the user must re-issue
-                    // the collective comms operation to try again, if so desired.
-                    if (!updateTopology()) {
-                        LOG(ERR) << "Failed to update topology after collective comms operation was aborted";
+                    if (!abort_packet_received) {
+                        const auto abort_response = master_socket.receiveMatchingPacket<M2CPacketCollectiveCommsAbort>(
+                                [tag](const M2CPacketCollectiveCommsAbort &packet) { return packet.tag == tag; });
+                        if (!abort_response) {
+                            return false;
+                        }
+                        aborted = abort_response->aborted;
                     }
-                    return false;
-                }
-                return true;
-            }()) {
+
+                    const auto complete_response =
+                            master_socket.receiveMatchingPacket<M2CPacketCollectiveCommsComplete>(
+                                    [tag](const M2CPacketCollectiveCommsComplete &packet) {
+                                        return packet.tag == tag;
+                                    });
+
+                    if (!complete_response) {
+                        return false;
+                    }
+                    if (aborted) {
+                        // abort=true is considered a failure, where the user must re-issue
+                        // the collective comms operation to try again, if so desired.
+                        if (!obtainTopology()) {
+                            LOG(ERR) << "Failed to update topology after collective comms operation was aborted";
+                        }
+                        return false;
+                    }
+                    return true;
+                }()) {
                 success = false;
             }
             promise.set_value(success);
@@ -1104,8 +1090,7 @@ bool ccoip::CCoIPClientHandler::joinAsyncReduce(const uint64_t tag) {
     return true;
 }
 
-bool ccoip::CCoIPClientHandler::getAsyncReduceInfo(const uint64_t tag,
-                                                   std::optional<ccoip_reduce_info_t> &info_out) {
+bool ccoip::CCoIPClientHandler::getAsyncReduceInfo(const uint64_t tag, std::optional<ccoip_reduce_info_t> &info_out) {
     const auto world_size_opt = client_state.getCollectiveComsWorldSize(tag);
     const auto tx_bytes_opt = client_state.getCollectiveComsTxBytes(tag);
     const auto rx_bytes_opt = client_state.getCollectiveComsRxBytes(tag);
@@ -1132,6 +1117,4 @@ bool ccoip::CCoIPClientHandler::isAnyCollectiveComsOpRunning() const {
     return client_state.isAnyCollectiveComsOpRunning();
 }
 
-size_t ccoip::CCoIPClientHandler::getWorldSize() const {
-    return client_state.getWorldSize();
-}
+size_t ccoip::CCoIPClientHandler::getWorldSize() const { return client_state.getWorldSize(); }
