@@ -7,27 +7,29 @@
 #include <tinysockets.hpp>
 #include "win_sock_bridge.h"
 
-ccoip::NetworkBenchmarkRunner::NetworkBenchmarkRunner(
-    const ccoip_socket_address_t &benchmark_endpoint): benchmark_endpoint(benchmark_endpoint) {
+ccoip::NetworkBenchmarkRunner::NetworkBenchmarkRunner(const ccoip_socket_address_t &benchmark_endpoint) :
+    benchmark_endpoint(benchmark_endpoint) {
 }
 
 ccoip::NetworkBenchmarkRunner::BenchmarkResult ccoip::NetworkBenchmarkRunner::runBlocking() {
     tinysockets::BlockingIOSocket socket(benchmark_endpoint);
+    LOG(DEBUG) << "NetworkBenchmarkRunner connecting to endpoint " << ccoip_sockaddr_to_str(benchmark_endpoint) << "...";
     if (!socket.establishConnection()) {
-        LOG(WARN) << "Failed to establish connection to benchmark endpoint " << ccoip_sockaddr_to_str(benchmark_endpoint) << ".";
+        LOG(WARN) << "Failed to establish connection to benchmark endpoint "
+                  << ccoip_sockaddr_to_str(benchmark_endpoint) << ".";
         return BenchmarkResult::CONNECTION_FAILURE;
     }
 
     const auto packet_opt = socket.receivePacket<B2CPacketBenchmarkServerIsBusy>();
     if (!packet_opt) {
-        LOG(ERR) << "Failed to receive B2CPacketBenchmarkServerIsBusy from " << ccoip_sockaddr_to_str(
-            benchmark_endpoint);
+        LOG(ERR) << "Failed to receive B2CPacketBenchmarkServerIsBusy from "
+                 << ccoip_sockaddr_to_str(benchmark_endpoint);
         return BenchmarkResult::CONNECTION_FAILURE;
     }
     if (packet_opt->is_busy) {
         if (!socket.closeConnection()) {
-            LOG(WARN) << "Failed to close connection to " << ccoip_sockaddr_to_str(benchmark_endpoint) <<
-                    " after benchmark server indicated it was busy. Ignoring...";
+            LOG(WARN) << "Failed to close connection to " << ccoip_sockaddr_to_str(benchmark_endpoint)
+                      << " after benchmark server indicated it was busy. Ignoring...";
         }
         return BenchmarkResult::BENCHMARK_SERVER_BUSY;
     }
@@ -78,22 +80,20 @@ ccoip::NetworkBenchmarkRunner::BenchmarkResult ccoip::NetworkBenchmarkRunner::ru
 
     const auto now = std::chrono::high_resolution_clock::now();
     if (!socket.closeConnection()) {
-        LOG(WARN) << "Failed to close connection to " << ccoip_sockaddr_to_str(benchmark_endpoint) <<
-                " after benchmark. Ignoring...";
+        LOG(WARN) << "Failed to close connection to " << ccoip_sockaddr_to_str(benchmark_endpoint)
+                  << " after benchmark. Ignoring...";
     }
     const auto duration = now - start_time;
     const auto duration_us = std::chrono::duration_cast<std::chrono::microseconds>(duration).count();
     const auto duration_seconds = static_cast<double>(duration_us) / 1e6;
     const auto bandwidth_mbits_per_second = static_cast<double>(total_bytes_sent * 8) / 1e6 / duration_seconds;
-    LOG(DEBUG) << "Measured bandwidth: " << bandwidth_mbits_per_second << " Mbit/s to peer " << ccoip_sockaddr_to_str(
-        benchmark_endpoint);
+    LOG(DEBUG) << "Measured bandwidth: " << bandwidth_mbits_per_second << " Mbit/s to peer "
+               << ccoip_sockaddr_to_str(benchmark_endpoint);
     output_bandwidth_mbps = bandwidth_mbits_per_second;
     return BenchmarkResult::SUCCESS;
 }
 
-double ccoip::NetworkBenchmarkRunner::getOutputBandwidthMbitsPerSecond() const {
-    return output_bandwidth_mbps;
-}
+double ccoip::NetworkBenchmarkRunner::getOutputBandwidthMbitsPerSecond() const { return output_bandwidth_mbps; }
 
 bool ccoip::NetworkBenchmarkHandler::runBlocking(const int socket_fd) {
     size_t total_bytes_received = 0;
@@ -116,7 +116,7 @@ bool ccoip::NetworkBenchmarkHandler::runBlocking(const int socket_fd) {
     const std::unique_ptr<uint8_t[]> buffer(new uint8_t[buffer_size]);
     while (true) {
         std::vector descriptors = {
-            tinysockets::poll::PollDescriptor{socket_fd, tinysockets::poll::PollEvent::POLL_INPUT},
+                tinysockets::poll::PollDescriptor{socket_fd, tinysockets::poll::PollEvent::POLL_INPUT},
         };
         auto &rx_descriptor = descriptors[0];
         tinysockets::poll::poll(descriptors, 0);

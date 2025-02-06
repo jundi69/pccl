@@ -1,6 +1,6 @@
 #pragma once
+
 #include <ccoip_inet.h>
-#include <tinysockets.hpp>
 
 namespace ccoip {
     class NetworkBenchmarkRunner {
