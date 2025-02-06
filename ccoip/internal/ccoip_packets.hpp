@@ -103,6 +103,7 @@ namespace ccoip {
     public:
         static packetId_t packet_id;
         bool success;
+        std::vector<ccoip_uuid_t> failed_peers;
 
         void serialize(PacketWriteBuffer &buffer) const override;
 

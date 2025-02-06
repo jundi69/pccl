@@ -312,6 +312,11 @@ namespace ccoip {
         /// Cleared when the collective communications operation ends.
         std::unordered_map<uint32_t, std::unordered_map<uint64_t, bool>> collective_comms_op_abort_states{};
 
+        /// Map of all peers that a given peer cannot reach.
+        /// unreachability_map[a] is the list of peers that peer a cannot reach.
+        /// Populated on failed p2p connection establishment.
+        std::unordered_map<ccoip_uuid_t, std::unordered_set<ccoip_uuid_t>> unreachability_map{};
+
         /// Bandwidth store for all clients
         BandwidthStore bandwidth_store{};
 
@@ -404,9 +409,11 @@ namespace ccoip {
         /// The particular client will be transitioned to the @code WAITING_FOR_OTHER_PEERS@endcode state
         /// until all peers have declared that they have established p2p connections.
         ///
-        /// Once all peers have declared that they have established p2p connections,
+        /// Once all peers have declared that they have established p2p connections (and succeeded in doing so)
         /// clients return back to the @code IDLE@endcode state.
-        [[nodiscard]] bool markP2PConnectionsEstablished(const ccoip_uuid_t &peer_uuid, bool success);
+        /// If @code success@endcode is false, the peer has indicated that it was not able to establish p2p connections to the peers inside @code failed_peers@endcode.
+        /// If this is the case, we will mark the failed peer as unreachable as from the perspective of @code peer_uuid@endcode.
+        [[nodiscard]] bool markP2PConnectionsEstablished(const ccoip_uuid_t &peer_uuid, bool success, const std::vector<ccoip_uuid_t> &failed_peers);
 
         /// Transition to the p2p connections established phase
         /// Triggered after all clients have declared that they have established p2p connections either successfully or not.
@@ -560,10 +567,10 @@ namespace ccoip {
         [[nodiscard]] std::vector<bandwidth_entry> getMissingBandwidthEntries(ccoip_uuid_t peer);
 
         /// Returns true if the bandwidth store is fully populated for all peers.
-        [[nodiscard]] bool isBandwidthStoreFullyPopulated();
+        [[nodiscard]] bool isBandwidthStoreFullyPopulated() const;
 
         /// Returns the number of peers registered in the bandwidth store
-        [[nodiscard]] size_t getNumBandwidthStoreRegisteredPeers();
+        [[nodiscard]] size_t getNumBandwidthStoreRegisteredPeers() const;
 
         /// Finds the client UUID from the client address; returns std::nullopt if not found
         [[nodiscard]] std::optional<ccoip_uuid_t> findClientUUID(const ccoip_socket_address_t &client_address);
@@ -621,7 +628,15 @@ namespace ccoip {
     private:
         void onPeerAccepted(const ClientInfo &info);
 
-        /// Builds a default non-optimized ring topology
+        /// Builds a default non-optimized ring topology.
+        /// NOTE: Does not respect the @code unreachability_map@endcode !!
         [[nodiscard]] std::vector<ccoip_uuid_t> buildBasicRingTopology();
+
+        /// Builds a non-optimized ring topology while respecting the @code unreachability_map@encode
+        /// Returns std::nullopt, if no tour is possible given the state of the unreachability_map
+        [[nodiscard]] std::optional<std::vector<ccoip_uuid_t>> buildReachableRingTopology();
+
+        /// Sets the current ring reduce topology and the associated state whether it is optimal
+        void setRingTopology(const std::vector<ccoip_uuid_t> &new_topology, bool optimal);
     };
 }

@@ -59,10 +59,20 @@ ccoip::packetId_t ccoip::C2MPacketP2PConnectionsEstablished::packet_id = C2M_PAC
 
 void ccoip::C2MPacketP2PConnectionsEstablished::serialize(PacketWriteBuffer &buffer) const {
     buffer.write<boolean>(success);
+    buffer.write<uint64_t>(failed_peers.size());
+    for (const auto &[data] : failed_peers) {
+        buffer.writeFixedArray(data);
+    }
 }
 
 bool ccoip::C2MPacketP2PConnectionsEstablished::deserialize(PacketReadBuffer &buffer) {
     success = buffer.read<boolean>();
+    const auto length = buffer.read<uint64_t>();
+    for (size_t i = 0; i < length; i++) {
+        ccoip_uuid_t uuid{};
+        uuid.data = buffer.readFixedArray<uint8_t, CCOIP_UUID_N_BYTES>();
+        failed_peers.push_back(uuid);
+    }
     return true;
 }
 
@@ -99,7 +109,6 @@ void ccoip::C2MPacketSyncSharedState::serialize(PacketWriteBuffer &buffer) const
 bool ccoip::C2MPacketSyncSharedState::deserialize(PacketReadBuffer &buffer) {
     shared_state_revision = buffer.read<uint64_t>();
     const auto n_entries = buffer.read<uint64_t>();
-    shared_state_hashes.reserve(n_entries);
     for (size_t i = 0; i < n_entries; i++) {
         SharedStateHashEntry entry{};
         entry.key = buffer.readString();
@@ -221,7 +230,6 @@ bool ccoip::M2CPacketP2PConnectionInfo::deserialize(PacketReadBuffer &buffer) {
         return true;
     }
     const auto n_peers = buffer.read<uint64_t>();
-    all_peers.reserve(n_peers);
     for (size_t i = 0; i < n_peers; i++) {
         PeerInfo peer_info{};
         peer_info.p2p_listen_addr = readSocketAddress(buffer);
@@ -258,7 +266,6 @@ void ccoip::M2CPacketGetTopologyResponse::serialize(PacketWriteBuffer &buffer) c
 
 bool ccoip::M2CPacketGetTopologyResponse::deserialize(PacketReadBuffer &buffer) {
     const auto n_peers = buffer.read<uint64_t>();
-    ring_reduce_order.reserve(n_peers);
     for (size_t i = 0; i < n_peers; i++) {
         ccoip_uuid_t uuid{};
         uuid.data = buffer.readFixedArray<uint8_t, CCOIP_UUID_N_BYTES>();
@@ -282,7 +289,6 @@ void ccoip::M2CPacketOptimizeTopologyResponse::serialize(PacketWriteBuffer &buff
 
 bool ccoip::M2CPacketOptimizeTopologyResponse::deserialize(PacketReadBuffer &buffer) {
     const auto n_requests = buffer.read<uint64_t>();
-    bw_benchmark_requests.reserve(n_requests);
     for (size_t i = 0; i < n_requests; i++) {
         BenchmarkRequest request{};
         request.from_peer_uuid.data = buffer.readFixedArray<uint8_t, CCOIP_UUID_N_BYTES>();
@@ -327,11 +333,9 @@ bool ccoip::M2CPacketSyncSharedState::deserialize(PacketReadBuffer &buffer) {
     is_outdated = buffer.read<boolean>();
     distributor_address = readSocketAddress(buffer);
     const auto n_keys = buffer.read<uint64_t>();
-    outdated_keys.reserve(n_keys);
     for (size_t i = 0; i < n_keys; i++) {
         outdated_keys.push_back(buffer.readString());
     }
-    expected_hashes.reserve(n_keys);
     for (size_t i = 0; i < n_keys; i++) {
         expected_hashes.push_back(buffer.read<uint64_t>());
     }
@@ -428,7 +432,6 @@ void ccoip::C2SPacketRequestSharedState::serialize(PacketWriteBuffer &buffer) co
 
 bool ccoip::C2SPacketRequestSharedState::deserialize(PacketReadBuffer &buffer) {
     const auto n_keys = buffer.read<uint64_t>();
-    requested_keys.reserve(n_keys);
     for (size_t i = 0; i < n_keys; i++) {
         requested_keys.push_back(buffer.readString());
     }
@@ -459,7 +462,6 @@ bool ccoip::S2CPacketSharedStateResponse::deserialize(PacketReadBuffer &buffer) 
 
     // read entries
     const auto n_entries = buffer.read<uint64_t>();
-    entries.reserve(n_entries);
     for (size_t i = 0; i < n_entries; i++) {
         const std::string key = buffer.readString();
         const auto size_bytes = buffer.read<uint64_t>();

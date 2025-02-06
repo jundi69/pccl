@@ -654,6 +654,7 @@ bool ccoip::CCoIPClientHandler::establishP2PConnections() {
     LOG(DEBUG) << "Received M2CPacketNewPeers from master";
 
     bool all_peers_connected = true;
+    std::vector<ccoip_uuid_t> failed_peers{};
     if (!connection_info_packet->unchanged) {
         LOG(DEBUG) << "New peers list has changed";
 
@@ -667,6 +668,7 @@ bool ccoip::CCoIPClientHandler::establishP2PConnections() {
             if (!establishP2PConnection(peer)) {
                 LOG(ERR) << "Failed to establish P2P connection with peer " << uuid_to_string(peer.peer_uuid);
                 all_peers_connected = false;
+                failed_peers.push_back(peer.peer_uuid);
                 break;
             }
         }
@@ -690,6 +692,18 @@ bool ccoip::CCoIPClientHandler::establishP2PConnections() {
     // send packet to this peer has established its p2p connections
     C2MPacketP2PConnectionsEstablished packet{};
     packet.success = all_peers_connected;
+
+    // We report the fact that we couldn't establish p2p connections with this peer to the master.
+    // This might indicate that traffic doesn't get routed between the peers, however they both might be able
+    // to ping the master or other peers.
+    // If there is any failed connection, we will retry to establish p2p connections.
+    // This time, the master will not pair us with this peer.
+    // If we are unlucky enough to get paired with another peer we can't connect to, this process
+    // repeats until the master either kicks us because in the worst case we can't ping any peer,
+    // but beyond that we might not be able to ping at least N peers, where N is the minimum amount of neighbors
+    // required to sustain the topology.
+    packet.failed_peers = failed_peers;
+
     if (!master_socket.sendPacket<C2MPacketP2PConnectionsEstablished>(packet)) {
         LOG(ERR) << "Failed to send P2P connections established packet";
         return false;

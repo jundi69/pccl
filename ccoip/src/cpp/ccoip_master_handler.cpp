@@ -195,11 +195,9 @@ void ccoip::CCoIPMasterHandler::handleRequestSessionJoin(const ccoip_socket_addr
     // register client uuid
     if (!server_state.registerClient(
                 client_address,
-                CCoIPClientVariablePorts{
-                    .p2p_listen_port=p2p_listen_port,
-                    .shared_dist_state_listen_port=shared_state_listen_port,
-                    .bandwidth_benchmark_listen_port=bandwidth_benchmark_listen_port
-                },
+                CCoIPClientVariablePorts{.p2p_listen_port = p2p_listen_port,
+                                         .shared_dist_state_listen_port = shared_state_listen_port,
+                                         .bandwidth_benchmark_listen_port = bandwidth_benchmark_listen_port},
                 packet.peer_group, new_uuid)) [[unlikely]] {
         LOG(ERR) << "Failed to register client " << ccoip_sockaddr_to_str(client_address);
         response.accepted = false;
@@ -362,7 +360,8 @@ bool ccoip::CCoIPMasterHandler::checkTopologyOptimizationConsensus() {
                                                  .port = peer_info.variable_ports.bandwidth_benchmark_listen_port,
                                          }};
                 LOG(DEBUG) << "Requesting bandwidth information from " << uuid_to_string(from_peer_uuid) << " to "
-                           << uuid_to_string(to_peer_uuid) << "; Endpoint: " << ccoip_sockaddr_to_str(request.to_peer_benchmark_endpoint);
+                           << uuid_to_string(to_peer_uuid)
+                           << "; Endpoint: " << ccoip_sockaddr_to_str(request.to_peer_benchmark_endpoint);
 
                 benchmark_requests.push_back(request);
             }
@@ -381,14 +380,20 @@ bool ccoip::CCoIPMasterHandler::checkTopologyOptimizationCompletionConsensus() {
     // check if at least one client is waiting for topology optimization to complete
     if (server_state.topologyOptimizationCompleteConsensus()) {
 
-        // check if all bandwidth benchmark requests have been completed
+        /*
+         * check if all bandwidth benchmark requests have been completed
         const bool success = server_state.isBandwidthStoreFullyPopulated();
 
         if (!success) {
             LOG(WARN) << "Not all bandwidth benchmarks have been completed! Topology optimization failed. Retrying...";
             LOG(DEBUG) << "Number of registered peers in bandwidth store: "
                        << server_state.getNumBandwidthStoreRegisteredPeers();
-        }
+        }*/
+
+        // We don't actually assert that the bandwidth store is fully populated.
+        // not all peers may be able to talk to any other peer. The ATSP solver will navigate around those challenges
+        // and find the optimal tour taking into account the routing limitations.
+        constexpr bool success = true;
 
         if (!server_state.endTopologyOptimizationPhase(!success)) {
             LOG(BUG) << "Failed to end topology optimization phase. This is a bug!";
@@ -816,8 +821,31 @@ void ccoip::CCoIPMasterHandler::handleP2PConnectionsEstablished(const ccoip_sock
         }
         return;
     }
-    if (const auto client_uuid = client_uuid_opt.value();
-        !server_state.markP2PConnectionsEstablished(client_uuid, packet.success)) [[unlikely]] {
+    const auto client_uuid = client_uuid_opt.value();
+
+    bool invalid_failed_peers = false;
+    if (!packet.failed_peers.empty() && packet.success) {
+        invalid_failed_peers = true;
+    } else {
+        for (const auto &peer : packet.failed_peers) {
+            if (peer == client_uuid) {
+                invalid_failed_peers = true;
+                break;
+            }
+            if (!server_state.getClientInfo(peer)) {
+                invalid_failed_peers = true;
+                break;
+            }
+        }
+    }
+    if (invalid_failed_peers) {
+        LOG(ERR) << "Client sent invalid failed peers list in C2MPacketP2PConnectionsEstablished packet";
+        if (!kickClient(client_address)) [[unlikely]] {
+            LOG(ERR) << "Failed to kick client " << ccoip_sockaddr_to_str(client_address);
+        }
+        return;
+    }
+    if (!server_state.markP2PConnectionsEstablished(client_uuid, packet.success, packet.failed_peers)) [[unlikely]] {
         LOG(WARN) << "Failed to mark P2P connections established for " << ccoip_sockaddr_to_str(client_address);
         if (!kickClient(client_address)) [[unlikely]] {
             LOG(ERR) << "Failed to kick client " << ccoip_sockaddr_to_str(client_address);
