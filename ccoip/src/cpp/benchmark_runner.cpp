@@ -14,6 +14,7 @@ ccoip::NetworkBenchmarkRunner::NetworkBenchmarkRunner(
 ccoip::NetworkBenchmarkRunner::BenchmarkResult ccoip::NetworkBenchmarkRunner::runBlocking() {
     tinysockets::BlockingIOSocket socket(benchmark_endpoint);
     if (!socket.establishConnection()) {
+        LOG(WARN) << "Failed to establish connection to benchmark endpoint " << ccoip_sockaddr_to_str(benchmark_endpoint) << ".";
         return BenchmarkResult::CONNECTION_FAILURE;
     }
 
