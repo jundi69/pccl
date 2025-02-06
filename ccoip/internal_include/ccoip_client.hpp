@@ -45,7 +45,7 @@ namespace ccoip {
         [[nodiscard]] bool interrupt() const;
 
         /// Performs a topology update if required
-        [[nodiscard]] bool updateTopology() const;
+        [[nodiscard]] bool obtainTopology() const;
 
         /// Performs topology optimization on the current topology
         [[nodiscard]] bool optimizeTopology() const;
