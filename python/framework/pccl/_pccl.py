@@ -53,6 +53,9 @@ class Result(Enum):
     RANK_CONNECTION_FAILED = C.pcclRankConnectionFailed
     RANK_CONNECTION_LOST = C.pcclRankConnectionLost
     NO_SHARED_STATE_AVAILABLE = C.pcclNoSharedStateAvailable
+    PENDING_ASYNC_OPS = C.pcclPendingAsyncOps
+    UPDATE_TOPOLOGY_FAILED = C.pcclUpdateTopologyFailed
+    TOPOLOGY_OPTIMIZATION_FAILED = C.pcclTopologyOptimizationFailed
 
 
 class PCCLError(Exception):
