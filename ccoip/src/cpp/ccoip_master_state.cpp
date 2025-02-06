@@ -1,5 +1,6 @@
 #include "ccoip_master_state.hpp"
 
+#include <functional>
 #include <ccoip_packets.hpp>
 #include <pccl_log.hpp>
 #include <topology_optimizer.hpp>
@@ -1259,6 +1260,8 @@ bool ccoip::CCoIPMasterState::performTopologyOptimization(const bool moonshot, s
     if (moonshot) {
         auto topology = getRingTopology();
         bool topology_has_improved = false;
+
+        // ReSharper disable once CppDFAConstantConditions ; go home CLion, you're drunk
         if (!topology_is_optimal) {
             bool topology_is_optimal = false;
             if (!TopologyOptimizer::ImproveTopologyMoonshot(bandwidth_store, topology, topology_is_optimal,
@@ -1273,6 +1276,7 @@ bool ccoip::CCoIPMasterState::performTopologyOptimization(const bool moonshot, s
     } else {
         auto topology = getRingTopology();
 
+        // ReSharper disable once CppDFAConstantConditions ; go home CLion, you're drunk
         if (!topology_is_optimal) {
             bool topology_is_optimal = false;
             if (!TopologyOptimizer::OptimizeTopology(bandwidth_store, topology, topology_is_optimal)) {
@@ -1283,7 +1287,9 @@ bool ccoip::CCoIPMasterState::performTopologyOptimization(const bool moonshot, s
             is_optimal = topology_is_optimal;
             has_improved = true;
         } else {
+            // ReSharper disable CppDFAUnreachableCode ; go home CLion, you're drunk
             has_improved = false;
+            // ReSharper restore CppDFAUnreachableCode
         }
     }
     return true;
