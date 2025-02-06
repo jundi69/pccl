@@ -359,7 +359,7 @@ bool ccoip::CCoIPMasterHandler::checkTopologyOptimizationConsensus() {
                 BenchmarkRequest request{from_peer_uuid, to_peer_uuid,
                                          ccoip_socket_address_t{
                                                  .inet = peer_info.socket_address.inet,
-                                                 .port = internal::network_order_utils::host_to_network(peer_info.variable_ports.bandwidth_benchmark_listen_port),
+                                                 .port = peer_info.variable_ports.bandwidth_benchmark_listen_port,
                                          }};
                 LOG(DEBUG) << "Requesting bandwidth information from " << uuid_to_string(from_peer_uuid) << " to "
                            << uuid_to_string(to_peer_uuid) << "; Endpoint: " << ccoip_sockaddr_to_str(request.to_peer_benchmark_endpoint);
