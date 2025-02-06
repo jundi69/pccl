@@ -1,5 +1,9 @@
 #include "bandwidth_store.hpp"
 
+#include <bits/ranges_util.h>
+#include <iomanip>
+#include <pccl_log.hpp>
+
 bool ccoip::BandwidthStore::registerPeer(const ccoip_uuid_t peer) {
     auto [_, inserted] = registered_peers.insert(peer);
     return inserted;
@@ -85,4 +89,39 @@ bool ccoip::BandwidthStore::unregisterPeer(const ccoip_uuid_t peer) {
         map.erase(peer);
     }
     return true;
+}
+
+
+void ccoip::BandwidthStore::printBandwidthStore() {
+    std::vector<ccoip_uuid_t> peers{};
+    peers.reserve(registered_peers.size());
+
+    for (const auto &peer: registered_peers) {
+        peers.push_back(peer);
+    }
+
+    std::stringstream ss{};
+    ss << "Bandwidth store:\n";
+    for (int i = 0; i < peers.size(); ++i) {
+        ss << std::setw(5) << i;
+        ss << " ";
+    }
+    ss << '\n';
+    std::vector<std::vector<double>> matrix{};
+    for (const auto &[from, to_bandwidth_map]: bandwidth_map) {
+        auto &row = matrix.emplace_back(peers.size(), -1.0);
+        for (const auto &[to, bandwidth]: to_bandwidth_map) {
+            const size_t to_index = std::ranges::find(peers, to) - peers.begin();
+            row[to_index] = bandwidth;
+        }
+    }
+    for (size_t from_index = 0; from_index < matrix.size(); from_index++) {
+        ss << std::to_string(from_index) << " ";
+        const auto &row = matrix[from_index];
+        for (const double bandwidth : row) {
+            ss << std::setw(5) << std::setprecision(2) << std::fixed << (bandwidth / 2000.0) << " ";
+        }
+        ss << "\n";
+    }
+    LOG(DEBUG) << ss.str();
 }

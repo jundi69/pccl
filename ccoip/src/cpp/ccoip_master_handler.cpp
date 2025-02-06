@@ -385,6 +385,7 @@ bool ccoip::CCoIPMasterHandler::checkTopologyOptimizationCompletionConsensus() {
 
         if (!success) {
             LOG(WARN) << "Not all bandwidth benchmarks have been completed! Topology optimization failed. Retrying...";
+            LOG(DEBUG) << "Number of registered peers in bandwidth store: " << server_state.getNumBandwidthStoreRegisteredPeers();
         }
 
         if (!server_state.endTopologyOptimizationPhase(!success)) {

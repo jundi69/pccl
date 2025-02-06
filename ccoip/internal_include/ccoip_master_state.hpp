@@ -562,6 +562,9 @@ namespace ccoip {
         /// Returns true if the bandwidth store is fully populated for all peers.
         [[nodiscard]] bool isBandwidthStoreFullyPopulated();
 
+        /// Returns the number of peers registered in the bandwidth store
+        [[nodiscard]] size_t getNumBandwidthStoreRegisteredPeers();
+
         /// Finds the client UUID from the client address; returns std::nullopt if not found
         [[nodiscard]] std::optional<ccoip_uuid_t> findClientUUID(const ccoip_socket_address_t &client_address);
 

@@ -54,6 +54,13 @@ bool ccoip::CCoIPMasterState::registerClient(const ccoip_socket_address_t &clien
 
 void ccoip::CCoIPMasterState::onPeerAccepted(const ClientInfo &info) {
     const auto uuid = info.client_uuid;
+    int world_size = 0;
+    for (const auto &[uuid, info] : client_info) {
+        if (info.connection_phase == PEER_ACCEPTED) {
+            world_size++;
+        }
+    }
+    LOG(DEBUG) << "Peer " << uuid_to_string(uuid) << " has been accepted (PEER_ACCEPTED). New world size: " << world_size;
     if (!bandwidth_store.registerPeer(uuid)) {
         LOG(BUG) << "Failed to register bandwidth data for client " << uuid_to_string(uuid) <<
                 "; This means the peer was already registered. This is a bug";
@@ -474,6 +481,9 @@ bool ccoip::CCoIPMasterState::endSharedStateSyncPhase(const uint32_t peer_group)
 
 
 bool ccoip::CCoIPMasterState::endTopologyOptimizationPhase(const bool failed) {
+    if (failed) {
+        bandwidth_store.printBandwidthStore();
+    }
     for (auto &[_, info]: client_info) {
         if (info.connection_phase != PEER_ACCEPTED) {
             continue;
@@ -1062,6 +1072,9 @@ std::vector<ccoip::bandwidth_entry> ccoip::CCoIPMasterState::getMissingBandwidth
 
 bool ccoip::CCoIPMasterState::isBandwidthStoreFullyPopulated() {
     return bandwidth_store.isBandwidthStoreFullyPopulated();
+}
+size_t ccoip::CCoIPMasterState::getNumBandwidthStoreRegisteredPeers() {
+    return bandwidth_store.getNumberOfRegisteredPeers();
 }
 
 std::optional<ccoip::CCoIPMasterState::SharedStateMismatchStatus> ccoip::CCoIPMasterState::getSharedStateMismatchStatus(
