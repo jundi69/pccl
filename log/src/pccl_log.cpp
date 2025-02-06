@@ -27,7 +27,7 @@ static LogLevel readReportingLevel() {
     const char *logLevel = getenv("PCCL_LOG_LEVEL");
 
     if (logLevel == nullptr) {
-        return NONE;
+        return ERR;
     }
     if (strcmp(logLevel, "DEBUG") == 0) {
         return DEBUG;
