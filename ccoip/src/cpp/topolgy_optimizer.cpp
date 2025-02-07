@@ -108,7 +108,7 @@ bool ccoip::TopologyOptimizer::ImproveTopologyMoonshot(const BandwidthStore &ban
             }
             const auto bandwidth = bandwidth_store.getBandwidthMbps(from, to);
             if (!bandwidth.has_value()) {
-                return false;
+                 continue; // don't assert a fully populated bandwidth store
             }
 
             const nodeid_t from_id = peer_to_id.try_emplace(from, peer_to_id.size()).first->second;

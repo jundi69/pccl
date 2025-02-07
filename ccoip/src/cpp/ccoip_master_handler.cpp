@@ -374,7 +374,6 @@ bool ccoip::CCoIPMasterHandler::checkTopologyOptimizationConsensus() {
     return true;
 }
 
-#define CALLSITE_TOPOLOGY_OPTIMIZATION_COMPLETE __COUNTER__
 
 bool ccoip::CCoIPMasterHandler::checkTopologyOptimizationCompletionConsensus() {
     // check if at least one client is waiting for topology optimization to complete
@@ -438,10 +437,15 @@ bool ccoip::CCoIPMasterHandler::checkTopologyOptimizationCompletionConsensus() {
                         topology_optimization_moonshot_thread->join();
                     }
 
-                    if (!server_state.updateTopology(next_ring_topology, next_ring_is_optimal)) {
-                        LOG(WARN) << "Failed to update topology with moon shot optimization result!";
-                        return false;
+                    // apply the pending ring topology as produced by the moon shot optimization, if one exists
+                    if (!next_ring_topology.empty()) {
+                        if (!server_state.updateTopology(next_ring_topology, next_ring_is_optimal)) {
+                            LOG(WARN) << "Failed to update topology with moon shot optimization result!";
+                            return false;
+                        }
                     }
+                    next_ring_topology.clear();
+                    next_ring_is_optimal = false;
 
                     // start another moonshot optimization if the topology is still not optimal
                     if (!server_state.isTopologyOptimal()) {
@@ -455,6 +459,7 @@ bool ccoip::CCoIPMasterHandler::checkTopologyOptimizationCompletionConsensus() {
                             if (!server_state.performTopologyOptimization(true, new_topology, is_optimal,
                                                                           has_improved)) {
                                 LOG(WARN) << "Failed to perform moon shot topology optimization!";
+                                topology_optimization_moonshot_thread_running = false;
                                 return;
                             }
 
@@ -1274,8 +1279,6 @@ void ccoip::CCoIPMasterHandler::handleEstablishP2PConnections(const ccoip_socket
 }
 
 ccoip::CCoIPMasterHandler::~CCoIPMasterHandler() = default;
-
-#define CALLSITE_P2P_CONNECTION_INFORMATION __COUNTER__
 
 void ccoip::CCoIPMasterHandler::sendP2PConnectionInformation(const bool changed, const ClientInfo &peer_info) {
     M2CPacketP2PConnectionInfo new_peers{};
