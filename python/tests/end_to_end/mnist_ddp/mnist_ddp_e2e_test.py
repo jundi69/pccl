@@ -84,7 +84,7 @@ def test_mnist_ddp_world_size_2_plus_1_late_joiner():
 
     # launch master node
     master_process = launch_py_process(master_script_path, [], {'PCCL_LOG_LEVEL': 'INFO'})
-    print(f"Launched master node; PID: {master_process.pid}")\
+    print(f"Launched master node; PID: {master_process.pid}")
 
     # launch 2 peers
     process_list = []
