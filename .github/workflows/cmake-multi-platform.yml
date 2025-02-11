@@ -53,7 +53,7 @@ jobs:
 
       - name: Set reusable strings
         id: strings
-        shell: ${{ matrix.os == 'Windows' && 'pwsh' || 'bash' }}
+        shell: ${{ runner.os == 'Windows' && 'pwsh' || 'bash' }}
         run: |
           if ($env:RUNNER_OS -eq "Windows") {
             $build_output_dir = "${{ github.workspace }}\\build"
