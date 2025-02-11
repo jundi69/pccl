@@ -41,6 +41,7 @@ jobs:
             c_compiler: C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.42.34433/bin/Hostx64/x64/cl.exe
             cpp_compiler: C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.42.34433/bin/Hostx64/x64/cl.exe
             rc_compiler: C:/Program Files (x86)/Windows Kits/10/bin/10.0.22621.0/x64/rc.exe
+            make_program: C:/Program Files/NinjaBuild/bin/ninja.exe
             generator: Ninja
             build_type: Release
 
