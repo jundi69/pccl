@@ -34,7 +34,13 @@ jobs:
             build_type: Release
 
           # Windows configurations using GitHub-hosted runners
-          - runs-on: windows-latest
+          - runs-on: [ self-hosted, Windows, cpu ]
+            os: windows-latest
+            c_compiler: cl
+            cpp_compiler: cl
+            build_type: Release
+
+          - runs-on: [ self-hosted, Windows, cuda ]
             os: windows-latest
             c_compiler: cl
             cpp_compiler: cl
