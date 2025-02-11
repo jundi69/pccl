@@ -1,8 +1,9 @@
-#include <random>
+#include <chrono>
 #include <cstring>
-#include <gtest/gtest.h>
 #include <cuda.h>
 #include <cuda_runtime_api.h>
+#include <gtest/gtest.h>
+#include <random>
 
 extern "C" uint64_t simplehash_cuda_kernel(const void *data, size_t n_bytes);
 
