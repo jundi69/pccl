@@ -51,17 +51,21 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Set reusable strings
-        id: strings
-        shell: ${{ runner.os == 'Windows' && 'pwsh' || 'bash' }}
+      - name: Set reusable strings (Linux)
+        id: strings-linux
+        if: runner.os != 'Windows'
+        shell: bash
         run: |
-          if ($env:RUNNER_OS -eq "Windows") {
-            $build_output_dir = "${{ github.workspace }}\\build"
-            echo "build-output-dir=$build_output_dir" >> $env:GITHUB_OUTPUT
-          } else {
-            build_output_dir="${{ github.workspace }}/build"
-            echo "build-output-dir=$build_output_dir" >> "$GITHUB_OUTPUT"
-          }
+          build_output_dir="${{ github.workspace }}/build"
+          echo "build-output-dir=$build_output_dir" >> "$GITHUB_OUTPUT"
+      
+      - name: Set reusable strings (Windows)
+        id: strings-windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $build_output_dir = "${{ github.workspace }}\\build"
+          echo "build-output-dir=$build_output_dir" >> $env:GITHUB_OUTPUT
 
       - name: Configure CMake
         run: >
