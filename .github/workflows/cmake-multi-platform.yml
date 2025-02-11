@@ -42,6 +42,8 @@ jobs:
             cpp_compiler: C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.42.34433/bin/Hostx64/x64/cl.exe
             rc_compiler: C:/Program Files (x86)/Windows Kits/10/bin/10.0.22621.0/x64/rc.exe
             make_program: C:/Program Files/NinjaBuild/bin/ninja.exe
+            linker_program: C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.42.34433/bin/Hostx64/x64/link.exe
+            ar_progran: C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.42.34433/bin/Hostx64/x64/lib.exe
             generator: Ninja
             build_type: Release
 
@@ -51,6 +53,8 @@ jobs:
             cpp_compiler: C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.42.34433/bin/Hostx64/x64/cl.exe
             rc_compiler: C:/Program Files (x86)/Windows Kits/10/bin/10.0.22621.0/x64/rc.exe
             make_program: C:/Program Files/NinjaBuild/bin/ninja.exe
+            linker_program: C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.42.34433/bin/Hostx64/x64/link.exe
+            ar_progran: C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.42.34433/bin/Hostx64/x64/lib.exe
             generator: Ninja
             build_type: Release
 
@@ -92,6 +96,11 @@ jobs:
           -G "${{ matrix.generator }}"
           "-DCMAKE_MAKE_PROGRAM=${{ matrix.make_program }}"
           "-DCMAKE_BUILD_TYPE=${{ matrix.build_type }}"
+          "-DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }}"
+          "-DCMAKE_C_COMPILER=${{ matrix.c_compiler }}"
+          "-DCMAKE_RC_COMPILER=${{ matrix.rc_compiler }}"
+          "-DCMAKE_LINKER=${{ matrix.linker_program }}"
+          "-DCMAKE_AR=${{ matrix.ar_program }}"
           -S "${{ github.workspace }}"
 
       - name: Build
