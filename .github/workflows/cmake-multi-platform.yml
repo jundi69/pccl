@@ -81,6 +81,7 @@ jobs:
       
       - name: Configure CMake (Windows)
         if: runner.os == 'Windows'
+        shell: cmd
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat"
           cmake -B ${{steps.strings-windows.outputs.build-output-dir }} -G "${{ matrix.generator }}" "-DCMAKE_MAKE_PROGRAM=${{ matrix.make_program }}" -S "${{ github.workspace }}"
