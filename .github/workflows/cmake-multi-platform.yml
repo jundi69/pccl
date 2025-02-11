@@ -62,7 +62,7 @@ jobs:
       - name: Set reusable strings (Windows)
         id: strings-windows
         if: runner.os == 'Windows'
-        shell: pwsh
+        shell: powershell
         run: |
           $build_output_dir = "${{ github.workspace }}\\build"
           echo "build-output-dir=$build_output_dir" >> $env:GITHUB_OUTPUT
