@@ -38,17 +38,17 @@ jobs:
           # Windows configurations using GitHub-hosted runners
           - runs-on: [ self-hosted, Windows, cpu ]
             os: windows-latest
-            c_compiler: C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.42.34433\bin\Hostx64\x64\cl.exe
-            cpp_compiler: C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.42.34433\bin\Hostx64\x64\cl.exe
-            rc_compiler: C:\Program Files (x86)\Windows Kits\10\bin\10.0.22621.0\x64\rc.exe
+            c_compiler: C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.42.34433/bin/Hostx64/x64/cl.exe
+            cpp_compiler: C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.42.34433/bin/Hostx64/x64/cl.exe
+            rc_compiler: C:/Program Files (x86)/Windows Kits/10/bin/10.0.22621.0/x64/rc.exe
             generator: Ninja
             build_type: Release
 
           - runs-on: [ self-hosted, Windows, cuda ]
             os: windows-latest
-            c_compiler: C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.42.34433\bin\Hostx64\x64\cl.exe
-            cpp_compiler: C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.42.34433\bin\Hostx64\x64\cl.exe
-            rc_compiler: C:\Program Files (x86)\Windows Kits\10\bin\10.0.22621.0\x64\rc.exe
+            c_compiler: C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.42.34433/bin/Hostx64/x64/cl.exe
+            cpp_compiler: C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.42.34433/bin/Hostx64/x64/cl.exe
+            rc_compiler: C:/Program Files (x86)/Windows Kits/10/bin/10.0.22621.0/x64/rc.exe
             generator: Ninja
             build_type: Release
 
@@ -70,7 +70,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: powershell
         run: |
-          $build_output_dir = "${{ github.workspace }}\\build"
+          $build_output_dir = "${{ github.workspace }}//build"
           echo "build-output-dir=$build_output_dir" >> $env:GITHUB_OUTPUT
 
       - name: Configure CMake (Unix)
