@@ -87,13 +87,15 @@ jobs:
           cmake -B ${{steps.strings-windows.outputs.build-output-dir }} -G "${{ matrix.generator }}" "-DCMAKE_MAKE_PROGRAM=${{ matrix.make_program }}" -S "${{ github.workspace }}"
 
       - name: Build (Unix)
+        if: runner.os != 'Windows'
         run: cmake --build ${{ steps.strings-unix.outputs.build-output-dir }} --config ${{ matrix.build_type }} --parallel
 
       - name: Build (Windows)
         shell: cmd
+        if: runner.os == 'Windows'
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat"
-          cmake --build ${{ steps.strings-windows.outputs.build-output-dir }} --config ${{ matrix.build_type }} --parallel
+          cmake --build "${{ steps.strings-windows.outputs.build-output-dir }}" --config ${{ matrix.build_type }} --parallel
 
       - name: Test
         working-directory: ${{ steps.strings-unix.outputs.build-output-dir || steps.strings-windows.outputs.build-output-dir }}
