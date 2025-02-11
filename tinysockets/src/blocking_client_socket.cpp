@@ -298,6 +298,9 @@ std::optional<size_t> tinysockets::BlockingIOSocket::receivePacketLength(const b
             }
         }
         if (i == -1 || i == 0) {
+            if (errno == 0) {
+                continue;
+            }
             std::string error_message = std::strerror(errno);
             if (!isOpen()) {
                 error_message = "Connection closed";
