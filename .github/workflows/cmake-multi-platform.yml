@@ -25,12 +25,14 @@ jobs:
             os: ubuntu-latest
             c_compiler: gcc
             cpp_compiler: g++
+            generator: Ninja
             build_type: Release
 
           - runs-on: [ self-hosted, Linux, cuda ]
             os: ubuntu-latest
             c_compiler: gcc
             cpp_compiler: g++
+            generator: Ninja
             build_type: Release
 
           # Windows configurations using GitHub-hosted runners
@@ -38,12 +40,14 @@ jobs:
             os: windows-latest
             c_compiler: cl
             cpp_compiler: cl
+            generator: Ninja
             build_type: Release
 
           - runs-on: [ self-hosted, Windows, cuda ]
             os: windows-latest
             c_compiler: cl
             cpp_compiler: cl
+            generator: Ninja
             build_type: Release
 
     steps:
@@ -70,6 +74,7 @@ jobs:
       - name: Configure CMake
         run: >
           cmake -B ${{ steps.strings-linux.outputs.build-output-dir || steps.strings-windows.outputs.build-output-dir }}
+          -G ${{ matrix.generator }}
           -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }}
           -DCMAKE_C_COMPILER=${{ matrix.c_compiler }}
           -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
