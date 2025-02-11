@@ -40,6 +40,7 @@ jobs:
             os: windows-latest
             c_compiler: C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.42.34433\bin\Hostx64\x64\cl.exe
             cpp_compiler: C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.42.34433\bin\Hostx64\x64\cl.exe
+            rc_compiler: C:\Program Files (x86)\Windows Kits\10\bin\10.0.22621.0\x64\rc.exe
             generator: Ninja
             build_type: Release
 
@@ -57,7 +58,7 @@ jobs:
           submodules: recursive
 
       - name: Set reusable strings (Unix)
-        id: strings-linux
+        id: strings-unix
         if: runner.os != 'Windows'
         shell: bash
         run: |
@@ -75,7 +76,7 @@ jobs:
       - name: Configure CMake (Unix)
         if: runner.os != 'Windows'
         run: >
-          cmake -B ${{steps.strings-windows.outputs.build-output-dir }}
+          cmake -B ${{steps.strings-unix.outputs.build-output-dir }}
           -G "${{ matrix.generator }}"
           -DCMAKE_CXX_COMPILER="${{ matrix.cpp_compiler }}"
           -DCMAKE_C_COMPILER="${{ matrix.c_compiler }}"
@@ -89,14 +90,15 @@ jobs:
           -G "${{ matrix.generator }}"
           -DCMAKE_CXX_COMPILER="${{ matrix.cpp_compiler }}"
           -DCMAKE_C_COMPILER="${{ matrix.c_compiler }}"
+          -DCMAKE_RC_COMPILER="${{ matrix.rc_compiler }}"
           -DCMAKE_BUILD_TYPE="${{ matrix.build_type }}"
           -S "${{ github.workspace }}"
 
       - name: Build
-        run: cmake --build ${{ steps.strings-linux.outputs.build-output-dir || steps.strings-windows.outputs.build-output-dir }} --config ${{ matrix.build_type }} --parallel
+        run: cmake --build ${{ steps.strings-unix.outputs.build-output-dir || steps.strings-windows.outputs.build-output-dir }} --config ${{ matrix.build_type }} --parallel
 
       - name: Test
-        working-directory: ${{ steps.strings-linux.outputs.build-output-dir || steps.strings-windows.outputs.build-output-dir }}
+        working-directory: ${{ steps.strings-unix.outputs.build-output-dir || steps.strings-windows.outputs.build-output-dir }}
         run: ctest --verbose --build-config ${{ matrix.build_type }} --output-on-failure
 
       - name: Compile Python wheel
