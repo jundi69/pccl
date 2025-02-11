@@ -112,7 +112,7 @@ jobs:
 
       - name: Install Python wheel Win32
         if: runner.os == 'Windows'
-        run: pip install "${{ github.workspace }}\python\framework\dist\pccl-0.1.0-cp39-cp39-win_amd64.whl"
+        run: pip install "${{ github.workspace }}\python\framework\dist\pccl-0.1.0-cp312-cp312-win_amd64.whl"
 
       - name: Install Python wheel Unix
         if: runner.os != 'Windows'
