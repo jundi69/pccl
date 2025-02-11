@@ -66,7 +66,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: powershell
         run: |
-          $build_output_dir = "${{ github.workspace }}//build"
+          $build_output_dir = "${{ github.workspace }}/build"
           echo "build-output-dir=$build_output_dir" >> $env:GITHUB_OUTPUT
       
       - name: Configure CMake (Unix)
