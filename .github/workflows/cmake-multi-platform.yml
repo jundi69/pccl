@@ -53,9 +53,15 @@ jobs:
 
       - name: Set reusable strings
         id: strings
-        shell: bash
+        shell: ${{ runner.os == 'Windows' && 'pwsh' || 'bash' }}
         run: |
-          echo "build-output-dir=${{ github.workspace }}/build" >> "$GITHUB_OUTPUT"
+          if ($env:RUNNER_OS -eq "Windows") {
+            $build_output_dir = "${{ github.workspace }}\\build"
+            echo "build-output-dir=$build_output_dir" >> $env:GITHUB_OUTPUT
+          } else {
+            build_output_dir="${{ github.workspace }}/build"
+            echo "build-output-dir=$build_output_dir" >> "$GITHUB_OUTPUT"
+          }
 
       - name: Configure CMake
         run: >
