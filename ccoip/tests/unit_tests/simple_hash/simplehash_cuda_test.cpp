@@ -204,7 +204,10 @@ int main(int argc, char **argv) {
         std::cerr << "Can't run CUDA-tests when no CUDA-supported GPUs are available!" << std::endl;
         return -1;
     }
-    cuCtxCreate_v2(&ctx, 0, 1);
+    if (cuCtxCreate_v2(&ctx, 0, 0) != CUDA_SUCCESS) {
+        std::cerr << "Can't create CUDA context!" << std::endl;
+        return -1;
+    }
     testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }
