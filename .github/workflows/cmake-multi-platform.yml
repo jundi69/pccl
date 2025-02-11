@@ -76,10 +76,10 @@ jobs:
           -S ${{ github.workspace }}
 
       - name: Build
-        run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }} --parallel
+        run: cmake --build ${{ steps.strings-linux.outputs.build-output-dir || steps.strings-windows.outputs.build-output-dir } --config ${{ matrix.build_type }} --parallel
 
       - name: Test
-        working-directory: ${{ steps.strings.outputs.build-output-dir }}
+        working-directory: ${{ steps.strings-linux.outputs.build-output-dir || steps.strings-windows.outputs.build-output-dir }
         run: ctest --verbose --build-config ${{ matrix.build_type }} --output-on-failure
 
       - name: Compile Python wheel
