@@ -79,20 +79,17 @@ def test_mnist_ddp_world_size_3():
 
 
 def test_mnist_ddp_world_size_2_plus_1_late_joiner():
-    rev50_signal_file = os.path.join(os.path.dirname(__file__), 'RANK_0_REV_50')
-    os.remove(rev50_signal_file) if os.path.exists(rev50_signal_file) else None
-
     peer_script_path = os.path.join(os.path.dirname(__file__), 'mnist_peer.py')
     master_script_path = os.path.join(os.path.dirname(__file__), 'mnist_master.py')
 
     # launch master node
     master_process = launch_py_process(master_script_path, [], {'PCCL_LOG_LEVEL': 'INFO'})
-    print(f"Launched master node; PID: {master_process.pid}")
+    print(f"Launched master node; PID: {master_process.pid}")\
 
     # launch 2 peers
     process_list = []
     for rank in range(2):
-        process_list.append(launch_py_process(peer_script_path, [], {'PCCL_LOG_LEVEL': 'INFO', 'RANK': str(rank)}))
+        process_list.append(launch_py_process(peer_script_path, [], {'PCCL_LOG_LEVEL': 'INFO', 'RANK': str(rank), 'DONT_EXIT_BEFORE_REACHED_WORLD_SIZE': "3"}))
         print(f"Launched peer {rank}; PID: {process_list[-1].pid}")
 
     time.sleep(0.5)

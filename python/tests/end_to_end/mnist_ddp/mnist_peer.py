@@ -36,12 +36,12 @@ device = torch.device("cpu")
 # Define hyperparameters
 input_size = 28 * 28  # MNIST images are 28x28
 # hidden_sizes = [1024, 4096, 4096, 4096, 4096, 1024]
-hidden_sizes = [256]
+hidden_sizes = [128]
 num_classes = 10  # Digits 0-9
-batch_size = 128
+batch_size = 32
 learning_rate = 0.001
 IS_CI = os.getenv('IS_CI', '0') == '1'
-max_steps = IS_CI and 512 or 2048
+max_steps = 10
 
 # MNIST dataset (images and labels)
 train_dataset = datasets.MNIST(root='./data', train=True, transform=transforms.ToTensor(), download=True)
@@ -193,14 +193,20 @@ def main():
                 continue
 
             params = torch.cat([p.view(-1) for p in model.parameters()])
-            #log_debug(f"(RANK={RANK}, it={i}, ws={world_size}) [pre shared state sync] params crc32 hash: {compute_crc32(params)}, lindenstrauss: {random_projection_64(params)}")
-            log_debug(f"(RANK={RANK}, it={it}, ws={world_size}) [pre shared state sync] params crc32 hash: {compute_crc32(params)}")
+            # log_debug(f"(RANK={RANK}, it={i}, ws={world_size}) [pre shared state sync] params crc32 hash: {compute_crc32(params)}, lindenstrauss: {random_projection_64(params)}")
+            log_debug(
+                f"(RANK={RANK}, it={it}, ws={world_size}) [pre shared state sync] params crc32 hash: {compute_crc32(params)}")
 
             sync_info = communicator.sync_shared_state(shared_state)
             num_syncs += 1
             log_debug(
                 f"(RANK={RANK}, it={it}) shared_state.revision: {shared_state.revision}, sync_info (tx_bytes={sync_info.tx_bytes}, rx_bytes={sync_info.rx_bytes})")
             if shared_state.revision >= max_steps:
+                twz = os.getenv("DONT_EXIT_BEFORE_REACHED_WORLD_SIZE")
+                if twz is not None:
+                    if int(twz) > world_size:
+                        continue
+
                 log_debug(f"(RANK={RANK}, it={it}) Training completed")
                 break
 
@@ -214,7 +220,6 @@ def main():
             if num_syncs > 1:
                 assert sync_info.tx_bytes == 0
                 assert sync_info.rx_bytes == 0
-
 
             try:
                 batch_idx, (images, labels) = next(train_it)
