@@ -38,15 +38,15 @@ jobs:
           # Windows configurations using GitHub-hosted runners
           - runs-on: [ self-hosted, Windows, cpu ]
             os: windows-latest
-            c_compiler: cl
-            cpp_compiler: cl
+            c_compiler: C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.42.34433\bin\Hostx64\x64\cl.exe
+            cpp_compiler: C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.42.34433\bin\Hostx64\x64\cl.exe
             generator: Ninja
             build_type: Release
 
           - runs-on: [ self-hosted, Windows, cuda ]
             os: windows-latest
-            c_compiler: cl
-            cpp_compiler: cl
+            c_compiler: C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.42.34433\bin\Hostx64\x64\cl.exe
+            cpp_compiler: C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.42.34433\bin\Hostx64\x64\cl.exe
             generator: Ninja
             build_type: Release
 
