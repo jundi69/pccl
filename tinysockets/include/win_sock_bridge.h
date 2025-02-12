@@ -82,6 +82,10 @@ inline uint64_t net_u64_to_host(uint64_t net_long) {
 #endif
 }
 
+inline int create_socket(const int domain, const int type, const int protocol) {
+    return socket(domain, type, protocol);
+}
+
 inline void closesocket(const int socket_fd) {
     close(socket_fd);
 }
