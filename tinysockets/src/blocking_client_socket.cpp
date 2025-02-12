@@ -295,11 +295,8 @@ std::optional<size_t> tinysockets::BlockingIOSocket::receivePacketLength(const b
                 continue; // no data available, but repeat the loop to see if next call fails with EAGAIN/EWOULDBLOCK
             }
         }
-        if (i == -1 || (i == 0 && errno != 0)) {
-            std::string error_message = std::strerror(errno);
-            if (!isOpen()) {
-                error_message = "Connection closed";
-            }
+        if (i == -1 || i == 0) {
+            const std::string error_message = std::strerror(errno);
             LOG(INFO) << "Failed to receive packet length with error: " << error_message;
             return std::nullopt;
         }

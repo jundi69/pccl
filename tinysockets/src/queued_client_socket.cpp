@@ -310,7 +310,7 @@ std::optional<size_t> tinysockets::QueuedSocket::receivePacketLength() const {
     size_t n_received = 0;
     do {
         const ssize_t i = recvvp(socket_fd, &length, sizeof(length), 0);
-        if (i == -1 || (i == 0 && errno != 0) || !running) {
+        if (i == -1 || i == 0 || !running) {
             std::string error_message = std::strerror(errno);
             if (!isOpen()) {
                 error_message = "Connection closed";
