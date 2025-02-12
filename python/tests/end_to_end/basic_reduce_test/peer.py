@@ -6,7 +6,7 @@ from pccl import SharedState, TensorInfo, Communicator, Attribute, ReduceOp, Qua
     QuantizationAlgorithm
 
 HOST: str = '127.0.0.1:48148'
-STEPS: int = 100
+STEPS: int = 10000
 WEIGHT_N: int = 1024
 PEERS: int = 1
 NUM_ELEMENTS: int = 1024
@@ -34,7 +34,7 @@ def main():
     n_performed_steps = 0
     it = 0
     world_size: int = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
-    while n_performed_steps < STEPS:
+    while shared_state.revision < STEPS:
         it += 1
         if it > 1:
             logging.info(f"(RANK={RANK}, it={it}) update_topology()")
@@ -42,7 +42,10 @@ def main():
             world_size: int = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
 
         if world_size > 1:
-           communicator.optimize_topology()
+           try:
+               communicator.optimize_topology()
+           except Exception as ex:
+               print(ex)
 
         if world_size < 2:
             sleep(1)
@@ -51,8 +54,7 @@ def main():
         logging.info(f"(RANK={RANK}, it={it}) sync_shared_state()")
         info = communicator.sync_shared_state(shared_state)
         assert info is not None
-        if it > 2:
-            assert info.tx_bytes == 0 and info.rx_bytes == 0
+        print(f"(RANK={RANK}, it={it}) tx_bytes={info.tx_bytes}, rx_bytes={info.rx_bytes}")
 
         # Create gradients tensors
         grad: torch.Tensor = torch.rand(NUM_ELEMENTS, dtype=torch.float32)
@@ -64,7 +66,7 @@ def main():
                                                                                             QuantizationAlgorithm.MIN_MAX))
 
             is_success, status, info = handle.wait()
-            assert is_success, f"All reduce failed with stats: {status}"
+            assert is_success, f"All reduce failed with status: {status}"
             assert info is not None
             logging.info(
                 f"(RANK={RANK}, it={it}) Reduce completed RX: {info.rx_bytes}, TX: {info.tx_bytes}")

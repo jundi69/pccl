@@ -128,11 +128,11 @@ bool tinysockets::BlockingIOSocket::closeConnection() {
     return true;
 }
 
-bool tinysockets::BlockingIOSocket::isOpen() const {
+bool tinysockets::BlockingIOSocket::isOpen() {
     if (socket_fd == 0) [[unlikely]] {
         return false;
     }
-
+    std::lock_guard guard{recv_mutex}; // prevent race conditions so that other threads don't accidentally hit the fd in non-blocking mode.
 #ifndef WIN32
     // Using MSG_PEEK with a small read: if it returns 0, the connection is closed.
     char buf;
@@ -197,10 +197,6 @@ bool tinysockets::BlockingIOSocket::sendLtvPacket(const ccoip::packetId_t packet
     tlv_buffer.write<uint64_t>(buffer.size() + sizeof(ccoip::packetId_t));
     tlv_buffer.write(packet_id);
     tlv_buffer.writeContents(buffer.data(), buffer.size());
-    int flags = 0;
-#ifndef WIN32
-    flags |= MSG_NOSIGNAL;
-#endif
 
     int max_buffer_size{};
     socklen_t optlen = sizeof(max_buffer_size);
@@ -297,7 +293,7 @@ std::optional<size_t> tinysockets::BlockingIOSocket::receivePacketLength(const b
         }
         if (i == -1 || i == 0) {
             const std::string error_message = std::strerror(errno);
-            LOG(INFO) << "Failed to receive packet length with error: " << error_message;
+            LOG(INFO) << "[BlockingIOSocket] Failed to receive packet length with error: " << error_message;
             return std::nullopt;
         }
         n_received += i;

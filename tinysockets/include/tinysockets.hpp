@@ -185,7 +185,7 @@ namespace tinysockets {
 
         [[nodiscard]] bool closeConnection();
 
-        [[nodiscard]] bool isOpen() const;
+        [[nodiscard]] bool isOpen();
 
         [[nodiscard]] const ccoip_socket_address_t &getConnectSockAddr() const;
 

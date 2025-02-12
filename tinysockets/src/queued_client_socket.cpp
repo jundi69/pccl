@@ -1,10 +1,10 @@
 #include <ccoip_utils.hpp>
 #include <win_sock_bridge.h>
 
-#include "tinysockets.hpp"
-#include <cstring> // for std::strerror
 #include <condition_variable>
+#include <cstring> // for std::strerror
 #include <shared_mutex>
+#include "tinysockets.hpp"
 
 static bool configure_socket_fd(const int socket_fd) {
     constexpr int opt = 1;
@@ -39,22 +39,15 @@ namespace tinysockets {
         std::mutex mutex; // Protects condition variable and access coordination
         std::condition_variable cond_var;
 
-        QueuedSocketInternalState() : recv_queue() {
-        }
+        QueuedSocketInternalState() : recv_queue() {}
     };
-}
+} // namespace tinysockets
 
-tinysockets::QueuedSocket::QueuedSocket(const ccoip_socket_address_t &address) : socket_fd(0),
-    connect_sockaddr(address),
-    internal_state(new QueuedSocketInternalState),
-    running(false) {
-}
+tinysockets::QueuedSocket::QueuedSocket(const ccoip_socket_address_t &address) :
+    socket_fd(0), connect_sockaddr(address), internal_state(new QueuedSocketInternalState), running(false) {}
 
-tinysockets::QueuedSocket::QueuedSocket(const int socket_fd) : socket_fd(socket_fd),
-                                                               connect_sockaddr(),
-                                                               internal_state(new QueuedSocketInternalState),
-                                                               running(true) {
-}
+tinysockets::QueuedSocket::QueuedSocket(const int socket_fd) :
+    socket_fd(socket_fd), connect_sockaddr(), internal_state(new QueuedSocketInternalState), running(true) {}
 
 tinysockets::QueuedSocket::~QueuedSocket() {
     delete internal_state;
@@ -82,11 +75,7 @@ bool tinysockets::QueuedSocket::run() {
             const auto length_opt = receivePacketLength();
             if (!length_opt) {
                 if (running) {
-                    if (isOpen()) {
-                        LOG(ERR) << "Failed to receive packet length; closing connection & exiting receive loop...";
-                    } else {
-                        LOG(ERR) << "Connection was closed; exiting receive loop...";
-                    }
+                    LOG(ERR) << "Connection was closed; exiting receive loop...";
                     if (!interrupt()) [[unlikely]] {
                         LOG(ERR) << "Failed to interrupt QueuedSocket";
                     }
@@ -166,65 +155,9 @@ bool tinysockets::QueuedSocket::interrupt() {
     return true;
 }
 
-const ccoip_socket_address_t &tinysockets::QueuedSocket::getConnectSockAddr() const {
-    return connect_sockaddr;
-}
+const ccoip_socket_address_t &tinysockets::QueuedSocket::getConnectSockAddr() const { return connect_sockaddr; }
 
-bool tinysockets::QueuedSocket::isOpen() const {
-    if (socket_fd == 0) [[unlikely]] {
-        return false;
-    }
-
-#ifndef WIN32
-    // Using MSG_PEEK with a small read: if it returns 0, the connection is closed.
-    char buf;
-    const ssize_t n = recv(socket_fd, &buf, 1, MSG_PEEK | MSG_DONTWAIT);
-    if (n == 0) {
-        return false;
-    }
-    if (n < 0) {
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
-            // No data available, but socket may still be connected
-            return true;
-        }
-        // An error occurred; some errors like ECONNRESET mean the socket is effectively closed
-        return false;
-    }
-    // If we got here, there's data available to read, so the socket is still connected
-    return true;
-#else
-    // set socket into non-blocking mode
-    u_long mode = 1;
-    if (ioctlsocket(socket_fd, FIONBIO, &mode) != NO_ERROR) {
-        LOG(ERR) << "Failed to set socket into non-blocking mode";
-        return false;
-    }
-
-    bool is_open = false;
-    char buf;
-    if (int n = recv(socket_fd, &buf, 1, MSG_PEEK); n == 0) {
-        // The connection was closed gracefully by the peer.
-        is_open = false;
-    } else if (n == SOCKET_ERROR) {
-        if (const int err = WSAGetLastError(); err == WSAEWOULDBLOCK) {
-            // No data available now, but the socket is still considered open.
-            is_open = true;
-        } else {
-            // Other errors (like WSAECONNRESET) mean the socket is effectively closed.
-            is_open = false;
-        }
-    } else if (n > 0) {
-        is_open = true;
-    }
-    // set socket back to blocking mode
-    mode = 0;
-    if (ioctlsocket(socket_fd, FIONBIO, &mode) != NO_ERROR) {
-        LOG(ERR) << "Failed to set socket back to blocking mode";
-        return false;
-    }
-    return is_open;
-#endif
-}
+bool tinysockets::QueuedSocket::isOpen() const { return socket_fd != 0; }
 
 bool tinysockets::QueuedSocket::establishConnection() {
     if (socket_fd != 0) {
@@ -271,8 +204,8 @@ bool tinysockets::QueuedSocket::establishConnection() {
             return false;
         }
     } else if (connect_sockaddr.inet.protocol == inetIPv6) {
-        if (connect(socket_fd, reinterpret_cast<const sockaddr *>(&server_address_ipv6),
-                    sizeof(server_address_ipv6)) < 0) {
+        if (connect(socket_fd, reinterpret_cast<const sockaddr *>(&server_address_ipv6), sizeof(server_address_ipv6)) <
+            0) {
             const std::string error_message = std::strerror(errno);
             LOG(ERR) << "Failed to connect to server; connect() failed with " << error_message;
             closesocket(socket_fd);
@@ -311,12 +244,9 @@ std::optional<size_t> tinysockets::QueuedSocket::receivePacketLength() const {
     do {
         const ssize_t i = recvvp(socket_fd, &length, sizeof(length), 0);
         if (i == -1 || i == 0 || !running) {
-            std::string error_message = std::strerror(errno);
-            if (!isOpen()) {
-                error_message = "Connection closed";
-            }
+            const std::string error_message = std::strerror(errno);
             if (running) {
-                LOG(ERR) << "Failed to receive packet length with error: " << error_message;
+                LOG(ERR) << "[QueuedSocket] Failed to receive packet length with error: " << error_message;
             }
             return std::nullopt;
         }
@@ -359,8 +289,7 @@ bool tinysockets::QueuedSocket::sendLtvPacket(ccoip::packetId_t packet_id, const
     while (bytes_sent < tlv_buffer.size()) {
         const size_t bytes_remaining = tlv_buffer.size() - bytes_sent;
         const size_t to_send = std::min(bytes_remaining, static_cast<size_t>(max_buffer_size));
-        const size_t bytes_sent_now = sendvp(socket_fd, tlv_buffer.data() + bytes_sent,
-                                             to_send, MSG_NOSIGNAL);
+        const size_t bytes_sent_now = sendvp(socket_fd, tlv_buffer.data() + bytes_sent, to_send, MSG_NOSIGNAL);
         if (bytes_sent_now == -1) {
             const std::string error_message = std::strerror(errno);
             LOG(INFO) << "Failed to send packet with error: " << error_message;
@@ -371,7 +300,7 @@ bool tinysockets::QueuedSocket::sendLtvPacket(ccoip::packetId_t packet_id, const
     return true;
 }
 
-std::optional<std::pair<std::unique_ptr<uint8_t[]>, std::span<uint8_t> > >
+std::optional<std::pair<std::unique_ptr<uint8_t[]>, std::span<uint8_t>>>
 tinysockets::QueuedSocket::pollNextPacketBuffer(const ccoip::packetId_t packet_id, const bool no_wait) const {
     if (!running) {
         return std::nullopt;
@@ -415,10 +344,10 @@ tinysockets::QueuedSocket::pollNextPacketBuffer(const ccoip::packetId_t packet_i
     }
 }
 
-std::optional<std::pair<std::unique_ptr<uint8_t[]>, std::span<uint8_t> > >
-tinysockets::QueuedSocket::pollNextMatchingPacketBuffer(const ccoip::packetId_t packet_id,
-                                                        const std::function<bool(const std::span<uint8_t> &)> &
-                                                        predicate, const bool no_wait) const {
+std::optional<std::pair<std::unique_ptr<uint8_t[]>, std::span<uint8_t>>>
+tinysockets::QueuedSocket::pollNextMatchingPacketBuffer(
+        const ccoip::packetId_t packet_id, const std::function<bool(const std::span<uint8_t> &)> &predicate,
+        const bool no_wait) const {
     if (!running) {
         return std::nullopt;
     }
