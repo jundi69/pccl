@@ -74,7 +74,7 @@ int main() {
     };
     
     pcclSharedState_t sstate{
-        .revision = 1, // must match the current step
+        .revision = 0,
         .count    = 1,
         .infos    = &tinfo
     };
@@ -110,7 +110,26 @@ int main() {
             continue;
         }
 
-        // D) Example ring operation => a small All-Reduce
+        // D) Synchronize shared state.
+        //  The shared state revision of new commers will be set to the popular shared state revision along with contents. 
+        // PCCL enforces that "revision" must increment by exactly 1, for each pcclSynchronizeSharedState call.
+        pcclSharedStateSyncInfo_t ssi{};
+        pcclResult_t sst = pcclSynchronizeSharedState(comm, &sstate, &ssi);
+        if (sst == pcclSuccess) {
+            std::cout << "[Peer] shared state revision now " << sstate.revision
+                      << ", sync => tx=" << ssi.tx_bytes
+                      << ", rx=" << ssi.rx_bytes << "\n";
+            // we can assert that we do not receive data beyond the initial transfer on join, where we have to obtain the popular state.
+            if (local_iter > 1) {
+                assert(ssi.rx_bytes == 0);
+            }
+        } else {
+            std::cerr << "[Peer] shared-state sync fail: " << sst
+                      << " at revision=" << sstate.revision << "\n";
+            break;
+        }
+
+        // E) Example ring operation => a small All-Reduce
         float local_data[4];
         for (int k = 0; k < 4; k++) {
             local_data[k] = float(local_iter * 10 + (k + 1)); // something unique each iteration
@@ -162,19 +181,6 @@ int main() {
 
         // Increment the shared state revision followed by subsequent sync.
         sstate.revision++;
-
-        // PCCL enforces that "revision" must increment by exactly 1, for each pcclSynchronizeSharedState call.
-        pcclSharedStateSyncInfo_t ssi{};
-        pcclResult_t sst = pcclSynchronizeSharedState(comm, &sstate, &ssi);
-        if (sst == pcclSuccess) {
-            std::cout << "[Peer] shared state revision now " << sstate.revision
-                      << ", sync => tx=" << ssi.tx_bytes
-                      << ", rx=" << ssi.rx_bytes << "\n";
-        } else {
-            std::cerr << "[Peer] shared-state sync fail: " << sst
-                      << " at revision=" << sstate.revision << "\n";
-            break;
-        }
 
         // F) Stop if we've done enough steps => i.e., if revision >= MAX_STEPS
         //    Each peer that sees we reached that step will break out the same iteration.
@@ -242,7 +248,7 @@ def main():
     )
     # We'll wrap that in a SharedState
     shared_state = pccl.SharedState([my_weights_info])
-    shared_state.revision = 0  # must match current step
+    shared_state.revision = 0
 
     # 4) Enter the training loop
     # We'll do up to MAX_STEPS. Each step => ring operation + shared-state sync
@@ -279,7 +285,20 @@ def main():
             local_iter += 1
             continue
 
-        # D) Example ring operation => a small All-Reduce
+        # D) Perform shared state synchronization
+        try:
+            sync_info = comm.sync_shared_state(shared_state)
+            print(f"[Peer] shared_revision now {shared_state.revision}, sync => "
+                  f"tx={sync_info.tx_bytes}, rx={sync_info.rx_bytes}")
+            if local_iter > 1:
+                # be pedantic about shared state drifts
+                assert sync_info.rx_bytes == 0, "Peer shared state drifted!"
+        except pccl.PCCLError as e:
+            print(f"[Peer] shared-state sync fail => {e} at revision={shared_state.revision}")
+            # break out => no sense continuing
+            break
+
+        # E) Example ring operation => a small All-Reduce
         local_data = np.array([local_iter * 10 + (k+1) for k in range(4)], dtype=np.float32)
         result_data = np.zeros_like(local_data)
 
@@ -321,19 +340,10 @@ def main():
             local_iter += 1
             continue
 
-        # E) increment the shared revision => sync
-        shared_state.revision += 1
+        # F) increment the shared revision => sync
+        shagred_state.revision += 1
 
-        try:
-            sync_info = comm.sync_shared_state(shared_state)
-            print(f"[Peer] shared_revision now {shared_state.revision}, sync => "
-                  f"tx={sync_info.tx_bytes}, rx={sync_info.rx_bytes}")
-        except pccl.PCCLError as e:
-            print(f"[Peer] shared-state sync fail => {e} at revision={shared_state.revision}")
-            # break out => no sense continuing
-            break
-
-        # F) Stop if we've done enough steps
+        # G) Stop if we've done enough steps
         if shared_state.revision >= MAX_STEPS:
             print(f"[Peer] Reached revision {shared_state.revision} => done.\n")
             break
