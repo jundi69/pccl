@@ -102,7 +102,7 @@ jobs:
         run: ctest --verbose --build-config ${{ matrix.build_type }} --output-on-failure
 
       - name: Compile Python wheel
-        run: cd ${{ github.workspace }}/python/framework && pip3 wheel --verbose -w dist .
+        run: pip3 wheel --verbose -w dist ${{ github.workspace }}/python/framework
 
       - name: Create Python virtual environment
         run: python -m venv ${{ github.workspace }}/venv
