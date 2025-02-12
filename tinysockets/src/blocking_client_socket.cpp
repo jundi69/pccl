@@ -154,7 +154,6 @@ bool tinysockets::BlockingIOSocket::isOpen() const {
     // set socket into non-blocking mode
     u_long mode = 1;
     if (ioctlsocket(socket_fd, FIONBIO, &mode) != NO_ERROR) {
-        LOG(ERR) << "Failed to set socket into non-blocking mode";
         return false;
     }
 
@@ -177,7 +176,6 @@ bool tinysockets::BlockingIOSocket::isOpen() const {
     // set socket back to blocking mode
     mode = 0;
     if (ioctlsocket(socket_fd, FIONBIO, &mode) != NO_ERROR) {
-        LOG(ERR) << "Failed to set socket back to blocking mode";
         return false;
     }
     return is_open;

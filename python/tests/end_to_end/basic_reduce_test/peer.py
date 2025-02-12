@@ -31,31 +31,33 @@ def main():
     communicator.connect(n_attempts=15)
     logging.info(f"(RANK={RANK}) Connected to the master node")
 
-    world_size: int = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
-
     n_performed_steps = 0
+    it = 0
+    world_size: int = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
     while n_performed_steps < STEPS:
-        if n_performed_steps > 0 or world_size == 1:
-            if world_size > 1:
-                communicator.optimize_topology()
-            logging.info(f"(RANK={RANK}, it={n_performed_steps}) update_topology()")
+        it += 1
+        if it > 1:
+            logging.info(f"(RANK={RANK}, it={it}) update_topology()")
             communicator.update_topology()
-        world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
+            world_size: int = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
+
+        if world_size > 1:
+           communicator.optimize_topology()
 
         if world_size < 2:
             sleep(1)
             continue
 
-        logging.info(f"(RANK={RANK}, it={n_performed_steps}) sync_shared_state()")
+        logging.info(f"(RANK={RANK}, it={it}) sync_shared_state()")
         info = communicator.sync_shared_state(shared_state)
         assert info is not None
-        if n_performed_steps > 1:
+        if it > 2:
             assert info.tx_bytes == 0 and info.rx_bytes == 0
 
         # Create gradients tensors
         grad: torch.Tensor = torch.rand(NUM_ELEMENTS, dtype=torch.float32)
         while True:
-            logging.info(f"(RANK={RANK}, it={n_performed_steps}) all_reduce_async()")
+            logging.info(f"(RANK={RANK}, it={it}) all_reduce_async()")
             handle = communicator.all_reduce_async(grad, weights,
                                                    op=ReduceOp.SUM,
                                                    quantization_options=QuantizationOptions(DataType.UINT8,
@@ -65,7 +67,7 @@ def main():
             assert is_success, f"All reduce failed with stats: {status}"
             assert info is not None
             logging.info(
-                f"(RANK={RANK}, it={n_performed_steps}) Reduce completed RX: {info.rx_bytes}, TX: {info.tx_bytes}")
+                f"(RANK={RANK}, it={it}) Reduce completed RX: {info.rx_bytes}, TX: {info.tx_bytes}")
             break
 
         shared_state.revision += 1

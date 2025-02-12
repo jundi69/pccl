@@ -49,9 +49,10 @@ int main() {
     const auto gradients = new float[n_elements];
     fill_uniform(gradients, n_elements);
 
-    PCCL_CHECK(pcclGetAttribute(communicator, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size));
     size_t i = 0;
-    while (true) {
+    size_t n_steps = 0;
+
+    while (n_steps < 10) {
         if (i > 0) {
             PCCL_CHECK(pcclUpdateTopology(communicator));
             PCCL_CHECK(pcclGetAttribute(communicator, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size));
@@ -96,6 +97,7 @@ int main() {
         }
         std::cout << std::endl;
         i++;
+        n_steps++;
     }
 
     PCCL_CHECK(pcclDestroyCommunicator(communicator));

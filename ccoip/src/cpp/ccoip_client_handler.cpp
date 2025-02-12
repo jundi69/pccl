@@ -142,6 +142,7 @@ bool ccoip::CCoIPClientHandler::connect() {
                     // we have an accept backlog of 1, so this is fine and intended.
                     LOG(WARN) << "Failed to run network benchmark with " << ccoip_sockaddr_to_str(client_address);
                 }
+                LOG(INFO) << "Network benchmark finished with client " << ccoip_sockaddr_to_str(client_address);
                 benchmark_complete_state.store(true);
             });
 
@@ -628,7 +629,9 @@ bool ccoip::CCoIPClientHandler::join() {
     benchmark_socket.join();
     master_socket.join();
     if (benchmark_thread_opt.has_value()) {
-        benchmark_thread_opt->join();
+        if (benchmark_thread_opt->joinable()) {
+            benchmark_thread_opt->join();
+        }
     }
     return true;
 }
