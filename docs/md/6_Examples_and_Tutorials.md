@@ -72,8 +72,9 @@ int main() {
         .device_type              = pcclDeviceCpu,
         .allow_content_inequality = false
     };
+    
     pcclSharedState_t sstate{
-        .revision = shared_revision, // must match the current step
+        .revision = 1, // must match the current step
         .count    = 1,
         .infos    = &tinfo
     };
@@ -166,19 +167,19 @@ int main() {
         pcclSharedStateSyncInfo_t ssi{};
         pcclResult_t sst = pcclSynchronizeSharedState(comm, &sstate, &ssi);
         if (sst == pcclSuccess) {
-            std::cout << "[Peer] shared_revision now " << shared_revision
+            std::cout << "[Peer] shared state revision now " << sstate.revision
                       << ", sync => tx=" << ssi.tx_bytes
                       << ", rx=" << ssi.rx_bytes << "\n";
         } else {
             std::cerr << "[Peer] shared-state sync fail: " << sst
-                      << " at revision=" << shared_revision << "\n";
+                      << " at revision=" << sstate.revision << "\n";
             break;
         }
 
-        // F) Stop if we've done enough steps => i.e., if shared_revision >= MAX_STEPS
+        // F) Stop if we've done enough steps => i.e., if revision >= MAX_STEPS
         //    Each peer that sees we reached that step will break out the same iteration.
-        if (shared_revision >= MAX_STEPS) {
-            std::cout << "[Peer] Reached revision " << shared_revision
+        if (sstate.revision >= MAX_STEPS) {
+            std::cout << "[Peer] Reached revision " << sstate.revision
                       << " => done.\n";
             break;
         }
@@ -227,7 +228,6 @@ def main():
     #   - a local iteration counter `local_iter` to skip update_topology on i=0
     #   - a shared_state 'revision' to keep all peers in step lock
     local_iter = 0
-    shared_revision = 0
 
     # 3) Prepare some dummy data to place in "shared state"
     #    Suppose in real usage these are model/optimizer states
@@ -242,7 +242,7 @@ def main():
     )
     # We'll wrap that in a SharedState
     shared_state = pccl.SharedState([my_weights_info])
-    shared_state.revision = shared_revision  # must match current step
+    shared_state.revision = 0  # must match current step
 
     # 4) Enter the training loop
     # We'll do up to MAX_STEPS. Each step => ring operation + shared-state sync
@@ -322,21 +322,20 @@ def main():
             continue
 
         # E) increment the shared revision => sync
-        shared_revision += 1
-        shared_state.revision = shared_revision
+        shared_state.revision += 1
 
         try:
             sync_info = comm.sync_shared_state(shared_state)
-            print(f"[Peer] shared_revision now {shared_revision}, sync => "
+            print(f"[Peer] shared_revision now {shared_state.revision}, sync => "
                   f"tx={sync_info.tx_bytes}, rx={sync_info.rx_bytes}")
         except pccl.PCCLError as e:
-            print(f"[Peer] shared-state sync fail => {e} at revision={shared_revision}")
+            print(f"[Peer] shared-state sync fail => {e} at revision={shared_state.revision}")
             # break out => no sense continuing
             break
 
         # F) Stop if we've done enough steps
-        if shared_revision >= MAX_STEPS:
-            print(f"[Peer] Reached revision {shared_revision} => done.\n")
+        if shared_state.revision >= MAX_STEPS:
+            print(f"[Peer] Reached revision {shared_state.revision} => done.\n")
             break
 
         local_iter += 1
