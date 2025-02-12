@@ -230,7 +230,7 @@ bool tinysockets::QueuedSocket::establishConnection() {
     if (socket_fd != 0) {
         return false;
     }
-    socket_fd = socket(AF_INET, SOCK_STREAM, 0);
+    socket_fd = create_socket(AF_INET, SOCK_STREAM, 0);
     if (socket_fd < 0) [[unlikely]] {
         LOG(ERR) << "Failed to create socket";
         return false;

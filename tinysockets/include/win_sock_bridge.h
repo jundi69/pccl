@@ -26,9 +26,24 @@
 
 typedef long long int ssize_t;
 
+static bool wsa_initialized = false;
+
 inline uint64_t net_u64_to_host(const uint64_t net_long)
 {
     return ntohll(net_long);
+}
+
+inline int create_socket(const int domain, const int type, const int protocol) {
+    if (!wsa_initialized) {
+        WSADATA wsa_data;
+        if (const int result = WSAStartup(MAKEWORD(2, 2), &wsa_data) != 0) {
+            printf("WSAStartup failed with error %d\n", result);
+            return -1;
+        }
+        wsa_initialized = true;
+    }
+    const SOCKET sock = socket(domain, type, protocol);
+    return static_cast<int>(sock);
 }
 
 inline int setsockoptvp(const int socket_fd, const int level, const int optname, const void *optval,

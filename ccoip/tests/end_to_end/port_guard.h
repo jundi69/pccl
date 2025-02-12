@@ -31,9 +31,8 @@ static void guard_port(int port) {
     static bool wsa_initialized = false;
     if (!wsa_initialized) {
         WSADATA wsaData;
-        int iResult = WSAStartup(MAKEWORD(2,2), &wsaData);
-        if (iResult != 0) {
-            fprintf(stderr, "WSAStartup failed: %d\n", iResult);
+        if (const int result = WSAStartup(MAKEWORD(2, 2), &wsaData); result != 0) {
+            fprintf(stderr, "WSAStartup failed: %d\n", result);
             exit(1);
         }
         wsa_initialized = true;

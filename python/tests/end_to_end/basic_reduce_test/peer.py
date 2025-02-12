@@ -6,7 +6,7 @@ from pccl import SharedState, TensorInfo, Communicator, Attribute, ReduceOp, Qua
     QuantizationAlgorithm
 
 HOST: str = '127.0.0.1:48148'
-STEPS: int = 1000
+STEPS: int = 100
 WEIGHT_N: int = 1024
 PEERS: int = 1
 NUM_ELEMENTS: int = 1024
@@ -65,7 +65,7 @@ def main():
             assert is_success, f"All reduce failed with stats: {status}"
             assert info is not None
             logging.info(
-                f"((RANK={RANK}, it={n_performed_steps}) Reduce completed RX: {info.rx_bytes}, TX: {info.tx_bytes}")
+                f"(RANK={RANK}, it={n_performed_steps}) Reduce completed RX: {info.rx_bytes}, TX: {info.tx_bytes}")
             break
 
         shared_state.revision += 1

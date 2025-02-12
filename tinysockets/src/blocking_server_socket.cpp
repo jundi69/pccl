@@ -4,18 +4,12 @@
 
 #include "tinysockets.hpp"
 
-tinysockets::BlockingIOServerSocket::BlockingIOServerSocket(const ccoip_socket_address_t &listen_address)
-    : listen_address(listen_address),
-      bump_port_on_failure(false),
-      socket_fd(0) {
-}
+tinysockets::BlockingIOServerSocket::BlockingIOServerSocket(const ccoip_socket_address_t &listen_address) :
+    listen_address(listen_address), bump_port_on_failure(false), socket_fd(0) {}
 
 tinysockets::BlockingIOServerSocket::BlockingIOServerSocket(const ccoip_inet_address_t &inet_address,
-                                                            const uint16_t above_port)
-    : listen_address({inet_address, above_port}),
-      bump_port_on_failure(true),
-      socket_fd(0) {
-}
+                                                            const uint16_t above_port) :
+    listen_address({inet_address, above_port}), bump_port_on_failure(true), socket_fd(0) {}
 
 tinysockets::BlockingIOServerSocket::~BlockingIOServerSocket() {
     if (running) {
@@ -32,8 +26,7 @@ static bool configure_socket_fd(const int socket_fd) {
     constexpr int opt = 1;
 
     // enable TCP_NODELAY
-    if (setsockoptvp(socket_fd, IPPROTO_TCP, TCP_NODELAY, &opt, sizeof(opt)) < 0) [[
-        unlikely]] {
+    if (setsockoptvp(socket_fd, IPPROTO_TCP, TCP_NODELAY, &opt, sizeof(opt)) < 0) [[unlikely]] {
         LOG(ERR) << "Failed to set TCP_NODELAY option on server socket";
         closesocket(socket_fd);
         return false;
@@ -42,8 +35,7 @@ static bool configure_socket_fd(const int socket_fd) {
     // enable SO_REUSEADDR if available
 #ifndef WIN32
 #ifdef SO_REUSEADDR
-    if (setsockoptvp(socket_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) [[
-        unlikely]] {
+    if (setsockoptvp(socket_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) [[unlikely]] {
         LOG(ERR) << "Failed to set SO_REUSEADDR option on server socket";
         closesocket(socket_fd);
         return false;
@@ -71,7 +63,7 @@ bool tinysockets::BlockingIOServerSocket::listen() {
         return false;
     }
 
-    socket_fd = socket(AF_INET, SOCK_STREAM, 0);
+    socket_fd = create_socket(AF_INET, SOCK_STREAM, 0);
     if (socket_fd == -1) {
         return false;
     }
@@ -121,8 +113,8 @@ bool tinysockets::BlockingIOServerSocket::listen() {
         const int listen_result = ::listen(socket_fd, SOMAXCONN);
         failure = listen_result != 0;
         if (failure) {
-            LOG(ERR) << "Failed to listen on port " << listen_address.port << " with error: " << std::strerror(errno) <<
-                    " (" << errno << ")";
+            LOG(ERR) << "Failed to listen on port " << listen_address.port << " with error: " << std::strerror(errno)
+                     << " (" << errno << ")";
         }
     } while (bump_port_on_failure && failure);
 
@@ -139,8 +131,8 @@ bool tinysockets::BlockingIOServerSocket::runAsync() {
         while (running.load()) {
             sockaddr_in client_address{};
             socklen_t client_address_len = sizeof(client_address);
-            const int client_socket = accept(socket_fd, reinterpret_cast<sockaddr *>(&client_address),
-                                             &client_address_len);
+            const int client_socket =
+                    accept(socket_fd, reinterpret_cast<sockaddr *>(&client_address), &client_address_len);
             if (client_socket == 0 || client_socket == -1) {
                 if (!running.load() || socket_fd == 0) {
                     break; // Interrupted
@@ -165,9 +157,7 @@ bool tinysockets::BlockingIOServerSocket::interrupt() {
     return true;
 }
 
-void tinysockets::BlockingIOServerSocket::join() {
-    server_thread.join();
-}
+void tinysockets::BlockingIOServerSocket::join() { server_thread.join(); }
 
 void tinysockets::BlockingIOServerSocket::setJoinCallback(const BlockingServerSocketJoinCallback &callback) {
     join_callback = callback;
