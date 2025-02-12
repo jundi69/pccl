@@ -470,6 +470,8 @@ PCCL_CHECK(pcclGetAttribute(communicator, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &wo
 
 ```c++
 int world_size{};
+PCCL_CHECK(pcclGetAttribute(communicator, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size));
+
 for (uint64_t i = 0;;i++) {
 
     if (i > 0) {
@@ -663,6 +665,9 @@ int main() {
         .infos    = &tinfo
     };
 
+    int world_size{};
+    PCCL_CHECK(pcclGetAttribute(comm, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size));
+
     // 5) Enter the training loop
     // We'll do up to MAX_STEPS. Each step => we do some ring operation and a shared-state sync.
     while (true) {
@@ -672,11 +677,9 @@ int main() {
                 std::cout << "[Peer] UpdateTopology failed => retrying...\n";
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
             }
+            // get up-to-date world size
+            PCCL_CHECK(pcclGetAttribute(comm, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size));
         }
-
-        // B) get the updated world size (always after updateTopology)
-        int world_size{};
-        PCCL_CHECK(pcclGetAttribute(comm, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size));
 
         // C) If multiple peers are present => optionally optimize ring
         if (world_size > 1) {
