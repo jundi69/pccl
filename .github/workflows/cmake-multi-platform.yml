@@ -110,8 +110,13 @@ jobs:
           set CMAKE_GENERATOR=${{ matrix.generator }}
           cd ${{ github.workspace }}/python/framework && pip3 wheel --verbose -w dist .
 
-      - name: Create Python virtual environment
+      - name: Create Python virtual environment (Unix)
+        if: runner.os != 'Windows'
         run: python3 -m venv ${{ github.workspace }}/venv
+      
+      - name: Create Python virtual environment (Windows)
+        if: runner.os == 'Windows'
+        run: python -m venv ${{ github.workspace }}/venv
 
       - name: Activate virtual environment (Unix)
         if: runner.os != 'Windows'
@@ -128,7 +133,7 @@ jobs:
 
       - name: Install Python wheel Unix
         if: runner.os != 'Windows'
-        run: pip install "${{ github.workspace }}/python/framework/dist/*.whl"
+        run: pip install "${{ github.workspace }}/python/framework/dist/pccl-0.1.0-cp312-cp312-win_amd64.whl"
 
       - name: Install Unit Test dependencies
         run: pip install -r ${{ github.workspace }}/python/tests/unit_tests/requirements.txt
