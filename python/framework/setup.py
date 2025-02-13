@@ -54,6 +54,8 @@ class CMakeBuildExecutor(build_ext):
         # Get C and CXX compiler
         c_compiler = os.environ.get('CC', None)
         cxx_compiler = os.environ.get('CXX', None)
+        make_program = os.environ.get('MAKE_PROGRAM', None)
+        generator = os.environ.get('CMAKE_GENERATOR', None)
 
         # Prepare cmake arguments
         cmake_args = [
@@ -63,6 +65,12 @@ class CMakeBuildExecutor(build_ext):
             cmake_args += [f'-DCMAKE_C_COMPILER={c_compiler}']
         if cxx_compiler is not None:
             cmake_args += [f'-DCMAKE_CXX_COMPILER={cxx_compiler}']
+
+        if make_program is not None:
+            cmake_args += [f'-DCMAKE_MAKE_PROGRAM={make_program}']
+
+        if generator is not None:
+            cmake_args += [f'-G', generator]
 
         # Probe configure to detect the cmake generator
         print("Probe configure to detect the cmake generator...")

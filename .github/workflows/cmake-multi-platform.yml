@@ -101,8 +101,14 @@ jobs:
         working-directory: ${{ steps.strings-unix.outputs.build-output-dir || steps.strings-windows.outputs.build-output-dir }}
         run: ctest --verbose --build-config ${{ matrix.build_type }} --output-on-failure
 
-      - name: Compile Python wheel
-        run: cd ${{ github.workspace }}/python/framework && pip3 wheel --verbose -w dist .
+      - name: Compile Python wheel (Windows)
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat"
+          set MAKE_PROGRAM=${{ matrix.make_program }}
+          set CMAKE_GENERATOR=${{ matrix.generator }}
+          cd ${{ github.workspace }}/python/framework && pip3 wheel --verbose -w dist .
 
       - name: Create Python virtual environment
         run: python -m venv ${{ github.workspace }}/venv
