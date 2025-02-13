@@ -135,13 +135,13 @@ jobs:
         if: runner.os == 'Windows'
         shell: powershell
         run: |
-          python -m pip install python\framework\dist\pccl-win-*.whl
+          python -m pip install python\framework\dist\pccl-*.whl
 
       - name: Install wheel (Unix)
         if: runner.os != 'Windows'
         shell: bash
         run: |
-          python -m pip install ./python/framework/dist/pccl-linux-*.whl
+          python -m pip install ./python/framework/dist/pccl-*.whl
 
       - name: Install Unit Test dependencies
         run: pip install -r ${{ github.workspace }}/python/tests/unit_tests/requirements.txt
