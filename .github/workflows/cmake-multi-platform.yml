@@ -132,10 +132,14 @@ jobs:
         run: echo "PATH=%GITHUB_WORKSPACE%\\venv\\Scripts;%PATH%" >> %GITHUB_ENV%
       
       - name: Install wheel (Windows)
-        if: runner.os == 'Windows'
-        shell: powershell
+        shell: pwsh
         run: |
-          python -m pip install python\framework\dist\pccl-*.whl
+          $wheels = Get-ChildItem "$env:GITHUB_WORKSPACE\python\framework\dist\pccl-*.whl"
+          if (-Not $wheels) {
+            Write-Error "No .whl files found!"
+            exit 1
+          }
+          pip install $wheels
 
       - name: Install wheel (Unix)
         if: runner.os != 'Windows'
