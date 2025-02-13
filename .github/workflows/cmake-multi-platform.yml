@@ -89,7 +89,7 @@ jobs:
         shell: cmd
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat"
-          cmake -B ${{steps.strings-windows.outputs.build-output-dir }} -G "${{ matrix.generator }} "-DCMAKE_MAKE_PROGRAM=${{ matrix.make_program }}" "-DPCCL_BUILD_CUDA_SUPPORT=${{ matrix.pccl_build_cuda_support }}" -S "${{ github.workspace }}"
+          cmake -B ${{steps.strings-windows.outputs.build-output-dir }} -G "${{ matrix.generator }} "-DCMAKE_MAKE_PROGRAM="${{ matrix.make_program }}" "-DPCCL_BUILD_CUDA_SUPPORT=${{ matrix.pccl_build_cuda_support }}" -S "${{ github.workspace }}"
 
       - name: Build (Unix)
         if: runner.os != 'Windows'
