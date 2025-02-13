@@ -132,6 +132,7 @@ jobs:
         run: echo "PATH=%GITHUB_WORKSPACE%\\venv\\Scripts;%PATH%" >> %GITHUB_ENV%
       
       - name: Install wheel (Windows)
+        if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $wheels = Get-ChildItem "$env:GITHUB_WORKSPACE\python\framework\dist\pccl-*.whl"
