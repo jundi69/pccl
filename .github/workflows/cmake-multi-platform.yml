@@ -27,6 +27,7 @@ jobs:
             cpp_compiler: g++
             generator: Ninja
             build_type: Release
+            pccl_build_cuda_support: OFF
 
           - runs-on: [ self-hosted, Linux, cuda ]
             os: ubuntu-latest
@@ -34,6 +35,7 @@ jobs:
             cpp_compiler: g++
             generator: Ninja
             build_type: Release
+            pccl_build_cuda_support: ON
 
           # Windows configurations using GitHub-hosted runners
           - runs-on: [ self-hosted, Windows, cpu ]
@@ -41,12 +43,14 @@ jobs:
             make_program: C:/Program Files/NinjaBuild/bin/ninja.exe
             generator: Ninja
             build_type: Release
+            pccl_build_cuda_support: OFF
 
           - runs-on: [ self-hosted, Windows, cuda ]
             os: windows-latest
             make_program: C:/Program Files/NinjaBuild/bin/ninja.exe
             generator: Ninja
             build_type: Release
+            pccl_build_cuda_support: ON
 
     steps:
       - uses: actions/checkout@v4
@@ -77,6 +81,7 @@ jobs:
           "-DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }}"
           "-DCMAKE_C_COMPILER=${{ matrix.c_compiler }}"
           "-DCMAKE_BUILD_TYPE=${{ matrix.build_type }}"
+          "-DPCCL_BUILD_CUDA_SUPPORT=${{ matrix.pccl_build_cuda_support }}"
           -S "${{ github.workspace }}"
       
       - name: Configure CMake (Windows)
@@ -108,11 +113,12 @@ jobs:
           call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat"
           set MAKE_PROGRAM=${{ matrix.make_program }}
           set CMAKE_GENERATOR=${{ matrix.generator }}
+          set PCCL_BUILD_CUDA_SUPPORT=${{ matrix.pccl_build_cuda_support }}
           cd ${{ github.workspace }}/python/framework && pip3 wheel --verbose -w dist .
       
       - name: Compile Python wheel (Unix)
         if: runner.os != 'Windows'
-        run: cd ${{ github.workspace }}/python/framework && CMAKE_GENERATOR=${{ matrix.generator }} pip3 wheel --verbose -w dist .
+        run: cd ${{ github.workspace }}/python/framework && CMAKE_GENERATOR=${{ matrix.generator }} PCCL_BUILD_CUDA_SUPPORT=${{ matrix.pccl_build_cuda_support }} pip3 wheel --verbose -w dist .
 
       - name: Create Python virtual environment (Unix)
         if: runner.os != 'Windows'
