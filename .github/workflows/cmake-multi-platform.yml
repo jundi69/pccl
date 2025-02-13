@@ -109,6 +109,10 @@ jobs:
           set MAKE_PROGRAM=${{ matrix.make_program }}
           set CMAKE_GENERATOR=${{ matrix.generator }}
           cd ${{ github.workspace }}/python/framework && pip3 wheel --verbose -w dist .
+      
+      - name: Compile Python wheel (Unix)
+        if: runner.os != 'Windows'
+        run: cd ${{ github.workspace }}/python/framework && CMAKE_GENERATOR=${{ matrix.generator }} pip3 wheel --verbose -w dist .
 
       - name: Create Python virtual environment (Unix)
         if: runner.os != 'Windows'
@@ -126,14 +130,8 @@ jobs:
         if: runner.os == 'Windows'
         shell: cmd
         run: echo "PATH=%GITHUB_WORKSPACE%\\venv\\Scripts;%PATH%" >> %GITHUB_ENV%
-
-      - name: Install Python wheel Win32
-        if: runner.os == 'Windows'
-        run: pip install "${{ github.workspace }}\python\framework\dist\pccl-0.1.0-cp312-cp312-win_amd64.whl"
-
-      - name: Install Python wheel Unix
-        if: runner.os != 'Windows'
-        run: pip install "${{ github.workspace }}/python/framework/dist/pccl-0.1.0-cp312-cp312-win_amd64.whl"
+      - name: Install Python wheel
+        run: pip install "${{ github.workspace }}/python/framework/dist/*.whl"
 
       - name: Install Unit Test dependencies
         run: pip install -r ${{ github.workspace }}/python/tests/unit_tests/requirements.txt
