@@ -107,13 +107,14 @@ class CMakeBuildExecutor(build_ext):
 
         # For multi-config generators like Visual Studio
         multi_config_generator_args = [
-            f'-DCMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE={output_dir}',
-            f'-DCMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG={output_dir}',
+            f'-DCMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE={os.path.abspath(output_dir)}',
+            f'-DCMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG={os.path.abspath(output_dir)}',
         ]
 
         # For non-multi-config generators like Unix Makefiles
         single_config_generator_args = [
-            f'-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={output_dir}',
+            f'-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={os.path.abspath(output_dir)}',
+            f"-DCMAKE_RUNTIME_OUTPUT_DIRECTORY={os.path.abspath(output_dir)}",
         ]
 
         # Get the cmake generator
