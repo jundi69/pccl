@@ -130,8 +130,9 @@ jobs:
         if: runner.os == 'Windows'
         shell: cmd
         run: echo "PATH=%GITHUB_WORKSPACE%\\venv\\Scripts;%PATH%" >> %GITHUB_ENV%
+      
       - name: Install Python wheel
-        run: pip install "${{ github.workspace }}/python/framework/dist/pccl-*.whl"
+        run: pip install ${{ github.workspace }}/python/framework/dist/pccl-*.whl
 
       - name: Install Unit Test dependencies
         run: pip install -r ${{ github.workspace }}/python/tests/unit_tests/requirements.txt
