@@ -111,7 +111,7 @@ jobs:
           cd ${{ github.workspace }}/python/framework && pip3 wheel --verbose -w dist .
 
       - name: Create Python virtual environment
-        run: python -m venv ${{ github.workspace }}/venv
+        run: python3 -m venv ${{ github.workspace }}/venv
 
       - name: Activate virtual environment (Unix)
         if: runner.os != 'Windows'
