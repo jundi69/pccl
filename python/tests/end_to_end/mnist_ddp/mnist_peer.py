@@ -54,7 +54,8 @@ test_loader = DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=Fa
 num_threads = os.getenv('USE_TORCH_NUM_THREADS', None)
 if num_threads is not None:
     torch.set_num_threads(int(num_threads))
-
+else:
+    torch.set_num_threads(1)
 
 # Define a simple neural network
 class NeuralNet(nn.Module):
@@ -263,7 +264,7 @@ def main():
                 break
 
             # print hash of the gradients tensor content
-            log_debug(f"(RANK={RANK}, it={it}) grads hash: {compute_crc32(grads)}")
+            # log_debug(f"(RANK={RANK}, it={it}) grads hash: {compute_crc32(grads)}")
 
             # scatter gradients back to model parameters
             offset = 0
