@@ -1,5 +1,6 @@
 import os
 import subprocess
+import pccl
 import sys
 import time
 import unittest
@@ -31,7 +32,7 @@ def launch_py_process(
         env=env
     )
 
-@pytest.mark.parametrize("use_cuda", [False, True])
+@pytest.mark.parametrize("use_cuda", [False, True] if pccl.cuda.is_available() else [False])
 def test_mnist_ddp_world_size_2(use_cuda: bool):
     peer_script_path = os.path.join(os.path.dirname(__file__), 'mnist_peer.py')
     master_script_path = os.path.join(os.path.dirname(__file__), 'mnist_master.py')
@@ -56,7 +57,7 @@ def test_mnist_ddp_world_size_2(use_cuda: bool):
     master_process.wait()
 
 
-@pytest.mark.parametrize("use_cuda", [False, True])
+@pytest.mark.parametrize("use_cuda", [False, True] if pccl.cuda.is_available() else [False])
 def test_mnist_ddp_world_size_3(use_cuda: bool):
     peer_script_path = os.path.join(os.path.dirname(__file__), 'mnist_peer.py')
     master_script_path = os.path.join(os.path.dirname(__file__), 'mnist_master.py')
@@ -81,7 +82,7 @@ def test_mnist_ddp_world_size_3(use_cuda: bool):
     master_process.wait()
 
 
-@pytest.mark.parametrize("use_cuda", [True])
+@pytest.mark.parametrize("use_cuda", [False, True] if pccl.cuda.is_available() else [False])
 def test_mnist_ddp_world_size_2_plus_1_late_joiner(use_cuda: bool):
     peer_script_path = os.path.join(os.path.dirname(__file__), 'mnist_peer.py')
     master_script_path = os.path.join(os.path.dirname(__file__), 'mnist_master.py')
@@ -115,7 +116,7 @@ def test_mnist_ddp_world_size_2_plus_1_late_joiner(use_cuda: bool):
     master_process.wait()
 
 
-@pytest.mark.parametrize("use_cuda", [False, True])
+@pytest.mark.parametrize("use_cuda", [False, True] if pccl.cuda.is_available() else [False])
 @unittest.skip("Skipping test_mnist_ddp_world_size_4")
 def test_mnist_ddp_world_size_4(use_cuda: bool):
     peer_script_path = os.path.join(os.path.dirname(__file__), 'mnist_peer.py')
@@ -140,7 +141,7 @@ def test_mnist_ddp_world_size_4(use_cuda: bool):
     master_process.kill()
     master_process.wait()
 
-@pytest.mark.parametrize("use_cuda", [False, True])
+@pytest.mark.parametrize("use_cuda", [False, True] if pccl.cuda.is_available() else [False])
 @unittest.skip("Skipping test_mnist_ddp_world_size_16")
 def test_mnist_ddp_world_size_16(use_cuda: bool):
     peer_script_path = os.path.join(os.path.dirname(__file__), 'mnist_peer.py')

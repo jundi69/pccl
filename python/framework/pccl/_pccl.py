@@ -1,11 +1,11 @@
-from typing import Union, Optional, Tuple
+from typing import Union, Optional, Tuple, List, Dict
 import time
 from ipaddress import ip_address, IPv4Address, IPv6Address
 from enum import Enum
 from pccl._loader import load_native_module
 import logging
 import importlib
-
+import pccl._cuda
 
 class ModuleDummy:
     def __init__(self, name: str):
@@ -78,6 +78,17 @@ class PCCLError(Exception):
 # Init PCCL
 PCCLError.check(C.pcclInit(), "pcclInit")
 
+# Get PCCL build info
+
+def __get_build_info() -> Dict[str, any]:
+    build_info = ffi.new('pcclBuildInfo_t*')
+    PCCLError.check(C.pcclGetBuildInfo(build_info), "pcclGetBuildInfo")
+    return {
+        'has_cuda_support': build_info.has_cuda_support
+    }
+
+_build_info = __get_build_info()
+pccl._cuda.is_cuda_available = _build_info['has_cuda_support']
 
 class ReduceOp(Enum):
     """PCCL reduction operations."""

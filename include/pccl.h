@@ -157,6 +157,14 @@ typedef struct pcclSharedStateSyncInfo_t {
 
 typedef struct pcclMasterInstanceState_t pcclMasterInstance_t;
 
+
+typedef struct pcclBuildInfo_t {
+    /**
+     * Whether this pccl build was compiled with CUDA support
+     */
+    bool has_cuda_support;
+} pcclBuildInfo_t;
+
 #define PCCL_NULLABLE /* nothing */
 
 /**
@@ -361,6 +369,13 @@ PCCL_EXPORT pcclResult_t pcclMasterAwaitTermination(pcclMasterInstance_t *master
  * @return @code pcclSuccess@endcode if the master node was destroyed successfully.
  */
 PCCL_EXPORT pcclResult_t pcclDestroyMaster(pcclMasterInstance_t *master_instance);
+
+/**
+ * Obtains build info of this pccl build
+ * @param info output where the build information will be written to
+ * @return @code pcclSuccess@endcode
+ */
+PCCL_EXPORT pcclResult_t pcclGetBuildInfo(pcclBuildInfo_t *info);
 
 #ifdef __cplusplus
 }

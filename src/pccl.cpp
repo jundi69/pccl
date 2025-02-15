@@ -425,3 +425,9 @@ pcclResult_t pcclDestroyMaster(pcclMasterInstance_t *master_instance) {
     delete master_instance;
     return pcclSuccess;
 }
+
+pcclResult_t pcclGetBuildInfo(pcclBuildInfo_t *info) {
+    PCCL_VALIDATE(info != nullptr, pcclInvalidArgument);
+    info->has_cuda_support = PCCL_HAS_CUDA_SUPPORT;
+    return pcclSuccess;
+}
