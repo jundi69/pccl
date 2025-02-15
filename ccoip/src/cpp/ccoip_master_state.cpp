@@ -124,7 +124,7 @@ bool ccoip::CCoIPMasterState::isClientRegistered(const ccoip_socket_address_t &c
     return client_uuids.contains(internal_address);
 }
 
-bool ccoip::CCoIPMasterState::voteEstablishP2PConnections(const ccoip_uuid_t &peer_uuid, bool accept_new_peers) {
+bool ccoip::CCoIPMasterState::voteEstablishP2PConnections(const ccoip_uuid_t &peer_uuid, const bool accept_new_peers) {
     const auto info_opt = getClientInfo(peer_uuid);
     if (!info_opt) {
         LOG(WARN) << "Cannot vote to accept new peers for unregistered client " << uuid_to_string(peer_uuid);
@@ -439,15 +439,26 @@ bool ccoip::CCoIPMasterState::markP2PConnectionsEstablished(const ccoip_uuid_t &
     return true;
 }
 
-bool ccoip::CCoIPMasterState::transitionToP2PConnectionsEstablishedPhase(const bool any_failed) {
+bool ccoip::CCoIPMasterState::transitionToP2PConnectionsEstablishedPhase(const bool failure) {
     for (auto &[_, info]: client_info) {
         if (info.connection_phase == PEER_REGISTERED && info.connection_state == IDLE) {
             // ignore clients that have not made the cut for the current peer acceptance phase
             continue;
         }
-        if (any_failed) {
+        if (failure) {
             if (info.connection_state == WAITING_FOR_OTHER_PEERS) {
                 info.connection_state = CONNECTING_TO_PEERS_FAILED;
+
+                // we still accept the new peer into the run despite the fact the p2p connection establishment
+                // phase is considered a failure and ought to be re-tried by the clients.
+                // However, in order to do so, we must accept the client.
+                // It will still be stuck in the CONNECTING_TO_PEERS_FAILED state though (just like all other clients),
+                // so no "damage" can be done from this client caused by this state transition.
+                // It will be stuck in this state until it successfully establishes all p2p connections needed for operation.
+                if (info.connection_phase == PEER_REGISTERED) {
+                    info.connection_phase = PEER_ACCEPTED; // update connection phase to PEER_ACCEPTED
+                    onPeerAccepted(info);
+                }
             } else if (info.connection_state != CONNECTING_TO_PEERS_FAILED) {
                 LOG(WARN) << "Client " << ccoip_sockaddr_to_str(info.socket_address) << " in state "
                           << info.connection_state
@@ -693,6 +704,27 @@ bool ccoip::CCoIPMasterState::isCollectiveCommsOperationAborted(const uint32_t p
         return false;
     }
     return tag_it->second;
+}
+
+bool ccoip::CCoIPMasterState::isCollectiveOperationRunning(const uint32_t peer_group, const uint64_t tag) const {
+    // find any peer
+    for (const auto &[_, info]: client_info) {
+        if (info.peer_group != peer_group) {
+            continue;
+        }
+
+        const auto tag_it = info.collective_coms_states.find(tag);
+        if (tag_it == info.collective_coms_states.end()) {
+            continue;
+        }
+
+        // if one peer of the peer group is in the running state, we know the operation is still running.
+        // only if all have transitioned out of this state, are we ready to conclude the collective comms op
+        if (tag_it->second == PERFORM_COLLECTIVE_COMMS) {
+            return true;
+        }
+    }
+    return false;
 }
 
 bool ccoip::CCoIPMasterState::syncSharedStateConsensus(const uint32_t peer_group) {
@@ -1018,7 +1050,11 @@ bool ccoip::CCoIPMasterState::checkMaskSharedStateMismatches(const uint32_t peer
                       << peer_group;
         }
 
-        SharedStateMismatchStatus status = SUCCESSFUL_MATCH;
+        SharedStateMismatchStatus status = shared_state_statuses[peer_group][uuid];
+        if (status != SUCCESSFUL_MATCH) {
+            continue;
+        }
+
         for (size_t i = 0; i < mask_entries.size(); i++) {
             const auto &mask_entry = mask_entries[i];
             const auto &entry = entries[i];
@@ -1265,16 +1301,16 @@ std::vector<std::string> ccoip::CCoIPMasterState::getSharedStateKeys(const uint3
 }
 
 std::vector<uint64_t> ccoip::CCoIPMasterState::getOngoingCollectiveComsOpTags(const uint32_t peer_group) {
-    std::vector<uint64_t> tags{};
+    std::unordered_set<uint64_t> tags{};
     for (const auto &[_, info]: client_info) {
         if (info.peer_group != peer_group) {
             continue;
         }
         for (const auto &[tag, _]: info.collective_coms_states) {
-            tags.push_back(tag);
+            tags.insert(tag);
         }
     }
-    return tags;
+    return std::vector(tags.begin(), tags.end());
 }
 
 bool ccoip::CCoIPMasterState::performTopologyOptimization(const bool moonshot, std::vector<ccoip_uuid_t> &new_topology,
@@ -1476,8 +1512,20 @@ std::optional<std::vector<ccoip_uuid_t>> ccoip::CCoIPMasterState::buildReachable
     return std::nullopt;
 }
 
-std::vector<ccoip_uuid_t> ccoip::CCoIPMasterState::getRingTopology() {
+static bool isTopologyDirty(const std::vector<ccoip_uuid_t>&ring_topology, const std::unordered_map<ccoip_uuid_t, ccoip::ClientInfo> &client_info) {
     if (ring_topology.size() != client_info.size()) {
+        return true;
+    }
+    for (const auto &peer_uuid: ring_topology) {
+        if (!client_info.contains(peer_uuid)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+std::vector<ccoip_uuid_t> ccoip::CCoIPMasterState::getRingTopology() {
+    if (isTopologyDirty(ring_topology, client_info)) {
         const auto new_topology = buildBasicRingTopology();
         setRingTopology(new_topology, false);
     }

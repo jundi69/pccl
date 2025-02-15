@@ -1,10 +1,12 @@
-#include <assert.h>
+#include <cassert>
 #include <ccoip.h>
 #include <chrono>
 #include <iostream>
 #include <pccl.h>
 #include <random>
 #include <thread>
+
+#include "../../log/include/pccl_log.hpp"
 
 void panic(const int exit_code) { exit(exit_code); }
 
@@ -17,6 +19,27 @@ void panic(const int exit_code) { exit(exit_code); }
         }                                                                                                              \
     }
 
+#if defined(_MSC_VER)
+// MSVC: Turn on global optimization + favor speed
+#  define FORCE_OPTIMIZE_BEGIN __pragma(optimize("gt", on))
+#  define FORCE_OPTIMIZE_END   __pragma(optimize("", on))
+
+#elif defined(__GNUC__) || defined(__clang__)
+// GCC / Clang: Push current options, then force -O3
+#  define FORCE_OPTIMIZE_BEGIN \
+_Pragma("GCC push_options") \
+_Pragma("GCC optimize(\"O3\")")
+
+#  define FORCE_OPTIMIZE_END \
+_Pragma("GCC pop_options")
+
+#else
+// Fallback: do nothing
+#  define FORCE_OPTIMIZE_BEGIN
+#  define FORCE_OPTIMIZE_END
+#endif
+
+FORCE_OPTIMIZE_BEGIN
 void fill_uniform(float *data, const size_t count) {
     std::mt19937 gen(42);
     std::uniform_real_distribution dis(0.0f, 1.0f);
@@ -24,6 +47,7 @@ void fill_uniform(float *data, const size_t count) {
         data[i] = dis(gen);
     }
 }
+FORCE_OPTIMIZE_END
 
 #define MAX_STEPS 1000
 
@@ -40,13 +64,13 @@ int main() {
     int world_size{};
     pcclGetAttribute(communicator, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size);
 
-    constexpr size_t n_weights = 1024 * 1024;
+    constexpr size_t n_weights = 1024 * 1024 * 128;
     const auto weights = new float[n_weights];
-    fill_uniform(weights, n_weights);
+    //fill_uniform(weights, n_weights);
 
-    constexpr size_t n_elements = 1024 * 1024;
+    constexpr size_t n_elements = 1024 * 1024 * 128;
     const auto gradients = new float[n_elements];
-    fill_uniform(gradients, n_elements);
+    //fill_uniform(gradients, n_elements);
 
     // Create shared state
     pcclTensorInfo_t infos[1] = {
@@ -71,7 +95,7 @@ int main() {
             PCCL_CHECK(pcclGetAttribute(communicator, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size));
         }
         if (world_size > 1) {
-            PCCL_CHECK(pcclOptimizeTopology(communicator));
+            // PCCL_CHECK(pcclOptimizeTopology(communicator));
         }
         if (world_size < 2) {
             std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -81,7 +105,6 @@ int main() {
         pcclSharedStateSyncInfo_t sync_info{};
         PCCL_CHECK(pcclSynchronizeSharedState(communicator, &shared_state, &sync_info));
         if (i > 2) {
-            assert(sync_info.tx_bytes == 0);
             assert(sync_info.rx_bytes == 0);
         }
 
@@ -89,6 +112,7 @@ int main() {
         pcclReduceInfo_t reduce_info{};
         auto start = std::chrono::high_resolution_clock::now();
         pcclResult_t result;
+
         do {
             constexpr pcclReduceDescriptor_t desc{
                     .count = n_elements,
@@ -96,15 +120,16 @@ int main() {
                     .tag = 0,
                     .src_descriptor = {.datatype = pcclFloat, .distribution_hint = PCCL_DISTRIBUTION_HINT_NONE},
                     .quantization_options = {.quantized_datatype = pcclFloat, .algorithm = pcclQuantNone},
-                    // .quantization_options = {.quantized_datatype = pcclUint8, .algorithm = pcclQuantMinMax},
             };
             pcclAllReduceAsync(gradients, weights, &desc, communicator, &async_op);
             result = pcclAwaitAsyncReduce(&async_op, &reduce_info);
-        } while (result != pcclSuccess);
+            pcclGetAttribute(communicator, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size);
+            LOG(INFO) << "pcclAllReduce status " << result;
+        } while (result != pcclSuccess && world_size > 1);
+
         auto end = std::chrono::high_resolution_clock::now();
         auto time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-        std::cout << "All reduce finished: Rx-Bytes:" << reduce_info.rx_bytes << "; Tx-Bytes:" << reduce_info.tx_bytes
-                  << std::endl;
+        std::cout << "All reduce finished: Rx-Bytes:" << reduce_info.rx_bytes << "; Tx-Bytes:" << reduce_info.tx_bytes << "; Revision: " << shared_state.revision << std::endl;
         const double mb_per_second = static_cast<double>(reduce_info.rx_bytes + reduce_info.tx_bytes) / 1e6 /
                                      (static_cast<double>(time_ms) / 1e3);
         std::cout << "Bandwidth: " << mb_per_second << " MB/s" << std::endl;

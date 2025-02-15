@@ -220,7 +220,7 @@ namespace tinysockets {
         void maximizeReceiveBuffer() const;
 
         /// Receives n bytes from the socket and writes them into dst
-        [[nodiscard]] ssize_t receiveRawData(std::span<std::byte> &dst, size_t n_bytes) const;
+        [[nodiscard]] ssize_t receiveRawData(std::span<std::byte> &dst, size_t n_bytes);
 
     private:
         // Packet decoding / encoding functions

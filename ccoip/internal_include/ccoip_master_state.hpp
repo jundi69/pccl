@@ -465,7 +465,7 @@ namespace ccoip {
         /// WAITING_FOR_OTHER_PEERS@endcode state, they will be transitioned to the @code
         /// CONNECTING_TO_PEERS_FAILED@endcode state. Otherwise, all clients are expected to be in the @code
         /// CONNECTING_TO_PEERS_FAILED@endcode state.
-        [[nodiscard]] bool transitionToP2PConnectionsEstablishedPhase(bool any_failed);
+        [[nodiscard]] bool transitionToP2PConnectionsEstablishedPhase(bool failure);
 
         /// Transition to the shared state distribution phase
         /// Triggered after all peers of a peer group have voted to synchronize shared state
@@ -525,6 +525,9 @@ namespace ccoip {
         /// Returns true if the specified collective communications operation with the given tag for the given peer
         /// group has been aborted.
         [[nodiscard]] bool isCollectiveCommsOperationAborted(uint32_t peer_group, uint64_t tag) const;
+
+        /// @returns true, if the collective communications operation with the specified tag in the specified peer group is in the running state, meaning that the operation was commenced and not yet finished.
+        [[nodiscard]] bool isCollectiveOperationRunning(uint32_t peer_group, uint64_t tag) const;
 
         /// @returns SharedStateMismatchStatus::SUCCESSFUL_MATCH if the specified revision is legal as the next
         /// shared state revision for the given peer group.

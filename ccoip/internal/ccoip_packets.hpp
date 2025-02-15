@@ -31,27 +31,25 @@ namespace ccoip {
 #define C2M_PACKET_REQUEST_SESSION_REGISTRATION_ID 1
 #define C2M_PACKET_REQUEST_ESTABLISH_P2P_CONNECTIONS 2
 #define C2M_PACKET_P2P_CONNECTIONS_ESTABLISHED_ID 3
-#define C2M_PACKET_GET_TOPOLOGY_REQUEST_ID 4
-#define C2M_PACKET_OPTIMIZE_TOPOLOGY_ID 5
-#define C2M_PACKET_REPORT_PEER_BANDWIDTH_ID 6
-#define C2M_PACKET_OPTIMIZE_TOPOLOGY_WORK_COMPLETE_ID 7
-#define C2M_PACKET_SYNC_SHARED_STATE_ID 8
-#define C2M_PACKET_DIST_SHARED_STATE_COMPLETE_ID 9
-#define C2M_PACKET_COLLECTIVE_COMMS_INITIATE_ID 10
-#define C2M_PACKET_COLLECTIVE_COMMS_COMPLETE_ID 11
+#define C2M_PACKET_OPTIMIZE_TOPOLOGY_ID 4
+#define C2M_PACKET_REPORT_PEER_BANDWIDTH_ID 5
+#define C2M_PACKET_OPTIMIZE_TOPOLOGY_WORK_COMPLETE_ID 6
+#define C2M_PACKET_SYNC_SHARED_STATE_ID 7
+#define C2M_PACKET_DIST_SHARED_STATE_COMPLETE_ID 8
+#define C2M_PACKET_COLLECTIVE_COMMS_INITIATE_ID 9
+#define C2M_PACKET_COLLECTIVE_COMMS_COMPLETE_ID 10
 
     // M2C packets:
 #define M2C_PACKET_SESSION_REGISTRATION_RESPONSE_ID 1
 #define M2C_PACKET_P2P_CONNECTION_INFO_ID 2
 #define M2C_PACKET_P2P_CONNECTIONS_ESTABLISHED_ID 3
-#define M2C_PACKET_GET_TOPOLOGY_RESPONSE_ID 4
-#define M2C_PACKET_OPTIMIZE_TOPOLOGY_RESPONSE_ID 5
-#define M2C_PACKET_OPTIMIZE_TOPOLOGY_COMPLETE_ID 6
-#define M2C_PACKET_SYNC_SHARED_STATE_ID 7
-#define M2C_PACKET_SYNC_SHARED_STATE_COMPLETE_ID 8
-#define M2C_PACKET_COLLECTIVE_COMMS_COMMENCE_ID 9
-#define M2C_PACKET_COLLECTIVE_COMMS_COMPLETE_ID 10
-#define M2C_PACKET_COLLECTIVE_COMMS_ABORT_ID 11
+#define M2C_PACKET_OPTIMIZE_TOPOLOGY_RESPONSE_ID 4
+#define M2C_PACKET_OPTIMIZE_TOPOLOGY_COMPLETE_ID 5
+#define M2C_PACKET_SYNC_SHARED_STATE_ID 6
+#define M2C_PACKET_SYNC_SHARED_STATE_COMPLETE_ID 7
+#define M2C_PACKET_COLLECTIVE_COMMS_COMMENCE_ID 8
+#define M2C_PACKET_COLLECTIVE_COMMS_COMPLETE_ID 9
+#define M2C_PACKET_COLLECTIVE_COMMS_ABORT_ID 10
 
     // P2P packets:
 #define P2P_PACKET_HELLO_ID 1
@@ -108,12 +106,6 @@ namespace ccoip {
         void serialize(PacketWriteBuffer &buffer) const override;
 
         [[nodiscard]] bool deserialize(PacketReadBuffer &buffer) override;
-    };
-
-    // C2MPacketGetTopologyRequest
-    class C2MPacketGetTopologyRequest final : public EmptyPacket {
-    public:
-        static packetId_t packet_id;
     };
 
     // C2MPacketOptimizeTopology
@@ -250,22 +242,13 @@ namespace ccoip {
         static packetId_t packet_id;
         bool success;
 
-        void serialize(PacketWriteBuffer &buffer) const override;
-
-        [[nodiscard]] bool deserialize(PacketReadBuffer &buffer) override;
-    };
-
-    // M2CPacketGetTopologyResponse
-    class M2CPacketGetTopologyResponse final : public Packet {
-    public:
-        static packetId_t packet_id;
-
         // NOTE: THIS STRUCTURE IS SUBJECT TO CHANGE ONCE GENERALIZED ALL REDUCE TOPOLOGY IS IMPLEMENTED
 
         // TODO: Hardcode assume ring reduce for now...
         //  last element is the peer that will receive the final result and distribute it to all peers
         //  (this ring reduce impl is also temporary and known not optimal)
         std::vector<ccoip_uuid_t> ring_reduce_order{};
+
 
         void serialize(PacketWriteBuffer &buffer) const override;
 
@@ -296,6 +279,14 @@ namespace ccoip {
         static packetId_t packet_id;
 
         bool success;
+
+
+        // NOTE: THIS STRUCTURE IS SUBJECT TO CHANGE ONCE GENERALIZED ALL REDUCE TOPOLOGY IS IMPLEMENTED
+
+        // TODO: Hardcode assume ring reduce for now...
+        //  last element is the peer that will receive the final result and distribute it to all peers
+        //  (this ring reduce impl is also temporary and known not optimal)
+        std::vector<ccoip_uuid_t> ring_reduce_order{};
 
         void serialize(PacketWriteBuffer &buffer) const override;
 
@@ -329,7 +320,6 @@ namespace ccoip {
         static packetId_t packet_id;
 
         uint64_t tag;
-        bool require_topology_update;
 
         void serialize(PacketWriteBuffer &buffer) const override;
 

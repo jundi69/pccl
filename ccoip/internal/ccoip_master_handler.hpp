@@ -37,6 +37,16 @@ namespace ccoip {
         /// Indicates whether @code next_ring_topology@endcode is optimal.
         bool next_ring_is_optimal = false;
 
+        /// Indicates (when the master is currently in the midst of establishing p2p connections) the state of whether
+        /// peers have left. This is needed to make sure the p2p connection establishment phase is guaranteed to fail
+        /// when peers drop because the p2p connection information that has been distributed in the beginning of this
+        /// phase does now no longer reflect the new topology taking the leaving peer(s) into account.
+        /// New up-to-date p2p connection information must be distributed to reflect the new topology
+        /// and this is achieved via the fact that a failed p2p connection establishment phase will result in a re-try
+        /// initiated by all clients.
+        // This retry is enforced by the master via the CONNECTING_TO_PEERS_FAILED state.
+        bool peer_dropped = false;
+
     public:
         volatile bool running = false;
         volatile bool interrupted = false;
@@ -70,7 +80,7 @@ namespace ccoip {
 
         [[nodiscard]] bool checkSyncSharedStateCompleteConsensus(uint32_t peer_group);
 
-        [[nodiscard]] bool checkCollectiveCommsInitiateConsensus(uint32_t peer_group, uint64_t tag, bool topology_changed);
+        [[nodiscard]] bool checkCollectiveCommsInitiateConsensus(uint32_t peer_group, uint64_t tag);
 
         [[nodiscard]] bool checkCollectiveCommsCompleteConsensus(uint32_t peer_group, uint64_t tag);
 
@@ -88,9 +98,6 @@ namespace ccoip {
 
         void handleP2PConnectionsEstablished(const ccoip_socket_address_t &client_address,
                                              const C2MPacketP2PConnectionsEstablished &packet);
-
-        void handleGetTopologyRequest(const ccoip_socket_address_t &client_address,
-                                      const C2MPacketGetTopologyRequest &packet);
 
         void handleOptimizeTopology(const ccoip_socket_address_t &client_address,
                                    const C2MPacketOptimizeTopology &packet);

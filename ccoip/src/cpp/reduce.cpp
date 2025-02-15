@@ -11,7 +11,6 @@
 #include <win_sock_bridge.h>
 
 namespace {
-
     /**
      * \brief Utility to compute per-rank chunk boundaries for an array
      *        of \p total_el elements across \p world_size ranks.
@@ -20,9 +19,9 @@ namespace {
      *   boundaries[r] = {start_index, end_index}
      * in element (not byte) units.
      */
-    std::vector<std::pair<size_t, size_t>>
+    std::vector<std::pair<size_t, size_t> >
     computeChunkBoundaries(const size_t total_el, const size_t world_size) {
-        std::vector<std::pair<size_t, size_t>> boundaries(world_size, {0, 0});
+        std::vector<std::pair<size_t, size_t> > boundaries(world_size, {0, 0});
         if (world_size == 0) { return boundaries; }
 
         const size_t base = total_el / world_size;
@@ -37,36 +36,38 @@ namespace {
         return boundaries;
     }
 
-
     /**
      * \brief Perform the "reduce-scatter" stage of the ring in one step (send one chunk / receive one chunk / reduce).
      *
      * - Sends the \p tx_span (possibly quantized) to the next rank.
      * - Receives from the previous rank into \p recv_buffer_span (which is sized exactly for the incoming chunk).
      * - De-quantizes and accumulates into \p rx_span.
+     *
+     * @return {success, abort_packet_received}
      */
-    void runReduceStage(
-            ccoip::CCoIPClientState &client_state,
-            const uint64_t tag,
-            const std::span<const std::byte> &tx_span,
-            const std::span<std::byte> &rx_span,
-            const std::span<std::byte> &recv_buffer_span,
+    [[nodiscard]] std::pair<bool, bool> runReduceStage(
+        ccoip::CCoIPClientState &client_state,
+        tinysockets::QueuedSocket &master_socket,
+        const uint64_t tag,
+        const std::span<const std::byte> &tx_span,
+        const std::span<std::byte> &rx_span,
+        const std::span<std::byte> &recv_buffer_span,
 
-            const ccoip::ccoip_data_type_t data_type,
-            const ccoip::ccoip_data_type_t quantized_type,
-            const ccoip::ccoip_quantization_algorithm_t quantization_algorithm,
-            const ccoip::ccoip_reduce_op_t op,
+        const ccoip::ccoip_data_type_t data_type,
+        const ccoip::ccoip_data_type_t quantized_type,
+        const ccoip::ccoip_quantization_algorithm_t quantization_algorithm,
+        const ccoip::ccoip_reduce_op_t op,
 
-            const size_t rank,
-            const size_t world_size,
-            const std::vector<ccoip_uuid_t> &ring_order,
+        const size_t rank,
+        const size_t world_size,
+        const std::vector<ccoip_uuid_t> &ring_order,
 
-            const std::optional<ccoip::internal::quantize::DeQuantizationMetaData> &meta_data_self,
+        const std::optional<ccoip::internal::quantize::DeQuantizationMetaData> &meta_data_self,
 
-            const std::unordered_map<ccoip_uuid_t,
-                                     std::unique_ptr<tinysockets::BlockingIOSocket>> &peer_tx_sockets,
-            const std::unordered_map<ccoip_uuid_t,
-                                     std::unique_ptr<tinysockets::BlockingIOSocket>> &peer_rx_sockets) {
+        const std::unordered_map<ccoip_uuid_t,
+            std::unique_ptr<tinysockets::BlockingIOSocket> > &peer_tx_sockets,
+        const std::unordered_map<ccoip_uuid_t,
+            std::unique_ptr<tinysockets::BlockingIOSocket> > &peer_rx_sockets) {
         using namespace tinysockets;
         using namespace ccoip::internal::reduce;
         using namespace ccoip::internal::quantize;
@@ -94,7 +95,7 @@ namespace {
                                               : DeQuantizationMetaData{});
             if (!tx_socket->sendPacket<ccoip::P2PPacketDequantizationMeta>(packet)) {
                 LOG(WARN) << "Failed to send de-quantization meta data!";
-                return;
+                return {false, false};
             }
             constexpr size_t ltv_header = sizeof(uint64_t) + sizeof(ccoip::packetId_t);
             client_state.trackCollectiveComsTxBytes(tag, ltv_header + packet.serializedSize());
@@ -106,7 +107,7 @@ namespace {
             const auto packet = rx_socket->receivePacket<ccoip::P2PPacketDequantizationMeta>();
             if (!packet) {
                 LOG(WARN) << "Failed to receive de-quantization meta data!";
-                return;
+                return {false, false};
             }
             received_meta_data = packet->dequantization_meta;
             constexpr size_t ltv_header = sizeof(uint64_t) + sizeof(ccoip::packetId_t);
@@ -117,6 +118,7 @@ namespace {
         size_t bytes_sent = 0;
         size_t bytes_recvd = 0;
 
+        size_t no_event_ctr = 0;
         while (bytes_sent < total_tx_size || bytes_recvd < total_rx_size) {
             // Prepare poll descriptors
             std::vector<poll::PollDescriptor> descriptors;
@@ -134,18 +136,22 @@ namespace {
                 rx_desc = &descriptors.back();
             }
 
-            if (poll::poll(descriptors, -1) < 0) {
+            bool no_event = true;
+            if (poll::poll(descriptors, 0) < 0) {
                 const std::string error_message = strerror(errno);
                 LOG(WARN) << "poll() failed: " << error_message;
-                return;
+                return {false, false};
             }
 
             // 3a) Send if ready
             if (tx_desc && (*tx_desc)->hasEvent(poll::PollEvent::POLL_OUTPUT)) {
                 const auto send_sub = tx_span.subspan(bytes_sent);
                 if (auto sent = send_nonblocking(send_sub, **tx_desc)) {
+                    no_event = false;
                     bytes_sent += *sent;
                     client_state.trackCollectiveComsTxBytes(tag, *sent);
+                } else {
+                    return {false, false};
                 }
             }
 
@@ -154,6 +160,7 @@ namespace {
                 const auto recv_sub = recv_buffer_span.subspan(bytes_recvd);
                 if (auto recvd = recv_nonblocking(recv_sub, **rx_desc)) {
                     if (*recvd > 0) {
+                        no_event = false;
                         client_state.trackCollectiveComsRxBytes(tag, *recvd);
 
                         const size_t quant_el_sz = ccoip_data_type_size(quantized_type);
@@ -186,9 +193,27 @@ namespace {
                                              received_meta_data);
                         }
                     }
+                } else {
+                    return {false, false};
                 }
             }
+
+            if (no_event) {
+                no_event_ctr++;
+            } else {
+                no_event_ctr = 0;
+            }
+
+            if (no_event_ctr > 100) {
+                const auto abort_packet = master_socket.receiveMatchingPacket<ccoip::M2CPacketCollectiveCommsAbort>(
+                        [tag](const ccoip::M2CPacketCollectiveCommsAbort &packet) { return packet.tag == tag; }, true);
+                if (abort_packet) {
+                    return {true, true};
+                }
+                no_event_ctr = 0;
+            }
         }
+        return {true, false};
     }
 
     /**
@@ -196,29 +221,32 @@ namespace {
      *
      * This is like runReduceStage but without applying a reduce-op. Instead, we effectively copy the newly
      * arrived data into \p rx_span.
+     *
+     * @return {success, abort_packet_received}
      */
-    void runAllgatherStage(
-            ccoip::CCoIPClientState &client_state,
-            const uint64_t tag,
-            const std::span<const std::byte> &tx_span,
-            const std::span<std::byte> &rx_span,
-            const std::span<std::byte> &recv_buffer_span,
+    [[nodiscard]] std::pair<bool, bool> runAllgatherStage(
+        ccoip::CCoIPClientState &client_state,
+        tinysockets::QueuedSocket &master_socket,
+        const uint64_t tag,
+        const std::span<const std::byte> &tx_span,
+        const std::span<std::byte> &rx_span,
+        const std::span<std::byte> &recv_buffer_span,
 
-            const ccoip::ccoip_data_type_t data_type,
-            const ccoip::ccoip_data_type_t quantized_type,
-            const ccoip::ccoip_quantization_algorithm_t quantization_algorithm,
+        const ccoip::ccoip_data_type_t data_type,
+        const ccoip::ccoip_data_type_t quantized_type,
+        const ccoip::ccoip_quantization_algorithm_t quantization_algorithm,
 
-            const size_t rank,
-            const size_t world_size,
-            const std::vector<ccoip_uuid_t> &ring_order,
+        const size_t rank,
+        const size_t world_size,
+        const std::vector<ccoip_uuid_t> &ring_order,
 
-            const std::optional<ccoip::internal::quantize::DeQuantizationMetaData> &meta_data_self,
-            ccoip::internal::quantize::DeQuantizationMetaData &received_meta_data_out,
+        const std::optional<ccoip::internal::quantize::DeQuantizationMetaData> &meta_data_self,
+        ccoip::internal::quantize::DeQuantizationMetaData &received_meta_data_out,
 
-            const std::unordered_map<ccoip_uuid_t,
-                                     std::unique_ptr<tinysockets::BlockingIOSocket>> &peer_tx_sockets,
-            const std::unordered_map<ccoip_uuid_t,
-                                     std::unique_ptr<tinysockets::BlockingIOSocket>> &peer_rx_sockets) {
+        const std::unordered_map<ccoip_uuid_t,
+            std::unique_ptr<tinysockets::BlockingIOSocket> > &peer_tx_sockets,
+        const std::unordered_map<ccoip_uuid_t,
+            std::unique_ptr<tinysockets::BlockingIOSocket> > &peer_rx_sockets) {
         using namespace tinysockets;
         using namespace ccoip::internal::quantize;
         using namespace ccoip::internal::reduce;
@@ -244,7 +272,7 @@ namespace {
                                               : DeQuantizationMetaData{});
             if (!tx_socket->sendPacket<ccoip::P2PPacketDequantizationMeta>(packet)) {
                 LOG(WARN) << "Failed to send de-quantization meta data in allgather!";
-                return;
+                return {false, false};
             }
             constexpr size_t ltv_header = sizeof(uint64_t) + sizeof(ccoip::packetId_t);
             client_state.trackCollectiveComsTxBytes(tag, ltv_header + packet.serializedSize());
@@ -255,7 +283,7 @@ namespace {
             const auto packet = rx_socket->receivePacket<ccoip::P2PPacketDequantizationMeta>();
             if (!packet) {
                 LOG(WARN) << "Failed to receive de-quant meta in allgather!";
-                return;
+                return {false, false};
             }
             received_meta_data = packet->dequantization_meta;
             constexpr size_t ltv_header = sizeof(uint64_t) + sizeof(ccoip::packetId_t);
@@ -267,6 +295,7 @@ namespace {
         size_t bytes_sent = 0;
         size_t bytes_recvd = 0;
 
+        size_t no_event_ctr = 0;
         while (bytes_sent < total_tx_size || bytes_recvd < total_rx_size) {
             std::vector<poll::PollDescriptor> descriptors;
             descriptors.reserve(2);
@@ -283,18 +312,23 @@ namespace {
                 rx_desc = &descriptors.back();
             }
 
-            if (poll::poll(descriptors, -1) < 0) {
+            if (poll::poll(descriptors, 0) < 0) {
                 const std::string error_message = strerror(errno);
                 LOG(WARN) << "poll() failed (allgather): " << error_message;
-                return;
+                return {false, false};
             }
+
+            bool no_event = true;
 
             // Send
             if (tx_desc && (*tx_desc)->hasEvent(poll::PollEvent::POLL_OUTPUT)) {
                 const auto send_sub = tx_span.subspan(bytes_sent);
                 if (auto sent = send_nonblocking(send_sub, **tx_desc)) {
+                    no_event = false;
                     bytes_sent += *sent;
                     client_state.trackCollectiveComsTxBytes(tag, *sent);
+                } else {
+                    return {false, false};
                 }
             }
 
@@ -303,6 +337,7 @@ namespace {
                 const auto recv_sub = recv_buffer_span.subspan(bytes_recvd);
                 if (auto recvd = recv_nonblocking(recv_sub, **rx_desc)) {
                     if (*recvd > 0) {
+                        no_event = false;
                         client_state.trackCollectiveComsRxBytes(tag, *recvd);
 
                         const size_t quant_el_sz = ccoip_data_type_size(quantized_type);
@@ -317,8 +352,8 @@ namespace {
 
                             const size_t data_type_el_sz = ccoip_data_type_size(data_type);
                             auto copy_dst_span = rx_span.subspan(
-                                    (old_floor / quant_el_sz) * data_type_el_sz,
-                                    (chunk_bytes / quant_el_sz) * data_type_el_sz);
+                                (old_floor / quant_el_sz) * data_type_el_sz,
+                                (chunk_bytes / quant_el_sz) * data_type_el_sz);
 
                             // We do not accumulate for allgather, just "copy" via performReduction w/ ccoipOpSet
                             performReduction(copy_dst_span,
@@ -330,9 +365,25 @@ namespace {
                                              received_meta_data);
                         }
                     }
+                } else {
+                    return {false, false};
                 }
             }
+            if (no_event) {
+                no_event_ctr++;
+            } else {
+                no_event_ctr = 0;
+            }
+            if (no_event_ctr > 100) {
+                const auto abort_packet = master_socket.receiveMatchingPacket<ccoip::M2CPacketCollectiveCommsAbort>(
+                        [tag](const ccoip::M2CPacketCollectiveCommsAbort &packet) { return packet.tag == tag; }, true);
+                if (abort_packet) {
+                    return {true, true};
+                }
+                no_event_ctr = 0;
+            }
         }
+        return {true, false};
     }
 } // end anonymous namespace
 
@@ -340,22 +391,23 @@ namespace {
 //--------------------------------------------------------
 // The main pipeline ring reduce API
 //--------------------------------------------------------
-void ccoip::reduce::pipelineRingReduce(
-        CCoIPClientState &client_state,
-        const uint64_t tag,
-        std::span<const std::byte> src_buf,
-        const std::span<std::byte> &dst_buf,
-        const ccoip_data_type_t data_type,
-        const ccoip_data_type_t quantized_type,
-        const ccoip_reduce_op_t op,
-        const ccoip_quantization_algorithm_t quantization_algorithm,
-        const size_t rank,
-        const size_t world_size,
-        const std::vector<ccoip_uuid_t> &ring_order,
-        const std::unordered_map<ccoip_uuid_t,
-                                 std::unique_ptr<tinysockets::BlockingIOSocket>> &peer_tx_sockets,
-        const std::unordered_map<ccoip_uuid_t,
-                                 std::unique_ptr<tinysockets::BlockingIOSocket>> &peer_rx_sockets) {
+std::pair<bool, bool> ccoip::reduce::pipelineRingReduce(
+    CCoIPClientState &client_state,
+    tinysockets::QueuedSocket &master_socket,
+    const uint64_t tag,
+    std::span<const std::byte> src_buf,
+    const std::span<std::byte> &dst_buf,
+    const ccoip_data_type_t data_type,
+    const ccoip_data_type_t quantized_type,
+    const ccoip_reduce_op_t op,
+    const ccoip_quantization_algorithm_t quantization_algorithm,
+    const size_t rank,
+    const size_t world_size,
+    const std::vector<ccoip_uuid_t> &ring_order,
+    const std::unordered_map<ccoip_uuid_t, std::unique_ptr<tinysockets::BlockingIOSocket>> &
+    peer_tx_sockets,
+    const std::unordered_map<ccoip_uuid_t, std::unique_ptr<tinysockets::BlockingIOSocket>> &
+    peer_rx_sockets) {
     using namespace ccoip::internal::quantize;
     using namespace ccoip::internal::reduce;
 
@@ -365,14 +417,13 @@ void ccoip::reduce::pipelineRingReduce(
             std::memcpy(dst_buf.data(), src_buf.data(), src_buf.size_bytes());
         }
         performReduceFinalization(dst_buf, data_type, world_size, op);
-        return;
+        return {true, false};
     }
 
     // Handle potential overlap of src_buf and dst_buf:
-    std::optional<std::unique_ptr<std::byte[]>> maybe_src_copy;
+    std::optional<std::unique_ptr<std::byte[]> > maybe_src_copy;
 
-    bool src_and_dest_identical_ptr = (src_buf.data() == dst_buf.data());
-    {
+    bool src_and_dest_identical_ptr = (src_buf.data() == dst_buf.data()); {
         const auto *src_beg = src_buf.data();
         const auto *src_end = src_beg + src_buf.size_bytes();
         const auto *dst_beg = dst_buf.data();
@@ -458,14 +509,17 @@ void ccoip::reduce::pipelineRingReduce(
                 recv_buffer_span.subspan(0, rx_size_el * quant_type_el_size);
 
         // Perform ring exchange & reduce
-        runReduceStage(client_state, tag,
-                       /*tx_span=*/ tx_unquantized,
-                       /*rx_span=*/ rx_span,
-                       /*recv_buffer_span=*/ recv_sub,
-                       data_type, quantized_type, quantization_algorithm, op,
-                       rank, world_size, ring_order,
-                       meta_data,
-                       peer_tx_sockets, peer_rx_sockets);
+        auto [success, abort_packet_received] = runReduceStage(client_state, master_socket, tag,
+                                      /*tx_span=*/ tx_unquantized,
+                                      /*rx_span=*/ rx_span,
+                                      /*recv_buffer_span=*/ recv_sub,
+                                      data_type, quantized_type, quantization_algorithm, op,
+                                      rank, world_size, ring_order,
+                                      meta_data,
+                                      peer_tx_sockets, peer_rx_sockets);
+        if (!success || abort_packet_received) {
+            return {success, abort_packet_received};
+        }
     }
 
     //----------------------------------------------------------------------
@@ -548,13 +602,16 @@ void ccoip::reduce::pipelineRingReduce(
                 recv_buffer_span.subspan(0, rx_size_el * quant_type_el_size);
 
         // Ring exchange (no reduce-op)
-        runAllgatherStage(client_state, tag,
-                          tx_span, rx_span, recv_sub,
-                          data_type, quantized_type, quantization_algorithm,
-                          rank, world_size, ring_order,
-                          meta_data,
-                          prev_meta_data, // out
-                          peer_tx_sockets, peer_rx_sockets);
+        auto [success, abort_packet_received] = runAllgatherStage(client_state, master_socket, tag,
+                                         tx_span, rx_span, recv_sub,
+                                         data_type, quantized_type, quantization_algorithm,
+                                         rank, world_size, ring_order,
+                                         meta_data,
+                                         prev_meta_data, // out
+                                         peer_tx_sockets, peer_rx_sockets);
+        if (!success || abort_packet_received) {
+            return {success, abort_packet_received};
+        }
 
         // we will hold on to the quantized data we just received and forward it verbatim in the next step.
         if (owned_data_ptr == nullptr) {
@@ -571,4 +628,5 @@ void ccoip::reduce::pipelineRingReduce(
     // Finalize for ops that need it (e.g. op = AVG, etc.)
     //----------------------------------------------------------------------
     performReduceFinalization(dst_buf, data_type, world_size, op);
+    return {true, false};
 }

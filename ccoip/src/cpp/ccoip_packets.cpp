@@ -44,9 +44,6 @@ bool ccoip::C2MPacketRequestEstablishP2PConnections::deserialize(PacketReadBuffe
     return true;
 }
 
-// C2MPacketGetTopologyRequest
-ccoip::packetId_t ccoip::C2MPacketGetTopologyRequest::packet_id = C2M_PACKET_GET_TOPOLOGY_REQUEST_ID;
-
 // C2MPacketOptimizeTopology
 ccoip::packetId_t ccoip::C2MPacketOptimizeTopology::packet_id = C2M_PACKET_OPTIMIZE_TOPOLOGY_ID;
 
@@ -247,24 +244,14 @@ ccoip::packetId_t ccoip::M2CPacketP2PConnectionsEstablished::packet_id = M2C_PAC
 
 void ccoip::M2CPacketP2PConnectionsEstablished::serialize(PacketWriteBuffer &buffer) const {
     buffer.write<boolean>(success);
-}
-
-bool ccoip::M2CPacketP2PConnectionsEstablished::deserialize(PacketReadBuffer &buffer) {
-    success = buffer.read<boolean>();
-    return true;
-}
-
-// M2CPacketGetTopologyResponse
-ccoip::packetId_t ccoip::M2CPacketGetTopologyResponse::packet_id = M2C_PACKET_GET_TOPOLOGY_RESPONSE_ID;
-
-void ccoip::M2CPacketGetTopologyResponse::serialize(PacketWriteBuffer &buffer) const {
     buffer.write<uint64_t>(ring_reduce_order.size());
     for (const auto &uuid: ring_reduce_order) {
         buffer.writeFixedArray(uuid.data);
     }
 }
 
-bool ccoip::M2CPacketGetTopologyResponse::deserialize(PacketReadBuffer &buffer) {
+bool ccoip::M2CPacketP2PConnectionsEstablished::deserialize(PacketReadBuffer &buffer) {
+    success = buffer.read<boolean>();
     const auto n_peers = buffer.read<uint64_t>();
     for (size_t i = 0; i < n_peers; i++) {
         ccoip_uuid_t uuid{};
@@ -304,10 +291,20 @@ ccoip::packetId_t ccoip::M2CPacketOptimizeTopologyComplete::packet_id = M2C_PACK
 
 void ccoip::M2CPacketOptimizeTopologyComplete::serialize(PacketWriteBuffer &buffer) const {
     buffer.write<boolean>(success);
+    buffer.write<uint64_t>(ring_reduce_order.size());
+    for (const auto &uuid: ring_reduce_order) {
+        buffer.writeFixedArray(uuid.data);
+    }
 }
 
 bool ccoip::M2CPacketOptimizeTopologyComplete::deserialize(PacketReadBuffer &buffer) {
     success = buffer.read<boolean>();
+    const auto n_peers = buffer.read<uint64_t>();
+    for (size_t i = 0; i < n_peers; i++) {
+        ccoip_uuid_t uuid{};
+        uuid.data = buffer.readFixedArray<uint8_t, CCOIP_UUID_N_BYTES>();
+        ring_reduce_order.push_back(uuid);
+    }
     return true;
 }
 
@@ -350,12 +347,10 @@ ccoip::packetId_t ccoip::M2CPacketCollectiveCommsCommence::packet_id = M2C_PACKE
 
 void ccoip::M2CPacketCollectiveCommsCommence::serialize(PacketWriteBuffer &buffer) const {
     buffer.write<uint64_t>(tag);
-    buffer.write<boolean>(require_topology_update);
 }
 
 bool ccoip::M2CPacketCollectiveCommsCommence::deserialize(PacketReadBuffer &buffer) {
     tag = buffer.read<uint64_t>();
-    require_topology_update = buffer.read<boolean>();
     return true;
 }
 

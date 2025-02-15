@@ -26,6 +26,16 @@ static bool configure_socket_fd(const int socket_fd) {
 #ifdef TCP_QUICKACK
     setsockoptvp(socket_fd, IPPROTO_TCP, TCP_QUICKACK, &opt, sizeof(opt));
 #endif
+
+    // 5 seconds time out
+    // TODO: DISABLE THIS IN DEBUG BUILDS BECAUSE IT IS ANNOYING FOR DEBUGGING
+    /*
+    timeval tv{};
+    tv.tv_sec = 5;
+    tv.tv_usec = 0;
+    setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
+    */
+
     return true;
 }
 
@@ -293,7 +303,7 @@ std::optional<size_t> tinysockets::BlockingIOSocket::receivePacketLength(const b
         }
         if (i == -1 || i == 0) {
             const std::string error_message = std::strerror(errno);
-            LOG(INFO) << "[BlockingIOSocket] Failed to receive packet length with error: " << error_message;
+            LOG(WARN) << "[BlockingIOSocket] Failed to receive packet length with error: " << error_message;
             return std::nullopt;
         }
         n_received += i;
@@ -301,7 +311,7 @@ std::optional<size_t> tinysockets::BlockingIOSocket::receivePacketLength(const b
     return net_u64_to_host(length);
 }
 
-ssize_t tinysockets::BlockingIOSocket::receiveRawData(std::span<std::byte> &dst, const size_t n_bytes) const {
+ssize_t tinysockets::BlockingIOSocket::receiveRawData(std::span<std::byte> &dst, const size_t n_bytes) {
     // check if dst has enough space for n_bytes
     if (dst.size_bytes() < n_bytes) {
         LOG(BUG) << "Insufficient buffer size provided to receiveRawData!";
@@ -312,7 +322,7 @@ ssize_t tinysockets::BlockingIOSocket::receiveRawData(std::span<std::byte> &dst,
         const ssize_t i = recvvp(socket_fd, dst.data() + n_received, dst.size_bytes() - n_received, 0);
         if (i == -1) {
             const std::string error_message = std::strerror(errno);
-            LOG(INFO) << "Failed to receive packet data with error: " << error_message;
+            LOG(WARN) << "Failed to receive packet data with error: " << error_message;
             return -1;
         }
         n_received += i;

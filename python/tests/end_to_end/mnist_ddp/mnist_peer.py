@@ -242,7 +242,7 @@ def main():
             # collect gradients in one contiguous tensor
             grads = torch.cat([p.grad.view(-1) for p in model.parameters() if p.grad is not None])
 
-            while True:
+            while world_size > 1:
                 log_debug(f"(RANK={RANK}, it={it}) all_reduce_async()")
                 op_desc = ReduceOperandDescriptor(
                     datatype=DataType.FLOAT,
@@ -262,6 +262,13 @@ def main():
                 log_debug(
                     f"(RANK={RANK}, it={it}) Reduce completed RX: {info.rx_bytes}, TX: {info.tx_bytes}; world_size: {info.world_size}")
                 break
+
+            if world_size == 1:
+                # drop current step, as we are alone in the run and whatever we just computed would induce too much noise if we stepped here.
+                # If one accepts the pattern that one waits until the world size is at least two, it would be erroneous to step here.
+                print(
+                    "All peers have left except this peer. Dropping current step to avoid inducing too much variance with our local batch!")
+                continue
 
             # print hash of the gradients tensor content
             # log_debug(f"(RANK={RANK}, it={it}) grads hash: {compute_crc32(grads)}")

@@ -38,7 +38,7 @@ namespace ccoip {
 
         bool interrupted = false;
 
-        bool connected = false;
+        bool accepted = false;
 
         /// Thread that runs the currently ongoing bandwidth benchmark (if any).
         /// It runs the receiving side of the benchmark.
@@ -59,8 +59,6 @@ namespace ccoip {
                                            ccoip_shared_state_sync_info_t &info_out);
 
         [[nodiscard]] bool interrupt();
-
-        [[nodiscard]] bool obtainTopology();
 
         [[nodiscard]] bool optimizeTopology();
 
@@ -86,7 +84,12 @@ namespace ccoip {
         [[nodiscard]] size_t getWorldSize() const;
 
     private:
-        [[nodiscard]] bool establishP2PConnections();
+        enum EstablishP2PConnectionResult {
+            SUCCESS = 0,
+            FAILED = 1,
+            RETRY_NEEDED = 2
+        };
+        [[nodiscard]] EstablishP2PConnectionResult establishP2PConnections();
 
         [[nodiscard]] bool establishP2PConnection(const PeerInfo &peer);
 

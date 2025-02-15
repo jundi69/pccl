@@ -42,10 +42,10 @@ def main():
             world_size: int = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
 
         if world_size > 1:
-           try:
-               communicator.optimize_topology()
-           except Exception as ex:
-               print(ex)
+            try:
+                communicator.optimize_topology()
+            except Exception as ex:
+                print(ex)
 
         if world_size < 2:
             sleep(1)
@@ -58,7 +58,7 @@ def main():
 
         # Create gradients tensors
         grad: torch.Tensor = torch.rand(NUM_ELEMENTS, dtype=torch.float32)
-        while True:
+        while world_size > 1:
             logging.info(f"(RANK={RANK}, it={it}) all_reduce_async()")
             handle = communicator.all_reduce_async(grad, weights,
                                                    op=ReduceOp.SUM,
@@ -66,11 +66,18 @@ def main():
                                                                                             QuantizationAlgorithm.MIN_MAX))
 
             is_success, status, info = handle.wait()
+            world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
             assert is_success, f"All reduce failed with status: {status}"
             assert info is not None
             logging.info(
                 f"(RANK={RANK}, it={it}) Reduce completed RX: {info.rx_bytes}, TX: {info.tx_bytes}")
             break
+        if world_size == 1:
+            # drop current step, as we are alone in the run and whatever we just computed would induce too much noise if we stepped here.
+            # If one accepts the pattern that one waits until the world size is at least two, it would be erroneous to step here.
+            print(
+                "All peers have left except this peer. Dropping current step to avoid inducing too much variance with our local batch!")
+            continue
 
         shared_state.revision += 1
         n_performed_steps += 1

@@ -32,7 +32,7 @@ ccoip::CCoIPClientHandler::CCoIPClientHandler(const ccoip_socket_address_t &addr
 }
 
 bool ccoip::CCoIPClientHandler::connect() {
-    if (connected) {
+    if (accepted) {
         LOG(WARN) << "CCoIPClientHandler::connect() called while already connected";
         return false;
     }
@@ -42,8 +42,8 @@ bool ccoip::CCoIPClientHandler::connect() {
         p2p_socket.setJoinCallback([this](const ccoip_socket_address_t &client_address,
                                           std::unique_ptr<tinysockets::BlockingIOSocket> &socket) {
             // maximize send and receive buffer sizes
-            // socket->maximizeSendBuffer();
-            // socket->maximizeReceiveBuffer();
+            socket->maximizeSendBuffer();
+            socket->maximizeReceiveBuffer();
 
             const auto hello_packet_opt = socket->receivePacket<P2PPacketHello>();
             if (!hello_packet_opt) {
@@ -194,18 +194,26 @@ bool ccoip::CCoIPClientHandler::connect() {
     }
     client_state.setAssignedUUID(response->assigned_uuid);
 
-    if (!establishP2PConnections()) {
-        LOG(ERR) << "Failed to establish P2P connections";
+    const auto result = establishP2PConnections();
+    if (result == RETRY_NEEDED) {
+        accepted = true;
+        // even if the initial p2p connection establishment fails due to unfortunate timing
+        // of other peers dropping or becoming unreachable we will still be considered as a newly accepted peer,
+        // even though p2p connections have not successfully been established. Here we have to retry like any other peer.
+        if (!requestAndEstablishP2PConnections(true)) { // accept_new_peers must be true by definition because we just got accepted
+            return false;
+        }
+    } else if (result == FAILED) {
+        LOG(ERR) << "Failed to establish p2p connections after connecting to master.";
         return false;
     }
-    connected = true;
+    accepted = true;
     return true;
 }
 
 bool ccoip::CCoIPClientHandler::requestAndEstablishP2PConnections(const bool accept_new_peers) {
-    if (!connected) {
-        LOG(WARN) << "CCoIPClientHandler::reestablishP2PConnections() before CCoIPClientHandler::connect() was called. "
-                     "Establish master connection first before performing client actions.";
+    if (!accepted) {
+        LOG(BUG) << "CCoIPClientHandler::reestablishP2PConnections() was called before peer was accepted into the run. This is a bug!";
         return false;
     }
 
@@ -219,14 +227,16 @@ bool ccoip::CCoIPClientHandler::requestAndEstablishP2PConnections(const bool acc
         return false;
     }
 
-    C2MPacketRequestEstablishP2PConnections packet{};
-    packet.accept_new_peers = accept_new_peers;
-    if (!master_socket.sendPacket<C2MPacketRequestEstablishP2PConnections>(packet)) {
-        return false;
-    }
-
-    if (!establishP2PConnections()) {
-        LOG(ERR) << "Failed to establish P2P connections";
+    EstablishP2PConnectionResult result;
+    do {
+        C2MPacketRequestEstablishP2PConnections packet{};
+        packet.accept_new_peers = accept_new_peers;
+        if (!master_socket.sendPacket<C2MPacketRequestEstablishP2PConnections>(packet)) {
+            return false;
+        }
+        result = establishP2PConnections();
+    } while (result == RETRY_NEEDED);
+    if (result == FAILED) {
         return false;
     }
     return true;
@@ -234,7 +244,7 @@ bool ccoip::CCoIPClientHandler::requestAndEstablishP2PConnections(const bool acc
 
 bool ccoip::CCoIPClientHandler::syncSharedState(ccoip_shared_state_t &shared_state,
                                                 ccoip_shared_state_sync_info_t &info_out) {
-    if (!connected) {
+    if (!accepted) {
         LOG(WARN) << "CCoIPClientHandler::syncSharedState() before CCoIPClientHandler::connect() was called. Establish "
                      "master connection first before performing client actions.";
         return false;
@@ -372,7 +382,7 @@ bool ccoip::CCoIPClientHandler::syncSharedState(ccoip_shared_state_t &shared_sta
                             "distributor";
                 return false;
             }
-            if (shared_state_response->status != SUCCESS) {
+            if (shared_state_response->status != SharedStateResponseStatus::SUCCESS) {
                 LOG(ERR) << "Failed to sync shared state: Shared state distributor returned status "
                          << shared_state_response->status;
                 return false;
@@ -502,18 +512,6 @@ bool ccoip::CCoIPClientHandler::syncSharedState(ccoip_shared_state_t &shared_sta
     return true;
 }
 
-bool ccoip::CCoIPClientHandler::obtainTopology() {
-    if (!master_socket.sendPacket<C2MPacketGetTopologyRequest>({})) {
-        return false;
-    }
-    const auto response = master_socket.receivePacket<M2CPacketGetTopologyResponse>();
-    if (!response) {
-        return false;
-    }
-    client_state.updateTopology(response->ring_reduce_order);
-    return true;
-}
-
 bool ccoip::CCoIPClientHandler::optimizeTopology() {
     bool topology_optimization_complete = false;
     do {
@@ -595,6 +593,8 @@ bool ccoip::CCoIPClientHandler::optimizeTopology() {
             return false;
         }
         topology_optimization_complete = response->success;
+        client_state.updateTopology(response->ring_reduce_order);
+
     } while (!topology_optimization_complete);
 
     if (!requestAndEstablishP2PConnections(false)) {
@@ -640,12 +640,12 @@ bool ccoip::CCoIPClientHandler::isInterrupted() const { return interrupted; }
 
 ccoip::CCoIPClientHandler::~CCoIPClientHandler() = default;
 
-bool ccoip::CCoIPClientHandler::establishP2PConnections() {
+ccoip::CCoIPClientHandler::EstablishP2PConnectionResult ccoip::CCoIPClientHandler::establishP2PConnections() {
     // wait for connection info packet
     const auto connection_info_packet = master_socket.receivePacket<M2CPacketP2PConnectionInfo>();
     if (!connection_info_packet) {
         LOG(ERR) << "Failed to receive new peers packet";
-        return false;
+        return FAILED;
     }
     LOG(DEBUG) << "Received M2CPacketNewPeers from master";
 
@@ -714,7 +714,7 @@ bool ccoip::CCoIPClientHandler::establishP2PConnections() {
 
     if (!master_socket.sendPacket<C2MPacketP2PConnectionsEstablished>(packet)) {
         LOG(ERR) << "Failed to send P2P connections established packet";
-        return false;
+        return FAILED;
     }
 
     // wait for response from master, indicating ALL peers have established their
@@ -722,18 +722,19 @@ bool ccoip::CCoIPClientHandler::establishP2PConnections() {
     const auto response = master_socket.receivePacket<M2CPacketP2PConnectionsEstablished>();
     if (!response) {
         LOG(ERR) << "Failed to receive P2P connections established response";
-        return false;
+        return FAILED;
     }
     if (!all_peers_connected && response->success) {
         LOG(BUG) << "Master indicated that all peers have established their p2p connections, but this peer has not and "
                     "should have reported this to the master. This is a bug!";
-        return false;
+        return FAILED;
     }
     if (!response->success) {
-        LOG(ERR) << "Master indicated that not all peers have established their p2p connections";
-        return false;
+        LOG(ERR) << "Master indicated that p2p connection establishment has failed; Retrying...";
+        return RETRY_NEEDED;
     }
-    return all_peers_connected;
+    client_state.updateTopology(response->ring_reduce_order);
+    return SUCCESS;
 }
 
 bool ccoip::CCoIPClientHandler::establishP2PConnection(const PeerInfo &peer) {
@@ -752,8 +753,8 @@ bool ccoip::CCoIPClientHandler::establishP2PConnection(const PeerInfo &peer) {
     }
 
     // maximize send and receive buffer sizes
-    // socket->maximizeSendBuffer();
-    // socket->maximizeReceiveBuffer();
+    socket->maximizeSendBuffer();
+    socket->maximizeReceiveBuffer();
 
     P2PPacketHello hello_packet{};
     hello_packet.peer_uuid = client_state.getAssignedUUID();
@@ -784,6 +785,41 @@ bool ccoip::CCoIPClientHandler::closeP2PConnection(const ccoip_uuid_t &uuid, tin
     return true;
 }
 
+bool ccoip::CCoIPClientHandler::closeAllP2PConnections() {
+    auto tx_connections_it = p2p_connections_tx.begin();
+
+    // close tx connections
+    {
+            while (tx_connections_it != p2p_connections_tx.end()) {
+            const auto &[uuid, tx_connection] = *tx_connections_it;
+            if (!tx_connection->closeConnection()) [[unlikely]] {
+                LOG(BUG) << "Failed to close connection with peer " << uuid_to_string(uuid);
+                return false;
+            }
+            if (!client_state.unregisterPeer(tx_connection->getConnectSockAddr())) [[unlikely]] {
+                LOG(BUG) << "Failed to unregister peer " << uuid_to_string(uuid)
+                         << ". This means the client was already unregistered; This is a bug!";
+                return false;
+            }
+            tx_connections_it = p2p_connections_tx.erase(tx_connections_it);
+        }
+    }
+
+    // close rx connections
+    {
+        auto rx_connections_it = p2p_connections_rx.begin();
+        while (tx_connections_it != p2p_connections_tx.end()) {
+            const auto &[uuid, rx_connection] = *rx_connections_it;
+            if (!rx_connection->closeConnection()) [[unlikely]] {
+                LOG(BUG) << "Failed to close connection with peer " << uuid_to_string(uuid);
+                return false;
+            }
+            rx_connections_it = p2p_connections_rx.erase(tx_connections_it);
+        }
+    }
+    return true;
+}
+
 void ccoip::CCoIPClientHandler::handleSharedStateRequest(const ccoip_socket_address_t &client_address,
                                                          const C2SPacketRequestSharedState &packet) {
     THREAD_GUARD(shared_state_server_thread_id);
@@ -804,7 +840,7 @@ void ccoip::CCoIPClientHandler::handleSharedStateRequest(const ccoip_socket_addr
 
     // construct the packet containing meta-data
     {
-        response.status = SUCCESS;
+        response.status = SharedStateResponseStatus::SUCCESS;
         const auto &shared_state = client_state.getCurrentSharedState();
         response.revision = shared_state.revision;
         for (const auto &requested_key: packet.requested_keys) {
@@ -962,7 +998,6 @@ bool ccoip::CCoIPClientHandler::allReduceAsync(const void *sendbuff, void *recvb
                                                     quantization_algorithm, op, tag](std::promise<bool> &promise) {
             LOG(DEBUG) << "Vote to commence all reduce operation with tag " << tag;
 
-            const bool abort_packet_received = false;
             bool aborted = false;
 
             const auto reduce_fun = [&] {
@@ -974,7 +1009,7 @@ bool ccoip::CCoIPClientHandler::allReduceAsync(const void *sendbuff, void *recvb
                     initiate_packet.data_type = datatype;
                     initiate_packet.op = op;
                     if (!master_socket.sendPacket<C2MPacketCollectiveCommsInitiate>(initiate_packet)) {
-                        return false;
+                        return std::pair{false, false};
                     }
 
                     // As long as we do not expect packets of types here that the main thread also expects and claims
@@ -986,23 +1021,17 @@ bool ccoip::CCoIPClientHandler::allReduceAsync(const void *sendbuff, void *recvb
                             [tag](const M2CPacketCollectiveCommsCommence &packet) { return packet.tag == tag; });
 
                     if (!response) {
-                        return false;
+                        return std::pair{false, false};
                     }
                     LOG(DEBUG) << "Received M2CPacketCollectiveCommsCommence for tag " << tag
                                << "; Collective communications consensus reached";
-                    if (response->require_topology_update) {
-                        if (!obtainTopology()) {
-                            LOG(ERR) << "Failed to update topology after collective comms commence indicated dirty "
-                                        "topology";
-                        }
-                    }
                 }
 
                 const auto &ring_order = client_state.getRingOrder();
 
                 // no need to actually all reduce when there is no second peer.
                 if (ring_order.size() < 2) {
-                    return false;
+                    return std::pair{false, false};
                 }
 
                 const auto &client_uuid = client_state.getAssignedUUID();
@@ -1010,7 +1039,7 @@ bool ccoip::CCoIPClientHandler::allReduceAsync(const void *sendbuff, void *recvb
                 // find position in ring order
                 const auto it = std::ranges::find(ring_order, client_uuid);
                 if (it == ring_order.end()) {
-                    return false;
+                    return std::pair{false, false};
                 }
                 const size_t position = std::distance(ring_order.begin(), it);
                 const size_t byte_size = count * ccoip_data_type_size(datatype);
@@ -1019,13 +1048,21 @@ bool ccoip::CCoIPClientHandler::allReduceAsync(const void *sendbuff, void *recvb
                 const std::span recv_span(static_cast<std::byte *>(recvbuff), byte_size);
 
                 // perform pipeline ring reduce
-                reduce::pipelineRingReduce(client_state, tag, send_span, recv_span, datatype, quantized_data_type, op,
-                                           quantization_algorithm, position, ring_order.size(), ring_order,
-                                           p2p_connections_tx, p2p_connections_rx);
-
-                return true;
+                auto [success, abort_packet_received] = reduce::pipelineRingReduce(client_state, master_socket,
+                                                  tag, send_span, recv_span, datatype, quantized_data_type, op, quantization_algorithm,
+                                                  position, ring_order.size(), ring_order, p2p_connections_tx,
+                                                  p2p_connections_rx);
+                return std::pair{success, abort_packet_received};
             };
-            auto success = reduce_fun();
+            auto [success, abort_packet_received] = reduce_fun();
+            if (!success) {
+                LOG(WARN) << "An IO error occurred during the all reduce; Aborting collective communications operation...";
+            }
+            if (abort_packet_received) {
+                LOG(WARN) << "Received abort packet during all reduce. Considering all reduce aborted.";
+                aborted = true;
+                success = false;
+            }
             if (![&] {
                     const auto &ring_order = client_state.getRingOrder();
 
@@ -1058,11 +1095,7 @@ bool ccoip::CCoIPClientHandler::allReduceAsync(const void *sendbuff, void *recvb
                         return false;
                     }
                     if (aborted) {
-                        // abort=true is considered a failure, where the user must re-issue
-                        // the collective comms operation to try again, if so desired.
-                        if (!obtainTopology()) {
-                            LOG(ERR) << "Failed to update topology after collective comms operation was aborted";
-                        }
+                        LOG(WARN) << "Collective communications operation was aborted";
                         return false;
                     }
                     return true;
@@ -1088,6 +1121,24 @@ bool ccoip::CCoIPClientHandler::joinAsyncReduce(const uint64_t tag) {
         return false;
     }
     if (*failure_opt) {
+        // Close all p2p sockets such that they are re-opened in the next step.
+        // Otherwise, it can be that old data will be mistaken to be
+        // good data in the next all reduce, which will inadvertently
+        // throw off byte counters where one peer could have "received all the data"
+        // while another peer is not yet done sending it because there was old data
+        // that caused this discrepancy.
+        if (!closeAllP2PConnections()) {
+            LOG(ERR) << "Failed to close all p2p connections after aborted all reduce!";
+            return false;
+        }
+
+        // In that next invocation, we need to have the new topology ready
+        // as necessitated that a peer just dropped, causing the abort.
+        // We thus re-establish p2p connections according to the new topology as determined by the master,
+        // and obtain the new topology.
+        if (!requestAndEstablishP2PConnections(false)) {
+            LOG(ERR) << "Failed to request and establish p2p connections after collective comms operation was aborted";
+        }
         return false;
     }
     return true;

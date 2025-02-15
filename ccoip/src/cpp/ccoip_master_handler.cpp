@@ -96,10 +96,6 @@ void ccoip::CCoIPMasterHandler::onClientRead(const ccoip_socket_address_t &clien
             return;
         }
         handleP2PConnectionsEstablished(client_address, packet);
-    } else if (packet_type == C2MPacketGetTopologyRequest::packet_id) {
-        C2MPacketGetTopologyRequest packet{};
-        packet.deserialize(buffer);
-        handleGetTopologyRequest(client_address, packet);
     } else if (packet_type == C2MPacketOptimizeTopology::packet_id) {
         C2MPacketOptimizeTopology packet{};
         packet.deserialize(buffer);
@@ -231,7 +227,6 @@ bool ccoip::CCoIPMasterHandler::checkP2PConnectionsEstablished() {
         const auto &peer_info = peer_info_opt->get();
 
         // all connection phases are legal (both REGISTERED & ACCEPTED)
-
         if (peer_info.connection_state == WAITING_FOR_OTHER_PEERS ||
             peer_info.connection_state == CONNECTING_TO_PEERS_FAILED) {
             any_waiting = true;
@@ -260,7 +255,8 @@ bool ccoip::CCoIPMasterHandler::checkP2PConnectionsEstablished() {
             }
         }
         // send confirmation packets to all clients
-        if (!server_state.transitionToP2PConnectionsEstablishedPhase(any_failed)) [[unlikely]] {
+        if (!server_state.transitionToP2PConnectionsEstablishedPhase(any_failed || peer_dropped)) [[unlikely]] {
+            peer_dropped = false; // reset peer_dropped state, as we are returning
             LOG(BUG) << "Failed to transition to P2P connections established phase;";
             return false;
         }
@@ -277,12 +273,24 @@ bool ccoip::CCoIPMasterHandler::checkP2PConnectionsEstablished() {
                 continue;
             }
             M2CPacketP2PConnectionsEstablished packet{};
-            packet.success = !any_failed;
+            if (peer_dropped) {
+                packet.success = false;
+            } else {
+                packet.success = !any_failed;
+            }
+
+            // TODO: implement real topology optimization,
+            //  for now we assert ring reduce and return the ring order to be ascending order of client uuids
+            const auto topology = server_state.getRingTopology();
+
+            packet.ring_reduce_order = topology;
+
             if (!server_socket.sendPacket<M2CPacketP2PConnectionsEstablished>(peer_address, packet)) {
                 LOG(ERR) << "Failed to send M2CPacketP2PConnectionsEstablished to "
                          << ccoip_sockaddr_to_str(peer_address);
             }
         }
+        peer_dropped = false; // reset peer_dropped state
     }
     return true;
 }
@@ -290,6 +298,7 @@ bool ccoip::CCoIPMasterHandler::checkP2PConnectionsEstablished() {
 bool ccoip::CCoIPMasterHandler::checkEstablishP2PConnectionConsensus() {
     // check if all clients have voted to accept new peers
     if (server_state.acceptNewPeersConsensus()) {
+        peer_dropped = false; // reset peer dropped state, as we are starting a completely new p2p connection establishment phase
         if (!server_state.transitionToP2PEstablishmentPhase(true)) [[unlikely]] {
             LOG(BUG) << "Failed to transition to P2P establishment phase. This is a bug!";
             return false;
@@ -299,6 +308,7 @@ bool ccoip::CCoIPMasterHandler::checkEstablishP2PConnectionConsensus() {
 
     // check if all clients have voted to establish p2p connections without accepting new peers
     if (server_state.noAcceptNewPeersEstablishP2PConnectionsConsensus()) {
+        peer_dropped = false; // reset peer dropped state, as we are starting a completely new p2p connection establishment phase
         if (!server_state.transitionToP2PEstablishmentPhase(false)) [[unlikely]] {
             LOG(BUG) << "Failed to transition to P2P establishment phase. This is a bug!";
             return false;
@@ -630,9 +640,6 @@ bool ccoip::CCoIPMasterHandler::checkSyncSharedStateConsensus(const uint32_t pee
                     response.distributor_address = *best_peer_opt;
 
                     auto outdated_keys = server_state.getOutdatedSharedStateKeys(peer_uuid);
-                    if (outdated_keys.empty()) {
-                        outdated_keys = server_state.getSharedStateKeys(peer_group);
-                    }
                     response.outdated_keys = outdated_keys;
 
                     for (const auto &key: outdated_keys) {
@@ -721,8 +728,7 @@ bool ccoip::CCoIPMasterHandler::checkSyncSharedStateCompleteConsensus(const uint
     return true;
 }
 
-bool ccoip::CCoIPMasterHandler::checkCollectiveCommsInitiateConsensus(const uint32_t peer_group, const uint64_t tag,
-                                                                      const bool topology_changed) {
+bool ccoip::CCoIPMasterHandler::checkCollectiveCommsInitiateConsensus(const uint32_t peer_group, const uint64_t tag) {
     // check if all clients have voted to initiate the collective communications operation
     if (server_state.collectiveCommsInitiateConsensus(peer_group, tag)) {
         if (!server_state.transitionToPerformCollectiveCommsPhase(peer_group, tag)) {
@@ -758,7 +764,6 @@ bool ccoip::CCoIPMasterHandler::checkCollectiveCommsInitiateConsensus(const uint
             // send confirmation packet
             M2CPacketCollectiveCommsCommence confirm_packet{};
             confirm_packet.tag = tag;
-            confirm_packet.require_topology_update = topology_changed;
             if (!server_socket.sendPacket<M2CPacketCollectiveCommsCommence>(peer_address, confirm_packet)) {
                 LOG(ERR) << "Failed to send M2CPacketCollectiveCommsCommence to "
                          << ccoip_sockaddr_to_str(peer_address);
@@ -876,39 +881,6 @@ void ccoip::CCoIPMasterHandler::handleP2PConnectionsEstablished(const ccoip_sock
     }
 }
 
-void ccoip::CCoIPMasterHandler::handleGetTopologyRequest(const ccoip_socket_address_t &client_address,
-                                                         const C2MPacketGetTopologyRequest &) {
-    THREAD_GUARD(server_thread_id);
-    LOG(DEBUG) << "Received C2MPacketGetTopologyRequest from " << ccoip_sockaddr_to_str(client_address);
-
-    // obtain client uuid from client address
-    ccoip_uuid_t client_uuid{};
-    {
-        const auto client_uuid_opt = server_state.findClientUUID(client_address);
-        if (!client_uuid_opt) [[unlikely]] {
-            LOG(WARN) << "Client " << ccoip_sockaddr_to_str(client_address) << " not found";
-            if (!kickClient(client_address)) [[unlikely]] {
-                LOG(ERR) << "Failed to kick client " << ccoip_sockaddr_to_str(client_address);
-            }
-            return;
-        }
-        client_uuid = client_uuid_opt.value();
-    }
-    if (const auto client_info_opt = server_state.getClientInfo(client_uuid); !client_info_opt) {
-        LOG(WARN) << "Client " << ccoip_sockaddr_to_str(client_address) << " not found";
-        return;
-    }
-
-    // TODO: implement real topology optimization,
-    //  for now we assert ring reduce and return the ring order to be ascending order of client uuids
-    const auto topology = server_state.getRingTopology();
-
-    M2CPacketGetTopologyResponse response{};
-    response.ring_reduce_order = topology;
-    if (!server_socket.sendPacket<M2CPacketGetTopologyResponse>(client_address, response)) {
-        LOG(ERR) << "Failed to send M2CPacketTopologyResponse to " << ccoip_sockaddr_to_str(client_address);
-    }
-}
 
 void ccoip::CCoIPMasterHandler::handleOptimizeTopology(const ccoip_socket_address_t &client_address,
                                                        const C2MPacketOptimizeTopology &packet) {
@@ -1113,7 +1085,7 @@ void ccoip::CCoIPMasterHandler::handleCollectiveCommsInitiate(const ccoip_socket
         return;
     }
     if (const auto &info = info_opt->get();
-        !checkCollectiveCommsInitiateConsensus(info.peer_group, packet.tag, false)) {
+        !checkCollectiveCommsInitiateConsensus(info.peer_group, packet.tag)) {
         LOG(BUG) << "checkCollectiveCommsInitiateConsensus() failed for " << ccoip_sockaddr_to_str(client_address)
                  << " when handling collective comms initiate packet. This should never happen.";
     }
@@ -1224,10 +1196,21 @@ void ccoip::CCoIPMasterHandler::onClientDisconnect(const ccoip_socket_address_t 
     if (!checkEstablishP2PConnectionConsensus()) [[unlikely]] {
         LOG(BUG) << "checkAcceptNewPeersConsensus() failed. This is a bug";
     }
+
+    // If a client disconnects, and we are in the middle of a p2p establishment phase,
+    // some of those p2p connections might have been successfully established before a problematic peer leaves,
+    // maybe said peer has even already confirmed successful establishment to the master,
+    // but those p2p connections are now outdated and do not reflect the topology as it will be when the client
+    // disconnection is fully handled by the master.
+    // This is why we in this case set a flag to indicate that the establishment phase must fail.
+    // This flag is respected in the checkP2PConnectionsEstablished phase.
+    peer_dropped = true;
+
     if (!checkP2PConnectionsEstablished()) {
         LOG(DEBUG) << "checkP2PConnectionsEstablished() returned false; This likely means no clients are waiting for "
                       "other peers and is expected during disconnects.";
     }
+
     if (!checkSyncSharedStateConsensus(client_info.peer_group)) {
         LOG(DEBUG) << "checkSyncSharedStateConsensus() returned false; This likely means no clients are waiting for "
                       "shared state sync and is expected during disconnects.";
@@ -1238,13 +1221,22 @@ void ccoip::CCoIPMasterHandler::onClientDisconnect(const ccoip_socket_address_t 
     }
 
     for (const auto &tag: server_state.getOngoingCollectiveComsOpTags(client_info.peer_group)) {
+        if (!checkCollectiveCommsInitiateConsensus(client_info.peer_group, tag)) {
+            LOG(DEBUG) << "checkCollectiveCommsInitiateConsensus() returned false; This likely means no clients are "
+                          "waiting for collective comms initiation and is expected during disconnects.";
+        }
         if (!checkCollectiveCommsCompleteConsensus(client_info.peer_group, tag)) {
             LOG(DEBUG) << "checkCollectiveCommsCompleteConsensus() returned false; This likely means no clients are "
                           "waiting for collective comms completion and is expected during disconnects.";
         }
-        if (!checkCollectiveCommsInitiateConsensus(client_info.peer_group, tag, true)) {
-            LOG(DEBUG) << "checkCollectiveCommsInitiateConsensus() returned false; This likely means no clients are "
-                          "waiting for collective comms initiation and is expected during disconnects.";
+        if (server_state.isCollectiveOperationRunning(client_info.peer_group, tag)) {
+            if (server_state.abortCollectiveCommsOperation(client_info.peer_group, tag)) {
+                // In this case, the master is the first to notice that a collective op needs to be aborted
+                // due to a client leaving that participated in said operation.
+                // Clients may report io failures themselves which also results in the collective op being aborted,
+                // but so must the master.
+                sendCollectiveCommsAbortPackets(client_info.peer_group, tag, true);
+            }
         }
     }
 }
@@ -1298,6 +1290,7 @@ void ccoip::CCoIPMasterHandler::sendP2PConnectionInformation(const bool changed,
         }
     }
 
+    LOG(DEBUG) << "Sending p2p connection information to peer " << ccoip_sockaddr_to_str(peer_address);
     if (!server_socket.sendPacket(peer_address, new_peers)) {
         LOG(ERR) << "Failed to send M2CPacketNewPeers to " << ccoip_sockaddr_to_str(peer_address);
     }

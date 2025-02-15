@@ -361,7 +361,6 @@ def main():
 
     # Prepare first batch
     x, y = get_batch_fn('train', config, device_type, device)
-    t0 = time.time()
 
     world_size: int = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
 
@@ -482,7 +481,7 @@ def main():
                 grads_dst.zero_()
 
             with profiler.session("all_reduce"):
-                while True:
+                while world_size > 1:
                     op_desc = ReduceOperandDescriptor(
                         datatype=DataType.FLOAT,
                         distribution_hint=DistributionHint.NORMAL
@@ -497,6 +496,7 @@ def main():
                         handle = communicator.all_reduce_async(grads, grads_dst, operand_descriptor=op_desc,
                                                                quantization_options=quant_desc, op=ReduceOp.SUM)
                         is_success, status, info = handle.wait()
+                        world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
 
                     end = time.time()
                     if not is_success:
@@ -506,6 +506,11 @@ def main():
                     print(
                         f"step {iter_num}: all reduce completed in {end - start:.2f}s, bandwidth {(total_bytes / 1e6) / (end - start):.2f} MB/s")
                     break
+                if world_size == 1:
+                    # drop current step, as we are alone in the run and whatever we just computed would induce too much noise if we stepped here.
+                    # If one accepts the pattern that one waits until the world size is at least two, it would be erroneous to step here.
+                    print("All peers have left except this peer. Dropping current step to avoid inducing too much variance with our local batch!")
+                    continue
 
             # scatter gradients back to model parameters
             with profiler.session("scatter_gradients"):

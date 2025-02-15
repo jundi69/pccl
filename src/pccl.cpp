@@ -99,11 +99,6 @@ pcclResult_t pcclConnect(pcclComm_t *communicator) {
         status = pcclMasterConnectionFailed;
         goto failure;
     }
-    if (!communicator->ccoip_client->obtainTopology()) {
-        LOG(ERR) << "Failed to update topology after connecting to master";
-        status = pcclMasterConnectionFailed;
-        goto failure;
-    }
     return status;
 failure:
     communicator->ccoip_client = nullptr;
@@ -192,11 +187,6 @@ pcclResult_t pcclUpdateTopology(pcclComm_t *communicator) {
         return pcclUpdateTopologyFailed;
     }
 
-    // update the topology
-    if (!communicator->ccoip_client->obtainTopology()) {
-        return pcclInvalidUsage;
-    }
-
     return pcclSuccess;
 }
 
@@ -209,10 +199,6 @@ pcclResult_t pcclOptimizeTopology(const pcclComm_t *communicator) {
     if (communicator->ccoip_client->getWorldSize() > 1) {
         if (!communicator->ccoip_client->optimizeTopology()) {
             return pcclTopologyOptimizationFailed;
-        }
-        // get the updated topology
-        if (!communicator->ccoip_client->obtainTopology()) {
-            return pcclInvalidUsage;
         }
     } else {
         return pcclInvalidUsage;
