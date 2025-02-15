@@ -30,8 +30,10 @@ def compute_crc32(tensor: torch.Tensor) -> int:
     return checksum
 
 
+USE_CUDA = os.getenv("MNIST_USE_CUDA", None) == "1"
+
 # Set device
-device = torch.device("cpu")
+device = torch.device("cpu") if not USE_CUDA else torch.device("cuda")
 
 # Define hyperparameters
 input_size = 28 * 28  # MNIST images are 28x28
@@ -142,7 +144,7 @@ def main():
 
     # perform a dummy forward pass to initialize the optimizer state
     for p in model.parameters():
-        p.grad = torch.zeros_like(p)  # set all gradients to zero
+        p.grad = torch.zeros_like(p, device=device)  # set all gradients to zero
     optimizer.step()
     print(f"(RANK={RANK}) Initialized optimizer state")
 
@@ -240,7 +242,7 @@ def main():
             loss.backward()
 
             # collect gradients in one contiguous tensor
-            grads = torch.cat([p.grad.view(-1) for p in model.parameters() if p.grad is not None])
+            grads = torch.cat([p.grad.view(-1) for p in model.parameters() if p.grad is not None]).to('cpu')
 
             while world_size > 1:
                 log_debug(f"(RANK={RANK}, it={it}) all_reduce_async()")

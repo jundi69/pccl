@@ -5,6 +5,8 @@ import time
 import unittest
 from typing import List, Optional, Dict
 
+import pytest
+
 
 def launch_py_process(
         script_path: str,
@@ -29,8 +31,8 @@ def launch_py_process(
         env=env
     )
 
-
-def test_mnist_ddp_world_size_2():
+@pytest.mark.parametrize("use_cuda", [False, True])
+def test_mnist_ddp_world_size_2(use_cuda: bool):
     peer_script_path = os.path.join(os.path.dirname(__file__), 'mnist_peer.py')
     master_script_path = os.path.join(os.path.dirname(__file__), 'mnist_master.py')
 
@@ -41,7 +43,7 @@ def test_mnist_ddp_world_size_2():
     # launch 2 peers
     process_list = []
     for rank in range(2):
-        process_list.append(launch_py_process(peer_script_path, [], {'PCCL_LOG_LEVEL': 'INFO', 'RANK': str(rank)}))
+        process_list.append(launch_py_process(peer_script_path, [], {'PCCL_LOG_LEVEL': 'INFO', 'RANK': str(rank), 'MNIST_USE_CUDA': "1" if use_cuda else "0"}))
         print(f"Launched peer {rank}; PID: {process_list[-1].pid}")
 
     # wait for all processes to finish
@@ -54,7 +56,8 @@ def test_mnist_ddp_world_size_2():
     master_process.wait()
 
 
-def test_mnist_ddp_world_size_3():
+@pytest.mark.parametrize("use_cuda", [False, True])
+def test_mnist_ddp_world_size_3(use_cuda: bool):
     peer_script_path = os.path.join(os.path.dirname(__file__), 'mnist_peer.py')
     master_script_path = os.path.join(os.path.dirname(__file__), 'mnist_master.py')
 
@@ -65,7 +68,7 @@ def test_mnist_ddp_world_size_3():
     # launch 3 peers
     process_list = []
     for rank in range(3):
-        process_list.append(launch_py_process(peer_script_path, [], {'PCCL_LOG_LEVEL': 'INFO', 'RANK': str(rank)}))
+        process_list.append(launch_py_process(peer_script_path, [], {'PCCL_LOG_LEVEL': 'INFO', 'RANK': str(rank), 'MNIST_USE_CUDA': "1" if use_cuda else "0"}))
         print(f"Launched peer {rank}; PID: {process_list[-1].pid}")
 
     # wait for all processes to finish
@@ -78,7 +81,8 @@ def test_mnist_ddp_world_size_3():
     master_process.wait()
 
 
-def test_mnist_ddp_world_size_2_plus_1_late_joiner():
+@pytest.mark.parametrize("use_cuda", [True])
+def test_mnist_ddp_world_size_2_plus_1_late_joiner(use_cuda: bool):
     peer_script_path = os.path.join(os.path.dirname(__file__), 'mnist_peer.py')
     master_script_path = os.path.join(os.path.dirname(__file__), 'mnist_master.py')
 
@@ -89,14 +93,14 @@ def test_mnist_ddp_world_size_2_plus_1_late_joiner():
     # launch 2 peers
     process_list = []
     for rank in range(2):
-        process_list.append(launch_py_process(peer_script_path, [], {'PCCL_LOG_LEVEL': 'INFO', 'RANK': str(rank), 'DONT_EXIT_BEFORE_REACHED_WORLD_SIZE': "3"}))
+        process_list.append(launch_py_process(peer_script_path, [], {'PCCL_LOG_LEVEL': 'INFO', 'RANK': str(rank), 'DONT_EXIT_BEFORE_REACHED_WORLD_SIZE': "3", 'MNIST_USE_CUDA': "1" if use_cuda else "0"}))
         print(f"Launched peer {rank}; PID: {process_list[-1].pid}")
 
     time.sleep(0.5)
 
     # if the other two peers are still running, add the third peer; otherwise, fail the test
     if all(p.poll() is None for p in process_list):
-        process_list.append(launch_py_process(peer_script_path, [], {'PCCL_LOG_LEVEL': 'INFO', 'RANK': '2'}))
+        process_list.append(launch_py_process(peer_script_path, [], {'PCCL_LOG_LEVEL': 'INFO', 'RANK': '2', 'MNIST_USE_CUDA': "1" if use_cuda else "0"}))
         print(f"Launched peer 2; PID: {process_list[-1].pid}")
     else:
         assert False, "One of the peers exited prematurely"
@@ -111,8 +115,9 @@ def test_mnist_ddp_world_size_2_plus_1_late_joiner():
     master_process.wait()
 
 
+@pytest.mark.parametrize("use_cuda", [False, True])
 @unittest.skip("Skipping test_mnist_ddp_world_size_4")
-def test_mnist_ddp_world_size_4():
+def test_mnist_ddp_world_size_4(use_cuda: bool):
     peer_script_path = os.path.join(os.path.dirname(__file__), 'mnist_peer.py')
     master_script_path = os.path.join(os.path.dirname(__file__), 'mnist_master.py')
 
@@ -123,7 +128,7 @@ def test_mnist_ddp_world_size_4():
     # launch 4 peers
     process_list = []
     for rank in range(4):
-        process_list.append(launch_py_process(peer_script_path, [], {'PCCL_LOG_LEVEL': 'INFO', 'RANK': str(rank)}))
+        process_list.append(launch_py_process(peer_script_path, [], {'PCCL_LOG_LEVEL': 'INFO', 'RANK': str(rank), 'MNIST_USE_CUDA': "1" if use_cuda else "0"}))
         print(f"Launched peer {rank}; PID: {process_list[-1].pid}")
 
     # wait for all processes to finish
@@ -135,8 +140,9 @@ def test_mnist_ddp_world_size_4():
     master_process.kill()
     master_process.wait()
 
+@pytest.mark.parametrize("use_cuda", [False, True])
 @unittest.skip("Skipping test_mnist_ddp_world_size_16")
-def test_mnist_ddp_world_size_16():
+def test_mnist_ddp_world_size_16(use_cuda: bool):
     peer_script_path = os.path.join(os.path.dirname(__file__), 'mnist_peer.py')
     master_script_path = os.path.join(os.path.dirname(__file__), 'mnist_master.py')
 
@@ -147,7 +153,7 @@ def test_mnist_ddp_world_size_16():
     # launch 16 peers
     process_list = []
     for rank in range(16):
-        process_list.append(launch_py_process(peer_script_path, [], {'PCCL_LOG_LEVEL': 'INFO', 'RANK': str(rank)}))
+        process_list.append(launch_py_process(peer_script_path, [], {'PCCL_LOG_LEVEL': 'INFO', 'RANK': str(rank), 'MNIST_USE_CUDA': "1" if use_cuda else "0"}))
         print(f"Launched peer {rank}; PID: {process_list[-1].pid}")
 
     # wait for all processes to finish
