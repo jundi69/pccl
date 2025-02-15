@@ -539,18 +539,6 @@ namespace ccoip {
         /// and can be queried via @code getSharedStateMismatchStatus@endcode.
         [[nodiscard]] SharedStateMismatchStatus isNewRevisionLegal(const ccoip_uuid_t &peer_uuid, uint64_t revision);
 
-        /// Returns true if the shared state entries provided match the current "mask".
-        /// A "mask" is defined by the identity of the set of shared state key strings and their corresponding hashes.
-        /// If @code ignore_hashes@endcode is true, only the shared state keys are compared.
-        /// If this is the first client to sync shared state, then the supplied shared state will define the "mask"
-        /// for subsequent checks.
-        /// The "mask" is elected by popularity among peers. The most popular "mask" determines which peers
-        /// are considered to have outdated or illegal shared state.
-        /// This status will be retained until the shared state voting phase ends and can be queried
-        /// via @code getSharedStateMismatchStatus@endcode.
-        [[nodiscard]] SharedStateMismatchStatus sharedStateMatches(const ccoip_uuid_t &peer_uuid,
-                                                                   const std::vector<SharedStateHashEntry> &entries);
-
         /// Votes for a specific shared state mask; Called for each peer that has voted to synchronize shared state.
         /// After all clients have voted to synchronize shared state, the elected shared state mask will be chosen by
         /// popularity.

@@ -790,7 +790,7 @@ bool ccoip::CCoIPClientHandler::closeAllP2PConnections() {
 
     // close tx connections
     {
-            while (tx_connections_it != p2p_connections_tx.end()) {
+        while (tx_connections_it != p2p_connections_tx.end()) {
             const auto &[uuid, tx_connection] = *tx_connections_it;
             if (!tx_connection->closeConnection()) [[unlikely]] {
                 LOG(BUG) << "Failed to close connection with peer " << uuid_to_string(uuid);

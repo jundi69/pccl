@@ -39,7 +39,7 @@ namespace tinysockets {
         std::mutex mutex; // Protects condition variable and access coordination
         std::condition_variable cond_var;
 
-        QueuedSocketInternalState() : recv_queue() {}
+        QueuedSocketInternalState() {}
     };
 } // namespace tinysockets
 
