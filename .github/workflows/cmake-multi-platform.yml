@@ -101,7 +101,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: cmd
         run: |
-          call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat" "${{ matrix.msvc_cpu_arch }}"
+          call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat" ${{ matrix.msvc_cpu_arch }}
           cmake -B ${{steps.strings-windows.outputs.build-output-dir }} -G ${{ matrix.generator }} "-DCMAKE_MAKE_PROGRAM=${{ matrix.make_program }}" "-DPCCL_BUILD_CUDA_SUPPORT=${{ matrix.pccl_build_cuda_support }}" -S "${{ github.workspace }}"
 
       - name: Build (Unix)
@@ -112,7 +112,7 @@ jobs:
         shell: cmd
         if: runner.os == 'Windows'
         run: |
-          call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat" "${{ matrix.msvc_cpu_arch }}"
+          call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat" ${{ matrix.msvc_cpu_arch }}
           cmake --build "${{ steps.strings-windows.outputs.build-output-dir }}" --config ${{ matrix.build_type }} --parallel
 
       - name: Test
@@ -123,7 +123,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: cmd
         run: |
-          call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat" "${{ matrix.msvc_cpu_arch }}"
+          call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat" ${{ matrix.msvc_cpu_arch }}
           set MAKE_PROGRAM=${{ matrix.make_program }}
           set CMAKE_GENERATOR=${{ matrix.generator }}
           set PCCL_BUILD_CUDA_SUPPORT=${{ matrix.pccl_build_cuda_support }}
