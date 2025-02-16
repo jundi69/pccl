@@ -3,10 +3,12 @@
 #include <random>
 #include <array>
 #include <chrono>
-
+#include <iostream>
+#include <cstdint>
+#include <vector>
 
 uint32_t CRC32Ref(const void *data, const size_t size) {
-    auto* buf = static_cast<const std::uint8_t*>(data);
+    auto *buf = static_cast<const std::uint8_t *>(data);
     static constexpr std::array<std::uint32_t, 256> crc_lut = {
         0x00000000, 0xf26b8303, 0xe13b70f7, 0x1350f3f4, 0xc79a971f, 0x35f1141c,
         0x26a1e7e8, 0xd4ca64eb, 0x8ad958cf, 0x78b2dbcc, 0x6be22838, 0x9989ab3b,
@@ -51,15 +53,16 @@ uint32_t CRC32Ref(const void *data, const size_t size) {
         0xf36e6f75, 0x0105ec76, 0x12551f82, 0xe03e9c81, 0x34f4f86a, 0xc69f7b69,
         0xd5cf889d, 0x27a40b9e, 0x79b737ba, 0x8bdcb4b9, 0x988c474d, 0x6ae7c44e,
         0xbe2da0a5, 0x4c4623a6, 0x5f16d052, 0xad7d5351
-        };
-        std::uint32_t crc = ~0u;
-        for (std::size_t i=0; i < size; ++i)
-            crc = (crc >> 8) ^ crc_lut[buf[i] ^ (crc & 0xff)];
-        return ~crc;
+    };
+    std::uint32_t crc = ~0u;
+    for (std::size_t i = 0; i < size; ++i)
+        crc = (crc >> 8) ^ crc_lut[buf[i] ^ (crc & 0xff)];
+    return ~crc;
 }
 
-TEST(CRC32Test, BenchmarkAgainstBaseline) {
-    std::vector<uint8_t> data(1024 * 1024 * 10, 0); // 10 MB
+static void runCrc32Test() {
+    // 64 MiB buffer
+    std::vector<uint8_t> data(1024 * 1024 * 64, 0);
 
     // init random
     {
@@ -67,50 +70,117 @@ TEST(CRC32Test, BenchmarkAgainstBaseline) {
         std::mt19937_64 generator(rd());
         std::uniform_int_distribution<uint32_t> dist(0, 255);
 
-        for (size_t i = 0; i < data.size(); ++i) { // NOLINT(*-loop-convert)
+        for (size_t i = 0; i < data.size(); ++i) {
             data[i] = dist(generator);
         }
     }
 
     constexpr int n_repeat = 100;
     uint64_t hashes_base[n_repeat]{};
+    uint64_t hashes_fast_crc[n_repeat]{};
+
+    // We'll use this to compute total bytes hashed:
+    const uint64_t total_bytes = data.size() * n_repeat;
+
+    // Baseline
     {
         const auto start = std::chrono::high_resolution_clock::now();
-
-        for (int i = 0; i < n_repeat; ++i) { // NOLINT(*-loop-convert)
+        for (int i = 0; i < n_repeat; ++i) {
             hashes_base[i] = CRC32Ref(data.data(), data.size());
         }
         const auto end = std::chrono::high_resolution_clock::now();
         const auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-        std::cout << "Baseline: " << duration.count() << " ms" << std::endl;
 
-        // assert all hashes are the same
+        // Compute throughput in GB/s (using 1024^3 bytes = 1 GiB)
+        double duration_sec = duration.count() / 1000.0;
+        double gb_s = (static_cast<double>(total_bytes) / duration_sec) / (1024.0 * 1024.0 * 1024.0);
+
+        std::cout << "Baseline: "
+                << duration.count() << " ms, "
+                << gb_s << " GB/s"
+                << std::endl;
+
+        // Assert all baseline hashes are the same
         for (int i = 1; i < n_repeat; ++i) {
             ASSERT_EQ(hashes_base[i], hashes_base[0]);
         }
     }
 
-    uint64_t hashes_fast_crc[n_repeat]{};
+    // Fast CRC
     {
         const auto start = std::chrono::high_resolution_clock::now();
-
-        for (int i = 0; i < n_repeat; ++i) { // NOLINT(*-loop-convert)
+        for (int i = 0; i < n_repeat; ++i) {
             hashes_fast_crc[i] = ccoip::hash_utils::CRC32(data.data(), data.size());
         }
         const auto end = std::chrono::high_resolution_clock::now();
         const auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-        std::cout << "CRC32 fast: " << duration.count() << " ms" << std::endl;
 
-        // assert all hashes are the same
+        // Compute throughput in GB/s (using 1024^3 bytes = 1 GiB)
+        double duration_sec = duration.count() / 1000.0;
+        double gb_s = (static_cast<double>(total_bytes) / duration_sec) / (1024.0 * 1024.0 * 1024.0);
+
+        std::cout << "CRC32 fast: "
+                << duration.count() << " ms, "
+                << gb_s << " GB/s"
+                << std::endl;
+
+        // Assert all fast hashes are the same
         for (int i = 1; i < n_repeat; ++i) {
             ASSERT_EQ(hashes_fast_crc[i], hashes_fast_crc[0]);
         }
     }
 
-    for (int i = 0; i < n_repeat; ++i) { // check if the hashes are the same
+    // Finally, check if both sets of hashes match
+    for (int i = 0; i < n_repeat; ++i) {
         ASSERT_EQ(hashes_base[i], hashes_fast_crc[i]);
     }
 }
+
+TEST(CRC32Test, BenchmarkAgainstBaselineRuntimeCPUID) {
+    std::cout << "BenchmarkAgainstBaselineRuntimeCPUID" << std::endl;
+    runCrc32Test();
+}
+
+/// NOTE: ALWAYS KEEP THIS IN SYNC WITH crc32_cpu.cpp
+// Make sure that the CPUFeatures struct & _SpoofCpuFeatures prototype is always updated here when changed in crc32_cpu.cpp
+struct CPUFeatures {
+    bool hasSSE42 = false; // x86 SSE4.2
+    bool hasPCLMUL = false; // x86 PCLMULQDQ
+    bool hasArmCRC = false; // ARMv8 CRC instructions
+    bool hasArmPMULL = false; // ARMv8 PMULL instructions
+};
+
+void _SpoofCpuFeatures(const CPUFeatures &cpu_features);
+/// ENDNOTE
+
+TEST(CRC32Test, BenchmarkAgainstBaselineNoSupportedFeatures) {
+    std::cout << "BenchmarkAgainstBaselineNoSupportedFeatures" << std::endl;
+    constexpr CPUFeatures cpu_features{};
+    _SpoofCpuFeatures(cpu_features);
+    runCrc32Test();
+}
+
+#if defined(__x86_64__) || defined(_M_X64) // this could technically fail with a CI runner from fucking 2004. Sue me
+TEST(CRC32Test, BenchmarkAgainstBaselineHasSSE42) {
+    std::cout << "BenchmarkAgainstBaselineHasSSE42" << std::endl;
+    constexpr CPUFeatures cpu_features{.hasSSE42 = true};
+    _SpoofCpuFeatures(cpu_features);
+    runCrc32Test();
+}
+TEST(CRC32Test, BenchmarkAgainstBaselineHasPCLMul) {
+    std::cout << "BenchmarkAgainstBaselineHasPCLMul" << std::endl;
+    constexpr CPUFeatures cpu_features{.hasPCLMUL = true};
+    _SpoofCpuFeatures(cpu_features);
+    runCrc32Test();
+}
+
+TEST(CRC32Test, BenchmarkAgainstBaselineHasSSE42AndPCLMul) {
+    std::cout << "BenchmarkAgainstBaselineHasSSE42AndPCLMul" << std::endl;
+    constexpr CPUFeatures cpu_features{.hasSSE42 = true, .hasPCLMUL = true};
+    _SpoofCpuFeatures(cpu_features);
+    runCrc32Test();
+}
+#endif
 
 
 int main(int argc, char **argv) {
