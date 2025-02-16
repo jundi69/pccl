@@ -341,7 +341,7 @@ def main():
             continue
 
         # F) increment the shared revision => sync
-        shagred_state.revision += 1
+        shared_state.revision += 1
 
         # G) Stop if we've done enough steps
         if shared_state.revision >= MAX_STEPS:

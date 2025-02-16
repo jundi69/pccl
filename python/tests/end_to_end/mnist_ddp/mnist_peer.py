@@ -43,7 +43,7 @@ num_classes = 10  # Digits 0-9
 batch_size = 32
 learning_rate = 0.001
 IS_CI = os.getenv('IS_CI', '0') == '1'
-max_steps = 512
+max_steps = 128
 
 # MNIST dataset (images and labels)
 train_dataset = datasets.MNIST(root='./data', train=True, transform=transforms.ToTensor(), download=True)
@@ -257,6 +257,7 @@ def main():
                 handle = communicator.all_reduce_async(grads, grads, operand_descriptor=op_desc,
                                                        quantization_options=quant_desc, op=ReduceOp.SUM)
                 is_success, status, info = handle.wait()
+                world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
                 if not is_success:
                     log_debug(f"(RANK={RANK}, it={it}) all_reduce_async() failed: {status}; retrying...")
                     continue

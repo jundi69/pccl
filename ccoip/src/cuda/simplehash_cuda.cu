@@ -1,5 +1,5 @@
 // This is about as fast as thrust can do it
-// TODO: OPTIMIZE THIS FURTHER
+// TODO: OPTIMIZE THIS FURTHER (AND KEEP IN SYNC WITH CPU IMPLEMENTATION)
 
 #include <cstdint>
 #include <cstdlib>
@@ -20,10 +20,11 @@ struct HashCombine {
      * @return The combined hash value.
      */
     __host__ __device__ __forceinline__
-    uint32_t operator()(uint32_t a, const uint32_t b) const {
-        a ^= b + 0x9e3779b1u;
-        a = (a << 7) | (a >> 25);
-        a *= 0x85ebca6bu;
+    uint32_t operator()(uint32_t a, uint32_t b) const {
+        // Inspired by fnv1a.
+        b ^= 0x9e3779b1u;
+        b *= 0x85ebca6bu;
+        a ^= b;
         return a;
     }
 };
@@ -170,7 +171,7 @@ extern "C" __host__ uint64_t simplehash_cuda_kernel(const void *data, const size
     if (n_bytes == 0) {
         return 0;
     }
-    // if not 16-byte alligned, fail
+    // if not 16-byte aligned, fail
     if (reinterpret_cast<uint64_t>(data) % 16 != 0) {
         abort();
     }
@@ -189,11 +190,11 @@ extern "C" __host__ uint64_t simplehash_cuda_kernel(const void *data, const size
 
     if (n_words > 0) {
         // Use vectorized elements (each uint4 covers 4 uint32_t's) to base grid dimensions.
-        const auto n_vec = static_cast<uint32_t>(n_words / 4);
+        const size_t n_vec = n_words / 4;
         const auto tail_ints = static_cast<uint32_t>(n_words % 4);
         if (n_vec > 0) {
             constexpr int blockDim_x = 256;
-            uint32_t gridDim_x = (n_vec + blockDim_x - 1) / blockDim_x;
+            auto gridDim_x = static_cast<uint32_t>((n_vec + blockDim_x - 1) / blockDim_x);
             if (gridDim_x > 960) {
                 gridDim_x = 960;
             }
@@ -238,11 +239,9 @@ extern "C" __host__ uint64_t simplehash_cuda_kernel(const void *data, const size
             if (res != CUDA_SUCCESS) {
                 abort();
             }
-            uint32_t tailVal = 0;
             for (size_t i = 0; i < tail_ints; ++i) {
-                tailVal |= tail_host[i] << (8 * i);
+                final_host_val = HashCombine()(final_host_val, tail_host[i]);
             }
-            final_host_val = HashCombine()(final_host_val, tailVal);
         }
     }
 

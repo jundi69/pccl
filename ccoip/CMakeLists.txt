@@ -5,6 +5,27 @@ add_library(ccoip_internal STATIC
         src/cpp/ccoip_master_state.cpp src/cpp/ccoip_client_state.cpp src/cpp/reduce_kernels.cpp src/cpp/reduce.cpp src/cpp/quantize.cpp
         src/cpp/quantize_kernels.cpp src/cpp/simplehash_cuda.cpp)
 
+add_library(crc32_cpu STATIC src/cpp/crc32_cpu.cpp)
+add_library(simplehash_cpu STATIC src/cpp/simplehash_cpu.cpp)
+
+# Arch specific compilation options.
+# Excludes older x86-64 CPUs released before 2008 (Intel) or 2011 (AMD) and excludes ARM CPUs before 2013.
+# These CPUs do not support the required instruction sets.
+# Instructions are needed for the fast CRC32 implementation.
+if(${IS_AMD64})
+    # we compile with all these options
+    set(AMD64_COMPILE_ARGS "-msse2" "-msse3" "-mssse3" "-msse4.1" "-msse4.2" "-mpclmul" "-mavx2")
+    target_compile_options(crc32_cpu PUBLIC ${AMD64_COMPILE_ARGS})
+    target_compile_options(simplehash_cpu PUBLIC ${AMD64_COMPILE_ARGS})
+elseif(${IS_ARM64})
+    set(ARM64_COMPILE_ARGS "-march=armv8-a+simd")
+    target_compile_options(crc32_cpu PUBLIC ${ARM64_COMPILE_ARGS})
+    target_compile_options(simplehash_cpu PUBLIC ${ARM64_COMPILE_ARGS})
+endif()
+
+target_link_libraries(ccoip_internal PRIVATE crc32_cpu)
+target_link_libraries(ccoip_internal PRIVATE simplehash_cpu)
+
 target_link_libraries(ccoip_internal PRIVATE tinysockets)
 target_link_libraries(ccoip_internal PRIVATE pccl_log)
 target_link_libraries(ccoip_internal PRIVATE tsp)
@@ -23,16 +44,6 @@ if (PCCL_BUILD_CUDA_SUPPORT)
     target_link_libraries(simplehash_cuda PUBLIC CUDA::cuda_driver)
     target_link_libraries(ccoip_internal PRIVATE simplehash_cuda)
 endif ()
-
-# Arch specific compilation options.
-# Excludes older x86-64 CPUs released before 2008 (Intel) or 2011 (AMD) and excludes ARM CPUs before 2013.
-# These CPUs do not support the required instruction sets.
-# Instructions are needed for the fast CRC32 implementation.
-if(${IS_AMD64})
-    target_compile_options(ccoip_internal PRIVATE -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mpclmul)
-elseif(${IS_ARM64})
-    target_compile_options(ccoip_internal PRIVATE -march=armv8-a+simd)
-endif()
 
 # add stub C++ language targets ccoip_private & ccoip_public
 add_library(ccoip_private STATIC cmake_hacks/dummy.cpp)
