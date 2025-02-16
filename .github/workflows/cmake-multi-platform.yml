@@ -176,34 +176,44 @@ jobs:
           python -m pip install ./python/framework/dist/pccl-*.whl
 
       - name: Install Unit Test dependencies
+        if: ${{ matrix.is_host_arch }}
         run: python -m pip install -r ${{ github.workspace }}/python/tests/unit_tests/requirements.txt
 
       - name: Python Unit Tests
+        if: ${{ matrix.is_host_arch }}
         run: python -m pytest -s ${{ github.workspace }}/python/tests/unit_tests
 
       - name: Install Numpy-Only Test dependencies
+        if: ${{ matrix.is_host_arch }}
         run: python -m pip install -r ${{ github.workspace }}/python/tests/numpy_only_tests/requirements.txt
 
       - name: Uninstall pytorch for Numpy-Only Tests
+        if: ${{ matrix.is_host_arch }}
         run: python -m pip uninstall -y torch torchvision
 
       - name: Python Numpy-Only Tests
+        if: ${{ matrix.is_host_arch }}
         run: python -m pytest -s -v ${{ github.workspace }}/python/tests/numpy_only_tests
 
       - name: Install Pytorch-Only Test dependencies
+        if: ${{ matrix.is_host_arch }}
         run: python -m pip install -r ${{ github.workspace }}/python/tests/pytorch_only_tests/requirements.txt
 
       - name: Uninstall numpy for Pytorch-Only Tests
+        if: ${{ matrix.is_host_arch }}
         run: python -m pip uninstall -y numpy
 
       - name: Python Pytorch-Only Tests
+        if: ${{ matrix.is_host_arch }}
         run: python -m pytest -s -v ${{ github.workspace }}/python/tests/pytorch_only_tests
 
       - name: Install End-to-End Test dependencies
+        if: ${{ matrix.is_host_arch }}
         run: |
           python -m pip install -r ${{ github.workspace }}/python/tests/end_to_end/requirements.txt
           python -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
 
       - name: Python End-to-End Tests
+        if: ${{ matrix.is_host_arch }}
         working-directory: ${{ github.workspace }}/python/tests/end_to_end/
         run: python -m pytest -s -v ${{ github.workspace }}/python/tests/end_to_end
