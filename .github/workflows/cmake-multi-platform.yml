@@ -21,45 +21,50 @@ jobs:
       matrix:
         include:
           # Linux configurations using self-hosted runners
-          - runs-on: [ self-hosted, Linux, cpu ]
+          - runs-on: [ self-hosted, Linux, X64, cpu ]
             os: ubuntu-latest
             c_compiler: gcc
             cpp_compiler: g++
+            is_host_arch: true
             generator: Ninja
             build_type: Release
             pccl_build_cuda_support: OFF
 
-          - runs-on: [ self-hosted, Linux, cuda ]
+          - runs-on: [ self-hosted, Linux, X64, cuda ]
             os: ubuntu-latest
             c_compiler: gcc
             cpp_compiler: g++
+            is_host_arch: true
             generator: Ninja
             build_type: Release
             pccl_build_cuda_support: ON
 
           # Windows configurations using GitHub-hosted runners
           # x86_64, no cuda
-          - runs-on: [ self-hosted, Windows, cpu ]
+          - runs-on: [ self-hosted, Windows, X64, cpu ]
             os: windows-latest
             msvc_cpu_arch: amd64
+            is_host_arch: true
             make_program: C:/Program Files/NinjaBuild/bin/ninja.exe
             generator: Ninja
             build_type: Release
             pccl_build_cuda_support: OFF
 
           # x86_64 with cuda
-          - runs-on: [ self-hosted, Windows, cuda ]
+          - runs-on: [ self-hosted, Windows, X64, cuda ]
             os: windows-latest
             msvc_cpu_arch: amd64
+            is_host_arch: true
             make_program: C:/Program Files/NinjaBuild/bin/ninja.exe
             generator: Ninja
             build_type: Release
             pccl_build_cuda_support: ON
 
           # aarch64, no cuda
-          - runs-on: [ self-hosted, Windows, cpu ]
+          - runs-on: [ self-hosted, Windows, X64, cpu ]
             os: windows-latest
             msvc_cpu_arch: amd64_arm64 # cross compile arm64 on x86_64
+            is_host_arch: false
             make_program: C:/Program Files/NinjaBuild/bin/ninja.exe
             generator: Ninja
             build_type: Release
@@ -116,6 +121,7 @@ jobs:
           cmake --build "${{ steps.strings-windows.outputs.build-output-dir }}" --config ${{ matrix.build_type }} --parallel
 
       - name: Test
+        if: ${{ matrix.is_host_arch }}
         working-directory: ${{ steps.strings-unix.outputs.build-output-dir || steps.strings-windows.outputs.build-output-dir }}
         run: ctest --verbose --build-config ${{ matrix.build_type }} --output-on-failure
 
@@ -134,26 +140,26 @@ jobs:
         run: cd ${{ github.workspace }}/python/framework && CMAKE_GENERATOR=${{ matrix.generator }} PCCL_BUILD_CUDA_SUPPORT=${{ matrix.pccl_build_cuda_support }} pip3 wheel --verbose -w dist .
 
       - name: Create Python virtual environment (Unix)
-        if: runner.os != 'Windows'
+        if: ${{ runner.os != 'Windows' && matrix.is_host_arch }}
         run: python3 -m venv ${{ github.workspace }}/venv
       
       - name: Create Python virtual environment (Windows)
-        if: runner.os == 'Windows'
+        if: ${{ runner.os == 'Windows' && matrix.is_host_arch }}
         run: python -m venv ${{ github.workspace }}/venv
 
       - name: Activate virtual environment (Unix)
-        if: runner.os != 'Windows'
+        if: ${{ runner.os != 'Windows' && matrix.is_host_arch }}
         run: echo 'PATH=${{ github.workspace }}/venv/bin:$PATH' >> $GITHUB_ENV
 
       - name: Activate virtual environment (Windows)
-        if: runner.os == 'Windows'
+        if: ${{ runner.os == 'Windows' && matrix.is_host_arch }}
         shell: powershell
         run: |
           echo "${{ github.workspace }}\venv\Scripts" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       
       - name: Install wheel (Windows)
-        if: runner.os == 'Windows'
+        if: ${{ runner.os == 'Windows' && matrix.is_host_arch }}
         shell: pwsh
         run: |
           $wheels = Get-ChildItem "$env:GITHUB_WORKSPACE\python\framework\dist\pccl-*.whl"
@@ -164,7 +170,7 @@ jobs:
           pip install $wheels
 
       - name: Install wheel (Unix)
-        if: runner.os != 'Windows'
+        if: ${{ runner.os != 'Windows' && matrix.is_host_arch }}
         shell: bash
         run: |
           python -m pip install ./python/framework/dist/pccl-*.whl
