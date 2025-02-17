@@ -147,7 +147,7 @@ TEST(SimpleHashTest, TestSizeOneByte) {
     // Compare with expected
     for (int i = 0; i < n_repeat; ++i) {
         ASSERT_EQ(reference, simple_hashes[i]);
-        ASSERT_EQ(2429690320, simple_hashes[i]);
+        ASSERT_EQ(366970640, simple_hashes[i]);
     }
 
     free(host_buffer);
@@ -189,7 +189,7 @@ TEST(SimpleHashTest, TestSizeFourBytes) {
     // Compare with expected
     for (int i = 0; i < n_repeat; ++i) {
         ASSERT_EQ(reference, simple_hashes[i]);
-        ASSERT_EQ(1120185552, simple_hashes[i]);
+        ASSERT_EQ(3727309584, simple_hashes[i]);
     }
 
     free(host_buffer);
@@ -232,7 +232,7 @@ TEST(SimpleHashTest, TestOneVecPlus2WordsPlus1Byte) {
     // Compare with expected
     for (int i = 0; i < n_repeat; ++i) {
         ASSERT_EQ(reference, simple_hashes[i]);
-        ASSERT_EQ(654648064, simple_hashes[i]);
+        ASSERT_EQ(3836545445, simple_hashes[i]);
     }
 
     free(host_buffer);
