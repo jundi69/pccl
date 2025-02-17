@@ -51,13 +51,17 @@ static void gpu_fill_random(void *host_buffer, const size_t size) {
     cuMemFree_v2(dev_ptr);
 }
 
-static void cpu_fill_random(char *data, const size_t size) {
-    std::mt19937_64 generator(42);
-    std::uniform_int_distribution<uint32_t> dist(0, 255);
+uint32_t next_uint32(uint32_t &seed, const uint32_t lo, const uint32_t hi) {
+    seed = 1664525u * seed + 1013904223u;
+    const uint64_t range = static_cast<uint64_t>(hi) - static_cast<uint64_t>(lo) + 1ULL;
+    const uint32_t rndInRange = static_cast<uint32_t>(static_cast<uint64_t>(seed) % range) + lo;
+    return rndInRange;
+}
 
-    for (size_t i = 0; i < size; i++) {
-        // NOLINT(*-loop-convert)
-        reinterpret_cast<unsigned char *>(data)[i] = dist(generator);
+static void cpu_fill_random(uint8_t *data, const size_t size) {
+    uint32_t seed = 42;
+    for (uint32_t i = 0; i < size; i++) { // NOLINT(*-loop-convert)
+        data[i] = static_cast<uint8_t>(next_uint32(seed, 0, 255));
     }
 }
 
@@ -113,7 +117,7 @@ TEST(SimpleHashTest, TestSizeOneByte) {
     ASSERT_NE(host_buffer, nullptr) << "Allocation failed";
 
     // Fill the host buffer via CPU random initialization
-    cpu_fill_random(static_cast<char *>(host_buffer), size);
+    cpu_fill_random(static_cast<uint8_t *>(host_buffer), size);
 
     volatile uint64_t simple_hashes[n_repeat] = {0};
 
@@ -155,7 +159,7 @@ TEST(SimpleHashTest, TestSizeFourBytes) {
     void *host_buffer = malloc(size);
     ASSERT_NE(host_buffer, nullptr) << "Allocation failed";
 
-    cpu_fill_random(static_cast<char *>(host_buffer), size);
+    cpu_fill_random(static_cast<uint8_t *>(host_buffer), size);
 
     volatile uint64_t simple_hashes[n_repeat] = {0};
 
@@ -198,7 +202,7 @@ TEST(SimpleHashTest, TestOneVecPlus2WordsPlus1Byte) {
     void *host_buffer = malloc(size);
     ASSERT_NE(host_buffer, nullptr) << "Allocation failed";
 
-    cpu_fill_random(static_cast<char *>(host_buffer), size);
+    cpu_fill_random(static_cast<uint8_t *>(host_buffer), size);
 
     volatile uint64_t simple_hashes[n_repeat] = {0};
 

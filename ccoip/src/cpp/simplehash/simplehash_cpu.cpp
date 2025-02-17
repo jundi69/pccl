@@ -96,11 +96,32 @@ static inline uint32_t compute_thread_block_result(const size_t b, const uint32_
     return block_hash;
 }
 
+static bool openmp_configured = false;
+
+#ifdef PCCL_BUILD_OPENMP_SUPPORT
+#include <omp.h>
+#endif
+
 //----------------------------------------------------------------
 // Compute the result of the final_reduce_kernel
 static inline uint32_t compute_kernel_result(const size_t gridDim, const uint32_t *words, const size_t n_vec,
                                              const size_t vectorsPerBlock) {
+#ifdef PCCL_BUILD_OPENMP_SUPPORT
+    if (!openmp_configured) {
+        // force OpenMP to use the max number of threads available
+        int num_procs = omp_get_num_procs();
 
+#if defined(__x86_64__) || defined(_M_X64)
+        // on x86_64, we make the somewhat erroneous assumption that we always use half of the available cores
+        // because we expect half of them to be hyper-threaded processors,
+        // which imperially do only degrade performance when used
+        num_procs /= 2;
+#endif
+
+        omp_set_num_threads(num_procs);
+        openmp_configured = true;
+    }
+#endif
     // Process the blocks in a 2 layer reduce style.
     alignas(32) uint32_t thread_reduce_results[blockDim] = {0};
 

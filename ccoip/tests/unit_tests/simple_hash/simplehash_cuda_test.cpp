@@ -7,17 +7,21 @@
 
 extern "C" uint64_t simplehash_cuda_kernel(const void *data, size_t n_bytes);
 
+uint32_t next_uint32(uint32_t &seed, const uint32_t lo, const uint32_t hi) {
+    seed = 1664525u * seed + 1013904223u;
+    const uint64_t range = static_cast<uint64_t>(hi) - static_cast<uint64_t>(lo) + 1ULL;
+    const uint32_t rndInRange = static_cast<uint32_t>(static_cast<uint64_t>(seed) % range) + lo;
+    return rndInRange;
+}
+
 TEST(SimpleHashTest, BenchmarkAgainstBaseline) {
     std::vector<uint8_t> data(154533888, 0);
 
     // init random
     {
-        std::mt19937_64 generator(42);
-        std::uniform_int_distribution<uint32_t> dist(0, 255);
-
-        for (unsigned char &i: data) {
-            // NOLINT(*-loop-convert)
-            i = dist(generator);
+        uint32_t seed = 42;
+        for (uint32_t i = 0; i < data.size(); i++) { // NOLINT(*-loop-convert)
+            data[i] = next_uint32(seed, 0, 255);
         }
     }
 
@@ -38,7 +42,8 @@ TEST(SimpleHashTest, BenchmarkAgainstBaseline) {
         const auto end = std::chrono::high_resolution_clock::now();
         const auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
         std::cout << "CUDA: " << duration.count() << " us" << std::endl;
-        const double bandwidth = (static_cast<double>(n_repeat * data.size()) / 1e9) / (static_cast<double>(duration.count()) / 1e6);
+        const double bandwidth = (static_cast<double>(n_repeat * data.size()) / 1e9) / (
+                                     static_cast<double>(duration.count()) / 1e6);
         std::cout << "Hashing-Bandwidth: " << bandwidth << " GB/s" << std::endl;
 
         // assert all hashes are the same
@@ -50,7 +55,7 @@ TEST(SimpleHashTest, BenchmarkAgainstBaseline) {
 
     for (int i = 0; i < n_repeat; ++i) {
         // check if the hashes are the same
-        ASSERT_EQ(326683241, simple_hashes[i]);
+        ASSERT_EQ(1502689209, simple_hashes[i]);
     }
 }
 
@@ -59,12 +64,9 @@ TEST(SimpleHashTest, TestSizeOneByte) {
 
     // init random
     {
-        std::mt19937_64 generator(42);
-        std::uniform_int_distribution<uint32_t> dist(0, 255);
-
-        for (unsigned char &i: data) {
-            // NOLINT(*-loop-convert)
-            i = dist(generator);
+        uint32_t seed = 42;
+        for (uint32_t i = 0; i < data.size(); i++) { // NOLINT(*-loop-convert)
+            data[i] = next_uint32(seed, 0, 255);
         }
     }
 
@@ -79,13 +81,15 @@ TEST(SimpleHashTest, TestSizeOneByte) {
     {
         const auto start = std::chrono::high_resolution_clock::now();
 
-        for (int i = 0; i < n_repeat; ++i) { // NOLINT(*-loop-convert)
+        for (int i = 0; i < n_repeat; ++i) {
+            // NOLINT(*-loop-convert)
             simple_hashes[i] = simplehash_cuda_kernel(reinterpret_cast<void *>(data_ptr), data.size());
         }
         const auto end = std::chrono::high_resolution_clock::now();
         const auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
         std::cout << "CUDA: " << duration.count() << " us" << std::endl;
-        const double bandwidth = (static_cast<double>(n_repeat * data.size()) / 1e9) / (static_cast<double>(duration.count()) / 1e6);
+        const double bandwidth = (static_cast<double>(n_repeat * data.size()) / 1e9) / (
+                                     static_cast<double>(duration.count()) / 1e6);
         std::cout << "Hashing-Bandwidth: " << bandwidth << " GB/s" << std::endl;
 
         // assert all hashes are the same
@@ -97,7 +101,7 @@ TEST(SimpleHashTest, TestSizeOneByte) {
 
     for (int i = 0; i < n_repeat; ++i) {
         // check if the hashes are the same
-        ASSERT_EQ(2429690320, simple_hashes[i]);
+        ASSERT_EQ(366970640, simple_hashes[i]);
     }
 }
 
@@ -107,12 +111,9 @@ TEST(SimpleHashTest, TestSizeFourBytes) {
 
     // init random
     {
-        std::mt19937_64 generator(42);
-        std::uniform_int_distribution<uint32_t> dist(0, 255);
-
-        for (unsigned char &i: data) {
-            // NOLINT(*-loop-convert)
-            i = dist(generator);
+        uint32_t seed = 42;
+        for (uint32_t i = 0; i < data.size(); i++) { // NOLINT(*-loop-convert)
+            data[i] = next_uint32(seed, 0, 255);
         }
     }
 
@@ -133,7 +134,8 @@ TEST(SimpleHashTest, TestSizeFourBytes) {
         const auto end = std::chrono::high_resolution_clock::now();
         const auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
         std::cout << "CUDA: " << duration.count() << " us" << std::endl;
-        const double bandwidth = (static_cast<double>(n_repeat * data.size()) / 1e9) / (static_cast<double>(duration.count()) / 1e6);
+        const double bandwidth = (static_cast<double>(n_repeat * data.size()) / 1e9) / (
+                                     static_cast<double>(duration.count()) / 1e6);
         std::cout << "Hashing-Bandwidth: " << bandwidth << " GB/s" << std::endl;
 
         // assert all hashes are the same
@@ -145,7 +147,7 @@ TEST(SimpleHashTest, TestSizeFourBytes) {
 
     for (int i = 0; i < n_repeat; ++i) {
         // check if the hashes are the same
-        ASSERT_EQ(1120185552, simple_hashes[i]);
+        ASSERT_EQ(3727309584, simple_hashes[i]);
     }
 }
 
@@ -154,12 +156,9 @@ TEST(SimpleHashTest, TestOneVecPlus2WordsPlus1Byte) {
 
     // init random
     {
-        std::mt19937_64 generator(42);
-        std::uniform_int_distribution<uint32_t> dist(0, 255);
-
-        for (unsigned char &i: data) {
-            // NOLINT(*-loop-convert)
-            i = dist(generator);
+        uint32_t seed = 42;
+        for (uint32_t i = 0; i < data.size(); i++) { // NOLINT(*-loop-convert)
+            data[i] = next_uint32(seed, 0, 255);
         }
     }
 
@@ -180,7 +179,8 @@ TEST(SimpleHashTest, TestOneVecPlus2WordsPlus1Byte) {
         const auto end = std::chrono::high_resolution_clock::now();
         const auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
         std::cout << "CUDA: " << duration.count() << " us" << std::endl;
-        const double bandwidth = (static_cast<double>(n_repeat * data.size()) / 1e9) / (static_cast<double>(duration.count()) / 1e6);
+        const double bandwidth = (static_cast<double>(n_repeat * data.size()) / 1e9) / (
+                                     static_cast<double>(duration.count()) / 1e6);
         std::cout << "Hashing-Bandwidth: " << bandwidth << " GB/s" << std::endl;
 
         // assert all hashes are the same
@@ -192,7 +192,7 @@ TEST(SimpleHashTest, TestOneVecPlus2WordsPlus1Byte) {
 
     for (int i = 0; i < n_repeat; ++i) {
         // check if the hashes are the same
-        ASSERT_EQ(654648064, simple_hashes[i]);
+        ASSERT_EQ(3836545445, simple_hashes[i]);
     }
 }
 

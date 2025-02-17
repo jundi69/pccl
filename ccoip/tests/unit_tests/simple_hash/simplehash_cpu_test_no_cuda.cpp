@@ -10,14 +10,11 @@
 // Declaration of the CPU hash function (implemented elsewhere).
 extern "C" uint64_t simplehash(const void *data, size_t n_bytes);
 
-// CPU-based random initialization of a buffer.
-static void cpu_fill_random(char *data, const size_t size) {
-    std::mt19937_64 generator(42);
-    std::uniform_int_distribution<uint32_t> dist(0, 255);
-
-    for (size_t i = 0; i < size; i++) {
-        reinterpret_cast<unsigned char *>(data)[i] = dist(generator);
-    }
+uint32_t next_uint32(uint32_t &seed, const uint32_t lo, const uint32_t hi) {
+    seed = 1664525u * seed + 1013904223u;
+    const uint64_t range = static_cast<uint64_t>(hi) - static_cast<uint64_t>(lo) + 1ULL;
+    const uint32_t rndInRange = static_cast<uint32_t>(static_cast<uint64_t>(seed) % range) + lo;
+    return rndInRange;
 }
 
 TEST(SimpleHashTest, BenchmarkAgainstBaseline) {
@@ -28,8 +25,13 @@ TEST(SimpleHashTest, BenchmarkAgainstBaseline) {
     void *host_buffer = malloc(size);
     ASSERT_NE(host_buffer, nullptr) << "Allocation failed";
 
-    // Fill host_buffer using CPU RNG.
-    cpu_fill_random(static_cast<char *>(host_buffer), size);
+    // init random
+    {
+        uint32_t seed = 42;
+        for (uint32_t i = 0; i < size; i++) { // NOLINT(*-loop-convert)
+            static_cast<uint8_t *>(host_buffer)[i] = next_uint32(seed, 0, 255);
+        }
+    }
 
     volatile uint64_t simple_hashes[n_repeat] = {0};
 
@@ -50,7 +52,7 @@ TEST(SimpleHashTest, BenchmarkAgainstBaseline) {
     }
 
     // If you want to compare to a known reference, insert your updated ASSERT here:
-    ASSERT_EQ(1683357801, simple_hashes[0]);
+    ASSERT_EQ(1502689209, simple_hashes[0]);
 
     free(host_buffer);
 }
@@ -62,8 +64,13 @@ TEST(SimpleHashTest, TestSizeOneByte) {
     void *host_buffer = malloc(size);
     ASSERT_NE(host_buffer, nullptr) << "Allocation failed";
 
-    // Fill the host buffer via CPU RNG.
-    cpu_fill_random(static_cast<char *>(host_buffer), size);
+    // init random
+    {
+        uint32_t seed = 42;
+        for (uint32_t i = 0; i < size; i++) { // NOLINT(*-loop-convert)
+            static_cast<uint8_t *>(host_buffer)[i] = next_uint32(seed, 0, 255);
+        }
+    }
 
     volatile uint64_t simple_hashes[n_repeat] = {0};
 
@@ -83,7 +90,7 @@ TEST(SimpleHashTest, TestSizeOneByte) {
     }
 
     // Insert an updated reference if desired.
-    ASSERT_EQ(3683124237, simple_hashes[0]);
+    ASSERT_EQ(366970640, simple_hashes[0]);
 
     free(host_buffer);
 }
@@ -95,7 +102,13 @@ TEST(SimpleHashTest, TestSizeFourBytes) {
     void *host_buffer = malloc(size);
     ASSERT_NE(host_buffer, nullptr) << "Allocation failed";
 
-    cpu_fill_random(static_cast<char *>(host_buffer), size);
+    // init random
+    {
+        uint32_t seed = 42;
+        for (uint32_t i = 0; i < size; i++) { // NOLINT(*-loop-convert)
+            static_cast<uint8_t *>(host_buffer)[i] = next_uint32(seed, 0, 255);
+        }
+    }
 
     volatile uint64_t simple_hashes[n_repeat] = {0};
 
@@ -114,7 +127,7 @@ TEST(SimpleHashTest, TestSizeFourBytes) {
     }
 
     // Insert an updated reference if desired.
-    ASSERT_EQ(2375994381, simple_hashes[0]);
+    ASSERT_EQ(3727309584, simple_hashes[0]);
 
     free(host_buffer);
 }
@@ -127,7 +140,13 @@ TEST(SimpleHashTest, TestOneVecPlus2WordsPlus1Byte) {
     void *host_buffer = malloc(size);
     ASSERT_NE(host_buffer, nullptr) << "Allocation failed";
 
-    cpu_fill_random(static_cast<char *>(host_buffer), size);
+    // init random
+    {
+        uint32_t seed = 42;
+        for (uint32_t i = 0; i < size; i++) { // NOLINT(*-loop-convert)
+            static_cast<uint8_t *>(host_buffer)[i] = next_uint32(seed, 0, 255);
+        }
+    }
 
     volatile uint64_t simple_hashes[n_repeat] = {0};
 
@@ -146,7 +165,7 @@ TEST(SimpleHashTest, TestOneVecPlus2WordsPlus1Byte) {
     }
 
     // Insert an updated reference if desired.
-    ASSERT_EQ(1032845947, simple_hashes[0]);
+    ASSERT_EQ(3836545445, simple_hashes[0]);
 
     free(host_buffer);
 }
