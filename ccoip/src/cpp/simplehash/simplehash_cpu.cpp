@@ -7,12 +7,6 @@
 constexpr int warpSize = 32;
 constexpr size_t blockDim = 256; // Emulate 256 threads per block.
 
-#ifdef _MSC_VER
-#include <intrin.h>
-#else
-#include <cpuid.h>
-#endif
-
 //----------------------------------------------------------------
 // Scalar version of HashCombine (kept for reference)
 // (The struct version is now replaced by a static inline function.)

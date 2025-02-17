@@ -86,6 +86,27 @@ We recommend using python distributions from Homebrew to avoid conflicts with th
 and additionally because Homebrew python is built to allow attachment of debuggers, such as lldb and gdb
 to debug both python and native code end to end.
 
+After installing the `llvm` package, make sure the `clang` compiler from said package is first in your PATH.
+
+First, check the install location of the `llvm` package:
+```bash
+brew --prefix llvm
+```
+Depending on your system this path might look like `/opt/homebrew/opt/llvm`.
+
+Then, in `bin` directory of the `llvm` package, you will find the `clang` compiler.
+```bash
+ls /opt/homebrew/opt/llvm/bin | grep clang
+```
+
+We will then export variables for the current shell to use the `clang` compiler from the `llvm` package:
+```bash
+export CC=/opt/homebrew/opt/llvm/bin/clang
+export CXX=/opt/homebrew/opt/llvm/bin/clang++
+```
+NOTE: These variables will only be set for the current shell session. To make these changes permanent, add these lines to your shell profile (e.g. `~/.bash_profile` or `~/.zshrc`).
+
+
 #### Ubuntu
 
 ```bash
