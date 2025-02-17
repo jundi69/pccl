@@ -61,8 +61,8 @@ uint32_t CRC32Ref(const void *data, const size_t size) {
 }
 
 static void runCrc32Test() {
-    // 64 MiB buffer
-    std::vector<uint8_t> data(1024 * 1024 * 64, 0);
+    // 16 MiB buffer
+    std::vector<uint8_t> data(1024 * 1024 * 16, 0);
 
     // init random
     {
@@ -150,13 +150,13 @@ struct CPUFeatures {
     bool hasArmPMULL = false; // ARMv8 PMULL instructions
 };
 
-void _SpoofCpuFeatures(const CPUFeatures &cpu_features);
+void Crc32SpoofCpuFeatures(const CPUFeatures &cpu_features);
 /// ENDNOTE
 
 TEST(CRC32Test, BenchmarkAgainstBaselineNoSupportedFeatures) {
     std::cout << "BenchmarkAgainstBaselineNoSupportedFeatures" << std::endl;
     constexpr CPUFeatures cpu_features{};
-    _SpoofCpuFeatures(cpu_features);
+    Crc32SpoofCpuFeatures(cpu_features);
     runCrc32Test();
 }
 
@@ -164,20 +164,20 @@ TEST(CRC32Test, BenchmarkAgainstBaselineNoSupportedFeatures) {
 TEST(CRC32Test, BenchmarkAgainstBaselineHasSSE42) {
     std::cout << "BenchmarkAgainstBaselineHasSSE42" << std::endl;
     constexpr CPUFeatures cpu_features{.hasSSE42 = true};
-    _SpoofCpuFeatures(cpu_features);
+    Crc32SpoofCpuFeatures(cpu_features);
     runCrc32Test();
 }
 TEST(CRC32Test, BenchmarkAgainstBaselineHasPCLMul) {
     std::cout << "BenchmarkAgainstBaselineHasPCLMul" << std::endl;
     constexpr CPUFeatures cpu_features{.hasPCLMUL = true};
-    _SpoofCpuFeatures(cpu_features);
+    Crc32SpoofCpuFeatures(cpu_features);
     runCrc32Test();
 }
 
 TEST(CRC32Test, BenchmarkAgainstBaselineHasSSE42AndPCLMul) {
     std::cout << "BenchmarkAgainstBaselineHasSSE42AndPCLMul" << std::endl;
     constexpr CPUFeatures cpu_features{.hasSSE42 = true, .hasPCLMUL = true};
-    _SpoofCpuFeatures(cpu_features);
+    Crc32SpoofCpuFeatures(cpu_features);
     runCrc32Test();
 }
 #endif

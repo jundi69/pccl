@@ -1,26 +1,25 @@
 add_library(ccoip_internal STATIC
         src/cpp/ccoip_master.cpp src/cpp/ccoip_client_handler.cpp src/cpp/ccoip_master_handler.cpp
         src/cpp/bandwidth_store.cpp src/cpp/benchmark_runner.cpp src/cpp/topolgy_optimizer.cpp
-        src/cpp/ccoip_packets.cpp src/cpp/ccoip_packet_buffer.cpp src/cpp/ccoip_client.cpp src/cpp/uuid_utils.cpp src/cpp/crc32_cpu.cpp
+        src/cpp/ccoip_packets.cpp src/cpp/ccoip_packet_buffer.cpp src/cpp/ccoip_client.cpp src/cpp/uuid_utils.cpp
         src/cpp/ccoip_master_state.cpp src/cpp/ccoip_client_state.cpp src/cpp/reduce_kernels.cpp src/cpp/reduce.cpp src/cpp/quantize.cpp
-        src/cpp/quantize_kernels.cpp src/cpp/simplehash_cuda.cpp)
+        src/cpp/quantize_kernels.cpp src/cpp/simplehash/simplehash_cuda.cpp)
 
-add_library(crc32_cpu STATIC src/cpp/crc32_cpu.cpp)
-add_library(simplehash_cpu STATIC src/cpp/simplehash_cpu.cpp)
+add_library(crc32_cpu STATIC src/cpp/crc32/crc32_cpu.cpp)
+add_library(simplehash_cpu STATIC src/cpp/simplehash/simplehash_cpu.cpp)
 
-# Arch specific compilation options.
-# Excludes older x86-64 CPUs released before 2008 (Intel) or 2011 (AMD) and excludes ARM CPUs before 2013.
-# These CPUs do not support the required instruction sets.
-# Instructions are needed for the fast CRC32 implementation.
 if(${IS_AMD64})
-    # we compile with all these options
-    set(AMD64_COMPILE_ARGS "-msse2" "-msse3" "-mssse3" "-msse4.1" "-msse4.2" "-mpclmul" "-mavx2")
-    target_compile_options(crc32_cpu PUBLIC ${AMD64_COMPILE_ARGS})
-    target_compile_options(simplehash_cpu PUBLIC ${AMD64_COMPILE_ARGS})
+    add_library(crc32_amd64_sse42_pcmul STATIC src/cpp/crc32/crc32_amd64_sse42_pcmul.cpp)
+    target_compile_options(crc32_amd64_sse42_pcmul PUBLIC "-msse4.2" "-mpclmul")
+
+    add_library(crc32_amd64_sse42 STATIC src/cpp/crc32/crc32_amd64_sse42.cpp)
+    target_compile_options(crc32_amd64_sse42 PUBLIC "-msse4.2")
+
+    target_link_libraries(crc32_cpu PRIVATE crc32_amd64_sse42 crc32_amd64_sse42_pcmul)
 elseif(${IS_ARM64})
-    set(ARM64_COMPILE_ARGS "-march=armv8-a+simd")
-    target_compile_options(crc32_cpu PUBLIC ${ARM64_COMPILE_ARGS})
-    target_compile_options(simplehash_cpu PUBLIC ${ARM64_COMPILE_ARGS})
+    add_library(crc32_arm64 STATIC src/cpp/crc32/crc32_arm64.cpp)
+    target_compile_options(crc32_arm64 PUBLIC "-march=armv8-a+simd")
+    target_link_libraries(crc32_cpu PRIVATE crc32_arm64)
 endif()
 
 target_link_libraries(ccoip_internal PRIVATE crc32_cpu)
