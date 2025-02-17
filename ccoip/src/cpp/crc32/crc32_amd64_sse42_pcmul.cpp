@@ -1,4 +1,5 @@
 #include <cstdint>
+#include <cstddef>
 
 #if defined(_MSC_VER)
 // For Windows: intrin.h provides __cpuid(), _mm_crc32_u8, etc.
