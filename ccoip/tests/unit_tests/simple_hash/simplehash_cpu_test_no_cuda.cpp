@@ -1,13 +1,11 @@
+#include <gtest/gtest.h>
+
 #include <chrono>
 #include <cstdint>
 #include <cstdlib>
-#include <cstring>
 #include <iostream>
-#include <random>
 
-#include <gtest/gtest.h>
-
-#include "../../../internal_include/hash_utils.hpp"
+#include <hash_utils.hpp>
 
 uint32_t next_uint32(uint32_t &seed, const uint32_t lo, const uint32_t hi) {
     seed = 1664525u * seed + 1013904223u;

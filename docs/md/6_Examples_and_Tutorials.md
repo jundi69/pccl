@@ -529,6 +529,7 @@ def main():
             loss = criterion(outputs, labels)
 
             # Backward pass and optimization
+            # set_to_none=False is required, otherwise shared state references will become invalid!
             optimizer.zero_grad(set_to_none=False)
             loss.backward()
 

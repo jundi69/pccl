@@ -22,6 +22,9 @@ Unlike MPI or other HPC libraries that rely on all ranks starting in tandem, PCC
 Depending on the size of the problem, the master may start a "moonshot" optimization as a background task, where either continuous heuristic improvement upon the solution or an exact solution is attempted. Depending on whether this yielded a better solution, peers will adopt the new topology during the next invocation of `pcclOptimizeTopology()`, if no peers joined in the meantime - making the optimization no longer applicable and thus discarded.
 However, for any call to `pcclOptimizeTopology()` with no current optimization in progress, the master will immediately provide the best topology that can be found within a small computational timeout budget, which peers will adopt immediately.
 
+**NOTE**: PCCL benchmarks by sending and receiving bytes as fast as possible. PCCL will not take into consideration the possible CPU-overhead introduced by e.g. quantization during an all reduce. If a peer is bottlenecked by its CPU and cannot utilize its full available bandwidth during an ongoing collective operation, PCCL may settle on a suboptimal topology.
+PCCL also asserts idealized pseudo-fullduplex bandwidth to accelerate the bandwidth testing process: PCCL will assert that sending does not degrade receving performance or the other way around. If a peer has high peak receiving bandwidth, but sending degrades this side substantially, the topology optimization may not find the optimal solution.
+
 3. Shared State
 
 - The master verifies that each peer’s “shared state revision” matches the group’s expected next revision. If not, the peer is considered out-of-date (and might request or distribute data in the subsequent sync phase).

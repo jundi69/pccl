@@ -14,5 +14,5 @@ endif ()
 
 # test simplehash cpu hash
 add_sanitized_gtest(simplehash_cpu_no_cuda_test simplehash_cpu_test_no_cuda.cpp)
-target_link_libraries(simplehash_cpu_no_cuda_test PRIVATE simplehash_cpu)
+target_link_libraries(simplehash_cpu_no_cuda_test PRIVATE ccoip_private simplehash_cpu)
 
