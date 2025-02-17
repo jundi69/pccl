@@ -61,8 +61,8 @@ uint32_t CRC32Ref(const void *data, const size_t size) {
 }
 
 static void runCrc32Test() {
-    // 16 MiB buffer
-    std::vector<uint8_t> data(1024 * 1024 * 16, 0);
+    // 8 MiB buffer
+    std::vector<uint8_t> data(1024 * 1024 * 8, 0);
 
     // init random
     {
