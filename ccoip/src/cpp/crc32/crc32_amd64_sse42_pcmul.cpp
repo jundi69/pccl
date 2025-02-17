@@ -14,7 +14,6 @@
 //------------------- x86 SSE4.2 / PCLMUL Implementation -------------
 #if defined(__x86_64__) || defined(_M_X64)
 // "fancy" PCLMUL version:
-__attribute__((target("sse4.2,pclmul")))
 [[nodiscard]] uint32_t CRC32_x86_sse42_pclmul(const void *data, size_t size) {
     if (!data || !size) [[unlikely]] return 0;
     const auto *buf = static_cast<const std::uint8_t *>(data);

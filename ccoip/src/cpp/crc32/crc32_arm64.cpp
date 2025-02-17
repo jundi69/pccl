@@ -13,7 +13,6 @@
 
 //------------------- ARMv8 PMULL + CRC32 Implementation -------------
 #if defined(__aarch64__)
-__attribute__((target("armv8-a+simd")))
 [[nodiscard]] uint32_t CRC32_armv8(const void *data, size_t size)
 {
     if (!data || !size) [[unlikely]] return 0;

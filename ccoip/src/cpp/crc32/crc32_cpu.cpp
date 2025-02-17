@@ -1,30 +1,7 @@
 #include <array>
 #include <cassert>
-#include <bit>
 #include <cstdint>
 #include <atomic>
-#include <mutex>
-
-// For demonstration, we include some detection headers for Linux/Android:
-#if defined(__linux__) && defined(__aarch64__)
-#include <sys/auxv.h>
-#include <asm/hwcap.h>
-#endif
-
-#if defined(_MSC_VER)
-// For Windows: intrin.h provides __cpuid(), _mm_crc32_u8, etc.
-#include <intrin.h>
-#else
-// For GCC/Clang on x86:
-#if defined(__x86_64__) || defined(_M_X64)
-#include <cpuid.h>
-#include <immintrin.h>
-#elif defined(__aarch64__)
-// For __crc32cb, __crc32cd, etc. (arm_acle.h) and NEON:
-#include <arm_neon.h>
-#include <arm_acle.h>
-#endif
-#endif
 
 /// NOTE: ALWAYS KEEP THIS IN SYNC WITH crc32_cpu_test.cpp
 // Make sure that the CPUFeatures struct & _SpoofCpuFeatures prototype is always updated in crc32_cpu_test.cpp when changed in crc32_cpu.cpp

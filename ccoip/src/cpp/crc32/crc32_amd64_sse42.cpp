@@ -14,7 +14,6 @@
 //------------------- x86 SSE4.2 Implementation -------------
 // Simple SSE4.2-only version (no PCLMUL):
 #if defined(__x86_64__) || defined(_M_X64)
-__attribute__((target("sse4.2")))
 [[nodiscard]] uint32_t CRC32_x86_sse42(const void *data, size_t size) {
     if (!data || !size) [[unlikely]] return 0;
     const auto *buf = static_cast<const std::uint8_t *>(data);
