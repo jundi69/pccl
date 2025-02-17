@@ -9,12 +9,10 @@ constexpr size_t blockDim = 256; // Emulate 256 threads per block.
 
 //----------------------------------------------------------------
 // Scalar version of HashCombine (kept for reference)
-// (The struct version is now replaced by a static inline function.)
 static inline uint32_t hash_combine_scalar(uint32_t a, uint32_t b) {
-    // Inspired by fnv1a.
-    b ^= 0x9e3779b1u;
-    b *= 0x85ebca6bu;
-    a ^= b;
+    a ^= b + 0x9e3779b1u;
+    a = (a << 7) | (a >> 25);
+    a *= 0x85ebca6bu;
     return a;
 }
 
@@ -144,55 +142,58 @@ static inline uint32_t compute_kernel_result(const size_t gridDim, const uint32_
     return final_hash;
 }
 
-//----------------------------------------------------------------
-// The simple hash function which mimics the CUDA kernel’s reduction order.
-extern "C" uint64_t simplehash(const void *data, const size_t n_bytes) {
-    if (n_bytes == 0)
-        return 0;
-    // Check that the input pointer is 16–byte aligned.
-    if (reinterpret_cast<uintptr_t>(data) % 16 != 0) {
-        abort();
-    }
+namespace ccoip::hash_utils {
 
-    // Interpret the input as an array of 32–bit words.
-    const size_t n_words = n_bytes / 4;
-    const auto *words = static_cast<const uint32_t *>(data);
-
-    // Process the vectorized portion.
-    // We regard every 4 consecutive 32–bit words as a “vector” (like uint4).
-    const size_t n_vec = n_words / 4; // number of complete 4–word vectors
-    const size_t tail_ints = n_words % 4; // leftover full 32–bit words (if any)
-
-    // Emulate the GPU’s big–pass reduction.
-    // In the CUDA code the vectorized array is divided among blocks.
-    size_t gridDim = (n_vec + blockDim - 1) / blockDim;
-    if (gridDim > 960) {
-        gridDim = 960;
-    }
-
-    uint32_t final_hash = 0;
-    if (gridDim) {
-        const size_t vectorsPerBlock = (n_vec + gridDim - 1) / gridDim;
-        final_hash = compute_kernel_result(gridDim, words, n_vec, vectorsPerBlock);
-    }
-
-    // Process any leftover (tail) 32–bit words that didn’t form a complete vector.
-    const size_t tailStart = n_vec * 4;
-    for (size_t i = 0; i < tail_ints; i++) {
-        final_hash = hash_combine_scalar(final_hash, words[tailStart + i]);
-    }
-
-    // Process any leftover bytes (if n_bytes is not a multiple of 4).
-    const size_t tail_bytes = n_bytes % 4;
-    if (tail_bytes > 0) {
-        uint32_t tail_val = 0;
-        const auto *bytes = static_cast<const uint8_t *>(data);
-        const size_t byteStart = n_words * 4;
-        for (size_t i = 0; i < tail_bytes; i++) {
-            tail_val |= static_cast<uint32_t>(bytes[byteStart + i]) << (8 * i);
+    //----------------------------------------------------------------
+    // The simple hash function which mimics the CUDA kernel’s reduction order.
+    uint32_t simplehash_cpu(const void *data, const size_t n_bytes) {
+        if (n_bytes == 0)
+            return 0;
+        // Check that the input pointer is 16–byte aligned.
+        if (reinterpret_cast<uintptr_t>(data) % 16 != 0) {
+            abort();
         }
-        final_hash = hash_combine_scalar(final_hash, tail_val);
-    }
 
-    return final_hash;
-}
+        // Interpret the input as an array of 32–bit words.
+        const size_t n_words = n_bytes / 4;
+        const auto *words = static_cast<const uint32_t *>(data);
+
+        // Process the vectorized portion.
+        // We regard every 4 consecutive 32–bit words as a “vector” (like uint4).
+        const size_t n_vec = n_words / 4; // number of complete 4–word vectors
+        const size_t tail_ints = n_words % 4; // leftover full 32–bit words (if any)
+
+        // Emulate the GPU’s big–pass reduction.
+        // In the CUDA code the vectorized array is divided among blocks.
+        size_t gridDim = (n_vec + blockDim - 1) / blockDim;
+        if (gridDim > 960) {
+            gridDim = 960;
+        }
+
+        uint32_t final_hash = 0;
+        if (gridDim) {
+            const size_t vectorsPerBlock = (n_vec + gridDim - 1) / gridDim;
+            final_hash = compute_kernel_result(gridDim, words, n_vec, vectorsPerBlock);
+        }
+
+        // Process any leftover (tail) 32–bit words that didn’t form a complete vector.
+        const size_t tailStart = n_vec * 4;
+        for (size_t i = 0; i < tail_ints; i++) {
+            final_hash = hash_combine_scalar(final_hash, words[tailStart + i]);
+        }
+
+        // Process any leftover bytes (if n_bytes is not a multiple of 4).
+        const size_t tail_bytes = n_bytes % 4;
+        if (tail_bytes > 0) {
+            uint32_t tail_val = 0;
+            const auto *bytes = static_cast<const uint8_t *>(data);
+            const size_t byteStart = n_words * 4;
+            for (size_t i = 0; i < tail_bytes; i++) {
+                tail_val |= static_cast<uint32_t>(bytes[byteStart + i]) << (8 * i);
+            }
+            final_hash = hash_combine_scalar(final_hash, tail_val);
+        }
+
+        return final_hash;
+    }
+} // namespace ccoip::hash_utils

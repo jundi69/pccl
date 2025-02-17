@@ -7,8 +7,7 @@
 
 #include <gtest/gtest.h>
 
-// Declaration of the CPU hash function (implemented elsewhere).
-extern "C" uint64_t simplehash(const void *data, size_t n_bytes);
+#include "../../../internal_include/hash_utils.hpp"
 
 uint32_t next_uint32(uint32_t &seed, const uint32_t lo, const uint32_t hi) {
     seed = 1664525u * seed + 1013904223u;
@@ -38,7 +37,7 @@ TEST(SimpleHashTest, BenchmarkAgainstBaseline) {
     // CPU baseline
     auto start = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < n_repeat; ++i) {
-        simple_hashes[i] = simplehash(host_buffer, size);
+        simple_hashes[i] = ccoip::hash_utils::simplehash_cpu(host_buffer, size);
     }
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
@@ -52,7 +51,7 @@ TEST(SimpleHashTest, BenchmarkAgainstBaseline) {
     }
 
     // If you want to compare to a known reference, insert your updated ASSERT here:
-    ASSERT_EQ(1502689209, simple_hashes[0]);
+    ASSERT_EQ(3391090508, simple_hashes[0]);
 
     free(host_buffer);
 }
@@ -76,7 +75,7 @@ TEST(SimpleHashTest, TestSizeOneByte) {
 
     auto start = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < n_repeat; ++i) {
-        simple_hashes[i] = simplehash(host_buffer, size);
+        simple_hashes[i] = ccoip::hash_utils::simplehash_cpu(host_buffer, size);
     }
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
@@ -90,7 +89,7 @@ TEST(SimpleHashTest, TestSizeOneByte) {
     }
 
     // Insert an updated reference if desired.
-    ASSERT_EQ(366970640, simple_hashes[0]);
+    ASSERT_EQ(344386053, simple_hashes[0]);
 
     free(host_buffer);
 }
@@ -114,7 +113,7 @@ TEST(SimpleHashTest, TestSizeFourBytes) {
 
     auto start = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < n_repeat; ++i) {
-        simple_hashes[i] = simplehash(host_buffer, size);
+        simple_hashes[i] = ccoip::hash_utils::simplehash_cpu(host_buffer, size);
     }
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
@@ -127,7 +126,7 @@ TEST(SimpleHashTest, TestSizeFourBytes) {
     }
 
     // Insert an updated reference if desired.
-    ASSERT_EQ(3727309584, simple_hashes[0]);
+    ASSERT_EQ(3765247898, simple_hashes[0]);
 
     free(host_buffer);
 }
@@ -152,7 +151,7 @@ TEST(SimpleHashTest, TestOneVecPlus2WordsPlus1Byte) {
 
     auto start = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < n_repeat; ++i) {
-        simple_hashes[i] = simplehash(host_buffer, size);
+        simple_hashes[i] = ccoip::hash_utils::simplehash_cpu(host_buffer, size);
     }
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
@@ -165,7 +164,7 @@ TEST(SimpleHashTest, TestOneVecPlus2WordsPlus1Byte) {
     }
 
     // Insert an updated reference if desired.
-    ASSERT_EQ(3836545445, simple_hashes[0]);
+    ASSERT_EQ(3651434421, simple_hashes[0]);
 
     free(host_buffer);
 }

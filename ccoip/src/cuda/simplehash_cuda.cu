@@ -20,11 +20,10 @@ struct HashCombine {
      * @return The combined hash value.
      */
     __host__ __device__ __forceinline__
-    uint32_t operator()(uint32_t a, uint32_t b) const {
-        // Inspired by fnv1a.
-        b ^= 0x9e3779b1u;
-        b *= 0x85ebca6bu;
-        a ^= b;
+    uint32_t operator()(uint32_t a, const uint32_t b) const {
+        a ^= b + 0x9e3779b1u;
+        a = (a << 7) | (a >> 25);
+        a *= 0x85ebca6bu;
         return a;
     }
 };

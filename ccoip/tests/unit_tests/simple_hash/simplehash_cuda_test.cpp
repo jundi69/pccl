@@ -55,7 +55,7 @@ TEST(SimpleHashTest, BenchmarkAgainstBaseline) {
 
     for (int i = 0; i < n_repeat; ++i) {
         // check if the hashes are the same
-        ASSERT_EQ(1502689209, simple_hashes[i]);
+        ASSERT_EQ(3391090508, simple_hashes[i]);
     }
 }
 
@@ -101,7 +101,7 @@ TEST(SimpleHashTest, TestSizeOneByte) {
 
     for (int i = 0; i < n_repeat; ++i) {
         // check if the hashes are the same
-        ASSERT_EQ(366970640, simple_hashes[i]);
+        ASSERT_EQ(344386053, simple_hashes[i]);
     }
 }
 
@@ -147,7 +147,7 @@ TEST(SimpleHashTest, TestSizeFourBytes) {
 
     for (int i = 0; i < n_repeat; ++i) {
         // check if the hashes are the same
-        ASSERT_EQ(3727309584, simple_hashes[i]);
+        ASSERT_EQ(3765247898, simple_hashes[i]);
     }
 }
 
@@ -192,7 +192,7 @@ TEST(SimpleHashTest, TestOneVecPlus2WordsPlus1Byte) {
 
     for (int i = 0; i < n_repeat; ++i) {
         // check if the hashes are the same
-        ASSERT_EQ(3836545445, simple_hashes[i]);
+        ASSERT_EQ(3651434421, simple_hashes[i]);
     }
 }
 
