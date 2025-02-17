@@ -3,6 +3,13 @@
 #include <cstdint>
 #include <atomic>
 
+#if defined(_MSC_VER)
+#include <intrin.h>
+#else
+#include <cpuid.h>
+#endif
+
+
 /// NOTE: ALWAYS KEEP THIS IN SYNC WITH crc32_cpu_test.cpp
 // Make sure that the CPUFeatures struct & _SpoofCpuFeatures prototype is always updated in crc32_cpu_test.cpp when changed in crc32_cpu.cpp
 //------------------------------------------------------------------//
