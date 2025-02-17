@@ -100,6 +100,8 @@ int main() {
                 std::cout << "[Peer] OptimizeTopology failed => retrying...\n";
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
             }
+            // the world size may have changed after pcclOptimizeTopology, if a peer drops.
+            PCCL_CHECK(pcclGetAttribute(comm, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size));
         } else {
             // alone => no ring-based operation => wait
             std::cout << "[Peer] alone => sleeping.\n";
@@ -163,6 +165,7 @@ int main() {
                 break;
             } else {
                 std::cout << "[Peer] All-Reduce fail: " << red_st << "; Retrying...\n";
+                
                 // the world size may have changed after a failed all reduce if a peer drops.
                 PCCL_CHECK(pcclGetAttribute(comm, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size));
             
@@ -278,14 +281,19 @@ def main():
                 except pccl.PCCLError as e:
                     print(f"[Peer] OptimizeTopology failed => {e}. Retrying...")
                     time.sleep(0.1)
-        else:
+            # D) get the updated world size
+            #    after optimize_topology, it’s guaranteed to be fresh
+            world_size = comm.get_attribute(pccl.Attribute.CURRENT_WORLD_SIZE)
+        
+        
+        if world_size < 2:
             # alone => no ring-based operation => wait
             print("[Peer] alone => sleeping.")
             time.sleep(1)
             local_iter += 1
             continue
-
-        # D) Perform shared state synchronization
+            
+        # E) Perform shared state synchronization
         try:
             sync_info = comm.sync_shared_state(shared_state)
             print(f"[Peer] shared_revision now {shared_state.revision}, sync => "
@@ -298,7 +306,7 @@ def main():
             # break out => no sense continuing
             break
 
-        # E) Example ring operation => a small All-Reduce
+        # F) Example ring operation => a small All-Reduce
         local_data = np.array([local_iter * 10 + (k+1) for k in range(4)], dtype=np.float32)
         result_data = np.zeros_like(local_data)
 
@@ -340,7 +348,7 @@ def main():
             local_iter += 1
             continue
 
-        # F) increment the shared revision => sync
+        # G) increment the shared revision => sync
         shared_state.revision += 1
 
         # G) Stop if we've done enough steps
@@ -357,7 +365,7 @@ if __name__ == "__main__":
 ### Basic MNIST Example
 ```python
 import os
-from time import sleep
+import time
 from typing import List
 
 import pccl
@@ -473,27 +481,39 @@ def main():
                         print(f"(RANK={RANK}, it={it}) update_topology() failed: {e}; retrying...")
                         continue
 
-            world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
+            world_size = communicator.get_attribute(pccl.Attribute.CURRENT_WORLD_SIZE)
+
+            if world_size > 1:
+                while True:
+                    try:
+                        communicator.optimize_topology()
+                        break
+                    except pccl.PCCLError as e:
+                        print(f"[Peer] OptimizeTopology failed => {e}. Retrying...")
+                        time.sleep(0.1)
+                world_size = communicator.get_attribute(pccl.Attribute.CURRENT_WORLD_SIZE)
+    
 
             if world_size < 2:
-                sleep(1)
+                # alone => no ring-based operation => wait
+                print("[Peer] alone => sleeping.")
+                time.sleep(1)
                 continue
 
-            params = torch.cat([p.view(-1) for p in model.parameters()])
-
+            # Perform cuda device synchronization
+            # if your shared state partially or fully resides on the GPU we must wait until all currently dispatched kernels have completed
+            # to avoid validating or potentially transmitting data that is currently being in-place modified.
+            torch.cuda.synchronize(device)
+            
             sync_info = communicator.sync_shared_state(shared_state)
             num_syncs += 1
             if shared_state.revision >= max_steps:
                 print(f"(RANK={RANK}, it={it}) Training completed")
                 break
 
-            # collect model parameters in one contiguous tensor
-            params = torch.cat([p.view(-1) for p in model.parameters()])
-
             assert sync_info is not None
             if num_syncs > 1:
                 assert sync_info.rx_bytes == 0
-
 
             try:
                 batch_idx, (images, labels) = next(train_it)

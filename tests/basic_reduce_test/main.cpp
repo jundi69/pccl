@@ -94,9 +94,12 @@ int main() {
             PCCL_CHECK(pcclUpdateTopology(communicator));
             PCCL_CHECK(pcclGetAttribute(communicator, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size));
         }
+        
         if (world_size > 1) {
-            // PCCL_CHECK(pcclOptimizeTopology(communicator));
+            PCCL_CHECK(pcclOptimizeTopology(communicator));
+            PCCL_CHECK(pcclGetAttribute(communicator, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size));
         }
+
         if (world_size < 2) {
             std::this_thread::sleep_for(std::chrono::seconds(1));
             continue;

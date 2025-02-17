@@ -381,7 +381,15 @@ def main():
                 time.sleep(1)
                 continue
 
-            communicator.optimize_topology()
+            if world_size > 1:
+                while True:
+                    try:
+                        communicator.optimize_topology()
+                        break
+                    except pccl.PCCLError as e:
+                        print(f"[Peer] OptimizeTopology failed => {e}. Retrying...")
+                        time.sleep(0.1)
+                world_size = communicator.get_attribute(pccl.Attribute.CURRENT_WORLD_SIZE)
 
             torch.cuda.synchronize(device)
 

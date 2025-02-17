@@ -463,8 +463,8 @@ PCCL_CHECK(pcclGetAttribute(communicator, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &wo
 
 - `pcclOptimizeTopology` will establish p2p connections to newly designated neighboring peers if the topology changes in
   much the same way that `pcclOptimizeTopology` will, with the difference of
-  not accepting brand-new peers into the run. You can expect the world size to not change when invoking
-  `pcclOptimizeTopology`.
+  not accepting brand-new peers into the run. However, the world size can still change when peers leave!
+  It is recommended that the world size is re-obtained after invoking `pcclOptimizeTopology`.
 
 #### The recommended pattern for a loop iteration is thus as follows:
 
@@ -481,6 +481,7 @@ for (uint64_t i = 0;;i++) {
     
     if (world_size > 1) {
         PCCL_CHECK(pcclOptimizeTopology(communicator)); // optimize the ring order for better throughput
+        PCCL_CHECK(pcclGetAttribute(communicator, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size)); // get the new world size
     }
     
     if (world_size < 2) {
@@ -687,6 +688,8 @@ int main() {
                 std::cout << "[Peer] OptimizeTopology failed => retrying...\n";
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
             }
+            // get up-to-date world size
+            PCCL_CHECK(pcclGetAttribute(comm, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size));
         } else {
             // alone => no ring-based operation => wait
             std::cout << "[Peer] alone => sleeping.\n";

@@ -76,7 +76,8 @@ For each peer group, the master keeps a *“mask”* that enumerates which tenso
 - Peers that deviate (outdated revision or mismatched hash) are directed to request data from a designated up-to-date peer.
 - Once all participants converge, they vote to finalize the sync, returning each peer to `IDLE`.
 
-Note: `hash_type` is currently inferred by the device type of the shared state tensor. For CPU tensors, PCCL uses crc32 hashes. For GPU tensors, it uses a custom `simpleHash` function that is deterministic and fast. These hashes are not cryptographically secure but are sufficient for detecting silent divergences in shared state.
+Note: `hash_type` is currently always `simplehash`. Simple-hash is a non-cryptographic parallelizable hash function implemented on both cpu & cuda.
+PCCL thus does not make implicit assertions about device placement for shared state tensors. These hashes are not cryptographically secure nor designed to resist adversarial attacks, but are sufficient for detecting silent divergences in shared state.
 
 ### Fault Tolerance & Dynamic Peers
 
