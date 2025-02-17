@@ -99,7 +99,6 @@ namespace {
     }
 
     //------------------- Generic (no hardware accel) --------------------
-    __attribute__((target("arch=x86-64")))
     [[nodiscard]] uint32_t CRC32_generic(const void *data, const size_t size) {
         if (!data || !size) [[unlikely]] return 0;
         const auto *buf = static_cast<const std::uint8_t *>(data);
