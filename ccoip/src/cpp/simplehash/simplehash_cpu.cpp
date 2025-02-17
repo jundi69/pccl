@@ -106,6 +106,7 @@ static inline uint32_t compute_thread_block_result(const size_t b, const uint32_
 // Compute the result of the final_reduce_kernel
 static inline uint32_t compute_kernel_result(const size_t gridDim, const uint32_t *words, const size_t n_vec,
                                              const size_t vectorsPerBlock) {
+
     // Process the blocks in a 2 layer reduce style.
     alignas(32) uint32_t thread_reduce_results[blockDim] = {0};
 
@@ -114,8 +115,8 @@ static inline uint32_t compute_kernel_result(const size_t gridDim, const uint32_
     const size_t n_sections = (gridDim + blockDim - 1) / blockDim;
     for (int section = 0; section < n_sections; section++) {
         const size_t n_threads = std::min(gridDim - section * blockDim, blockDim);
-#ifdef SIMPLEHASH_ENABLE_OMP
-#pragma omp parallel for shared(thread_reduce_results)
+#ifdef PCCL_BUILD_OPENMP_SUPPORT
+#pragma omp parallel for shared(thread_reduce_results, n_threads, section, blockDim, gridDim, words, n_vec, vectorsPerBlock) default(none)
 #endif
         for (int thread_id = 0; thread_id < n_threads; thread_id++) {
             const size_t assigned_block_idx = section * blockDim + thread_id;

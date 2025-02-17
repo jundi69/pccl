@@ -18,6 +18,7 @@ endif ()
 
 # Handle CUDA build
 option(PCCL_BUILD_CUDA_SUPPORT "Build PCCL with CUDA support" ON)
+option(PCCL_BUILD_OPENMP_SUPPORT "Build PCCL with OpenMP support" ON)
 
 if (PCCL_BUILD_CUDA_SUPPORT)
     find_package(CUDAToolkit)
@@ -30,6 +31,49 @@ if (PCCL_BUILD_CUDA_SUPPORT)
         message(WARNING "CUDA Toolkit not found! CUDA support will be disabled!")
         set(PCCL_BUILD_CUDA_SUPPORT OFF)
     endif()
+endif ()
+
+if (PCCL_BUILD_OPENMP_SUPPORT)
+    set(OpenMP_USE_STATIC_LIBS ON)  # Request static OpenMP
+    find_package(OpenMP QUIET)
+
+    if (OpenMP_CXX_FOUND)
+        message(STATUS "Found OpenMP. Compiling with OpenMP support")
+        set(PCCL_BUILD_OPENMP_SUPPORT ON)
+    else()
+        message(STATUS "OpenMP not found through find_package(OpenMP). Checking compiler flags manually...")
+
+        # Manual check of compiler flags
+        include(CheckCXXCompilerFlag)
+
+        if (MSVC)
+            # MSVC uses /openmp
+            check_cxx_compiler_flag("/openmp" MSVC_OPENMP_SUPPORTED)
+            if (MSVC_OPENMP_SUPPORTED)
+                message(STATUS "OpenMP supported by MSVC. Enabling /openmp flag.")
+                set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /openmp")
+            else()
+                message(STATUS "OpenMP is not supported by this version of MSVC.")
+                set(PCCL_BUILD_OPENMP_SUPPORT OFF)
+            endif()
+        else()
+            # GCC, Clang, etc. typically use -fopenmp
+            check_cxx_compiler_flag("-fopenmp" GCC_CLANG_OPENMP_SUPPORTED)
+            if (GCC_CLANG_OPENMP_SUPPORTED)
+                message(STATUS "OpenMP supported by GCC/Clang. Enabling -fopenmp flag.")
+                set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp")
+            else()
+                message(STATUS "OpenMP is not supported by this compiler or version.")
+                set(PCCL_BUILD_OPENMP_SUPPORT OFF)
+            endif()
+        endif()
+    endif()
+else()
+    message(STATUS "PCCL_BUILD_OPENMP_SUPPORT is OFF. Skipping OpenMP checks.")
+endif()
+
+if (PCCL_BUILD_OPENMP_SUPPORT)
+    add_compile_definitions(PCCL_BUILD_OPENMP_SUPPORT)
 endif ()
 
 if (PCCL_BUILD_CUDA_SUPPORT)

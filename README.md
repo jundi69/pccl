@@ -28,6 +28,10 @@ PCCL aims to be compatible with all architectures. While specialized kernels exi
 CRC32 hashing and quantization, fallback to a generic implementation should always be possible.
 Feel free to create issues for architecture-induced compilation failures.
 
+For optimal performance, we recommend compiling with an OpenMP supported compiler.
+While PCCL will compile without it, it may result in significant performance degradation.
+NOTE: The default clang distribution of macOS does not support OpenMP! We recommend compiling with clang as distributed by the `llvm` homebrew package.
+
 ### Explicitly supported are:
 
 - x86_64
@@ -75,6 +79,7 @@ xcode-select --install # if not already installed
 brew install git # if not already installed by xcode command line tools
 brew install cmake
 brew install python@3.12 # (if you want to use the Python bindings)
+brew install llvm libomp # when OpenMP support is desired (strongly recommended!)
 ```
 
 We recommend using python distributions from Homebrew to avoid conflicts with the system python
@@ -91,7 +96,6 @@ sudo apt install -y cmake
 
 # (if you want to use the Python bindings)
 sudo apt install -y python3.12 python3.12-venv python3-pip
-
 ```
 
 ##### Installing CUDA (if not already installed)

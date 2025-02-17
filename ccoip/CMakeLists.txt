@@ -8,6 +8,11 @@ add_library(ccoip_internal STATIC
 add_library(crc32_cpu STATIC src/cpp/crc32/crc32_cpu.cpp)
 add_library(simplehash_cpu STATIC src/cpp/simplehash/simplehash_cpu.cpp)
 
+
+if (PCCL_BUILD_OPENMP_SUPPORT)
+    target_link_libraries(simplehash_cpu PRIVATE OpenMP::OpenMP_CXX)
+endif ()
+
 if(${IS_AMD64})
     add_library(crc32_amd64_sse42_pcmul STATIC src/cpp/crc32/crc32_amd64_sse42_pcmul.cpp)
     target_compile_options(crc32_amd64_sse42_pcmul PUBLIC "-msse4.2" "-mpclmul")
