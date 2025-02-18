@@ -23,7 +23,7 @@ if(${IS_AMD64})
     target_link_libraries(crc32_cpu PRIVATE crc32_amd64_sse42 crc32_amd64_sse42_pcmul)
 elseif(${IS_ARM64})
     add_library(crc32_arm64 STATIC src/cpp/crc32/crc32_arm64.cpp)
-    target_compile_options(crc32_arm64 PUBLIC "-march=armv8-a+simd")
+    target_compile_options(crc32_arm64 PUBLIC "-march=armv8-a+simd+crc")
     target_link_libraries(crc32_cpu PRIVATE crc32_arm64)
 endif()
 
