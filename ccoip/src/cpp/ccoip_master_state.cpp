@@ -2,6 +2,7 @@
 
 #include <ccoip_packets.hpp>
 #include <functional>
+#include <algorithm>
 #include <pccl_log.hpp>
 #include <topology_optimizer.hpp>
 
