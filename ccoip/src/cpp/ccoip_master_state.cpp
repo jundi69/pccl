@@ -954,29 +954,32 @@ struct SharedStateElectionStats {
 bool ccoip::CCoIPMasterState::electSharedStateMask(const uint32_t peer_group) {
     // count the number of votes for each distinct candidate
     std::unordered_map<SharedStateHashEntryList, SharedStateElectionStats> num_votes{};
+    int max_priority = INT32_MIN;
     for (const auto &[uuid, entries]: shared_state_mask_candidates[peer_group]) {
         SharedStateHashEntryList entry_list{.entries = entries};
         auto &election_stats = num_votes[entry_list];
         election_stats.num_votes++;
-        election_stats.priority = 1;
 
         if (const auto status_opt = getSharedStateMismatchStatus(uuid)) {
             const SharedStateMismatchStatus status = *status_opt;
-            if (status != SUCCESSFUL_MATCH) {
+            if (status == SUCCESSFUL_MATCH) {
+                election_stats.priority = 1;
+            } else if (status == REVISION_OUTDATED) {
+                election_stats.priority = -2;
+            } else {
                 election_stats.priority = -1;
             }
+            max_priority = std::max(max_priority, election_stats.priority);
         }
     }
 
     // get the candidate with the most votes
     SharedStateHashEntryList winning_candidate{};
     size_t max_votes = 0;
-    int max_priority = INT32_MIN;
+
     for (const auto &[candidate, stats]: num_votes) {
-        if (stats.priority > max_priority) {
-            max_votes = stats.num_votes;
-            max_priority = stats.priority;
-            winning_candidate = candidate;
+        if (stats.priority != max_priority) {
+            continue;
         }
         if (stats.num_votes > max_votes) {
             max_votes = stats.num_votes;

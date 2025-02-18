@@ -536,7 +536,7 @@ def main():
             # collect gradients in one contiguous tensor
             grads = torch.cat([p.grad.view(-1) for p in model.parameters() if p.grad is not None])
 
-            while True:
+            while world_size > 1:
                 print(f"(RANK={RANK}, it={it}) all_reduce_async()")
                 op_desc = ReduceOperandDescriptor(
                     datatype=DataType.FLOAT,
@@ -549,6 +549,7 @@ def main():
                 handle = communicator.all_reduce_async(grads, grads, operand_descriptor=op_desc,
                                                        quantization_options=quant_desc, op=ReduceOp.SUM)
                 is_success, status, info = handle.wait()
+                world_size = communicator.get_attribute(pccl.Attribute.CURRENT_WORLD_SIZE)
                 if not is_success:
                     print(f"(RANK={RANK}, it={it}) all_reduce_async() failed: {status}; retrying...")
                     continue
