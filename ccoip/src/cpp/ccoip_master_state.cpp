@@ -2,7 +2,6 @@
 
 #include <ccoip_packets.hpp>
 #include <functional>
-#include <algorithm>
 #include <pccl_log.hpp>
 #include <topology_optimizer.hpp>
 
@@ -970,7 +969,7 @@ bool ccoip::CCoIPMasterState::electSharedStateMask(const uint32_t peer_group) {
             } else {
                 election_stats.priority = -1;
             }
-            max_priority = std::max(max_priority, election_stats.priority);
+            max_priority = election_stats.priority > max_priority ? election_stats.priority : max_priority;
         }
     }
 
