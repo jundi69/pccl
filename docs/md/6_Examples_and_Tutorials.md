@@ -268,9 +268,9 @@ def main():
                     print(f"[Peer] UpdateTopology failed => {e}. Retrying...")
                     time.sleep(0.1)
 
-        # B) get the updated world size
-        #    after update_topology, it’s guaranteed to be fresh
-        world_size = comm.get_attribute(pccl.Attribute.CURRENT_WORLD_SIZE)
+            # B) get the updated world size
+            #    after update_topology, it’s guaranteed to be fresh
+            world_size = comm.get_attribute(pccl.Attribute.CURRENT_WORLD_SIZE)
 
         # C) If multiple peers => optionally optimize ring
         if world_size > 1:
@@ -489,7 +489,7 @@ def main():
                         communicator.optimize_topology()
                         break
                     except pccl.PCCLError as e:
-                        print(f"[Peer] OptimizeTopology failed => {e}. Retrying...")
+                        print(f"(RANK={RANK}, it={it}) OptimizeTopology failed => {e}. Retrying...")
                         time.sleep(0.1)
                 world_size = communicator.get_attribute(pccl.Attribute.CURRENT_WORLD_SIZE)
     

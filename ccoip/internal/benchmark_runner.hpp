@@ -23,7 +23,6 @@ namespace ccoip {
         /// Returns the output bandwidth in mbit/s
         [[nodiscard]] double getOutputBandwidthMbitsPerSecond() const;
 
-
     };
 
     class NetworkBenchmarkHandler {

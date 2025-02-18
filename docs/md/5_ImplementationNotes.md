@@ -3,8 +3,6 @@
 This section offers a behind-the-scenes look at how PCCL is implemented. While most users won’t need these details to run or integrate PCCL, it can be useful for:
 - Debugging issues in cross-platform socket code
 - Understanding how concurrency is managed
-- Adapting the library for advanced or custom scenarios
-- Contributing to the PCCL codebase
 
 ## TinySockets & Polling
 PCCL relies on standard TCP sockets for:
@@ -50,7 +48,7 @@ One of PCCL’s features is `bandwidth-aware ring ordering`. Since ring-based re
 1. **Bandwidth Store**: The master keeps an asymmetric cost matrix (`BandwidthStore`) of measured bandwidth from peer A to peer B.
 2. **Benchmark Requests**: When a peer calls `pcclOptimizeTopology`, the master identifies missing edges (i.e., pairs not yet measured) and instructs the relevant peer(s) to do a quick TCP test.
 3. **TSP Heuristic:** The master uses a traveling-salesman “shortest path” (or “highest bandwidth”) approach to find a ring ordering that tries to maximize total link speed. For small problems `world_size <= 16` an exact solution will be attempted in a set timeout limit, for larger problems it might attempt a simpler heuristic (path of immediate “closest” peer, random tour or ant colony optimization with 2 Opt & 3 Opt local search, etc.). If an optimal solution cannot be found, the master may start a “moonshot” approach in the background to either target an optimal solution for higher `world_size` or to continue improving the current solution heuristically.
-   Once a better ring is found, p2p connections will be re-established in that order (without letting brand-new peers in) the next time the client calls `pcclU pdateTopology`. The clients adopt the new ring as soon as they collectively vote and connect to each new neighbor.
+   Once a better ring is found, p2p connections will be re-established in that order (without letting brand-new peers in) the next time the client calls `pcclUpdateTopology`. The clients adopt the new ring as soon as they collectively vote and connect to each new neighbor.
    Solutions that are found immediately as part of the topology optimization phase without a background “moonshot” are adopted immediately by the peers as part of `pcclOptimizeTopology` in a fashion similar to `pcclUpdateTopology`, but without admitting newcomers into the run while still “going through the same motions” of voting to establish p2p connections by peers, followed by distribution of the p2p connection information by the master to said peers, along with subsequent connection establishment performed by the peers followed by subsequent confirmation of the connection establishment to the master.
 
 ### Shared-State Hashing & Distribution
@@ -58,13 +56,22 @@ One of PCCL’s features is `bandwidth-aware ring ordering`. Since ring-based re
 When you call `pcclSynchronizeSharedState`, each peer does:
 
 1. **Hash Each Tensor**:
-- On CPU: Typically a CRC32-based approach (with SSE/AVX/ARM Neon optimizations if available).
-- On GPU: A custom deterministic kernel if compiled with CUDA support.
+- On CPU: SimpleHash (with OpenMP optimizations, if supported by compiler) or a CRC32-based approach (with SSE/AVX/ARM Neon optimizations if available).
+- On GPU: SimpleHash, a custom deterministic kernel if compiled with CUDA support.
 
 2. **Report Revision & Hash**: The peer sends these to the master for that group’s “mask election.”
 3. **Master Chooses a Mask**: By popularity, it decides which set of (keys, hashes) is canonical. Peers that deviate are assigned to fetch the updated data from a designated “correct” peer via ephemeral connections.
 4. **One-Increment Rule**:
    The master checks that each new `shared_state->revision` is exactly 1 higher than before. If not, you see a `REVISION_INCREMENT_VIOLATION`.
+   If it were to ever happen that the last peer that distributed the shared state leaves the run, the shared state is effectively lost.
+   Because new peers will have freshly initialized revision counters, which thus triggers a mismatch, no peer will ever be able to synchronize the shared state successfully again until the master is restarted.
+   It is the responsibility of the application developer to ensure to periodically checkpoint the shared state.
+   In the best case, newly joining peers load the most recent shared state from disk, and because the shared
+   state revision matches the expected value, said peer will become shared state distributor, restoring the normal flow of operations.
+   If the peer only periodically checkpoints shared state, the load may not result in restoring the exact last seen shared state revision.
+   The master will of course not accept this revision, even though it might be the best available recovery choice.
+   It is intended that in such a scenario the master must be restarted for purposes of safety and consistency of behavior.
+
 5. Dirty Keys: If a peer’s local hash for “weight_1” mismatches the mask, the peer sets up a direct ephemeral TCP connection to the distributing peer to its shared state distribution socket. After transmission, the content is hashed again and compared to the expected value. If the hash matches, the peer proceeds. On hash mismatch, the call to `pcclSynchronizeSharedState` will return an error code.
 
 In practice, if your model steps are *bitwise deterministic across* peers, the “dirty keys” scenario rarely happens. But it remains crucial for newly joining peers who need a full checkpoint or for accidental drift scenarios.

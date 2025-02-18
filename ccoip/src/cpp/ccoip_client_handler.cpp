@@ -51,6 +51,11 @@ bool ccoip::CCoIPClientHandler::connect() {
             socket->maximizeSendBuffer();
             socket->maximizeReceiveBuffer();
 
+            // enable 5 seconds receive timeout
+            if (!socket->enableReceiveTimout(5)) [[unlikely]] {
+                LOG(WARN) << "Failed to enable receive timeout for p2p socket!";
+            }
+
             const auto hello_packet_opt = socket->receivePacket<P2PPacketHello>();
             if (!hello_packet_opt) {
                 LOG(ERR) << "Failed to receive P2PPacketHello from " << ccoip_sockaddr_to_str(client_address);
@@ -606,8 +611,10 @@ bool ccoip::CCoIPClientHandler::optimizeTopology() {
                         return false;
                     }
                     iterator = remaining_requests.erase(iterator);
-                } else if (result == NetworkBenchmarkRunner::BenchmarkResult::BENCHMARK_SERVER_BUSY) {
+                } else if (result == NetworkBenchmarkRunner::BenchmarkResult::BENCHMARK_SERVER_BUSY || result == NetworkBenchmarkRunner::BenchmarkResult::SEND_FAILURE) {
                     // try again later
+                    // Even when we encounter a send failure, it is worth trying again because we actually did manage to establish a connection at first.
+                    // We will check again to see if the peer is truly gone, and if it is, the next benchmark run with be a connection failure status anyway.
                     ++iterator;
                     last_attempt[request.to_peer_uuid] = std::chrono::steady_clock::now();
                 } else {
@@ -634,6 +641,7 @@ bool ccoip::CCoIPClientHandler::optimizeTopology() {
     if (!requestAndEstablishP2PConnections(false)) {
         return false;
     }
+
     return true;
 }
 

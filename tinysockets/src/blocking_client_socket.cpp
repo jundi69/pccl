@@ -26,27 +26,15 @@ static bool configure_socket_fd(const int socket_fd) {
 #ifdef TCP_QUICKACK
     setsockoptvp(socket_fd, IPPROTO_TCP, TCP_QUICKACK, &opt, sizeof(opt));
 #endif
-
-    // 5 seconds time out
-    // TODO: DISABLE THIS IN DEBUG BUILDS BECAUSE IT IS ANNOYING FOR DEBUGGING
-    /*
-    timeval tv{};
-    tv.tv_sec = 5;
-    tv.tv_usec = 0;
-    setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
-    */
-
     return true;
 }
 
 
-tinysockets::BlockingIOSocket::BlockingIOSocket(const ccoip_socket_address_t &address) :
-    socket_fd(0),
+tinysockets::BlockingIOSocket::BlockingIOSocket(const ccoip_socket_address_t &address) : socket_fd(0),
     connect_sockaddr(address) {
 }
 
-tinysockets::BlockingIOSocket::BlockingIOSocket(const int socket_fd) :
-    socket_fd(socket_fd), connect_sockaddr() {
+tinysockets::BlockingIOSocket::BlockingIOSocket(const int socket_fd) : socket_fd(socket_fd), connect_sockaddr() {
 }
 
 bool tinysockets::BlockingIOSocket::establishConnection() {
@@ -109,6 +97,18 @@ bool tinysockets::BlockingIOSocket::establishConnection() {
     return true;
 }
 
+bool tinysockets::BlockingIOSocket::enableReceiveTimout(const int seconds) const {
+    timeval tv{};
+    tv.tv_sec = seconds;
+    tv.tv_usec = 0;
+    if (setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv) < 0) [[unlikely]] {
+        LOG(ERR) << "Failed to set SO_RCVTIMEO option on server socket";
+        closesocket(socket_fd);
+        return false;
+    }
+    return true;
+}
+
 bool tinysockets::BlockingIOSocket::closeConnection() {
     if (socket_fd == 0) {
         return false;
@@ -142,7 +142,8 @@ bool tinysockets::BlockingIOSocket::isOpen() {
     if (socket_fd == 0) [[unlikely]] {
         return false;
     }
-    std::lock_guard guard{recv_mutex}; // prevent race conditions so that other threads don't accidentally hit the fd in non-blocking mode.
+    std::lock_guard guard{recv_mutex};
+    // prevent race conditions so that other threads don't accidentally hit the fd in non-blocking mode.
 #ifndef WIN32
     // Using MSG_PEEK with a small read: if it returns 0, the connection is closed.
     char buf;
@@ -294,11 +295,8 @@ std::optional<size_t> tinysockets::BlockingIOSocket::receivePacketLength(const b
             i = recvvp(socket_fd, &length, sizeof(length), 0);
         }
         if (no_wait) {
-            if (i == -1) {
+            if (i == -1 || i == 0) {
                 return std::nullopt;
-            }
-            if (i == 0) {
-                continue; // no data available, but repeat the loop to see if next call fails with EAGAIN/EWOULDBLOCK
             }
         }
         if (i == -1 || i == 0) {

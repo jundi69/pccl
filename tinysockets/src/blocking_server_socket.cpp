@@ -4,24 +4,6 @@
 
 #include "tinysockets.hpp"
 
-tinysockets::BlockingIOServerSocket::BlockingIOServerSocket(const ccoip_socket_address_t &listen_address) :
-    listen_address(listen_address), bump_port_on_failure(false), socket_fd(0) {}
-
-tinysockets::BlockingIOServerSocket::BlockingIOServerSocket(const ccoip_inet_address_t &inet_address,
-                                                            const uint16_t above_port) :
-    listen_address({inet_address, above_port}), bump_port_on_failure(true), socket_fd(0) {}
-
-tinysockets::BlockingIOServerSocket::~BlockingIOServerSocket() {
-    if (running) {
-        if (!interrupt()) [[unlikely]] {
-            LOG(ERR) << "Failed to interrupt BlockingIOServerSocket from destructor";
-        }
-        join();
-    } else if (bound && socket_fd != 0) {
-        closesocket(socket_fd);
-    }
-}
-
 static bool configure_socket_fd(const int socket_fd) {
     constexpr int opt = 1;
 
@@ -52,7 +34,30 @@ static bool configure_socket_fd(const int socket_fd) {
 #ifdef TCP_QUICKACK
     setsockoptvp(socket_fd, IPPROTO_TCP, TCP_QUICKACK, &opt, sizeof(opt));
 #endif
+
     return true;
+}
+
+tinysockets::BlockingIOServerSocket::BlockingIOServerSocket(
+    const ccoip_socket_address_t &listen_address) : listen_address(listen_address), bump_port_on_failure(false),
+                                                    socket_fd(0) {
+}
+
+tinysockets::BlockingIOServerSocket::BlockingIOServerSocket(const ccoip_inet_address_t &inet_address,
+                                                            const uint16_t above_port) : listen_address({
+    inet_address, above_port
+}), bump_port_on_failure(true), socket_fd(0) {
+}
+
+tinysockets::BlockingIOServerSocket::~BlockingIOServerSocket() {
+    if (running) {
+        if (!interrupt()) [[unlikely]] {
+            LOG(ERR) << "Failed to interrupt BlockingIOServerSocket from destructor";
+        }
+        join();
+    } else if (bound && socket_fd != 0) {
+        closesocket(socket_fd);
+    }
 }
 
 bool tinysockets::BlockingIOServerSocket::listen() {
@@ -114,7 +119,7 @@ bool tinysockets::BlockingIOServerSocket::listen() {
         failure = listen_result != 0;
         if (failure) {
             LOG(ERR) << "Failed to listen on port " << listen_address.port << " with error: " << std::strerror(errno)
-                     << " (" << errno << ")";
+                    << " (" << errno << ")";
         }
     } while (bump_port_on_failure && failure);
 

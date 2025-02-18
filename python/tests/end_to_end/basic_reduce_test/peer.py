@@ -39,11 +39,12 @@ def main():
         if it > 1:
             logging.info(f"(RANK={RANK}, it={it}) update_topology()")
             communicator.update_topology()
-            world_size: int = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
+            world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
 
         if world_size > 1:
             try:
                 communicator.optimize_topology()
+                world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
             except Exception as ex:
                 print(ex)
 

@@ -64,13 +64,13 @@ int main() {
     int world_size{};
     pcclGetAttribute(communicator, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size);
 
-    constexpr size_t n_weights = 1024 * 1024 * 128;
+    constexpr size_t n_weights = 1024 * 1024;
     const auto weights = new float[n_weights];
-    //fill_uniform(weights, n_weights);
+    fill_uniform(weights, n_weights);
 
-    constexpr size_t n_elements = 1024 * 1024 * 128;
+    constexpr size_t n_elements = 1024 * 1024;
     const auto gradients = new float[n_elements];
-    //fill_uniform(gradients, n_elements);
+    fill_uniform(gradients, n_elements);
 
     // Create shared state
     pcclTensorInfo_t infos[1] = {
@@ -88,7 +88,7 @@ int main() {
 
     size_t i = 0;
 
-    while (shared_state.revision < 1000) {
+    while (shared_state.revision < 10000) {
         i++;
         if (i > 1) {
             PCCL_CHECK(pcclUpdateTopology(communicator));
@@ -96,7 +96,7 @@ int main() {
         }
         
         if (world_size > 1) {
-            PCCL_CHECK(pcclOptimizeTopology(communicator));
+            // PCCL_CHECK(pcclOptimizeTopology(communicator));
             PCCL_CHECK(pcclGetAttribute(communicator, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size));
         }
 
@@ -122,6 +122,7 @@ int main() {
                     .op = pcclSum,
                     .tag = 0,
                     .src_descriptor = {.datatype = pcclFloat, .distribution_hint = PCCL_DISTRIBUTION_HINT_NONE},
+                    // .quantization_options = {.quantized_datatype = pcclUint8, .algorithm = pcclQuantMinMax},
                     .quantization_options = {.quantized_datatype = pcclFloat, .algorithm = pcclQuantNone},
             };
             pcclAllReduceAsync(gradients, weights, &desc, communicator, &async_op);

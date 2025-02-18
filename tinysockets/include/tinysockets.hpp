@@ -183,6 +183,8 @@ namespace tinysockets {
 
         [[nodiscard]] bool establishConnection();
 
+        [[nodiscard]] bool enableReceiveTimout(int seconds) const;
+
         [[nodiscard]] bool closeConnection();
 
         [[nodiscard]] bool isOpen();

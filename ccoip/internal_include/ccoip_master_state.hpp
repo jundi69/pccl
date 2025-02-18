@@ -276,12 +276,14 @@ namespace ccoip {
         /// Removed from on client leave/disconnect.
         std::unordered_map<uint32_t, std::unordered_set<ccoip_uuid_t>> votes_sync_shared_state_complete{};
 
-        /// Flag per "callsite" to indicate if the peer list has changed
+        /// Flag per "callsite" to indicate if the peer list has changed;
+        /// Each call-site defines separate scope for checking whether the peer list has changed since the last invocation from said call site.
         /// See @code hasPeerListChanged@endcode
         std::unordered_map<uint32_t, bool> peer_list_changed{{CALLSITE_TOPOLOGY_OPTIMIZATION_COMPLETE, false},
                                                              {CALLSITE_P2P_CONNECTION_INFORMATION, false}};
 
-        /// Flag per "callsite" to indicate if the topology has changed
+        /// Flag per "callsite" to indicate if the topology has changed;
+        /// Each call-site defines separate scope for checking whether the peer list has changed since the last invocation from said call site.
         /// See @code hasTopologyChanged@endcode
         std::unordered_map<uint32_t, bool> topology_changed{{CALLSITE_TOPOLOGY_OPTIMIZATION_COMPLETE, false},
                                                             {CALLSITE_P2P_CONNECTION_INFORMATION, false}};
