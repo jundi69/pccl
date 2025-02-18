@@ -101,7 +101,7 @@ def run_stress_test(
                     env_vars={"PCCL_LOG_LEVEL": "DEBUG"}
                 )
                 peers.append(p)
-                print(f"[INFO] Spawned peer (from 1→2); PID={p.pid}")
+                print(f"[INFO] Spawned peer (from 1 -> 2); PID={p.pid}")
                 # Mark this time so we remember not to kill again too soon.
                 last_spawn_from_singleton = time.time()
             else:
