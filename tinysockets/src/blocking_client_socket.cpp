@@ -101,7 +101,7 @@ bool tinysockets::BlockingIOSocket::enableReceiveTimout(const int seconds) const
     timeval tv{};
     tv.tv_sec = seconds;
     tv.tv_usec = 0;
-    if (setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv) < 0) [[unlikely]] {
+    if (setsockoptvp(socket_fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv) < 0) [[unlikely]] {
         LOG(ERR) << "Failed to set SO_RCVTIMEO option on server socket";
         closesocket(socket_fd);
         return false;
