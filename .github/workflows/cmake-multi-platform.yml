@@ -221,7 +221,10 @@ jobs:
         if: ${{ matrix.is_host_arch }}
         run: |
           python -m pip install -r ${{ github.workspace }}/python/tests/end_to_end/requirements.txt
-          python -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
+
+      - name: Install CUDA-enabled PyTorch
+        if: ${{ matrix.pccl_build_cuda_support == 'ON'}}
+        run: python -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
 
       - name: Python End-to-End Tests
         if: ${{ matrix.is_host_arch }}
