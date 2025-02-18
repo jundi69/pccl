@@ -3,14 +3,16 @@
 #include <cstdint>
 #include <atomic>
 
-#include <sys/auxv.h>
-
 #if defined(_MSC_VER)
 #include <intrin.h>
 #else
 
 #if defined(__x86_64__) || defined(_M_X64) || defined(__i386) || defined(_M_IX86)
 #include <cpuid.h>
+#endif
+
+#ifdef defined(__linux__)
+#include <sys/auxv.h>
 #endif
 
 #endif
