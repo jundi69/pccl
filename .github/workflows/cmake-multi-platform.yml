@@ -39,7 +39,7 @@ jobs:
             build_type: Release
             pccl_build_cuda_support: ON
 
-          # Windows configurations using GitHub-hosted runners
+          # Windows configurations using self-hosted runners
           # x86_64, no cuda
           - runs-on: [ self-hosted, Windows, X64, cpu ]
             os: windows-latest
@@ -60,12 +60,22 @@ jobs:
             build_type: Release
             pccl_build_cuda_support: ON
 
-          # aarch64, no cuda
+          # aarch64, no cuda (cross-compile, no testing!)
           - runs-on: [ self-hosted, Windows, X64, cpu ]
             os: windows-latest
             msvc_cpu_arch: amd64_arm64 # cross compile arm64 on x86_64
             is_host_arch: false
             make_program: C:/Program Files/NinjaBuild/bin/ninja.exe
+            generator: Ninja
+            build_type: Release
+            pccl_build_cuda_support: OFF
+
+          # MacOS configuration using self-hosted runners
+          - runs-on: [ self-hosted, macOS, ARM64, cpu ]
+            os: macos-latest
+            c_compiler: gcc
+            cpp_compiler: g++
+            is_host_arch: true
             generator: Ninja
             build_type: Release
             pccl_build_cuda_support: OFF
