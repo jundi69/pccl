@@ -73,8 +73,8 @@ jobs:
           # MacOS configuration using self-hosted runners
           - runs-on: [ self-hosted, macOS, ARM64, cpu ]
             os: macos-latest
-            c_compiler: gcc
-            cpp_compiler: g++
+            c_compiler: clang
+            cpp_compiler: clang++
             is_host_arch: true
             generator: Ninja
             build_type: Release
