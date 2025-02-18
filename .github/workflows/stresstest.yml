@@ -2,7 +2,7 @@ name: Stresstest
 
 on:
   push:
-    tags: [ 'stress-test' ]
+    tags: [ 'stress-test-*' ]
 
 jobs:
   build:
