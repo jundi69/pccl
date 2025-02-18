@@ -3,10 +3,16 @@
 #include <cstdint>
 #include <atomic>
 
+#include <sys/auxv.h>
+
 #if defined(_MSC_VER)
 #include <intrin.h>
 #else
+
+#if defined(__x86_64__) || defined(_M_X64) || defined(__i386) || defined(_M_IX86)
 #include <cpuid.h>
+#endif
+
 #endif
 
 
@@ -91,6 +97,13 @@ namespace {
             caps.hasArmCRC   = (hwcap & HWCAP_CRC32) != 0;
             caps.hasArmPMULL = (hwcap & HWCAP_PMULL) != 0;
 #endif
+
+#if defined(__APPLE__)
+        // on apple, we can safely assert that all available arm64 cpus do have advanced features
+        caps.hasArmCRC = true;
+        caps.hasArmPMULL = true;
+#endif
+
 #else
         // On other platforms: we assume no advanced CRC instructions
 #endif
