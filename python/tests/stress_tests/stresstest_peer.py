@@ -43,8 +43,13 @@ def main():
                     break
                 except PCCLError as ex:
                     if retry == 10:
-                        # the peer was likely kicked,
-                        print("Exiting because peer was likely kicked. This doesn't necessary entail a failure of the stress test, as long as the shared state revision is not lost and new peers continue on. This may happen because of extremely unlucky killing such that no p2p connections can be s")
+                        # The peer was likely kicked; this can happen be collateral damage in rare cases when lots of
+                        # people die at the same time, p2p connections cannot be established and the master thinks
+                        # the peer cannot communicate with enough peers to build a tour. This is unresolvable because
+                        # it might just be true that the peer can indeed just not talk to those peers.
+                        # If they had disconnected from the master too, they would already be considered removed from the
+                        # run. But if that happens just a tick late, this unlucky situation can happen.
+                        print("Exiting because peer was likely kicked. This doesn't necessary entail a failure of the stress test, as long as the shared state revision is not lost and new peers continue on.")
                         exit(0)
                     print(f"(RANK={RANK}, it={it}) update_topology() failed: {ex}; retrying...")
                     continue

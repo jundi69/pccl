@@ -1,188 +1,222 @@
 import os
+import sys
 import time
 import random
+import threading
 import subprocess
-import sys
-from typing import List, Optional, Dict
+from typing import Dict, List, Optional
 
-###############################################################################
-# Helper function to launch a single Python process.
-###############################################################################
-def launch_py_process(
-        script_path: str,
-        args: List[str],
-        env_vars: Optional[Dict[str, str]] = None
-) -> subprocess.Popen:
-    """
-    Launches a Python process with optional environment variables and stdout forwarding.
+# If 5 minutes pass without a "Reduce completed" line, we fail.
+MAX_IDLE_SECONDS = 5 * 60  # 5 minutes in seconds
 
-    :param script_path: Path to the Python script to execute.
-    :param args: List of arguments to pass to the script.
-    :param env_vars: Dictionary of environment variables to set for the process.
-    :return: A Popen object for the launched process.
+def stream_output_to_stdout(proc: subprocess.Popen,
+                            alive_dict: Dict[int, bool],
+                            last_reduce_timestamp: List[float]):
     """
-    env = {**dict(os.environ), **(env_vars or {})}
+    Continuously read lines from `proc.stdout` and write them to sys.stdout.
+    Once the first line is read, mark the process as alive in `alive_dict`.
+    If a line contains "Reduce completed RX:", update `last_reduce_timestamp[0]`.
+    """
+    pid = proc.pid
+    first_line_seen = False
+
+    for line in proc.stdout:
+        # Echo the line to our own stdout (or could store it, parse further, etc.)
+        sys.stdout.write(f"[PEER {pid}] {line}")
+        sys.stdout.flush()
+
+        # If it's the first line from this process, mark it as alive
+        if not first_line_seen:
+            alive_dict[pid] = True
+            first_line_seen = True
+
+        # If it contains our special marker, update the timestamp
+        if "Reduce completed RX:" in line:
+            last_reduce_timestamp[0] = time.time()
+
+    # When the peer exits or the pipe closes:
+    sys.stdout.write(f"[PEER {pid}] -- output stream closed.\n")
+    sys.stdout.flush()
+
+def launch_py_process(script_path: str,
+                      args: List[str],
+                      env_vars: Optional[Dict[str, str]] = None) -> subprocess.Popen:
+    """
+    Launches a Python process with environment variables and captured stdout/stderr.
+    """
+    env = {**os.environ, **(env_vars or {})}
     cmd = [sys.executable, script_path] + args
+
     print(f"[LAUNCH] {cmd} with env={env_vars}")
-    return subprocess.Popen(cmd, env=env)
+    return subprocess.Popen(
+        cmd,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,     # Return text (str) instead of bytes
+        bufsize=1      # Line-buffered
+    )
 
-###############################################################################
-# The main long-running stress test orchestrator.
-###############################################################################
-def run_stress_test(
-        duration_hours: float = 8.0,
-        max_peers: int = 10,
-        spawn_script_name: str = "stresstest_peer.py",
-        master_script_name: str = "stresstest_master.py"
-):
+def run_stress_test(duration_hours: float = 8.0,
+                    max_peers: int = 10,
+                    spawn_script_name: str = "stresstest_peer.py",
+                    master_script_name: str = "stresstest_master.py"):
     """
-    Spawns a master process and repeatedly spawns/kills peers to provoke
-    potential timing issues for a dynamic membership collective comms library.
-
-    :param duration_hours: How many hours to keep running the stress test.
-    :param max_peers: Maximum number of peers to allow at once.
-    :param spawn_script_name: Name/path of the peer script to launch.
-    :param master_script_name: Name/path of the master script.
+    Spawns a master process and repeatedly spawns/kills peers. If we go 5+ minutes
+    without seeing a "Reduce completed RX: ..." line from any peer, we consider
+    the test stuck and clean up early.
     """
-    # Resolve script paths relative to this file's location.
     base_dir = os.path.dirname(__file__)
     peer_script_path = os.path.join(base_dir, spawn_script_name)
     master_script_path = os.path.join(base_dir, master_script_name)
 
-    # 1) Launch a single master node.
+    # Dictionary to indicate if a PID has printed anything yet
+    alive_flags: Dict[int, bool] = {}
+
+    # We keep track of the last time a "Reduce completed" line was seen:
+    # Use a list of one float to allow modification from both main & threads.
+    last_reduce_timestamp = [time.time()]
+
+    # A list of active peer Popen objects
+    peers: List[subprocess.Popen] = []
+
+    # 1) Launch master node
     master_process = launch_py_process(
         master_script_path,
         args=[],
         env_vars={"PCCL_LOG_LEVEL": "DEBUG"}
     )
-    print(f"[INFO] Master launched with PID={master_process.pid}")
+    print(f"[INFO] Master launched, PID={master_process.pid}")
+    alive_flags[master_process.pid] = False
 
-    # 2) Launch an initial set of peers (start with 2).
-    peers = []
-    for rank in range(2):
+    # Start a thread to read & forward the master’s stdout
+    master_thread = threading.Thread(
+        target=stream_output_to_stdout,
+        args=(master_process, alive_flags, last_reduce_timestamp),
+        daemon=True
+    )
+    master_thread.start()
+
+    # Helper to spawn a peer & start reading its stdout
+    def spawn_peer():
         p = launch_py_process(
             peer_script_path,
             args=[],
-            env_vars={
-                "PCCL_LOG_LEVEL": "DEBUG",
-                "RANK": str(rank)
-            }
+            env_vars={"PCCL_LOG_LEVEL": "DEBUG"}
         )
         peers.append(p)
-        print(f"[INFO] Peer {rank} launched with PID={p.pid}")
+        alive_flags[p.pid] = False  # Not alive until first line
+        print(f"[INFO] Spawned peer PID={p.pid}; waiting for first line...")
 
-    print("[INFO] Initial peers launched.")
+        th = threading.Thread(
+            target=stream_output_to_stdout,
+            args=(p, alive_flags, last_reduce_timestamp),
+            daemon=True
+        )
+        th.start()
+        return p
 
-    # Tracking time
+    # 2) Launch initial 2 peers
+    for _ in range(2):
+        spawn_peer()
+
+    # 3) Main stress loop
     end_time = time.time() + duration_hours * 3600
     last_spawn_from_singleton: Optional[float] = None
 
-    # 3) Enter main loop for random spawn/kill operations.
+    def get_num_alive_peers() -> int:
+        """
+        Return count of peers that are:
+         1) still running (p.poll() is None),
+         2) marked as alive in alive_flags.
+        """
+        alive_count = 0
+        for p in peers:
+            if p.poll() is None and alive_flags.get(p.pid, False):
+                alive_count += 1
+        return alive_count
+
     while True:
         now = time.time()
         if now >= end_time:
-            break  # Stop after the allotted duration.
+            print("[INFO] Time limit reached; stopping stress test.")
+            break
 
-        # Decide what to do: spawn a new peer or kill an existing peer?
-        # But honor constraints:
-        #   - If we have only 1 peer, we must spawn a new one (cannot kill).
-        #   - If we just spawned a peer from 1→2, wait at least 1 sec before killing.
+        # Check if 5+ minutes have passed since last reduce
+        if (now - last_reduce_timestamp[0]) > MAX_IDLE_SECONDS:
+            print("[ERROR] No 'Reduce completed' lines for 5+ minutes. Considering test stuck!")
+            break
 
-        num_peers = len(peers)
-
-        # If we have exactly 1 peer, we either do nothing or spawn a new peer
-        # to avoid killing the last peer.
-        if num_peers == 1:
-            if num_peers < max_peers:
-                # Spawn a new peer
-                p = launch_py_process(
-                    peer_script_path,
-                    args=[],
-                    env_vars={"PCCL_LOG_LEVEL": "DEBUG"}
-                )
-                peers.append(p)
-                print(f"[INFO] Spawned peer (from 1 -> 2); PID={p.pid}")
-                # Mark this time so we remember not to kill again too soon.
-                last_spawn_from_singleton = time.time()
+        # Clean out peers that have exited
+        still_running = []
+        for p in peers:
+            if p.poll() is None:
+                still_running.append(p)
             else:
-                # If we're at max_peers (very unlikely if max_peers>1),
-                # just sleep and continue. No kill is allowed.
-                pass
+                print(f"[INFO] Peer PID={p.pid} ended (code={p.returncode}).")
+        peers[:] = still_running
 
+        num_alive = get_num_alive_peers()
+        total_peers = len(peers)  # includes not-yet-alive ones
+
+        # If we have 0 or 1 alive peers, spawn
+        if num_alive <= 1:
+            if total_peers < max_peers:
+                new_peer = spawn_peer()
+                if num_alive == 1:
+                    # We just went from 1 -> 2 (once the new peer prints). We'll check time
+                    last_spawn_from_singleton = time.time()
         else:
-            # We have 2 or more peers.
-            # Randomly choose spawn or kill, with a preference for "spawn" if small.
+            # We have >=2 alive peers => random action: spawn or kill
             action_candidates = []
-            if num_peers < max_peers:
+            if total_peers < max_peers:
                 action_candidates.append("spawn")
-            if num_peers > 1:
+            if num_alive > 1:
                 action_candidates.append("kill")
 
-            action_weights = []
-            for action in action_candidates:
-                if action == "spawn":
-                    action_weights.append(0.6)
-                else:  # "kill"
-                    action_weights.append(0.4)
+            if action_candidates:
+                weights = [0.6 if a == "spawn" else 0.4 for a in action_candidates]
+                chosen = random.choices(action_candidates, weights=weights, k=1)[0]
 
-            # Weighted choice: if we have very few peers, spawn is more likely.
-            # Otherwise, kill is also an option.
-            chosen_action = random.choices(
-                action_candidates,
-                weights=action_weights,
-                k=1
-            )[0]
-
-            if chosen_action == "spawn":
-                # Launch a new peer
-                p = launch_py_process(
-                    peer_script_path,
-                    args=[],
-                    env_vars={"PCCL_LOG_LEVEL": "DEBUG"}
-                )
-                peers.append(p)
-                print(f"[INFO] Spawned new peer; PID={p.pid}")
-
-                # If we just went from 1→2 peers, track time for the safety interval
-                if num_peers == 1:
-                    last_spawn_from_singleton = time.time()
-
-            else:  # chosen_action == "kill"
-                # Only kill if enough time has passed since last spawning from 1→2
-                if last_spawn_from_singleton is not None:
-                    time_since_singleton_spawn = time.time() - last_spawn_from_singleton
+                if chosen == "spawn":
+                    spawn_peer()
+                    if num_alive == 1:
+                        last_spawn_from_singleton = time.time()
                 else:
-                    time_since_singleton_spawn = 999999.0  # effectively "forever"
+                    # chosen == "kill"
+                    # Only kill if enough time after going from 1->2
+                    if last_spawn_from_singleton is not None:
+                        elapsed = time.time() - last_spawn_from_singleton
+                    else:
+                        elapsed = 999999.0
 
-                # We require at least 1 second after going from 1→2 before we kill again.
-                if time_since_singleton_spawn > 1.0:
-                    # Kill a random peer from the current list.
-                    # We want to avoid killing all peers, but "action_candidates" check
-                    # already ensures num_peers > 1.
-                    victim = random.choice(peers)
-                    victim_pid = victim.pid
-                    print(f"[INFO] KILLING peer PID={victim_pid}")
-                    victim.kill()
-                    # We can either wait() or do it asynchronously
-                    victim.wait()
-                    peers.remove(victim)
-                    print(f"[INFO] Confirmed peer PID={victim_pid} is terminated")
-                else:
-                    # If it's not safe to kill yet, just skip or spawn instead.
-                    pass
+                    if elapsed > 1.0:
+                        # Kill a random alive peer
+                        alive_peers = [p for p in peers
+                                       if p.poll() is None and alive_flags.get(p.pid, False)]
+                        if len(alive_peers) > 1:
+                            victim = random.choice(alive_peers)
+                            print(f"[INFO] KILLING peer PID={victim.pid}")
+                            victim.kill()
+                            victim.wait()
+                            print(f"[INFO] Confirmed peer PID={victim.pid} is terminated")
+                        else:
+                            # Not enough alive peers to kill
+                            pass
+                    else:
+                        # Not safe to kill yet
+                        pass
 
-        # Sleep a random time between 0.5 and 2 seconds to mix up the timing.
-        sleep_time = random.uniform(0.5, 2.0)
-        time.sleep(sleep_time)
+        # Sleep random time
+        time.sleep(random.uniform(0.5, 2.0))
 
-    # 4) Done with the main stress test; now shut everything down gracefully.
-    print("[INFO] Stress test duration complete. Terminating all peers...")
-
-    for peer in peers:
-        if peer.poll() is None:
-            print(f"[INFO] Killing peer PID={peer.pid}")
-            peer.kill()
-            peer.wait()
+    # 4) Done or stuck => cleanup
+    print("[INFO] Cleaning up peers...")
+    for p in peers:
+        if p.poll() is None:
+            print(f"[INFO] Killing peer PID={p.pid}")
+            p.kill()
+            p.wait()
 
     print("[INFO] All peers terminated. Killing master process...")
     if master_process.poll() is None:
@@ -191,9 +225,5 @@ def run_stress_test(
 
     print("[INFO] Master terminated. Stress test orchestrator finished.")
 
-###############################################################################
-# If you want to run this module by itself, do so here:
-###############################################################################
 if __name__ == "__main__":
-    # Example: run for ~8 hours with a max of 10 peers.
     run_stress_test(duration_hours=8.0, max_peers=10)
