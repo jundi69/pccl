@@ -160,18 +160,18 @@ def run_stress_test(duration_hours: float = 8.0,
         total_peers = len(peers)  # includes not-yet-alive ones
 
         # If we have 0 or 1 alive peers, spawn
-        if num_alive <= 1:
+        if num_alive <= 2:
             if total_peers < max_peers:
                 new_peer = spawn_peer()
-                if num_alive == 1:
-                    # We just went from 1 -> 2 (once the new peer prints). We'll check time
+                if num_alive <= 2:
+                    # We just went from 2 -> 3 (once the new peer prints). We'll check time
                     last_spawn_from_singleton = time.time()
         else:
-            # We have >=2 alive peers => random action: spawn or kill
+            # We have >=3 alive peers => random action: spawn or kill
             action_candidates = []
             if total_peers < max_peers:
                 action_candidates.append("spawn")
-            if num_alive > 1:
+            if num_alive > 2:
                 action_candidates.append("kill")
 
             if action_candidates:
@@ -180,7 +180,7 @@ def run_stress_test(duration_hours: float = 8.0,
 
                 if chosen == "spawn":
                     spawn_peer()
-                    if num_alive == 1:
+                    if num_alive <= 2:
                         last_spawn_from_singleton = time.time()
                 else:
                     # chosen == "kill"

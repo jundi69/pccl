@@ -292,14 +292,26 @@ namespace {
 
         DeQuantizationMetaData received_meta_data{};
         if (quantized_type != data_type) {
-            const auto packet = rx_socket->receivePacket<ccoip::P2PPacketDequantizationMeta>();
-            if (!packet) {
-                LOG(WARN) << "Failed to receive de-quant meta in allgather!";
-                return {false, false};
+            // wait until we receive a P2PPacketDequantizationMeta packet and wait for aborts in the meantime
+            while (true) {
+                const auto metadata_packet = rx_socket->receivePacket<ccoip::P2PPacketDequantizationMeta>(true);
+                if (!metadata_packet) {
+                    if (!rx_socket->isOpen()) {
+                        return {false, false};
+                    }
+                    const auto abort_packet = master_socket.receiveMatchingPacket<ccoip::M2CPacketCollectiveCommsAbort>(
+                        [tag](const ccoip::M2CPacketCollectiveCommsAbort &packet) { return packet.tag == tag; }, true);
+                    if (abort_packet) {
+                        return {true, true};
+                    }
+                    std::this_thread::yield();
+                    continue;
+                }
+                received_meta_data = metadata_packet->dequantization_meta;
+                constexpr size_t ltv_header = sizeof(uint64_t) + sizeof(ccoip::packetId_t);
+                client_state.trackCollectiveComsRxBytes(tag, ltv_header + metadata_packet->serializedSize());
+                break;
             }
-            received_meta_data = packet->dequantization_meta;
-            constexpr size_t ltv_header = sizeof(uint64_t) + sizeof(ccoip::packetId_t);
-            client_state.trackCollectiveComsRxBytes(tag, ltv_header + packet->serializedSize());
         }
         received_meta_data_out = received_meta_data;
 
