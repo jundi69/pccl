@@ -413,6 +413,12 @@ bool ccoip::CCoIPMasterState::markP2PConnectionsEstablished(const ccoip_uuid_t &
         {
             auto &unreachable_peers = unreachability_map[client_uuid];
             for (const auto &peer: failed_peers) {
+                const auto failed_peer_info_opt = getClientInfo(peer);
+                if (!failed_peer_info_opt) {
+                    // ignore invalid failed peer entries because that likely just means that the master has
+                    // already handled the disconnection and deregistered said peer, making it no longer valid.
+                    continue;
+                }
                 unreachable_peers.insert(peer);
             }
             if (unreachable_peers.size() == client_info.size()) {

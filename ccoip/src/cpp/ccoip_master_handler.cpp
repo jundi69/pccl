@@ -845,28 +845,6 @@ void ccoip::CCoIPMasterHandler::handleP2PConnectionsEstablished(const ccoip_sock
     }
     const auto client_uuid = client_uuid_opt.value();
 
-    bool invalid_failed_peers = false;
-    if (!packet.failed_peers.empty() && packet.success) {
-        invalid_failed_peers = true;
-    } else {
-        for (const auto &peer : packet.failed_peers) {
-            if (peer == client_uuid) {
-                invalid_failed_peers = true;
-                break;
-            }
-            if (!server_state.getClientInfo(peer)) {
-                invalid_failed_peers = true;
-                break;
-            }
-        }
-    }
-    if (invalid_failed_peers) {
-        LOG(ERR) << "Client sent invalid failed peers list in C2MPacketP2PConnectionsEstablished packet";
-        if (!kickClient(client_address)) [[unlikely]] {
-            LOG(ERR) << "Failed to kick client " << ccoip_sockaddr_to_str(client_address);
-        }
-        return;
-    }
     if (!server_state.markP2PConnectionsEstablished(client_uuid, packet.success, packet.failed_peers)) [[unlikely]] {
         LOG(WARN) << "Failed to mark P2P connections established for " << ccoip_sockaddr_to_str(client_address);
         if (!kickClient(client_address)) [[unlikely]] {

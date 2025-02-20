@@ -820,7 +820,7 @@ bool ccoip::CCoIPClientHandler::closeP2PConnection(const ccoip_uuid_t &uuid, tin
         return false;
     }
     if (!client_state.unregisterPeer(socket.getConnectSockAddr())) [[unlikely]] {
-        LOG(BUG) << "Failed to unregister peer " << uuid_to_string(uuid)
+        LOG(ERR) << "Failed to unregister peer " << uuid_to_string(uuid)
                 << ". This means the client was already unregistered; This is a bug!";
         return false;
     }
@@ -839,9 +839,7 @@ bool ccoip::CCoIPClientHandler::closeAllP2PConnections() {
                 return false;
             }
             if (!client_state.unregisterPeer(tx_connection->getConnectSockAddr())) [[unlikely]] {
-                LOG(BUG) << "Failed to unregister peer " << uuid_to_string(uuid)
-                        << ". This means the client was already unregistered; This is a bug!";
-                return false;
+                continue;
             }
             tx_connections_it = p2p_connections_tx.erase(tx_connections_it);
         }
