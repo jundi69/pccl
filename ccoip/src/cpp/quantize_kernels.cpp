@@ -51,7 +51,7 @@ FORCE_INLINE static DeQuantizationMetaData minMaxQuant(O *RESTRICT dst, const I 
     } else {
         for (size_t i = 0; i < count; ++i) {
             auto relative = static_cast<double>(src[i] - minmax.min);
-            dst[i] = static_cast<O>(relative * std::numeric_limits<O>::max());
+            dst[i] = static_cast<O>(relative * static_cast<double>(std::numeric_limits<O>::max()));
         }
     }
     return DeQuantizationMetaData::Make(minmax.min, minmax.max);
@@ -74,7 +74,7 @@ FORCE_INLINE static void minMaxQuantAndDequant(I *RESTRICT dst, const I *RESTRIC
     } else {
         for (size_t i = 0; i < count; ++i) {
             const auto relative = static_cast<double>(src[i] - minmax.min);
-            O quantized_value = static_cast<O>(relative * std::numeric_limits<O>::max());
+            O quantized_value = static_cast<O>(relative * static_cast<double>(std::numeric_limits<O>::max()));
             dst[i] = deQuantizeMinMaxScalar(quantized_value, minmax.min, minmax.max);
         }
     }

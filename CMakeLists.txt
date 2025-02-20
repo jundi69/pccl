@@ -1,8 +1,21 @@
 cmake_minimum_required(VERSION 3.16)
 project(pccl)
 
+include(cmake/macos-openmp.cmake)
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
+# make sure we reference dynamic libraries such as OpenMP via RPATH
+set(CMAKE_BUILD_WITH_INSTALL_RPATH ON)
+set(CMAKE_MACOSX_RPATH ON)
+
+if(APPLE)
+    set(CMAKE_INSTALL_RPATH "@rpath")
+elseif(UNIX)
+    # For Linux, we often use $ORIGIN so it’s relative to the .so location.
+    set(CMAKE_INSTALL_RPATH "$ORIGIN")
+endif()
 
 # Detect CPU architecture
 if (CMAKE_SYSTEM_PROCESSOR MATCHES "(x86)|(X86)|(amd64)|(AMD64)")
@@ -116,5 +129,7 @@ target_include_directories(pccl PRIVATE internal)
 target_link_libraries(pccl PRIVATE ccoip_private)
 target_link_libraries(pccl PUBLIC ccoip_public)
 target_link_libraries(pccl PRIVATE pccl_log)
+
+fix_macos_abspaths(pccl)
 
 add_subdirectory(tests)

@@ -1,6 +1,6 @@
 #include <algorithm>
-#include <cstdint>
 #include <cstddef>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
 
@@ -56,8 +56,9 @@ static uint32_t block_reduce(const uint32_t acc[blockDim]) {
     return blockResult;
 }
 
-static inline void compute_thread_block_perform_all_threads_step(
-    uint32_t acc[blockDim], const uint32_t *__restrict current_words, const int n_threads_with_data) {
+static inline void compute_thread_block_perform_all_threads_step(uint32_t acc[blockDim],
+                                                                 const uint32_t *__restrict current_words,
+                                                                 const int n_threads_with_data) {
     for (int t = 0; t < n_threads_with_data; t++) {
         // Each vector element is 4 words.
         const uint32_t *vec = current_words + t * 4;
@@ -129,7 +130,8 @@ static inline uint32_t compute_kernel_result(const size_t gridDim, const uint32_
     for (int section = 0; section < n_sections; section++) {
         const size_t n_threads = std::min(gridDim - section * blockDim, blockDim);
 #ifdef PCCL_BUILD_OPENMP_SUPPORT
-#pragma omp parallel for shared(thread_reduce_results, n_threads, section, blockDim, gridDim, words, n_vec, vectorsPerBlock) default(none)
+#pragma omp parallel for shared(thread_reduce_results, n_threads, section, blockDim, gridDim, words, n_vec,            \
+                                        vectorsPerBlock) default(none)
 #endif
         for (int thread_id = 0; thread_id < n_threads; thread_id++) {
             const size_t assigned_block_idx = section * blockDim + thread_id;

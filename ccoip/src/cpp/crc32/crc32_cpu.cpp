@@ -11,7 +11,7 @@
 #include <cpuid.h>
 #endif
 
-#ifdef defined(__linux__)
+#if defined(__linux__)
 #include <sys/auxv.h>
 #endif
 
