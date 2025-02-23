@@ -45,7 +45,6 @@ jobs:
             c_compiler: gcc
             cpp_compiler: g++
             is_host_arch: true
-            generator: Ninja
             build_type: Release
             pccl_build_cuda_support: OFF
 
