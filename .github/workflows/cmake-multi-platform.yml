@@ -40,7 +40,8 @@ jobs:
             pccl_build_cuda_support: ON
 
           # Linux configurations using GitHub-hosted runners; We also want to check if Docker introduces weirdness
-          - os: ubuntu-latest
+          - runs-on:
+            os: ubuntu-latest
             c_compiler: gcc
             cpp_compiler: g++
             is_host_arch: true
