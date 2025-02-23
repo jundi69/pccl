@@ -109,7 +109,7 @@ bool tinysockets::BlockingIOSocket::enableReceiveTimout(const int seconds) const
     return true;
 }
 
-bool tinysockets::BlockingIOSocket::closeConnection() {
+bool tinysockets::BlockingIOSocket::closeConnection(const bool no_half_close_drain) {
     if (socket_fd == 0) {
         return false;
     }
@@ -119,12 +119,14 @@ bool tinysockets::BlockingIOSocket::closeConnection() {
     tv.tv_usec = 0;
     setsockoptvp(socket_fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 
-    // do the half-close then drain trick
-    shutdown(socket_fd, SHUT_WR);
+    if (!no_half_close_drain) {
+        // do the half-close then drain trick
+        shutdown(socket_fd, SHUT_WR);
 
-    char buf[1024];
-    while (recv(socket_fd, buf, sizeof(buf), 0) > 0) {
-        // drain the socket
+        char buf[1024];
+        while (recv(socket_fd, buf, sizeof(buf), 0) > 0) {
+            // drain the socket
+        }
     }
 
     // Now shut everything down.

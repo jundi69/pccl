@@ -793,6 +793,7 @@ bool ccoip::CCoIPClientHandler::establishP2PConnection(const PeerInfo &peer) {
         LOG(ERR) << "Failed to establish P2P connection with peer " << uuid_to_string(peer.peer_uuid);
         return false;
     }
+    LOG(DEBUG) << "Established socket connection with peer " << uuid_to_string(peer.peer_uuid) << "; Starting p2p handshake...";
 
     // maximize send and receive buffer sizes
     socket->maximizeSendBuffer();
@@ -807,6 +808,7 @@ bool ccoip::CCoIPClientHandler::establishP2PConnection(const PeerInfo &peer) {
         LOG(ERR) << "Failed to receive hello ack from peer " << uuid_to_string(peer.peer_uuid);
         return false;
     }
+    LOG(DEBUG) << "P2P handshake with peer " << uuid_to_string(peer.peer_uuid) << " successful.";
     if (!client_state.registerPeer(peer.p2p_listen_addr, peer.peer_uuid)) {
         LOG(ERR) << "Failed to register peer " << uuid_to_string(peer.peer_uuid);
         return false;
@@ -815,7 +817,10 @@ bool ccoip::CCoIPClientHandler::establishP2PConnection(const PeerInfo &peer) {
 }
 
 bool ccoip::CCoIPClientHandler::closeP2PConnection(const ccoip_uuid_t &uuid, tinysockets::BlockingIOSocket &socket) {
-    if (!socket.closeConnection()) [[unlikely]] {
+    // not doing half-close drain here is fine because we either
+    // a) know because of master synchronization that no collective op is running
+    // b) we are aborting an all reduce and don't care anyways
+    if (!socket.closeConnection(true)) [[unlikely]] {
         LOG(BUG) << "Failed to close connection with peer " << uuid_to_string(uuid);
         return false;
     }

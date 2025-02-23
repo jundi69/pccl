@@ -65,7 +65,8 @@ class CMakeBuildExecutor(build_ext):
         # Prepare cmake arguments
         cmake_args = [
             f'-DCMAKE_BUILD_TYPE={release_type}',  # Specify the build type
-            f'-DPCCL_BUILD_CUDA_SUPPORT={build_cuda_support}' # Enable CUDA support depending on state
+            f'-DPCCL_BUILD_CUDA_SUPPORT={build_cuda_support}', # Enable CUDA support depending on state
+            f'-DPCCL_BUILD_STATIC_LIB=OFF',  # Build shared libraries
         ]
         if c_compiler is not None:
             cmake_args += [f'-DCMAKE_C_COMPILER={c_compiler}']

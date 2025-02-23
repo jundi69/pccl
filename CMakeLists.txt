@@ -114,7 +114,14 @@ add_subdirectory(ccoip)
 add_subdirectory(ccoip_master)
 add_subdirectory(tinysockets)
 
-add_library(pccl SHARED src/pccl.cpp)
+option(PCCL_BUILD_STATIC_LIB "Build PCCL as a static library" ON)
+
+if (PCCL_BUILD_STATIC_LIB)
+    add_library(pccl STATIC src/pccl.cpp)
+else ()
+    add_library(pccl SHARED src/pccl.cpp)
+endif ()
+
 if (NOT WIN32)
     target_compile_options(pccl PRIVATE -Wall -Wextra -Werror -Wpedantic -Wno-unused-parameter)
 endif ()
@@ -130,6 +137,8 @@ target_link_libraries(pccl PRIVATE ccoip_private)
 target_link_libraries(pccl PUBLIC ccoip_public)
 target_link_libraries(pccl PRIVATE pccl_log)
 
-fix_macos_abspaths(pccl)
+if (NOT PCCL_BUILD_STATIC_LIB)
+    fix_macos_abspaths(pccl)
+endif ()
 
 add_subdirectory(tests)

@@ -185,7 +185,9 @@ namespace tinysockets {
 
         [[nodiscard]] bool enableReceiveTimout(int seconds) const;
 
-        [[nodiscard]] bool closeConnection();
+        /// Closes the socket.
+        /// @param no_half_close_drain if true, will not perform a half-close drain to ensure all data sent before this call was acknowledged
+        [[nodiscard]] bool closeConnection(bool no_half_close_drain = false);
 
         [[nodiscard]] bool isOpen();
 

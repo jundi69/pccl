@@ -10,7 +10,6 @@ add_library(simplehash_cpu STATIC src/cpp/simplehash/simplehash_cpu.cpp)
 
 
 if (PCCL_BUILD_OPENMP_SUPPORT)
-    message("OpenMP_CXX_LIBRARIES: ${OpenMP_CXX_LIBRARIES}")
     target_link_libraries(simplehash_cpu PRIVATE ${OpenMP_CXX_LIBRARIES})
 endif ()
 
