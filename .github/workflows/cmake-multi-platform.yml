@@ -151,13 +151,13 @@ jobs:
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat" ${{ matrix.msvc_cpu_arch }}
           set MAKE_PROGRAM=${{ matrix.make_program }}
-          set CMAKE_GENERATOR=${{ matrix.generator }}
+          set CMAKE_GENERATOR="${{ matrix.generator }}"
           set PCCL_BUILD_CUDA_SUPPORT=${{ matrix.pccl_build_cuda_support }}
           cd ${{ github.workspace }}/python/framework && pip3 wheel --verbose -w dist .
       
       - name: Compile Python wheel (Unix)
         if: runner.os != 'Windows'
-        run: cd ${{ github.workspace }}/python/framework && CMAKE_GENERATOR=${{ matrix.generator }} PCCL_BUILD_CUDA_SUPPORT=${{ matrix.pccl_build_cuda_support }} pip3 wheel --verbose -w dist .
+        run: cd ${{ github.workspace }}/python/framework && CMAKE_GENERATOR="${{ matrix.generator }}" PCCL_BUILD_CUDA_SUPPORT=${{ matrix.pccl_build_cuda_support }} pip3 wheel --verbose -w dist .
 
       - name: Create Python virtual environment (Unix)
         if: ${{ runner.os != 'Windows' && matrix.is_host_arch }}
