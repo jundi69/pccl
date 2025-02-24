@@ -109,7 +109,7 @@ bool tinysockets::BlockingIOSocket::enableReceiveTimout(const int seconds) const
     return true;
 }
 
-bool tinysockets::BlockingIOSocket::closeConnection(const bool no_half_close_drain) {
+bool tinysockets::BlockingIOSocket::closeConnection(const bool allow_data_discard) {
     if (socket_fd == 0) {
         return false;
     }
@@ -119,14 +119,18 @@ bool tinysockets::BlockingIOSocket::closeConnection(const bool no_half_close_dra
     tv.tv_usec = 0;
     setsockoptvp(socket_fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 
-    if (!no_half_close_drain) {
-        // do the half-close then drain trick
-        shutdown(socket_fd, SHUT_WR);
-
-        char buf[1024];
-        while (recv(socket_fd, buf, sizeof(buf), 0) > 0) {
-            // drain the socket
-        }
+    if (!allow_data_discard) {
+        // linger on close to ensure all data is sent and at least acked by the peer's kernel
+        linger l{};
+        l.l_onoff = 1;
+        l.l_linger = 5;
+        setsockoptvp(socket_fd, SOL_SOCKET, SO_LINGER, &l, sizeof(l));
+    } else {
+        // set SO_LINGER to 0 to force a hard close
+        linger l{};
+        l.l_onoff = 1;
+        l.l_linger = 0;
+        setsockoptvp(socket_fd, SOL_SOCKET, SO_LINGER, &l, sizeof(l));
     }
 
     // Now shut everything down.

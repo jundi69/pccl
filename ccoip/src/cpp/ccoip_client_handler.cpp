@@ -819,7 +819,7 @@ bool ccoip::CCoIPClientHandler::establishP2PConnection(const PeerInfo &peer) {
 bool ccoip::CCoIPClientHandler::closeP2PConnection(const ccoip_uuid_t &uuid, tinysockets::BlockingIOSocket &socket) {
     // not doing half-close drain here is fine because we either
     // a) know because of master synchronization that no collective op is running
-    // b) we are aborting an all reduce and don't care anyways
+    // b) we are aborting an all reduce and don't care anyway
     if (!socket.closeConnection(true)) [[unlikely]] {
         LOG(BUG) << "Failed to close connection with peer " << uuid_to_string(uuid);
         return false;
@@ -839,7 +839,10 @@ bool ccoip::CCoIPClientHandler::closeAllP2PConnections() {
     {
         while (tx_connections_it != p2p_connections_tx.end()) {
             const auto &[uuid, tx_connection] = *tx_connections_it;
-            if (!tx_connection->closeConnection()) [[unlikely]] {
+            // not doing half-close drain here is fine because we either
+            // a) know because of master synchronization that no collective op is running
+            // b) we are aborting an all reduce and don't care anyway
+            if (!tx_connection->closeConnection(true)) [[unlikely]] {
                 LOG(BUG) << "Failed to close connection with peer " << uuid_to_string(uuid);
                 return false;
             }
