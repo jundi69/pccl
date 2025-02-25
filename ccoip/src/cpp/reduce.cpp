@@ -17,7 +17,7 @@
 /// The higher the chunk size, the less overhead is incurred by the multiplexer, but it is also less fine-granular.
 /// The reduce algorithm also uses this chunk size to quantize chunks as they are received. Higher chunk sizes means
 /// quantization runs less frequently but potentially for longer.
-#define MULTIPLEX_CHUNK_SIZE 2097152ul
+#define MULTIPLEX_CHUNK_SIZE size_t(2097152ull)
 
 namespace {
     /**
@@ -145,7 +145,7 @@ namespace {
 
             // 3a) Send if ready
             if (bytes_sent < total_tx_size) {
-                const size_t chunk_size = (std::min)(MULTIPLEX_CHUNK_SIZE, total_tx_size - bytes_sent);
+                const size_t chunk_size = std::min(MULTIPLEX_CHUNK_SIZE, total_tx_size - bytes_sent);
                 const auto send_sub = tx_span.subspan(bytes_sent, chunk_size);
                 if (tx_socket->sendBytes(tag, send_sub)) {
                     no_event = false;
@@ -315,7 +315,7 @@ namespace {
 
             // Send
             if (bytes_sent < total_tx_size) {
-                const size_t chunk_size = (std::min)(MULTIPLEX_CHUNK_SIZE, total_tx_size - bytes_sent);
+                const size_t chunk_size = std::min(MULTIPLEX_CHUNK_SIZE, total_tx_size - bytes_sent);
                 const auto send_sub = tx_span.subspan(bytes_sent, chunk_size);
                 if (tx_socket->sendBytes(tag, send_sub)) {
                     no_event = false;
