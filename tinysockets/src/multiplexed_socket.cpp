@@ -6,6 +6,7 @@
 #include <SPSCQueue.hpp>
 #include <network_order_utils.hpp>
 #include <shared_mutex>
+#include <cstring>
 
 static bool configure_socket_fd(const int socket_fd) {
     constexpr int opt = 1;
