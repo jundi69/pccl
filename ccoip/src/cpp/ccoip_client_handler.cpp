@@ -658,6 +658,12 @@ bool ccoip::CCoIPClientHandler::interrupt() {
     if (interrupted) {
         return false;
     }
+    for (const auto &p2p_entry: p2p_connections_rx) {
+        if (!p2p_entry.second->interrupt()) [[unlikely]] {
+            return false;
+        }
+        p2p_entry.second->join();
+    }
     if (!p2p_socket.interrupt()) [[unlikely]] {
         return false;
     }

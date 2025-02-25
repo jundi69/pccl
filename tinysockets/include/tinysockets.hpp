@@ -460,6 +460,7 @@ namespace tinysockets {
         std::thread send_thread;
 
         MultiplexedIOSocketInternalState *internal_state;
+
     public:
         explicit MultiplexedIOSocket(const ccoip_socket_address_t &address);
 
@@ -483,7 +484,28 @@ namespace tinysockets {
 
         [[nodiscard]] bool sendBytes(uint64_t tag, const std::span<const std::byte> &data) const;
 
-        [[nodiscard]] std::optional<ssize_t> receiveBytes(uint64_t tag, const std::span<std::byte> &data) const;
+        [[nodiscard]] std::optional<ssize_t> receiveBytesInplace(uint64_t tag, const std::span<std::byte> &data) const;
+
+        [[nodiscard]] std::optional<std::unique_ptr<std::byte[]>> receiveBytes(
+            uint64_t tag, std::span<std::byte> &data, bool no_wait) const;
+
+        /// Sends a packet to the client associated with the given socket address
+        /// Returns false if the server is not running or the client connection does not exist
+        template<typename T> requires std::is_base_of_v<ccoip::Packet, T>
+        [[nodiscard]] bool sendPacket(const uint64_t tag,
+                                      const T &packet) {
+            const ccoip::packetId_t id = T::packet_id;
+            PacketWriteBuffer buffer{};
+            packet.serialize(buffer);
+            return sendLtvPacket<T>(tag, id, buffer);
+        }
+
+        /// Receives a packet of the specified type
+        template<typename T> requires std::is_base_of_v<ccoip::Packet, T>
+        [[nodiscard]] std::optional<T> receivePacket(const uint64_t tag, const bool no_wait) {
+            const ccoip::packetId_t id = T::packet_id;
+            return receiveNextPacket<T>(tag, id, no_wait);
+        }
 
         /// Discards all received data that was not yet consumed by @code receiveBytes@endcode for the specified tag
         [[nodiscard]] bool discardReceivedData(uint64_t tag) const;
@@ -505,6 +527,42 @@ namespace tinysockets {
         /// Closes the socket.
         /// Note: this method will discard all data still queued for sending
         [[nodiscard]] bool closeConnection();
+
+        template<typename T> requires std::is_base_of_v<ccoip::Packet, T>
+        [[nodiscard]] std::optional<T> receiveNextPacket(const uint64_t tag, const ccoip::packetId_t packet_id,
+                                                         const bool no_wait) {
+            std::span<std::byte> data_span{};
+            auto data_uptr_opt = receiveBytes(tag, data_span, no_wait);
+            if (!data_uptr_opt) {
+                return std::nullopt;
+            }
+            if (data_uptr_opt == nullptr) {
+                return std::nullopt;
+            }
+            const std::unique_ptr<std::byte[]> data_uptr = std::move(*data_uptr_opt);
+            PacketReadBuffer buffer{reinterpret_cast<uint8_t *>(data_span.data()), data_span.size_bytes()};
+            if (const auto actual_packet_id = buffer.read<ccoip::packetId_t>(); actual_packet_id != packet_id) {
+                LOG(ERR) << "Expected packet ID " << packet_id << " but received " << actual_packet_id;
+                return std::nullopt;
+            }
+            T packet{};
+            if (!packet.deserialize(buffer)) {
+                LOG(ERR) << "Failed to deserialize packet with ID " << packet_id;
+                return std::nullopt;
+            }
+            return packet;
+        }
+
+        template<typename T> requires std::is_base_of_v<ccoip::Packet, T>
+        [[nodiscard]] bool sendLtvPacket(const uint64_t tag, const ccoip::packetId_t packet_id,
+                                         const PacketWriteBuffer &buffer) const {
+            PacketWriteBuffer complete_packet{};
+            complete_packet.write(packet_id);
+            complete_packet.writeContents(buffer.data(), buffer.size());
+            return sendBytes(tag,
+                             std::span(reinterpret_cast<const std::byte *>(complete_packet.data()),
+                                       complete_packet.size()));
+        }
     };
 
     namespace poll {

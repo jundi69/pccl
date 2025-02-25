@@ -94,26 +94,26 @@ namespace {
         const auto &rx_socket = peer_rx_sockets.at(rx_peer);
 
         // 1) Send our local de-quant metadata to next peer
-        /*if (quantized_type != data_type) {
+        if (quantized_type != data_type) {
             ccoip::P2PPacketDequantizationMeta packet{};
             packet.tag = tag;
             packet.dequantization_meta = (meta_data_self
                                               ? *meta_data_self
                                               : DeQuantizationMetaData{});
-            if (!tx_socket->sendPacket<ccoip::P2PPacketDequantizationMeta>(packet)) {
+            if (!tx_socket->sendPacket<ccoip::P2PPacketDequantizationMeta>(tag, packet)) {
                 LOG(WARN) << "Failed to send de-quantization meta data!";
                 return {false, false};
             }
             constexpr size_t ltv_header = sizeof(uint64_t) + sizeof(ccoip::packetId_t);
             client_state.trackCollectiveComsTxBytes(tag, ltv_header + packet.serializedSize());
-        }*/
+        }
 
         // 2) Receive their metadata from the previous peer
         DeQuantizationMetaData received_meta_data{};
-        /*if (quantized_type != data_type) {
+        if (quantized_type != data_type) {
             // wait until we receive a P2PPacketDequantizationMeta packet and wait for aborts in the meantime
             while (true) {
-                const auto metadata_packet = rx_socket->receivePacket<ccoip::P2PPacketDequantizationMeta>(true);
+                const auto metadata_packet = rx_socket->receivePacket<ccoip::P2PPacketDequantizationMeta>(tag, true);
                 if (!metadata_packet) {
                     if (!rx_socket->isOpen()) {
                         return {false, false};
@@ -131,7 +131,7 @@ namespace {
                 client_state.trackCollectiveComsRxBytes(tag, ltv_header + metadata_packet->serializedSize());
                 break;
             }
-        }*/
+        }
 
         // 3) Full-duplex send/recv loop
         size_t bytes_sent = 0;
@@ -157,7 +157,7 @@ namespace {
             // 3b) Receive if ready
             if (bytes_recvd < total_rx_size) {
                 const auto recv_sub = recv_buffer_span.subspan(bytes_recvd);
-                if (auto n_read = rx_socket->receiveBytes(tag, recv_sub)) {
+                if (auto n_read = rx_socket->receiveBytesInplace(tag, recv_sub)) {
                     if (n_read > 0) {
                         no_event = false;
                         client_state.trackCollectiveComsRxBytes(tag, *n_read);
@@ -263,25 +263,25 @@ namespace {
         const auto &rx_socket = peer_rx_sockets.at(rx_peer);
 
         // 1) Exchange metadata for consistency
-        /*if (quantized_type != data_type) {
+        if (quantized_type != data_type) {
             ccoip::P2PPacketDequantizationMeta packet{};
             packet.tag = tag;
             packet.dequantization_meta = (meta_data_self
                                               ? *meta_data_self
                                               : DeQuantizationMetaData{});
-            if (!tx_socket->sendPacket<ccoip::P2PPacketDequantizationMeta>(packet)) {
+            if (!tx_socket->sendPacket<ccoip::P2PPacketDequantizationMeta>(tag, packet)) {
                 LOG(WARN) << "Failed to send de-quantization meta data in allgather!";
                 return {false, false};
             }
             constexpr size_t ltv_header = sizeof(uint64_t) + sizeof(ccoip::packetId_t);
             client_state.trackCollectiveComsTxBytes(tag, ltv_header + packet.serializedSize());
-        }*/
+        }
 
         DeQuantizationMetaData received_meta_data{};
-        /*if (quantized_type != data_type) {
+        if (quantized_type != data_type) {
             // wait until we receive a P2PPacketDequantizationMeta packet and wait for aborts in the meantime
             while (true) {
-                const auto metadata_packet = rx_socket->receivePacket<ccoip::P2PPacketDequantizationMeta>(true);
+                const auto metadata_packet = rx_socket->receivePacket<ccoip::P2PPacketDequantizationMeta>(tag, true);
                 if (!metadata_packet) {
                     if (!rx_socket->isOpen()) {
                         return {false, false};
@@ -300,7 +300,7 @@ namespace {
                 break;
             }
         }
-        received_meta_data_out = received_meta_data;*/
+        received_meta_data_out = received_meta_data;
 
         // 2) Full-duplex send/recv
         size_t bytes_sent = 0;
@@ -327,7 +327,7 @@ namespace {
             // Receive
             if (bytes_recvd < total_rx_size) {
                 const auto recv_sub = recv_buffer_span.subspan(bytes_recvd);
-                if (auto n_read = rx_socket->receiveBytes(tag, recv_sub)) {
+                if (auto n_read = rx_socket->receiveBytesInplace(tag, recv_sub)) {
                     if (*n_read > 0) {
                         no_event = false;
                         client_state.trackCollectiveComsRxBytes(tag, *n_read);

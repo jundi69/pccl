@@ -293,7 +293,7 @@ bool tinysockets::MultiplexedIOSocket::sendBytes(const uint64_t tag, const std::
 }
 
 std::optional<ssize_t> tinysockets::MultiplexedIOSocket::
-receiveBytes(const uint64_t tag, const std::span<std::byte> &data) const {
+receiveBytesInplace(const uint64_t tag, const std::span<std::byte> &data) const {
     while (true) {
         if (!running || socket_fd == 0) {
             return std::nullopt;
@@ -315,8 +315,45 @@ receiveBytes(const uint64_t tag, const std::span<std::byte> &data) const {
             LOG(BUG) << "Obtained packet from SPMCQueue with unexpected tag " << entry.tag << "; expected " << tag;
             continue;
         }
+        // ensure buffer is large enough
+        if (data.size_bytes() < entry.data_span.size_bytes()) {
+            LOG(ERR) << "Buffer is too small to receive data; expected " << entry.data_span.size_bytes()
+                    << " bytes but got " << data.size_bytes();
+            continue;
+        }
         std::memcpy(data.data(), entry.data_span.data(), entry.data_span.size_bytes());
         return static_cast<ssize_t>(entry.data_span.size_bytes());
+    }
+}
+
+std::optional<std::unique_ptr<std::byte[]>> tinysockets::MultiplexedIOSocket::receiveBytes(const uint64_t tag,
+    std::span<std::byte> &data, bool no_wait) const {
+    while (true) {
+        if (!running || socket_fd == 0) {
+            return std::nullopt;
+        }
+        std::shared_lock lock{internal_state->receive_queues_mutex};
+        if (!internal_state->receive_queues.contains(tag)) {
+            continue;
+        }
+        const auto &queue = internal_state->receive_queues.at(tag);
+        if (queue->empty()) {
+            std::this_thread::yield();
+            if (no_wait) {
+                return nullptr;
+            }
+            continue;
+        }
+        const auto entry_ptr = queue->front();
+        auto entry = std::move(*entry_ptr);
+        queue->pop();
+
+        if (entry.tag != tag) {
+            LOG(BUG) << "Obtained packet from SPMCQueue with unexpected tag " << entry.tag << "; expected " << tag;
+            continue;
+        }
+        data = std::span(entry.data_span.data(), entry.data_span.size_bytes());
+        return std::move(entry.data);
     }
 }
 
@@ -398,6 +435,9 @@ const ccoip_socket_address_t &tinysockets::MultiplexedIOSocket::getConnectSockAd
 }
 
 tinysockets::MultiplexedIOSocket::~MultiplexedIOSocket() {
+    if (!interrupt()) [[unlikely]] {
+        // no way to react to failure in destructor
+    }
     join();
     delete internal_state;
 }
