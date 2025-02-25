@@ -11,6 +11,7 @@
 #include <tinysockets.hpp>
 #include <win_sock_bridge.h>
 
+
 /// Chunk size passed to the send() function of the MultiplexedIOSocket.
 /// This determines the maximum size of a single local tagged chunk as managed by the multiplexer.
 /// The higher the chunk size, the less overhead is incurred by the multiplexer, but it is also less fine-granular.
@@ -144,7 +145,7 @@ namespace {
 
             // 3a) Send if ready
             if (bytes_sent < total_tx_size) {
-                const size_t chunk_size = std::min(MULTIPLEX_CHUNK_SIZE, total_tx_size - bytes_sent);
+                const size_t chunk_size = (std::min)(MULTIPLEX_CHUNK_SIZE, total_tx_size - bytes_sent);
                 const auto send_sub = tx_span.subspan(bytes_sent, chunk_size);
                 if (tx_socket->sendBytes(tag, send_sub)) {
                     no_event = false;
@@ -314,7 +315,7 @@ namespace {
 
             // Send
             if (bytes_sent < total_tx_size) {
-                const size_t chunk_size = std::min(MULTIPLEX_CHUNK_SIZE, total_tx_size - bytes_sent);
+                const size_t chunk_size = (std::min)(MULTIPLEX_CHUNK_SIZE, total_tx_size - bytes_sent);
                 const auto send_sub = tx_span.subspan(bytes_sent, chunk_size);
                 if (tx_socket->sendBytes(tag, send_sub)) {
                     no_event = false;
