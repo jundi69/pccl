@@ -1,6 +1,7 @@
 #include "reduce.hpp"
 
 #include <cassert>
+#include <algorithm>
 #include <ccoip_master_state.hpp>
 #include <cstring>
 #include <ccoip_packets.hpp>
