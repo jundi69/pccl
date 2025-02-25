@@ -3,6 +3,7 @@ project(pccl)
 
 include(cmake/macos-openmp.cmake)
 
+set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 

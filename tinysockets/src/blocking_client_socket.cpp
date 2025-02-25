@@ -42,8 +42,9 @@ bool tinysockets::BlockingIOSocket::establishConnection() {
         return false;
     }
     socket_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (socket_fd < 0) [[unlikely]] {
-        LOG(ERR) << "Failed to create socket";
+    if (socket_fd <= 0) [[unlikely]] {
+        const std::string error_message = std::strerror(errno);
+        LOG(ERR) << "Failed to create socket: " << error_message;
         return false;
     }
 
@@ -98,7 +99,8 @@ bool tinysockets::BlockingIOSocket::establishConnection() {
 }
 
 bool tinysockets::BlockingIOSocket::enableReceiveTimout(const int seconds) const {
-    timeval tv{};
+    // TODO: RE-ENABLE AFTER DEBUGGING
+    /*timeval tv{};
     tv.tv_sec = seconds;
     tv.tv_usec = 0;
     if (setsockoptvp(socket_fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv) < 0) [[unlikely]] {
@@ -106,6 +108,7 @@ bool tinysockets::BlockingIOSocket::enableReceiveTimout(const int seconds) const
         closesocket(socket_fd);
         return false;
     }
+    return true;*/
     return true;
 }
 

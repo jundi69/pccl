@@ -186,7 +186,7 @@ namespace tinysockets {
         [[nodiscard]] bool enableReceiveTimout(int seconds) const;
 
         /// Closes the socket.
-        /// @param allow_data_discard if true, will not perform a half-close drain to ensure all data sent before this call was acknowledged
+        /// @param allow_data_discard if true, will perform an instant shutdown without lingering
         [[nodiscard]] bool closeConnection(bool allow_data_discard = false);
 
         [[nodiscard]] bool isOpen();
@@ -332,11 +332,11 @@ namespace tinysockets {
 
         [[nodiscard]] bool receivePacketData(std::span<std::uint8_t> &dst) const;
 
-        [[nodiscard]] std::optional<std::pair<std::unique_ptr<uint8_t[]>, std::span<uint8_t> > > pollNextPacketBuffer(
+        [[nodiscard]] std::optional<std::pair<std::unique_ptr<uint8_t[]>, std::span<uint8_t>>> pollNextPacketBuffer(
             ccoip::packetId_t packet_id,
             bool no_wait) const;
 
-        [[nodiscard]] std::optional<std::pair<std::unique_ptr<uint8_t[]>, std::span<uint8_t> > >
+        [[nodiscard]] std::optional<std::pair<std::unique_ptr<uint8_t[]>, std::span<uint8_t>>>
         pollNextMatchingPacketBuffer(
             ccoip::packetId_t packet_id, const std::function<bool(const std::span<uint8_t> &)> &predicate,
             bool no_wait) const;
@@ -449,6 +449,63 @@ namespace tinysockets {
         void onNewConnection(int client_socket, sockaddr_in sockaddr_in) const;
     };
 
+    struct MultiplexedIOSocketInternalState;
+
+    class MultiplexedIOSocket final {
+        volatile bool running = false;
+        volatile int socket_fd;
+        ccoip_socket_address_t connect_sockaddr;
+
+        std::thread recv_thread;
+        std::thread send_thread;
+
+        MultiplexedIOSocketInternalState *internal_state;
+    public:
+        explicit MultiplexedIOSocket(const ccoip_socket_address_t &address);
+
+        explicit MultiplexedIOSocket(int socket_fd);
+
+        explicit MultiplexedIOSocket(int socket_fd, const ccoip_socket_address_t &address);
+
+        MultiplexedIOSocket(const MultiplexedIOSocket &other) = delete;
+
+        MultiplexedIOSocket(MultiplexedIOSocket &&other) = delete;
+
+        MultiplexedIOSocket &operator=(const MultiplexedIOSocket &other) = delete;
+
+        MultiplexedIOSocket &operator=(MultiplexedIOSocket &&other) = delete;
+
+        [[nodiscard]] bool establishConnection();
+
+        [[nodiscard]] bool run();
+
+        [[nodiscard]] bool interrupt();
+
+        [[nodiscard]] bool sendBytes(uint64_t tag, const std::span<const std::byte> &data) const;
+
+        [[nodiscard]] std::optional<ssize_t> receiveBytes(uint64_t tag, const std::span<std::byte> &data) const;
+
+        /// Discards all received data that was not yet consumed by @code receiveBytes@endcode for the specified tag
+        [[nodiscard]] bool discardReceivedData(uint64_t tag) const;
+
+        void join();
+
+        [[nodiscard]] bool isOpen() const;
+
+        [[nodiscard]] const ccoip_socket_address_t &getConnectSockAddr() const;
+
+        ~MultiplexedIOSocket();
+
+    private:
+        // Packet decoding / encoding functions
+        [[nodiscard]] std::optional<size_t> receivePacketLength() const;
+
+        [[nodiscard]] bool receivePacketData(std::span<std::uint8_t> &dst) const;
+
+        /// Closes the socket.
+        /// Note: this method will discard all data still queued for sending
+        [[nodiscard]] bool closeConnection();
+    };
 
     namespace poll {
         enum PollEvent {

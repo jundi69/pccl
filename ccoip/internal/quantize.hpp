@@ -23,6 +23,7 @@ namespace ccoip::internal::quantize {
         template<typename T, typename = std::enable_if_t<std::is_arithmetic_v<T>>>
         [[nodiscard]]
         static DeQuantizationMetaData Make(T min_value, T max_value) {
+            using namespace tinysockets;
             constexpr ccoip_data_type_t data_type = ccoip_data_type_from_type<T>();
 
             DeQuantizationMetaData meta_data{};

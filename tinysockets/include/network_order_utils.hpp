@@ -10,7 +10,7 @@
 #include <intrin.h> // for _byteswap_ushort, _byteswap_ulong, _byteswap_uint64
 #endif
 
-namespace ccoip::internal::network_order_utils {
+namespace tinysockets::network_order_utils {
     //------------------------------------------------------------------
     // Shared "swap bytes" helper that always reverses the byte order
     // for 2-, 4-, or 8-byte integrals, regardless of endianness.

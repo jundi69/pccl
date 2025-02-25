@@ -1,7 +1,6 @@
 #include <gtest/gtest.h>
 #include <quantize.hpp>
 #include <quantize_kernels.hpp>
-#include <bit>
 
 TEST(QuantizationTest, TestPerfectInverse) {
     float values[] = {0.3, 0.4, 0.5, 0.6, 0.7};

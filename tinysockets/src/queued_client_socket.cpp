@@ -3,7 +3,6 @@
 
 #include <condition_variable>
 #include <cstring> // for std::strerror
-#include <shared_mutex>
 #include "tinysockets.hpp"
 
 static bool configure_socket_fd(const int socket_fd) {
@@ -38,8 +37,6 @@ namespace tinysockets {
         std::vector<ReceivedPacket> recv_queue;
         std::mutex mutex; // Protects condition variable and access coordination
         std::condition_variable cond_var;
-
-        QueuedSocketInternalState() {}
     };
 } // namespace tinysockets
 
@@ -268,7 +265,7 @@ bool tinysockets::QueuedSocket::receivePacketData(std::span<std::uint8_t> &dst) 
     return true;
 }
 
-bool tinysockets::QueuedSocket::sendLtvPacket(ccoip::packetId_t packet_id, const PacketWriteBuffer &buffer) const {
+bool tinysockets::QueuedSocket::sendLtvPacket(const ccoip::packetId_t packet_id, const PacketWriteBuffer &buffer) const {
     PacketWriteBuffer tlv_buffer{};
     tlv_buffer.reserve(buffer.size() + sizeof(packet_id) + sizeof(uint64_t));
     tlv_buffer.write<uint64_t>(buffer.size() + sizeof(ccoip::packetId_t));

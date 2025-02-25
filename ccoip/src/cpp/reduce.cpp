@@ -10,6 +10,13 @@
 #include <tinysockets.hpp>
 #include <win_sock_bridge.h>
 
+/// Chunk size passed to the send() function of the MultiplexedIOSocket.
+/// This determines the maximum size of a single local tagged chunk as managed by the multiplexer.
+/// The higher the chunk size, the less overhead is incurred by the multiplexer, but it is also less fine-granular.
+/// The reduce algorithm also uses this chunk size to quantize chunks as they are received. Higher chunk sizes means
+/// quantization runs less frequently but potentially for longer.
+#define MULTIPLEX_CHUNK_SIZE 2097152ul
+
 namespace {
     /**
      * \brief Utility to compute per-rank chunk boundaries for an array
@@ -65,9 +72,9 @@ namespace {
         const std::optional<ccoip::internal::quantize::DeQuantizationMetaData> &meta_data_self,
 
         const std::unordered_map<ccoip_uuid_t,
-            std::unique_ptr<tinysockets::BlockingIOSocket> > &peer_tx_sockets,
+            std::unique_ptr<tinysockets::MultiplexedIOSocket> > &peer_tx_sockets,
         const std::unordered_map<ccoip_uuid_t,
-            std::unique_ptr<tinysockets::BlockingIOSocket> > &peer_rx_sockets) {
+            std::unique_ptr<tinysockets::MultiplexedIOSocket> > &peer_rx_sockets) {
         using namespace tinysockets;
         using namespace ccoip::internal::reduce;
         using namespace ccoip::internal::quantize;
@@ -87,7 +94,7 @@ namespace {
         const auto &rx_socket = peer_rx_sockets.at(rx_peer);
 
         // 1) Send our local de-quant metadata to next peer
-        if (quantized_type != data_type) {
+        /*if (quantized_type != data_type) {
             ccoip::P2PPacketDequantizationMeta packet{};
             packet.tag = tag;
             packet.dequantization_meta = (meta_data_self
@@ -99,11 +106,11 @@ namespace {
             }
             constexpr size_t ltv_header = sizeof(uint64_t) + sizeof(ccoip::packetId_t);
             client_state.trackCollectiveComsTxBytes(tag, ltv_header + packet.serializedSize());
-        }
+        }*/
 
         // 2) Receive their metadata from the previous peer
         DeQuantizationMetaData received_meta_data{};
-        if (quantized_type != data_type) {
+        /*if (quantized_type != data_type) {
             // wait until we receive a P2PPacketDequantizationMeta packet and wait for aborts in the meantime
             while (true) {
                 const auto metadata_packet = rx_socket->receivePacket<ccoip::P2PPacketDequantizationMeta>(true);
@@ -124,7 +131,7 @@ namespace {
                 client_state.trackCollectiveComsRxBytes(tag, ltv_header + metadata_packet->serializedSize());
                 break;
             }
-        }
+        }*/
 
         // 3) Full-duplex send/recv loop
         size_t bytes_sent = 0;
@@ -132,54 +139,34 @@ namespace {
 
         size_t no_event_ctr = 0;
         while (bytes_sent < total_tx_size || bytes_recvd < total_rx_size) {
-            // Prepare poll descriptors
-            std::vector<poll::PollDescriptor> descriptors;
-            descriptors.reserve(2);
-
-            std::optional<poll::PollDescriptor *> tx_desc = std::nullopt;
-            std::optional<poll::PollDescriptor *> rx_desc = std::nullopt;
-
-            if (bytes_sent < total_tx_size) {
-                descriptors.push_back({tx_socket->getSocketFd(), poll::PollEvent::POLL_OUTPUT});
-                tx_desc = &descriptors.back();
-            }
-            if (bytes_recvd < total_rx_size) {
-                descriptors.push_back({rx_socket->getSocketFd(), poll::PollEvent::POLL_INPUT});
-                rx_desc = &descriptors.back();
-            }
-
             bool no_event = true;
-            if (poll::poll(descriptors, 0) < 0) {
-                const std::string error_message = strerror(errno);
-                LOG(WARN) << "poll() failed: " << error_message;
-                return {false, false};
-            }
 
             // 3a) Send if ready
-            if (tx_desc && (*tx_desc)->hasEvent(poll::PollEvent::POLL_OUTPUT)) {
-                const auto send_sub = tx_span.subspan(bytes_sent);
-                if (auto sent = send_nonblocking(send_sub, **tx_desc)) {
+            if (bytes_sent < total_tx_size) {
+                const size_t chunk_size = std::min(MULTIPLEX_CHUNK_SIZE, total_tx_size - bytes_sent);
+                const auto send_sub = tx_span.subspan(bytes_sent, chunk_size);
+                if (tx_socket->sendBytes(tag, send_sub)) {
                     no_event = false;
-                    bytes_sent += *sent;
-                    client_state.trackCollectiveComsTxBytes(tag, *sent);
+                    bytes_sent += send_sub.size_bytes();
+                    client_state.trackCollectiveComsTxBytes(tag, send_sub.size_bytes());
                 } else {
                     return {false, false};
                 }
             }
 
             // 3b) Receive if ready
-            if (rx_desc && (*rx_desc)->hasEvent(poll::PollEvent::POLL_INPUT)) {
+            if (bytes_recvd < total_rx_size) {
                 const auto recv_sub = recv_buffer_span.subspan(bytes_recvd);
-                if (auto recvd = recv_nonblocking(recv_sub, **rx_desc)) {
-                    if (*recvd > 0) {
+                if (auto n_read = rx_socket->receiveBytes(tag, recv_sub)) {
+                    if (n_read > 0) {
                         no_event = false;
-                        client_state.trackCollectiveComsRxBytes(tag, *recvd);
+                        client_state.trackCollectiveComsRxBytes(tag, *n_read);
 
                         const size_t quant_el_sz = ccoip_data_type_size(quantized_type);
 
                         // old_floor = how many *complete* quantized elements we had before
                         const size_t old_floor = (bytes_recvd / quant_el_sz) * quant_el_sz;
-                        bytes_recvd += *recvd;
+                        bytes_recvd += *n_read;
                         // new_floor = how many *complete* quantized elements we have now
                         const size_t new_floor = (bytes_recvd / quant_el_sz) * quant_el_sz;
 
@@ -256,9 +243,9 @@ namespace {
         ccoip::internal::quantize::DeQuantizationMetaData &received_meta_data_out,
 
         const std::unordered_map<ccoip_uuid_t,
-            std::unique_ptr<tinysockets::BlockingIOSocket> > &peer_tx_sockets,
+            std::unique_ptr<tinysockets::MultiplexedIOSocket> > &peer_tx_sockets,
         const std::unordered_map<ccoip_uuid_t,
-            std::unique_ptr<tinysockets::BlockingIOSocket> > &peer_rx_sockets) {
+            std::unique_ptr<tinysockets::MultiplexedIOSocket> > &peer_rx_sockets) {
         using namespace tinysockets;
         using namespace ccoip::internal::quantize;
         using namespace ccoip::internal::reduce;
@@ -276,7 +263,7 @@ namespace {
         const auto &rx_socket = peer_rx_sockets.at(rx_peer);
 
         // 1) Exchange metadata for consistency
-        if (quantized_type != data_type) {
+        /*if (quantized_type != data_type) {
             ccoip::P2PPacketDequantizationMeta packet{};
             packet.tag = tag;
             packet.dequantization_meta = (meta_data_self
@@ -288,10 +275,10 @@ namespace {
             }
             constexpr size_t ltv_header = sizeof(uint64_t) + sizeof(ccoip::packetId_t);
             client_state.trackCollectiveComsTxBytes(tag, ltv_header + packet.serializedSize());
-        }
+        }*/
 
         DeQuantizationMetaData received_meta_data{};
-        if (quantized_type != data_type) {
+        /*if (quantized_type != data_type) {
             // wait until we receive a P2PPacketDequantizationMeta packet and wait for aborts in the meantime
             while (true) {
                 const auto metadata_packet = rx_socket->receivePacket<ccoip::P2PPacketDequantizationMeta>(true);
@@ -313,7 +300,7 @@ namespace {
                 break;
             }
         }
-        received_meta_data_out = received_meta_data;
+        received_meta_data_out = received_meta_data;*/
 
         // 2) Full-duplex send/recv
         size_t bytes_sent = 0;
@@ -321,53 +308,34 @@ namespace {
 
         size_t no_event_ctr = 0;
         while (bytes_sent < total_tx_size || bytes_recvd < total_rx_size) {
-            std::vector<poll::PollDescriptor> descriptors;
-            descriptors.reserve(2);
-
-            std::optional<poll::PollDescriptor *> tx_desc = std::nullopt;
-            std::optional<poll::PollDescriptor *> rx_desc = std::nullopt;
-
-            if (bytes_sent < total_tx_size) {
-                descriptors.push_back({tx_socket->getSocketFd(), poll::PollEvent::POLL_OUTPUT});
-                tx_desc = &descriptors.back();
-            }
-            if (bytes_recvd < total_rx_size) {
-                descriptors.push_back({rx_socket->getSocketFd(), poll::PollEvent::POLL_INPUT});
-                rx_desc = &descriptors.back();
-            }
-
-            if (poll::poll(descriptors, 0) < 0) {
-                const std::string error_message = strerror(errno);
-                LOG(WARN) << "poll() failed (allgather): " << error_message;
-                return {false, false};
-            }
 
             bool no_event = true;
 
             // Send
-            if (tx_desc && (*tx_desc)->hasEvent(poll::PollEvent::POLL_OUTPUT)) {
-                const auto send_sub = tx_span.subspan(bytes_sent);
-                if (auto sent = send_nonblocking(send_sub, **tx_desc)) {
+            if (bytes_sent < total_tx_size) {
+                const size_t chunk_size = std::min(MULTIPLEX_CHUNK_SIZE, total_tx_size - bytes_sent);
+                const auto send_sub = tx_span.subspan(bytes_sent, chunk_size);
+                if (tx_socket->sendBytes(tag, send_sub)) {
                     no_event = false;
-                    bytes_sent += *sent;
-                    client_state.trackCollectiveComsTxBytes(tag, *sent);
+                    bytes_sent += send_sub.size_bytes();
+                    client_state.trackCollectiveComsTxBytes(tag, send_sub.size_bytes());
                 } else {
                     return {false, false};
                 }
             }
 
             // Receive
-            if (rx_desc && (*rx_desc)->hasEvent(poll::PollEvent::POLL_INPUT)) {
+            if (bytes_recvd < total_rx_size) {
                 const auto recv_sub = recv_buffer_span.subspan(bytes_recvd);
-                if (auto recvd = recv_nonblocking(recv_sub, **rx_desc)) {
-                    if (*recvd > 0) {
+                if (auto n_read = rx_socket->receiveBytes(tag, recv_sub)) {
+                    if (*n_read > 0) {
                         no_event = false;
-                        client_state.trackCollectiveComsRxBytes(tag, *recvd);
+                        client_state.trackCollectiveComsRxBytes(tag, *n_read);
 
                         const size_t quant_el_sz = ccoip_data_type_size(quantized_type);
 
                         const size_t old_floor = (bytes_recvd / quant_el_sz) * quant_el_sz;
-                        bytes_recvd += *recvd;
+                        bytes_recvd += *n_read;
 
                         if (const size_t new_floor = (bytes_recvd / quant_el_sz) * quant_el_sz; new_floor > old_floor) {
                             const size_t chunk_bytes = new_floor - old_floor;
@@ -428,9 +396,9 @@ std::pair<bool, bool> ccoip::reduce::pipelineRingReduce(
     const size_t rank,
     const size_t world_size,
     const std::vector<ccoip_uuid_t> &ring_order,
-    const std::unordered_map<ccoip_uuid_t, std::unique_ptr<tinysockets::BlockingIOSocket>> &
+    const std::unordered_map<ccoip_uuid_t, std::unique_ptr<tinysockets::MultiplexedIOSocket>> &
     peer_tx_sockets,
-    const std::unordered_map<ccoip_uuid_t, std::unique_ptr<tinysockets::BlockingIOSocket>> &
+    const std::unordered_map<ccoip_uuid_t, std::unique_ptr<tinysockets::MultiplexedIOSocket>> &
     peer_rx_sockets) {
     using namespace ccoip::internal::quantize;
     using namespace ccoip::internal::reduce;

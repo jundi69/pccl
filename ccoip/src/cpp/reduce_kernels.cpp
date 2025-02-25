@@ -27,6 +27,7 @@ struct DeQuantizationMetaDataInternal {
 
     FORCE_INLINE static DeQuantizationMetaDataInternal From(
         const ccoip::internal::quantize::DeQuantizationMetaData &meta_data) {
+        using namespace tinysockets;
         DeQuantizationMetaDataInternal result{};
 
         assert(meta_data.min_value.size() == sizeof(T));
@@ -37,8 +38,8 @@ struct DeQuantizationMetaDataInternal {
 
         if constexpr (std::is_integral_v<T>) {
             // Convert from big-endian (network order) to host byte order
-            min_value = ccoip::internal::network_order_utils::network_to_host(min_value);
-            max_value = ccoip::internal::network_order_utils::network_to_host(max_value);
+            min_value = network_order_utils::network_to_host(min_value);
+            max_value = network_order_utils::network_to_host(max_value);
         }
         // floats and doubles are always in host byte order
 

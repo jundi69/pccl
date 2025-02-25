@@ -39,14 +39,16 @@ static bool configure_socket_fd(const int socket_fd) {
 }
 
 tinysockets::BlockingIOServerSocket::BlockingIOServerSocket(
-    const ccoip_socket_address_t &listen_address) : listen_address(listen_address), bump_port_on_failure(false),
-                                                    socket_fd(0) {
+        const ccoip_socket_address_t &listen_address) :
+    listen_address(listen_address), bump_port_on_failure(false),
+    socket_fd(0) {
 }
 
 tinysockets::BlockingIOServerSocket::BlockingIOServerSocket(const ccoip_inet_address_t &inet_address,
-                                                            const uint16_t above_port) : listen_address({
-    inet_address, above_port
-}), bump_port_on_failure(true), socket_fd(0) {
+                                                            const uint16_t above_port) :
+    listen_address({
+            inet_address, above_port
+    }), bump_port_on_failure(true), socket_fd(0) {
 }
 
 tinysockets::BlockingIOServerSocket::~BlockingIOServerSocket() {
@@ -143,7 +145,9 @@ bool tinysockets::BlockingIOServerSocket::runAsync() {
                     break; // Interrupted
                 }
             }
-            onNewConnection(client_socket, client_address);
+            if (client_socket != 0) {
+                onNewConnection(client_socket, client_address);
+            }
         }
     });
     return true;
