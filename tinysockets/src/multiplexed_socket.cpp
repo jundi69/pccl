@@ -2,7 +2,7 @@
 #include <win_sock_bridge.h>
 
 #include "tinysockets.hpp"
-#include <mpscq.h>
+#include <MPSCQueue.hpp>
 #include <SPSCQueue.hpp>
 #include <network_order_utils.hpp>
 #include <shared_mutex>
@@ -49,18 +49,13 @@ namespace tinysockets {
 
     struct MultiplexedIOSocketInternalState {
 
-        mpscq *send_queue;
+        MPSCQueue<SendQueueEntry> send_queue;
 
         std::shared_mutex receive_queues_mutex{};
         std::unordered_map<uint64_t, std::unique_ptr<::rigtorp::SPSCQueue<ReceiveQueueEntry>>> receive_queues
                 {};
 
-        MultiplexedIOSocketInternalState() {
-            send_queue = mpscq_create(nullptr, TXRX_QUEUE_DEPTH);
-        }
-
-        ~MultiplexedIOSocketInternalState() {
-            mpscq_destroy(send_queue);
+        MultiplexedIOSocketInternalState() : send_queue(TXRX_QUEUE_DEPTH) {
         }
     };
 
@@ -230,8 +225,8 @@ bool tinysockets::MultiplexedIOSocket::run() {
     });
     send_thread = std::thread([this] {
         while (running && socket_fd != 0) {
-            const auto entry = static_cast<SendQueueEntry *>(mpscq_dequeue(internal_state->send_queue));
-            if (!entry) {
+            const auto entry = internal_state->send_queue.dequeue();
+            if (entry == nullptr) {
                 std::this_thread::yield();
                 continue;
             }
@@ -285,7 +280,7 @@ bool tinysockets::MultiplexedIOSocket::sendBytes(const uint64_t tag, const std::
     entry->data = std::make_unique<uint8_t[]>(data.size());
     entry->size_bytes = data.size_bytes();
     std::memcpy(entry->data.get(), data.data(), data.size());
-    if (!mpscq_enqueue(internal_state->send_queue, entry)) {
+    if (!internal_state->send_queue.enqueue(entry)) {
         LOG(ERR) << "MultiplexedIOSocket::sendBytes() failed to enqueue data; MPSC queue is full";
         return false;
     }
