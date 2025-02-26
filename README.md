@@ -1,7 +1,9 @@
 # Prime Collective Communications Library (PCCL) 
 [![CMake on multiple platforms](https://github.com/PrimeIntellect-ai/pccl/actions/workflows/cmake-multi-platform.yml/badge.svg)](https://github.com/PrimeIntellect-ai/pccl/actions/workflows/cmake-multi-platform.yml)
 
-![PCCL Logo](./docs/images/PCCL_Logo_Text.svg)
+<div align="center">
+    <img src="https://github.com/PrimeIntellect-ai/pccl/raw/main/docs/images/PCCL_Logo_Text.svg" width="50%" height="50%" alt="PCCL Logo">
+</div>
 
 The Prime Collective Communications Library (PCCL) implements efficient and fault-tolerant collective communications
 operations such as reductions over IP and provides shared state synchronization mechanisms to keep peers in sync and
