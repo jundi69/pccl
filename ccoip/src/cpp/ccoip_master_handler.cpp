@@ -810,8 +810,8 @@ bool ccoip::CCoIPMasterHandler::checkCollectiveCommsCompleteConsensus(const uint
 
             // because transitionToCollectiveCommsCompletePhase() was already invoked,
             // the only valid state for accepted clients to be in after a successful vote
-            // on collective comms completion is IDLE
-            if (peer_info.connection_state != IDLE) {
+            // on collective comms completion is IDLE (or COLLECTIVE_COMMUNICATIONS_RUNNING when multiple collective ops are running concurrently)
+            if (peer_info.connection_state != IDLE && peer_info.connection_state != COLLECTIVE_COMMUNICATIONS_RUNNING) {
                 LOG(BUG) << "Client " << ccoip_sockaddr_to_str(peer_address) << " in state "
                          << peer_info.connection_state << " but expected IDLE";
                 continue;

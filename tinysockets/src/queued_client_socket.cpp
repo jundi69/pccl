@@ -47,7 +47,6 @@ tinysockets::QueuedSocket::QueuedSocket(const int socket_fd) :
     socket_fd(socket_fd), connect_sockaddr(), internal_state(new QueuedSocketInternalState), running(true) {}
 
 tinysockets::QueuedSocket::~QueuedSocket() {
-    delete internal_state;
     if (running) {
         // ReSharper disable once CppDFAConstantConditions
         if (!interrupt()) [[unlikely]] {
@@ -63,6 +62,7 @@ tinysockets::QueuedSocket::~QueuedSocket() {
     } else if (socket_fd != 0) {
         closesocket(socket_fd);
     }
+    delete internal_state;
 }
 
 bool tinysockets::QueuedSocket::run() {

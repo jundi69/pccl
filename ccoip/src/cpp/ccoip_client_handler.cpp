@@ -695,7 +695,14 @@ bool ccoip::CCoIPClientHandler::join() {
 
 bool ccoip::CCoIPClientHandler::isInterrupted() const { return interrupted; }
 
-ccoip::CCoIPClientHandler::~CCoIPClientHandler() = default;
+ccoip::CCoIPClientHandler::~CCoIPClientHandler() {
+    if (!interrupt()) {
+        // do nothing, it may already have been interrupted by the user
+    }
+    if (!join()) [[unlikely]] {
+        // do nothing here in destructor
+    }
+}
 
 ccoip::CCoIPClientHandler::EstablishP2PConnectionResult ccoip::CCoIPClientHandler::establishP2PConnections() {
     // wait for connection info packet

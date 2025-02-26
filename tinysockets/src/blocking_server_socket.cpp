@@ -166,7 +166,11 @@ bool tinysockets::BlockingIOServerSocket::interrupt() {
     return true;
 }
 
-void tinysockets::BlockingIOServerSocket::join() { server_thread.join(); }
+void tinysockets::BlockingIOServerSocket::join() {
+    if (server_thread.joinable()) {
+        server_thread.join();
+    }
+}
 
 void tinysockets::BlockingIOServerSocket::setJoinCallback(const BlockingServerSocketJoinCallback &callback) {
     join_callback = callback;
