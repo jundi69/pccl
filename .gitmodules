@@ -9,3 +9,7 @@
 [submodule "third_party/libtsp"]
 	path = third_party/libtsp
 	url = https://github.com/PrimeIntellect-ai/libtsp.git
+
+[submodule "third_party/threadpark"]
+	path = third_party/threadpark
+	url = https://github.com/PrimeIntellect-ai/threadpark.git

@@ -3,3 +3,5 @@ add_subdirectory(googletest)
 
 set(LIBTSP_BUILD_TESTS OFF)
 add_subdirectory(libtsp)
+
+add_subdirectory(threadpark)

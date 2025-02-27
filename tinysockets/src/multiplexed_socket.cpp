@@ -7,6 +7,7 @@
 #include <network_order_utils.hpp>
 #include <shared_mutex>
 #include <cstring>
+#include <threadpark.h>
 
 static bool configure_socket_fd(const int socket_fd) {
     constexpr int opt = 1;
@@ -55,8 +56,17 @@ namespace tinysockets {
         std::unordered_map<uint64_t, std::unique_ptr<::rigtorp::SPSCQueue<ReceiveQueueEntry>>> receive_queues
                 {};
 
+        tpark_handle_t *tx_park_handle = nullptr;
+        volatile bool pending_send = false;
+
         MultiplexedIOSocketInternalState() :
             send_queue(TXRX_QUEUE_DEPTH) {
+        }
+
+        ~MultiplexedIOSocketInternalState() {
+            if (tx_park_handle != nullptr) {
+                tparkDestroyHandle(tx_park_handle);
+            }
         }
     };
 
@@ -232,11 +242,16 @@ bool tinysockets::MultiplexedIOSocket::run() {
     }
 
     if (flags & MODE_TX) {
+        internal_state->tx_park_handle = tparkCreateHandle();
         send_thread = std::thread([this] {
             while (running && socket_fd != 0) {
                 const auto entry = internal_state->send_queue.dequeue();
                 if (entry == nullptr) {
-                    std::this_thread::yield();
+                    if (!internal_state->pending_send) {
+                        tparkPark(internal_state->tx_park_handle);
+                    } else {
+                        internal_state->pending_send = false;
+                    }
                     continue;
                 }
                 const uint64_t preamble[2] = {
@@ -303,6 +318,8 @@ bool tinysockets::MultiplexedIOSocket::sendBytes(const uint64_t tag, const std::
         LOG(ERR) << "MultiplexedIOSocket::sendBytes() failed to enqueue data; MPSC queue is full";
         return false;
     }
+    internal_state->pending_send = true;
+    tparkWake(internal_state->tx_park_handle);
     return true;
 }
 
