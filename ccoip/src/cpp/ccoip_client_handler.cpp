@@ -662,7 +662,12 @@ bool ccoip::CCoIPClientHandler::interrupt() {
         if (!p2p_entry.second->interrupt()) [[unlikely]] {
             return false;
         }
-        p2p_entry.second->join();
+    }
+
+    for (const auto &p2p_entry: p2p_connections_tx) {
+        if (!p2p_entry.second->interrupt()) [[unlikely]] {
+            return false;
+        }
     }
     if (!p2p_socket.interrupt()) [[unlikely]] {
         return false;
@@ -681,6 +686,13 @@ bool ccoip::CCoIPClientHandler::interrupt() {
 }
 
 bool ccoip::CCoIPClientHandler::join() {
+    for (const auto &p2p_entry: p2p_connections_rx) {
+        p2p_entry.second->join();
+    }
+
+    for (const auto &p2p_entry: p2p_connections_tx) {
+        p2p_entry.second->join();
+    }
     p2p_socket.join();
     shared_state_socket.join();
     benchmark_socket.join();
