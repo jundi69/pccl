@@ -416,6 +416,10 @@ bool tinysockets::MultiplexedIOSocket::closeConnection() {
     const int socket_fd = this->socket_fd;
     this->socket_fd = 0;
 
+    if (internal_state->tx_park_handle != nullptr) {
+        tparkWake(internal_state->tx_park_handle); // wake up tx thread such that it can exit
+    }
+
     timeval tv{};
     tv.tv_sec = 1;
     tv.tv_usec = 0;
@@ -443,12 +447,16 @@ bool tinysockets::MultiplexedIOSocket::interrupt() {
         return true;
     }
 
+    running = false;
+    if (internal_state->tx_park_handle != nullptr) {
+        tparkWake(internal_state->tx_park_handle); // wake up tx thread such that it can exit
+    }
+
     // Shutdown both sides of the connection.
     // This is needed to ensure recv() unblock and return an error.
     // Docker is pedantic about this.
     shutdown(socket_fd, SHUT_RDWR);
 
-    running = false;
     return true;
 }
 
