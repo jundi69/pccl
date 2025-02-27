@@ -55,24 +55,29 @@ namespace tinysockets {
         std::unordered_map<uint64_t, std::unique_ptr<::rigtorp::SPSCQueue<ReceiveQueueEntry>>> receive_queues
                 {};
 
-        MultiplexedIOSocketInternalState() : send_queue(TXRX_QUEUE_DEPTH) {
+        MultiplexedIOSocketInternalState() :
+            send_queue(TXRX_QUEUE_DEPTH) {
         }
     };
 
 }
 
 
-tinysockets::MultiplexedIOSocket::MultiplexedIOSocket(const ccoip_socket_address_t &address) :
+tinysockets::MultiplexedIOSocket::MultiplexedIOSocket(const ccoip_socket_address_t &address,
+                                                      const ConnectionModeFlags flags) :
     socket_fd(0),
-    connect_sockaddr(address), internal_state(new MultiplexedIOSocketInternalState) {
+    connect_sockaddr(address), flags(flags),
+    internal_state(new MultiplexedIOSocketInternalState) {
 }
 
-tinysockets::MultiplexedIOSocket::MultiplexedIOSocket(const int socket_fd) :
-    socket_fd(socket_fd), connect_sockaddr(), internal_state(new MultiplexedIOSocketInternalState) {
+tinysockets::MultiplexedIOSocket::MultiplexedIOSocket(const int socket_fd, const ConnectionModeFlags flags) :
+    socket_fd(socket_fd), connect_sockaddr(), flags(flags), internal_state(new MultiplexedIOSocketInternalState) {
 }
 
-tinysockets::MultiplexedIOSocket::MultiplexedIOSocket(const int socket_fd, const ccoip_socket_address_t &address) :
-    socket_fd(socket_fd), connect_sockaddr(address), internal_state(new MultiplexedIOSocketInternalState) {
+tinysockets::MultiplexedIOSocket::MultiplexedIOSocket(const int socket_fd, const ccoip_socket_address_t &address,
+                                                      const ConnectionModeFlags flags) :
+    socket_fd(socket_fd), connect_sockaddr(address), flags(flags),
+    internal_state(new MultiplexedIOSocketInternalState) {
 }
 
 bool tinysockets::MultiplexedIOSocket::establishConnection() {
@@ -157,110 +162,120 @@ bool tinysockets::MultiplexedIOSocket::run() {
         return false;
     }
     running = true;
-    recv_thread = std::thread([this] {
-        while (running) {
-            const auto length_opt = receivePacketLength();
-            if (!length_opt) {
-                if (running) {
-                    LOG(ERR) << "Connection was closed; exiting receive loop...";
-                    if (!interrupt()) [[unlikely]] {
-                        LOG(ERR) << "Failed to interrupt MultiplexedIOSocket";
+    if (flags & MODE_RX) {
+        recv_thread = std::thread([this] {
+            while (running) {
+                const auto length_opt = receivePacketLength();
+                if (!length_opt) {
+                    if (running) {
+                        LOG(ERR) << "Connection was closed; exiting receive loop...";
+                        if (!interrupt()) [[unlikely]] {
+                            LOG(ERR) << "Failed to interrupt MultiplexedIOSocket";
+                        }
+                    } else {
+                        LOG(INFO) << "MultiplexedIOSocket::run() interrupted, exiting receive loop...";
                     }
-                } else {
-                    LOG(INFO) << "MultiplexedIOSocket::run() interrupted, exiting receive loop...";
-                }
-                break;
-            }
-            const size_t length = *length_opt;
-            if (length == 0) {
-                LOG(ERR) << "Received packet with length 0; closing connection";
-                if (!interrupt()) [[unlikely]] {
-                    LOG(ERR) << "Failed to interrupt MultiplexedIOSocket";
-                }
-                break;
-            }
-            auto data_ptr = std::make_unique<std::byte[]>(length);
-            std::span data{reinterpret_cast<uint8_t *>(data_ptr.get()), length};
-            if (!receivePacketData(data)) {
-                if (running) {
-                    LOG(ERR) << "Failed to receive packet data for packet with length " << length;
-                    if (!interrupt()) [[unlikely]] {
-                        LOG(ERR) << "Failed to interrupt MultiplexedIOSocket";
-                    }
-                } else {
-                    LOG(INFO) << "MultiplexedIOSocket::run() interrupted, exiting receive loop...";
-                }
-                break;
-            }
-            PacketReadBuffer buffer{data.data(), data.size_bytes()};
-            auto tag = buffer.read<uint64_t>();
-
-            if (!internal_state->receive_queues.contains(tag)) {
-                std::unique_lock guard{internal_state->receive_queues_mutex};
-                internal_state->receive_queues[tag] = std::make_unique<::rigtorp::SPSCQueue<ReceiveQueueEntry>>(
-                        TXRX_QUEUE_DEPTH);
-            }
-
-            // add entry to SPMC queue of tag
-            {
-                std::shared_lock guard{internal_state->receive_queues_mutex};
-                const auto &queue = internal_state->receive_queues.at(tag);
-                const auto data_raw_ptr = data_ptr.get();
-                queue->push(ReceiveQueueEntry{
-                        .tag = tag,
-
-                        // we just pass this for the sake of ownership
-                        .data = std::move(data_ptr),
-
-                        // don't include the tag in the data span
-                        .data_span = std::span(data_raw_ptr + sizeof(uint64_t),
-                                               data.size_bytes() - sizeof(uint64_t))
-                });
-            }
-        }
-        // the recv thread closes the connection after interruption
-        if (!closeConnection()) [[unlikely]] {
-            LOG(ERR) << "Failed to interrupt MultiplexedIOSocket";
-        }
-    });
-    send_thread = std::thread([this] {
-        while (running && socket_fd != 0) {
-            const auto entry = internal_state->send_queue.dequeue();
-            if (entry == nullptr) {
-                std::this_thread::yield();
-                continue;
-            }
-            const uint64_t preamble[2] = {
-                    network_order_utils::host_to_network(
-                            entry->size_bytes + sizeof(uint64_t) // size including the subsequent tag
-                            ),
-                    network_order_utils::host_to_network(
-                            entry->tag
-                            )
-            };
-            if (sendvp(socket_fd, preamble, sizeof(preamble), 0) == -1) {
-                LOG(ERR) << "Failed to send preamble for packet with tag " << entry->tag;
-                delete entry;
-                continue;
-            }
-            size_t n_sent = 0;
-            do {
-                const ssize_t i = sendvp(socket_fd, entry->data.get() + n_sent, entry->size_bytes - n_sent, 0);
-                if (i == -1) {
-                    LOG(ERR) << "Failed to send packet data for packet with tag " << entry->tag;
                     break;
                 }
-                n_sent += i;
-            } while (n_sent < entry->size_bytes);
-            delete entry;
-        }
-        // the send thread does not close the connection after interruption, this is done by the recv thread
-    });
+                const size_t length = *length_opt;
+                if (length == 0) {
+                    LOG(ERR) << "Received packet with length 0; closing connection";
+                    if (!interrupt()) [[unlikely]] {
+                        LOG(ERR) << "Failed to interrupt MultiplexedIOSocket";
+                    }
+                    break;
+                }
+                auto data_ptr = std::make_unique<std::byte[]>(length);
+                std::span data{reinterpret_cast<uint8_t *>(data_ptr.get()), length};
+                if (!receivePacketData(data)) {
+                    if (running) {
+                        LOG(ERR) << "Failed to receive packet data for packet with length " << length;
+                        if (!interrupt()) [[unlikely]] {
+                            LOG(ERR) << "Failed to interrupt MultiplexedIOSocket";
+                        }
+                    } else {
+                        LOG(INFO) << "MultiplexedIOSocket::run() interrupted, exiting receive loop...";
+                    }
+                    break;
+                }
+                PacketReadBuffer buffer{data.data(), data.size_bytes()};
+                auto tag = buffer.read<uint64_t>();
+
+                if (!internal_state->receive_queues.contains(tag)) {
+                    std::unique_lock guard{internal_state->receive_queues_mutex};
+                    internal_state->receive_queues[tag] = std::make_unique<::rigtorp::SPSCQueue<ReceiveQueueEntry>>(
+                            TXRX_QUEUE_DEPTH);
+                }
+
+                // add entry to SPMC queue of tag
+                {
+                    std::shared_lock guard{internal_state->receive_queues_mutex};
+                    const auto &queue = internal_state->receive_queues.at(tag);
+                    const auto data_raw_ptr = data_ptr.get();
+                    queue->push(ReceiveQueueEntry{
+                            .tag = tag,
+
+                            // we just pass this for the sake of ownership
+                            .data = std::move(data_ptr),
+
+                            // don't include the tag in the data span
+                            .data_span = std::span(data_raw_ptr + sizeof(uint64_t),
+                                                   data.size_bytes() - sizeof(uint64_t))
+                    });
+                }
+            }
+            // the recv thread closes the connection after interruption
+            if (!closeConnection()) [[unlikely]] {
+                LOG(ERR) << "Failed to interrupt MultiplexedIOSocket";
+            }
+        });
+    }
+
+    if (flags & MODE_TX) {
+        send_thread = std::thread([this] {
+            while (running && socket_fd != 0) {
+                const auto entry = internal_state->send_queue.dequeue();
+                if (entry == nullptr) {
+                    std::this_thread::yield();
+                    continue;
+                }
+                const uint64_t preamble[2] = {
+                        network_order_utils::host_to_network(
+                                entry->size_bytes + sizeof(uint64_t) // size including the subsequent tag
+                                ),
+                        network_order_utils::host_to_network(
+                                entry->tag
+                                )
+                };
+                if (sendvp(socket_fd, preamble, sizeof(preamble), MSG_NOSIGNAL) == -1) {
+                    LOG(ERR) << "Failed to send preamble for packet with tag " << entry->tag;
+                    delete entry;
+                    continue;
+                }
+                size_t n_sent = 0;
+                do {
+                    const ssize_t i = sendvp(socket_fd, entry->data.get() + n_sent, entry->size_bytes - n_sent,
+                                             MSG_NOSIGNAL);
+                    if (i == -1) {
+                        LOG(ERR) << "Failed to send packet data for packet with tag " << entry->tag;
+                        break;
+                    }
+                    n_sent += i;
+                } while (n_sent < entry->size_bytes);
+                delete entry;
+            }
+            // the send thread does not close the connection after interruption, this is done by the recv thread
+        });
+    }
     return true;
 }
 
 
 bool tinysockets::MultiplexedIOSocket::receivePacketData(std::span<std::uint8_t> &dst) const {
+    if (!(flags & MODE_RX)) {
+        LOG(ERR) << "MultiplexedIOSocket::receivePacketData() called on a socket without RX mode";
+        return false;
+    }
     size_t n_received = 0;
     do {
         const ssize_t i = recvvp(socket_fd, dst.data() + n_received, dst.size_bytes() - n_received, 0);
@@ -275,6 +290,10 @@ bool tinysockets::MultiplexedIOSocket::receivePacketData(std::span<std::uint8_t>
 
 
 bool tinysockets::MultiplexedIOSocket::sendBytes(const uint64_t tag, const std::span<const std::byte> &data) const {
+    if (!(flags & MODE_TX)) {
+        LOG(ERR) << "MultiplexedIOSocket::sendBytes() called on a socket without TX mode";
+        return false;
+    }
     auto *entry = new SendQueueEntry();
     entry->tag = tag;
     entry->data = std::make_unique<uint8_t[]>(data.size());
@@ -322,7 +341,11 @@ receiveBytesInplace(const uint64_t tag, const std::span<std::byte> &data) const 
 }
 
 std::optional<std::unique_ptr<std::byte[]>> tinysockets::MultiplexedIOSocket::receiveBytes(const uint64_t tag,
-    std::span<std::byte> &data, bool no_wait) const {
+    std::span<std::byte> &data, const bool no_wait) const {
+    if (!(flags & MODE_RX)) {
+        LOG(ERR) << "MultiplexedIOSocket::receiveBytes() called on a socket without RX mode";
+        return std::nullopt;
+    }
     while (true) {
         if (!running || socket_fd == 0) {
             return std::nullopt;
@@ -413,11 +436,15 @@ bool tinysockets::MultiplexedIOSocket::interrupt() {
 }
 
 void tinysockets::MultiplexedIOSocket::join() {
-    if (recv_thread.joinable()) {
-        recv_thread.join();
+    if (flags & MODE_RX) {
+        if (recv_thread.joinable()) {
+            recv_thread.join();
+        }
     }
-    if (send_thread.joinable()) {
-        send_thread.join();
+    if (flags & MODE_TX) {
+        if (send_thread.joinable()) {
+            send_thread.join();
+        }
     }
 }
 

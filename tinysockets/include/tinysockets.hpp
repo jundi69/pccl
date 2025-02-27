@@ -451,10 +451,17 @@ namespace tinysockets {
 
     struct MultiplexedIOSocketInternalState;
 
+    enum ConnectionModeFlags {
+        MODE_TX = 0x1,
+        MODE_RX = 0x2,
+    };
+
     class MultiplexedIOSocket final {
         volatile bool running = false;
         volatile int socket_fd;
         ccoip_socket_address_t connect_sockaddr;
+
+        ConnectionModeFlags flags;
 
         std::thread recv_thread;
         std::thread send_thread;
@@ -462,11 +469,11 @@ namespace tinysockets {
         MultiplexedIOSocketInternalState *internal_state;
 
     public:
-        explicit MultiplexedIOSocket(const ccoip_socket_address_t &address);
+        explicit MultiplexedIOSocket(const ccoip_socket_address_t &address, ConnectionModeFlags flags);
 
-        explicit MultiplexedIOSocket(int socket_fd);
+        explicit MultiplexedIOSocket(int socket_fd, ConnectionModeFlags flags);
 
-        explicit MultiplexedIOSocket(int socket_fd, const ccoip_socket_address_t &address);
+        explicit MultiplexedIOSocket(int socket_fd, const ccoip_socket_address_t &address, ConnectionModeFlags flags);
 
         MultiplexedIOSocket(const MultiplexedIOSocket &other) = delete;
 

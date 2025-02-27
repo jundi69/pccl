@@ -75,7 +75,7 @@ bool ccoip::CCoIPClientHandler::connect() {
             }
             const auto &rx_socket = p2p_connections_rx[hello_packet.peer_uuid] = std::make_unique<
                                         tinysockets::MultiplexedIOSocket>(
-                                            socket->getSocketFd());
+                                            socket->getSocketFd(), tinysockets::ConnectionModeFlags::MODE_RX);
             if (!rx_socket->run()) {
                 LOG(FATAL) << "Failed to start MultiplexedIOSocket for P2P connection with "
                         << ccoip_sockaddr_to_str(client_address);
@@ -839,7 +839,8 @@ bool ccoip::CCoIPClientHandler::establishP2PConnection(const PeerInfo &peer) {
     LOG(DEBUG) << "P2P handshake with peer " << uuid_to_string(peer.peer_uuid) << " successful.";
     auto [it, inserted] = p2p_connections_tx.emplace(
             peer.peer_uuid,
-            std::make_unique<tinysockets::MultiplexedIOSocket>(socket.getSocketFd(), socket.getConnectSockAddr()));
+            std::make_unique<tinysockets::MultiplexedIOSocket>(socket.getSocketFd(), socket.getConnectSockAddr(),
+                                                               tinysockets::ConnectionModeFlags::MODE_TX));
     if (!inserted) {
         LOG(ERR) << "P2P connection with peer " << uuid_to_string(peer.peer_uuid) << " already exists";
         return false;
