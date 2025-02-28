@@ -1,8 +1,8 @@
-option(SANITIZE_TESTS "Enable address sanitizer for tests" OFF)
+option(PCCL_SANITIZE_TESTS "Enable address sanitizer for tests" OFF)
 
 if (DEFINED $ENV{IS_CI})
     message(STATUS "Running in CI, enabling sanitizers in tests")
-    set(SANITIZE_TESTS ON)
+    set(PCCL_SANITIZE_TESTS ON)
 endif ()
 
 function(add_sanitized_gtest target_name test_file)
@@ -11,7 +11,7 @@ function(add_sanitized_gtest target_name test_file)
     add_test(NAME ${target_name} COMMAND ${target_name})
 
     # sanitized test
-    if (SANITIZE_TESTS)
+    if (PCCL_SANITIZE_TESTS)
         if (WIN32)
             message(STATUS "Sanitizer is not supported on Windows")
         elseif (APPLE)
