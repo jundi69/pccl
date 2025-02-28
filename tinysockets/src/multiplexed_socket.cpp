@@ -309,6 +309,10 @@ bool tinysockets::MultiplexedIOSocket::sendBytes(const uint64_t tag, const std::
         LOG(ERR) << "MultiplexedIOSocket::sendBytes() called on a socket without TX mode";
         return false;
     }
+    if (!running) {
+        LOG(ERR) << "MultiplexedIOSocket::sendBytes() called on a socket that is not running";
+        return false;
+    }
     auto *entry = new SendQueueEntry();
     entry->tag = tag;
     entry->data = std::make_unique<uint8_t[]>(data.size());
@@ -448,6 +452,7 @@ bool tinysockets::MultiplexedIOSocket::interrupt() {
     }
 
     running = false;
+    internal_state->pending_send = false;
     if (internal_state->tx_park_handle != nullptr) {
         tparkWake(internal_state->tx_park_handle); // wake up tx thread such that it can exit
     }
