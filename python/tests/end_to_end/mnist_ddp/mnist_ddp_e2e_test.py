@@ -101,7 +101,7 @@ def test_mnist_ddp_world_size_2_plus_1_late_joiner(use_cuda: bool):
 
     # if the other two peers are still running, add the third peer; otherwise, fail the test
     if all(p.poll() is None for p in process_list):
-        process_list.append(launch_py_process(peer_script_path, [], {'PCCL_LOG_LEVEL': 'INFO', 'RANK': '2', 'MNIST_USE_CUDA': "1" if use_cuda else "0"}))
+        process_list.append(launch_py_process(peer_script_path, [], {'PCCL_LOG_LEVEL': 'INFO', 'RANK': '2', 'DONT_EXIT_BEFORE_REACHED_WORLD_SIZE': "3", 'MNIST_USE_CUDA': "1" if use_cuda else "0"}))
         print(f"Launched peer 2; PID: {process_list[-1].pid}")
     else:
         assert False, "One of the peers exited prematurely"
