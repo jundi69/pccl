@@ -234,10 +234,6 @@ bool tinysockets::MultiplexedIOSocket::run() {
                     });
                 }
             }
-            // the recv thread closes the connection after interruption
-            if (!closeConnection()) [[unlikely]] {
-                LOG(ERR) << "Failed to interrupt MultiplexedIOSocket";
-            }
         });
     }
 
@@ -279,7 +275,6 @@ bool tinysockets::MultiplexedIOSocket::run() {
                 } while (n_sent < entry->size_bytes);
                 delete entry;
             }
-            // the send thread does not close the connection after interruption, this is done by the recv thread
         });
     }
     return true;
