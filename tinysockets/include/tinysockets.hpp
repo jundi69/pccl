@@ -13,8 +13,6 @@
 #include <atomic>
 #include <condition_variable>
 
-#include <pccl/common/cast_utils.hpp>
-
 #ifdef WIN32
 typedef long long int ssize_t;
 struct sockaddr_in;
@@ -457,7 +455,7 @@ namespace tinysockets {
     };
 
     class MultiplexedIOSocket final {
-        volatile bool running = false;
+        std::atomic<bool> running = false;
         volatile int socket_fd;
         ccoip_socket_address_t connect_sockaddr;
 

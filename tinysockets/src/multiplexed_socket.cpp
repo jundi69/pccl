@@ -57,7 +57,7 @@ namespace tinysockets {
                 {};
 
         tpark_handle_t *tx_park_handle = nullptr;
-        volatile bool pending_send = false;
+        std::atomic_bool pending_send = false;
 
         MultiplexedIOSocketInternalState() :
             send_queue(TXRX_QUEUE_DEPTH) {
@@ -155,7 +155,7 @@ std::optional<size_t> tinysockets::MultiplexedIOSocket::receivePacketLength() co
     size_t n_received = 0;
     do {
         const ssize_t i = recvvp(socket_fd, &length, sizeof(length), 0);
-        if (i == -1 || i == 0 || !running) {
+        if (const bool running = this->running.load(std::memory_order_acquire); i == -1 || i == 0 || !running) {
             const std::string error_message = std::strerror(errno);
             if (running) {
                 LOG(ERR) << "[MultiplexedIOSocket] Failed to receive packet length with error: " << error_message;
@@ -171,13 +171,13 @@ bool tinysockets::MultiplexedIOSocket::run() {
     if (socket_fd == 0) {
         return false;
     }
-    running = true;
+    running.store(true, std::memory_order_release);
     if (flags & MODE_RX) {
         recv_thread = std::thread([this] {
-            while (running) {
+            while (running.load(std::memory_order_acquire)) {
                 const auto length_opt = receivePacketLength();
                 if (!length_opt) {
-                    if (running) {
+                    if (running.load(std::memory_order_acquire)) {
                         LOG(ERR) << "Connection was closed; exiting receive loop...";
                         if (!interrupt()) [[unlikely]] {
                             LOG(ERR) << "Failed to interrupt MultiplexedIOSocket";
@@ -198,7 +198,7 @@ bool tinysockets::MultiplexedIOSocket::run() {
                 auto data_ptr = std::make_unique<std::byte[]>(length);
                 std::span data{reinterpret_cast<uint8_t *>(data_ptr.get()), length};
                 if (!receivePacketData(data)) {
-                    if (running) {
+                    if (running.load(std::memory_order_acquire)) {
                         LOG(ERR) << "Failed to receive packet data for packet with length " << length;
                         if (!interrupt()) [[unlikely]] {
                             LOG(ERR) << "Failed to interrupt MultiplexedIOSocket";
@@ -244,13 +244,13 @@ bool tinysockets::MultiplexedIOSocket::run() {
     if (flags & MODE_TX) {
         internal_state->tx_park_handle = tparkCreateHandle();
         send_thread = std::thread([this] {
-            while (running && socket_fd != 0) {
+            while (running.load(std::memory_order_acquire) && socket_fd != 0) {
                 const auto entry = internal_state->send_queue.dequeue();
                 if (entry == nullptr) {
-                    if (!internal_state->pending_send) {
+                    if (const bool was_pending =
+                                internal_state->pending_send.exchange(false, std::memory_order_acquire);
+                        !was_pending) {
                         tparkPark(internal_state->tx_park_handle);
-                    } else {
-                        internal_state->pending_send = false;
                     }
                     continue;
                 }
@@ -309,7 +309,7 @@ bool tinysockets::MultiplexedIOSocket::sendBytes(const uint64_t tag, const std::
         LOG(ERR) << "MultiplexedIOSocket::sendBytes() called on a socket without TX mode";
         return false;
     }
-    if (!running) {
+    if (!running.load(std::memory_order_acquire)) {
         LOG(ERR) << "MultiplexedIOSocket::sendBytes() called on a socket that is not running";
         return false;
     }
@@ -322,7 +322,7 @@ bool tinysockets::MultiplexedIOSocket::sendBytes(const uint64_t tag, const std::
         LOG(ERR) << "MultiplexedIOSocket::sendBytes() failed to enqueue data; MPSC queue is full";
         return false;
     }
-    internal_state->pending_send = true;
+    internal_state->pending_send.store(true, std::memory_order_release);
     tparkWake(internal_state->tx_park_handle);
     return true;
 }
@@ -330,7 +330,7 @@ bool tinysockets::MultiplexedIOSocket::sendBytes(const uint64_t tag, const std::
 std::optional<ssize_t> tinysockets::MultiplexedIOSocket::
 receiveBytesInplace(const uint64_t tag, const std::span<std::byte> &data) const {
     while (true) {
-        if (!running || socket_fd == 0) {
+        if (!running.load(std::memory_order_acquire) || socket_fd == 0) {
             return std::nullopt;
         }
         std::shared_lock lock{internal_state->receive_queues_mutex};
@@ -368,7 +368,7 @@ std::optional<std::unique_ptr<std::byte[]>> tinysockets::MultiplexedIOSocket::re
         return std::nullopt;
     }
     while (true) {
-        if (!running || socket_fd == 0) {
+        if (!running.load(std::memory_order_acquire) || socket_fd == 0) {
             return std::nullopt;
         }
         std::shared_lock lock{internal_state->receive_queues_mutex};
@@ -416,24 +416,14 @@ bool tinysockets::MultiplexedIOSocket::closeConnection() {
     }
 
     // exchange socket fd & set running to false before actually closing it so loop reacts as early as possible
-    this->running = false;
+    running.store(false, std::memory_order_release);
+    internal_state->pending_send.store(false, std::memory_order_release);
     const int socket_fd = this->socket_fd;
     this->socket_fd = 0;
 
     if (internal_state->tx_park_handle != nullptr) {
         tparkWake(internal_state->tx_park_handle); // wake up tx thread such that it can exit
     }
-
-    timeval tv{};
-    tv.tv_sec = 1;
-    tv.tv_usec = 0;
-    setsockoptvp(socket_fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
-
-    // set SO_LINGER to 0 to force a hard close
-    linger l{};
-    l.l_onoff = 1;
-    l.l_linger = 0;
-    setsockoptvp(socket_fd, SOL_SOCKET, SO_LINGER, &l, sizeof(l));
 
     // Shut everything down.
     // This is needed to ensure recv() unblock and return an error.
@@ -446,22 +436,24 @@ bool tinysockets::MultiplexedIOSocket::closeConnection() {
 }
 
 bool tinysockets::MultiplexedIOSocket::interrupt() {
-    if (!running) {
+    if (!running.load(std::memory_order_acquire)) {
         // already interrupted, either through discovery by io threads or external user
         return true;
     }
 
-    running = false;
-    internal_state->pending_send = false;
+    running.store(false, std::memory_order_release);
+    internal_state->pending_send.store(false, std::memory_order_release);
     if (internal_state->tx_park_handle != nullptr) {
         tparkWake(internal_state->tx_park_handle); // wake up tx thread such that it can exit
     }
 
     // Shutdown both sides of the connection.
-    // This is needed to ensure recv() unblock and return an error.
+    // This is needed to ensure recv() unblocks and return an error.
     // Docker is pedantic about this.
     shutdown(socket_fd, SHUT_RDWR);
 
+    // finally, close the socket
+    closesocket(socket_fd);
     return true;
 }
 
