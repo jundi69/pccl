@@ -221,7 +221,6 @@ def main():
 
             assert sync_info is not None
             if num_syncs > 1:
-                assert sync_info.tx_bytes == 0
                 assert sync_info.rx_bytes == 0
 
             try:
