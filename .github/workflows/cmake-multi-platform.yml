@@ -109,8 +109,8 @@ jobs:
           $build_output_dir = "${{ github.workspace }}/build"
           echo "build-output-dir=$build_output_dir" >> $env:GITHUB_OUTPUT
       
-      - name: Configure CMake (Unix)
-        if: runner.os != 'Windows'
+      - name: Configure CMake (Linux)
+        if: runner.os == 'Linux'
         run: >
           cmake -B ${{steps.strings-unix.outputs.build-output-dir }}
           -G "${{ matrix.generator }}"
@@ -120,6 +120,19 @@ jobs:
           "-DCMAKE_BUILD_TYPE=${{ matrix.build_type }}"
           "-DPCCL_BUILD_CUDA_SUPPORT=${{ matrix.pccl_build_cuda_support }}"
           -S "${{ github.workspace }}"
+
+      - name: Configure CMake (macOS)
+        if: runner.os == 'macOS'
+        run: >
+          cmake -B ${{steps.strings-unix.outputs.build-output-dir }}
+          -G "${{ matrix.generator }}"
+          "-DPCCL_SANITIZE_TESTS=ON"
+          "-DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }}"
+          "-DCMAKE_C_COMPILER=${{ matrix.c_compiler }}"
+          "-DCMAKE_BUILD_TYPE=RelWithDebInfo" # Release builds on macOS are prone to overzealous loads, causing ASAN false positives
+          "-DPCCL_BUILD_CUDA_SUPPORT=${{ matrix.pccl_build_cuda_support }}"
+          -S "${{ github.workspace }}"
+          
       
       - name: Configure CMake (Windows)
         if: runner.os == 'Windows'
