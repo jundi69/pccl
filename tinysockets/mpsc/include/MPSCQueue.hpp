@@ -3,7 +3,6 @@
 #include <atomic>
 #include <cassert>
 #include <cstddef>
-#include <new>    // For std::nothrow, if you want no-throw allocations
 
 template <typename T>
 class MPSCQueue {
