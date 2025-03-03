@@ -233,16 +233,19 @@ bool tinysockets::MultiplexedIOSocket::run() {
                 const SendQueueEntry *entry{};
                 {
                     tparkBeginPark(internal_state->tx_park_handle);
-                    entry = internal_state->send_queue.dequeue();
+                    entry = internal_state->send_queue.dequeue(true);
                     if (entry == nullptr) {
                         tparkWait(internal_state->tx_park_handle, true);
                         do {
-                            entry = internal_state->send_queue.dequeue();
+                            entry = internal_state->send_queue.dequeue(true);
                             // despite the fact that wakes are guaranteed not-spurious and insertion into the queue
-                            // should happen before the wake, it still is possible that the queue is empty because that store
-                            // isn't visible to another core yet. This happens more frequently on non TSO architectures,
-                            // such as aarch64, but has also been observed on x86_64 on Threadripper CPUs.
-                            // So we simply loop until we get an entry or the thread is interrupted.
+                            // should happen before the wake, it still is possible that the queue is empty because
+                            // seq cst only guarantees all writes before a seq_cst store are visible to other threads
+                            // when we are seq_cst loading a value that was written with seq_cst by the producer thread
+                            // from which it can be inferred that a previous store has occurred.
+                            // Here, the producer calls wake, where we are at the mercy of the OS as to which
+                            // memory model it uses for the atomic store. So we still can't assert the queue
+                            // is always non-empty after a wake.
                         } while (entry == nullptr && running.load(std::memory_order_acquire));
                     } else {
                         tparkEndPark(internal_state->tx_park_handle);
@@ -250,7 +253,7 @@ bool tinysockets::MultiplexedIOSocket::run() {
                 }
 
                 if (entry == nullptr) {
-                    LOG(INFO) << "MultiplexedIOSocket::run() interrupted, exiting send loop...";
+                    LOG(INFO) << "no entry to send, exiting send loop...";
                     break;
                 }
 
@@ -276,6 +279,7 @@ bool tinysockets::MultiplexedIOSocket::run() {
                 } while (n_sent < entry->size_bytes);
                 delete entry;
             }
+            LOG(INFO) << "MultiplexedIOSocket::run() interrupted, exiting send loop...";
         });
     }
     return true;
@@ -317,7 +321,7 @@ bool tinysockets::MultiplexedIOSocket::sendBytes(const uint64_t tag, const std::
     std::memcpy(entry->data.get(), data.data(), data.size());
 
     {
-        if (!internal_state->send_queue.enqueue(entry)) {
+        if (!internal_state->send_queue.enqueue(entry, true)) {
             LOG(ERR) << "MultiplexedIOSocket::sendBytes() failed to enqueue data; MPSC queue is full";
             return false;
         }

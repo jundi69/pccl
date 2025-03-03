@@ -25,17 +25,17 @@ public:
     MPSCQueue(const MPSCQueue&) = delete;
     MPSCQueue& operator=(const MPSCQueue&) = delete;
 
-    [[nodiscard]] bool enqueue(T* obj) {
+    [[nodiscard]] bool enqueue(T* obj, const bool seq_cst) {
         // Atomically increment count to reserve a slot
-        const std::size_t count = count_.fetch_add(1, std::memory_order_acquire);
+        const std::size_t count = count_.fetch_add(1, seq_cst ? std::memory_order_seq_cst : std::memory_order_acquire);
         if (count >= max_) {
             // The queue was full; roll back
-            count_.fetch_sub(1, std::memory_order_release);
+            count_.fetch_sub(1, seq_cst ? std::memory_order_seq_cst : std::memory_order_release);
             return false;
         }
 
         // Get a unique index in the ring for this producer
-        const std::size_t head = head_.fetch_add(1, std::memory_order_acquire);
+        const std::size_t head = head_.fetch_add(1, seq_cst ? std::memory_order_seq_cst : std::memory_order_acquire);
         std::size_t idx = head % max_;
 
         // The original code asserts that the slot should be empty
@@ -43,14 +43,14 @@ public:
         assert(buffer_[idx].load(std::memory_order_relaxed) == nullptr);
 
         // Atomically set the pointer in the slot
-        T* old = buffer_[idx].exchange(obj, std::memory_order_release);
+        T* old = buffer_[idx].exchange(obj, seq_cst ? std::memory_order_seq_cst : std::memory_order_release);
         assert(old == nullptr);
         return true;
     }
 
-    T* dequeue() {
+    T* dequeue(const bool seq_cst) {
         // Atomically swap out the pointer at 'tail'
-        T* ret = buffer_[tail_].exchange(nullptr, std::memory_order_acquire);
+        T* ret = buffer_[tail_].exchange(nullptr, seq_cst ? std::memory_order_seq_cst : std::memory_order_acquire);
         if (!ret) {
             // The queue is empty (or the producer hasn't finished writing).
             return nullptr;

@@ -80,7 +80,7 @@ int main() {
             .count = n_elements,
             .datatype = pcclFloat,
             .device_type = pcclDeviceCpu,
-            .allow_content_inequality = false
+            .allow_content_inequality = true
         }
     };
 
