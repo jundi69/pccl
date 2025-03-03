@@ -236,14 +236,21 @@ bool tinysockets::MultiplexedIOSocket::run() {
                     entry = internal_state->send_queue.dequeue();
                     if (entry == nullptr) {
                         tparkWait(internal_state->tx_park_handle, true);
-                        entry = internal_state->send_queue.dequeue();
+                        do {
+                            entry = internal_state->send_queue.dequeue();
+                            // despite the fact that wakes are guaranteed not-spurious and insertion into the queue
+                            // should happen before the wake, it still is possible that the queue is empty because that store
+                            // isn't visible to another core yet. This happens more frequently on non TSO architectures,
+                            // such as aarch64, but has also been observed on x86_64 on Threadripper CPUs.
+                            // So we simply loop until we get an entry or the thread is interrupted.
+                        } while (entry == nullptr && running.load(std::memory_order_acquire));
                     } else {
                         tparkEndPark(internal_state->tx_park_handle);
                     }
                 }
 
                 if (entry == nullptr) {
-                    // this should only happen if we are interrupting the thread when no data is available
+                    LOG(INFO) << "MultiplexedIOSocket::run() interrupted, exiting send loop...";
                     break;
                 }
 
@@ -330,11 +337,11 @@ std::optional<ssize_t> tinysockets::MultiplexedIOSocket::receiveBytesInplace(con
             continue;
         }
         const auto &queue = internal_state->receive_queues.at(tag);
-        if (queue->empty()) {
+        const auto entry_ptr = queue->front();
+        if (entry_ptr == nullptr) {
             std::this_thread::yield();
             return 0;
         }
-        const auto entry_ptr = queue->front();
         const auto entry = std::move(*entry_ptr);
         queue->pop();
 
@@ -369,14 +376,14 @@ std::optional<std::unique_ptr<std::byte[]>> tinysockets::MultiplexedIOSocket::re
             continue;
         }
         const auto &queue = internal_state->receive_queues.at(tag);
-        if (queue->empty()) {
+        const auto entry_ptr = queue->front();
+        if (entry_ptr == nullptr) {
             std::this_thread::yield();
             if (no_wait) {
                 return nullptr;
             }
             continue;
         }
-        const auto entry_ptr = queue->front();
         auto entry = std::move(*entry_ptr);
         queue->pop();
 
@@ -390,14 +397,14 @@ std::optional<std::unique_ptr<std::byte[]>> tinysockets::MultiplexedIOSocket::re
 }
 
 bool tinysockets::MultiplexedIOSocket::discardReceivedData(const uint64_t tag) const {
-    std::shared_lock lock{internal_state->receive_queues_mutex};
+    std::unique_lock lock{internal_state->receive_queues_mutex};
     {
         const auto it = internal_state->receive_queues.find(tag);
         if (it == internal_state->receive_queues.end()) {
             return false;
         }
         const auto &queue = it->second;
-        while (!queue->empty()) {
+        while (queue->front() != nullptr) {
             queue->pop();
         }
     }
