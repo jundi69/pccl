@@ -343,7 +343,6 @@ std::optional<ssize_t> tinysockets::MultiplexedIOSocket::receiveBytesInplace(con
         const auto &queue = internal_state->receive_queues.at(tag);
         const auto entry_ptr = queue->front();
         if (entry_ptr == nullptr) {
-            std::this_thread::yield();
             return 0;
         }
         const auto entry = std::move(*entry_ptr);

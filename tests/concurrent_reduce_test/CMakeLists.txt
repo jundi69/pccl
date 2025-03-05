@@ -1,0 +1,3 @@
+add_executable(concurrent_reduce_test main.cpp)
+
+target_link_libraries(concurrent_reduce_test PRIVATE pccl)

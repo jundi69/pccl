@@ -70,11 +70,12 @@ namespace ccoip {
         /// Maps tags of running collective operation tasks to their respective threads
         std::unordered_map<uint64_t, std::thread> running_reduce_tasks{};
 
-        /// Maps tags of running collective operation tasks to their respective promises;
-        /// These promises are used to signal the completion of the collective operation task
+        /// Maps tags of running collective operation tasks to their respective failure states;
+        /// These failure states are used to signal the completion of the collective operation task
         /// and indicate whether the operation was successful or not.
-        /// true=success, false=failure
-        std::unordered_map<uint64_t, std::promise<bool> > running_reduce_tasks_promises{};
+        /// 1=success, 0=failure, 2=not completed
+        std::unordered_map<uint64_t, std::atomic<uint32_t> > running_reduce_tasks_failure_states{};
+        std::shared_mutex running_reduce_tasks_failure_states_mutex{};
 
         // TODO: THIS IS SUBJECT TO CHANGE AND A TEMPORARY HACK!!
         //  FOR NOW ASSERT THE TOPOLOGY TO BE A SIMPLE RING REDUCE WITH A NON-PIPELINED ORDER

@@ -34,6 +34,9 @@ def all_reduce_multiple_with_retry(communicator: Communicator, tensors: List[tor
     handles: List[Optional[AsyncReduceHandle]] = [None for _ in range(len(tensors))]
     done_handles = set()
 
+    for tensor_index in range(len(tensors)):
+        handles[tensor_index] = launch_all_reduce(tensors[tensor_index], tensor_index)
+
     while world_size > 1:
         all_done = True
         for tensor_index in range(len(tensors)):

@@ -1,2 +1,3 @@
 add_subdirectory(basic_reduce_test)
+add_subdirectory(concurrent_reduce_test)
 add_subdirectory(c99_compat)

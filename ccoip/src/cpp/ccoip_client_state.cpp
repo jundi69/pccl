@@ -86,10 +86,22 @@ bool ccoip::CCoIPClientState::launchAsyncCollectiveOp(const uint64_t tag,
     resetCollectiveComsTxBytes(tag);
     resetCollectiveComsRxBytes(tag);
     running_collective_coms_ops_world_size[tag] = getWorldSize(); // retain applicable world size at the time of launch
-    running_reduce_tasks_promises[tag] = std::promise<bool>{};
+
+    {
+        std::unique_lock lock(running_reduce_tasks_failure_states_mutex);
+        running_reduce_tasks_failure_states[tag].store(2, std::memory_order_relaxed); // not completed
+    }
+
     running_reduce_tasks[tag] = std::move(std::thread([this, tag, task = std::move(task)] {
-        std::promise<bool> &promise = running_reduce_tasks_promises.at(tag);
+        std::promise<bool> promise{};
         task(promise);
+        std::future<bool> future = promise.get_future();
+
+        // expose the result of the task to the client state
+        {
+            std::unique_lock lock(running_reduce_tasks_failure_states_mutex);
+            running_reduce_tasks_failure_states[tag].store(future.get() ? 1 : 0, std::memory_order_relaxed);
+        }
     }));
     return true;
 }
@@ -106,13 +118,11 @@ bool ccoip::CCoIPClientState::joinAsyncReduce(const uint64_t tag) {
 }
 
 std::optional<bool> ccoip::CCoIPClientState::hasCollectiveComsOpFailed(const uint64_t tag) {
-    if (const auto it = running_reduce_tasks_promises.find(tag); it != running_reduce_tasks_promises.end()) {
-        auto &promise = it->second;
-        auto future = promise.get_future();
-        if (future.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
-            const bool success = future.get();
-            return success == false;
-        }
+    std::shared_lock lock(running_reduce_tasks_failure_states_mutex);
+    if (const auto it = running_reduce_tasks_failure_states.find(tag);
+        it != running_reduce_tasks_failure_states.end()) {
+        const auto &state = it->second;
+        return state.load() == 0;
     }
     return std::nullopt;
 }
