@@ -244,6 +244,13 @@ bool ccoip::CCoIPClientHandler::requestAndEstablishP2PConnections(const bool acc
         return false;
     }
 
+    if (accept_new_peers) {
+        if (client_state.isAnyCollectiveComsOpRunning()) {
+            LOG(ERR) << "Cannot accept new peers while a collective communications operation is running";
+            return false;
+        }
+    }
+
     EstablishP2PConnectionResult result;
     do {
         C2MPacketRequestEstablishP2PConnections packet{};
