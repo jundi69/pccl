@@ -3,7 +3,7 @@ import time
 
 import zlib
 from time import sleep
-from typing import List
+from typing import List, Optional
 
 import pccl
 from pccl import Communicator, SharedState, TensorInfo, ReduceOp, Attribute, PCCLError, ReduceOperandDescriptor, \
@@ -134,34 +134,55 @@ def all_reduce_multiple_with_retry(communicator: Communicator, tensors: List[tor
                                                quantization_options=quant_desc,
                                                op=op, tag=tag)
 
-    handles = []
-    for tensor_index in range(len(tensors)):
-        tensor = tensors[tensor_index]
-        handles.append(launch_all_reduce(tensor, tensor_index))
+    handles: List[Optional[pccl.AsyncReduceHandle]] = [None for _ in range(len(tensors))]
+    done_handles = set()
 
     while world_size > 1:
-
         all_done = True
         for tensor_index in range(len(tensors)):
             handle = handles[tensor_index]
             if handle is None:
-                continue
+                if tensor_index in done_handles:
+                    continue
+                else:
+                    handle = handles[tensor_index] = launch_all_reduce(tensors[tensor_index], tensor_index)
 
             log_debug(f"(RANK={RANK}, it={it}) all_reduce_async wait({tensor_index})")
             is_success, status, info = handle.wait()
             world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
             if not is_success:
                 log_debug(f"(RANK={RANK}, it={it}) all_reduce_async({tensor_index}) failed; New world_size: {world_size}")
-                handles[tensor_index] = launch_all_reduce(tensors[tensor_index], tensor_index)
+                log_info(f"(RANK={RANK}, it={it}) waiting for all async operations to complete before retrying...")
+                for j in range(len(tensors)):
+                    if j == tensor_index:
+                        continue
+                    handle = handles[j]
+                    if handle is not None:
+                        is_success, status, info = handle.wait()
+                        if is_success:
+                            done_handles.add(j)
+                        handles[tensor_index] = None
+                log_info(f"(RANK={RANK}, it={it}) all async operations awaited; retrying...")
+                handles[tensor_index] = None
                 all_done = False
                 break
             assert info is not None
             log_debug(
                 f"(RANK={RANK}, it={it}) Reduce completed RX: {info.rx_bytes}, TX: {info.tx_bytes}; world_size: {info.world_size}")
             handles[tensor_index] = None
+            done_handles.add(tensor_index)
 
         if all_done:
             break
+
+    if world_size == 1:
+        # await all handles
+        for handle in handles:
+            if handle is not None:
+                handle.wait()
+        return False
+
+    return True
 
 def print_outer_crc32s(outer_optimizer: optim.Optimizer, it: int):
     for outer_enry in outer_optimizer.state.values():
@@ -290,7 +311,9 @@ def main():
                 for outer_param, param in zip(outer_params_values, model.parameters()):
                     outer_param.grad = outer_param - param.data
 
-                all_reduce_multiple_with_retry(communicator, [outer_param.grad for outer_param in outer_params_values], ReduceOp.AVG, it)
+                if not all_reduce_multiple_with_retry(communicator, [outer_param.grad for outer_param in outer_params_values], ReduceOp.AVG, it):
+                    # We just play DiLoCo with ourselves... it's the only thing we can do here really
+                    pass
 
             outer_optimizer.step()
             outer_optimizer.zero_grad(set_to_none=False)
@@ -304,7 +327,6 @@ def main():
                     inner_param.copy_(outer_param)
 
             shared_state.revision += 1
-            inner_optimizer.zero_grad(set_to_none=False)
 
 
     except Exception as e:

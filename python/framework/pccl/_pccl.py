@@ -289,7 +289,7 @@ class TensorInfo:
         numel: int = tensor.size
         data_ptr: int = tensor.ctypes.data
         dtype: DataType = DataType.from_numpy_dtype(tensor.dtype)
-        return cls(name, data_ptr, numel=numel, dtype=dtype, allow_content_inequality=allow_content_inequality)
+        return cls(name, data_ptr, numel=numel, dtype=dtype, allow_content_inequality=allow_content_inequality, device_type=DeviceType.CPU)
 
 
 class SharedState:
