@@ -3,8 +3,7 @@ import os
 import logging
 import torch
 from pccl import SharedState, TensorInfo, Communicator, Attribute, ReduceOp, QuantizationOptions, DataType, \
-    QuantizationAlgorithm, PCCLError, ReduceOperandDescriptor, DistributionHint, AsyncReduceHandle
-from typing_extensions import Optional, List
+    QuantizationAlgorithm, PCCLError
 
 HOST: str = '127.0.0.1:48148'
 STEPS: int = 1000
@@ -14,72 +13,6 @@ RANK: int = int(os.getenv('RANK', "0"))
 
 logging.basicConfig(level=logging.INFO)
 
-
-def all_reduce_multiple_with_retry(communicator: Communicator, tensors: List[torch.Tensor], op: ReduceOp, it: int = 0):
-    world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
-
-    def launch_all_reduce(x: torch.Tensor, tag: int):
-        op_desc = ReduceOperandDescriptor(
-            datatype=DataType.FLOAT,
-            distribution_hint=DistributionHint.NORMAL
-        )
-        quant_desc = QuantizationOptions(
-            quantized_datatype=DataType.UINT8,
-            algorithm=QuantizationAlgorithm.MIN_MAX
-        )
-        return communicator.all_reduce_async(x, x, operand_descriptor=op_desc,
-                                             quantization_options=quant_desc,
-                                             op=op, tag=tag)
-
-    handles: List[Optional[AsyncReduceHandle]] = [None for _ in range(len(tensors))]
-    done_handles = set()
-
-    while world_size > 1:
-        all_done = True
-        for tensor_index in range(len(tensors)):
-            handle = handles[tensor_index]
-            if handle is None:
-                if tensor_index in done_handles:
-                    continue
-                else:
-                    handle = handles[tensor_index] = launch_all_reduce(tensors[tensor_index], tensor_index)
-
-            print(f"(RANK={RANK}, it={it}) all_reduce_async wait({tensor_index})")
-            is_success, status, info = handle.wait()
-            world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
-            if not is_success:
-                print(f"(RANK={RANK}, it={it}) all_reduce_async({tensor_index}) failed; New world_size: {world_size}")
-                print(f"(RANK={RANK}, it={it}) waiting for all async operations to complete before retrying...")
-                for j in range(len(tensors)):
-                    if j == tensor_index:
-                        continue
-                    handle = handles[j]
-                    if handle is not None:
-                        is_success, status, info = handle.wait()
-                        if is_success:
-                            done_handles.add(j)
-                        handles[tensor_index] = None
-                print(f"(RANK={RANK}, it={it}) all async operations awaited; retrying...")
-                handles[tensor_index] = None
-                all_done = False
-                break
-            assert info is not None
-            print(
-                f"(RANK={RANK}, it={it}) Reduce completed RX: {info.rx_bytes}, TX: {info.tx_bytes}; world_size: {info.world_size}")
-            handles[tensor_index] = None
-            done_handles.add(tensor_index)
-
-        if all_done:
-            break
-
-    if world_size == 1:
-        # await all handles
-        for handle in handles:
-            if handle is not None:
-                handle.wait()
-        return False
-
-    return True
 
 def main():
     logging.info(f"(RANK={RANK}) Starting peer node connecting to {HOST}")
@@ -148,9 +81,22 @@ def main():
         assert info is not None
         print(f"(RANK={RANK}, it={it}) tx_bytes={info.tx_bytes}, rx_bytes={info.rx_bytes}")
 
-        # Create fake gradients
-        gradients = [torch.randn(128, 128, dtype=torch.float32) for _ in range(10)]
-        all_reduce_multiple_with_retry(communicator, gradients, ReduceOp.SUM, it)
+        # Create gradients tensors
+        grad: torch.Tensor = torch.rand(NUM_ELEMENTS, dtype=torch.float32)
+        while world_size > 1:
+            logging.info(f"(RANK={RANK}, it={it}) all_reduce_async()")
+            handle = communicator.all_reduce_async(grad, weights,
+                                                   op=ReduceOp.SUM,
+                                                   quantization_options=QuantizationOptions(DataType.UINT8,
+                                                                                            QuantizationAlgorithm.MIN_MAX))
+            is_success, status, info = handle.wait()
+            world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
+            if not is_success:
+                logging.info(f"(RANK={RANK}, it={it}) all reduce failed; retrying...")
+                continue
+            logging.info(
+                f"(RANK={RANK}, it={it}) Reduce completed RX: {info.rx_bytes}, TX: {info.tx_bytes}")
+            break
         if world_size == 1:
             # drop current step, as we are alone in the run and whatever we just computed would induce too much noise if we stepped here.
             # If one accepts the pattern that one waits until the world size is at least two, it would be erroneous to step here.

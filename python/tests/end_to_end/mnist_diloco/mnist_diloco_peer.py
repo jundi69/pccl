@@ -1,5 +1,4 @@
 import os
-import time
 
 import zlib
 from time import sleep
@@ -97,27 +96,6 @@ def log_info(msg: str):
 RANK: int = int(os.getenv('RANK', "0"))
 
 
-def generate_random_vectors_64(d: int,
-                               device=None,
-                               dtype=torch.float32):
-    """
-    Generate 64 random vectors each of dimension d.
-    Shape: (64, d).
-    """
-    gen = torch.Generator()
-    gen.manual_seed(42)
-    return torch.randn((64, d), device=device, dtype=dtype, generator=gen)
-
-
-def random_projection_64(weights: torch.Tensor) -> torch.Tensor:
-    """
-    Project 'weights' (shape [d]) onto the 64 random vectors (shape [64, d]).
-
-    Returns a tensor of shape (64,) which is the 64D random projection.
-    """
-    return generate_random_vectors_64(len(weights)) @ weights
-
-
 def all_reduce_multiple_with_retry(communicator: Communicator, tensors: List[torch.Tensor], op: ReduceOp, it: int = 0):
     world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
 
@@ -127,8 +105,8 @@ def all_reduce_multiple_with_retry(communicator: Communicator, tensors: List[tor
             distribution_hint=DistributionHint.NORMAL
         )
         quant_desc = QuantizationOptions(
-            quantized_datatype=DataType.FLOAT,
-            algorithm=QuantizationAlgorithm.NONE
+            quantized_datatype=DataType.UINT8,
+            algorithm=QuantizationAlgorithm.MIN_MAX
         )
         return communicator.all_reduce_async(x, x, operand_descriptor=op_desc,
                                                quantization_options=quant_desc,
