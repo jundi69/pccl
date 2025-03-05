@@ -583,11 +583,6 @@ TYPED_TEST(TypeAllReduceTest, TestSumWorldSize3UnevenElements) {
     );
 }
 
-/**
- * New test for multiple concurrent all-reduces. We'll do a short demonstration
- * with two clients performing two different reductions back-to-back without
- * waiting for each other in-between.
- */
 TEST(AllReduceTest, TestMultipleConcurrentAllReduces) {
     GUARD_PORT(CCOIP_PROTOCOL_PORT_MASTER);
 
@@ -610,7 +605,6 @@ TEST(AllReduceTest, TestMultipleConcurrentAllReduces) {
     establishConnections({&client1, &client2});
 
     // We'll do 2 concurrent all-reduce operations, each identified by a different "tag"
-    // (though if your API doesn't use tags, you can manage concurrency in other ways).
 
     const size_t n = 256;
     std::unique_ptr<int32_t[]> c1_values_1(new int32_t[n]);
@@ -693,6 +687,105 @@ TEST(AllReduceTest, TestMultipleConcurrentAllReduces) {
         ASSERT_EQ(c1_results_2[i], expected);
         ASSERT_EQ(c2_results_2[i], expected);
     }
+
+    // clean shutdown
+    ASSERT_TRUE(client1.interrupt());
+    ASSERT_TRUE(client2.interrupt());
+
+    ASSERT_TRUE(client1.join());
+    ASSERT_TRUE(client2.join());
+
+    ASSERT_TRUE(master.interrupt());
+    ASSERT_TRUE(master.join());
+}
+
+/// Tests what happens when two clients try to do two concurrent all reduces respectively, which have the same tag.
+TEST(AllReduceTest, TestMultipleConcurrentAllReducesSameTagFail) {
+    GUARD_PORT(CCOIP_PROTOCOL_PORT_MASTER);
+
+    ccoip::CCoIPMaster master({
+        .inet = {.protocol = inetIPv4, .ipv4 = {.data = {0, 0, 0, 0}}},
+        .port = CCOIP_PROTOCOL_PORT_MASTER
+    });
+    ASSERT_TRUE(master.launch());
+
+    // client 1 and client 2
+    const ccoip::CCoIPClient client1({
+        .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+        .port = CCOIP_PROTOCOL_PORT_MASTER,
+    }, 0);
+    const ccoip::CCoIPClient client2({
+        .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+        .port = CCOIP_PROTOCOL_PORT_MASTER,
+    }, 0);
+
+    establishConnections({&client1, &client2});
+
+    // We'll do 2 concurrent all-reduce operations, each identified by the same "tag"
+
+    constexpr size_t n = 256;
+    std::unique_ptr<int32_t[]> c1_values_1(new int32_t[n]);
+    std::unique_ptr<int32_t[]> c1_values_2(new int32_t[n]);
+    std::unique_ptr<int32_t[]> c2_values_1(new int32_t[n]);
+    std::unique_ptr<int32_t[]> c2_values_2(new int32_t[n]);
+
+    std::unique_ptr<int32_t[]> c1_results_1(new int32_t[n]);
+    std::unique_ptr<int32_t[]> c1_results_2(new int32_t[n]);
+    std::unique_ptr<int32_t[]> c2_results_1(new int32_t[n]);
+    std::unique_ptr<int32_t[]> c2_results_2(new int32_t[n]);
+
+    // Fill some distinct patterns:
+    for (size_t i = 0; i < n; ++i) {
+        c1_values_1[i] = 10;  // all 10
+        c1_values_2[i] = i;   // 0..255
+        c2_values_1[i] = 20;  // all 20
+        c2_values_2[i] = 2 * int32_t(i); // 0,2,4,6,...
+    }
+
+    constexpr int TAG_1 = 123;
+    constexpr int TAG_2 = 123;
+
+    EXPECT_TRUE(client1.allReduceAsync(c1_values_1.get(),
+                                       c1_results_1.get(),
+                                       n,
+                                       ccoip::ccoipInt32,
+                                       ccoip::ccoipInt32,
+                                       ccoip::ccoipQuantizationNone,
+                                       ccoip::ccoipOpSum,
+                                       TAG_1));
+    EXPECT_TRUE(client2.allReduceAsync(c2_values_1.get(),
+                                       c2_results_1.get(),
+                                       n,
+                                       ccoip::ccoipInt32,
+                                       ccoip::ccoipInt32,
+                                       ccoip::ccoipQuantizationNone,
+                                       ccoip::ccoipOpSum,
+                                       TAG_1));
+
+
+
+    EXPECT_FALSE(client1.allReduceAsync(c1_values_2.get(),
+                                       c1_results_2.get(),
+                                       n,
+                                       ccoip::ccoipInt32,
+                                       ccoip::ccoipInt32,
+                                       ccoip::ccoipQuantizationNone,
+                                       ccoip::ccoipOpMax,
+                                       TAG_2));
+    EXPECT_FALSE(client2.allReduceAsync(c2_values_2.get(),
+                                       c2_results_2.get(),
+                                       n,
+                                       ccoip::ccoipInt32,
+                                       ccoip::ccoipInt32,
+                                       ccoip::ccoipQuantizationNone,
+                                       ccoip::ccoipOpMax,
+                                       TAG_2));
+
+    // Wait for both operations on both clients
+    EXPECT_TRUE(client1.joinAsyncReduce(TAG_1));
+    EXPECT_TRUE(client2.joinAsyncReduce(TAG_1));
+    EXPECT_FALSE(client1.joinAsyncReduce(TAG_2));
+    EXPECT_FALSE(client2.joinAsyncReduce(TAG_2));
 
     // clean shutdown
     ASSERT_TRUE(client1.interrupt());

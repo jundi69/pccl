@@ -1092,7 +1092,7 @@ void ccoip::CCoIPMasterHandler::sendCollectiveCommsAbortPackets(const uint32_t p
             LOG(ERR) << "Failed to send M2CPacketCollectiveCommsAbort to " << ccoip_sockaddr_to_str(peer_address);
         }
         LOG(DEBUG) << "Sent abort packet to " << ccoip_sockaddr_to_str(peer_address)
-                   << " with abort state: " << aborted;
+                   << " with abort state: " << aborted << " for tag " << tag;
     }
 }
 

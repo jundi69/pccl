@@ -8,6 +8,7 @@
 #include <ccoip_types.hpp>
 #include <future>
 #include <optional>
+#include <shared_mutex>
 #include <unordered_set>
 #include <unordered_map>
 #include <thread>
@@ -43,11 +44,19 @@ namespace ccoip {
         /// Accessible by @code getCollectiveComsTxBytes(uint32_t tag)@endcode
         /// Reset by @code resetCollectiveComsRxBytes(uint32_t tag)@endcode
         std::unordered_map<uint64_t, size_t> collective_coms_tx_bytes{};
+        std::shared_mutex collective_coms_tx_bytes_mutex{};
 
         /// The number of bytes received during ongoing collective communications operations
         /// Accessible by @code trackCollectiveComsRxBytes(uint32_t tag)@endcode
         /// Cleared by @code resetCollectiveComsRxBytes(uint32_t tag)@endcode
         std::unordered_map<uint64_t, size_t> collective_coms_rx_bytes{};
+        std::shared_mutex collective_coms_rx_bytes_mutex{};
+
+        /// The connection revision active at the start of the collective communications operation with the specified tag
+        /// Accessible by @code getCollectiveConnectionRevision(uint32_t tag)@endcode
+        /// Set by @code setCollectiveConnectionRevision(uint32_t tag, uint64_t revision)@endcode
+        std::unordered_map<uint64_t, uint64_t> collective_coms_connection_revisions{};
+        std::shared_mutex collective_coms_connection_revisions_mutex{};
 
         /// Maps tags of running collective communications operations to their respective world size
         /// that was valid at the time of the operation;
@@ -72,6 +81,8 @@ namespace ccoip {
         std::vector<ccoip_uuid_t> ring_order;
 
     public:
+        ~CCoIPClientState();
+
         /// Called to register a peer with the client state
         [[nodiscard]] bool registerPeer(const ccoip_socket_address_t &address, ccoip_uuid_t uuid);
 
@@ -134,7 +145,13 @@ namespace ccoip {
 
         /// Returns the number of bytes sent during ongoing collective communications operations;
         /// Returns std::nullopt if the tag is not found
-        [[nodiscard]] std::optional<size_t> getCollectiveComsRxBytes(uint64_t tag) const;
+        [[nodiscard]] std::optional<size_t> getCollectiveComsRxBytes(uint64_t tag);
+
+        /// Sets the connection revision active at the start of the collective communications operation with the specified tag
+        void setCollectiveConnectionRevision(uint64_t tag, uint64_t revision);
+
+        /// Returns the connection revision active at the start of the collective communications operation with the specified tag
+        [[nodiscard]] std::optional<uint64_t> getCollectiveConnectionRevision(uint64_t tag);
 
         /// Called to track additional bytes sent during ongoing collective communications operations
         void trackCollectiveComsTxBytes(uint64_t tag, size_t tx_bytes);
@@ -145,11 +162,11 @@ namespace ccoip {
 
         /// Returns the number of bytes sent during ongoing collective communications operations
         /// Returns std::nullopt if the tag is not found
-        [[nodiscard]] std::optional<size_t> getCollectiveComsTxBytes(uint64_t tag) const;
+        [[nodiscard]] std::optional<size_t> getCollectiveComsTxBytes(uint64_t tag);
 
         /// Returns the world size of the collective communications operation with the specified tag
         /// Returns std::nullopt if the tag is not found
-        [[nodiscard]] std::optional<uint32_t> getCollectiveComsWorldSize(uint64_t tag) const;
+        [[nodiscard]] std::optional<uint32_t> getCollectiveComsWorldSize(uint64_t tag);
 
         /// Resets the world size of the collective communications operation with the specified tag
         void resetCollectiveComsWorldSize(uint64_t tag);

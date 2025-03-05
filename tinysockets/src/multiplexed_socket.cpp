@@ -253,7 +253,7 @@ bool tinysockets::MultiplexedIOSocket::run() {
                 }
 
                 if (entry == nullptr) {
-                    LOG(INFO) << "no entry to send, exiting send loop...";
+                    LOG(DEBUG) << "no entry to send, exiting send loop...";
                     break;
                 }
 
@@ -400,19 +400,18 @@ std::optional<std::unique_ptr<std::byte[]>> tinysockets::MultiplexedIOSocket::re
     }
 }
 
-bool tinysockets::MultiplexedIOSocket::discardReceivedData(const uint64_t tag) const {
+void tinysockets::MultiplexedIOSocket::discardReceivedData(const uint64_t tag) const {
     std::unique_lock lock{internal_state->receive_queues_mutex};
     {
         const auto it = internal_state->receive_queues.find(tag);
         if (it == internal_state->receive_queues.end()) {
-            return false;
+            return;
         }
         const auto &queue = it->second;
         while (queue->front() != nullptr) {
             queue->pop();
         }
     }
-    return true;
 }
 
 bool tinysockets::MultiplexedIOSocket::closeConnection() {

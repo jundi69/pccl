@@ -244,10 +244,6 @@ bool ccoip::CCoIPClientHandler::requestAndEstablishP2PConnections(const bool acc
         return false;
     }
 
-    if (client_state.isAnyCollectiveComsOpRunning()) {
-        return false;
-    }
-
     EstablishP2PConnectionResult result;
     do {
         C2MPacketRequestEstablishP2PConnections packet{};
@@ -260,6 +256,7 @@ bool ccoip::CCoIPClientHandler::requestAndEstablishP2PConnections(const bool acc
     if (result == FAILED) {
         return false;
     }
+    connection_revision++;
     return true;
 }
 
@@ -1048,6 +1045,11 @@ bool ccoip::CCoIPClientHandler::allReduceAsync(const void *sendbuff, void *recvb
         return false;
     }
 
+
+    // Set connection revision active at the time of launching the collective comms operation.
+    // If the connection revision has changed since then,
+    // we know that p2p connections were re-established in the meantime.
+    client_state.setCollectiveConnectionRevision(tag, connection_revision);
     if (!client_state.launchAsyncCollectiveOp(tag, [this, sendbuff, recvbuff, count, datatype, quantized_data_type,
                                                   quantization_algorithm, op, tag](std::promise<bool> &promise) {
                                                   LOG(DEBUG) << "Vote to commence all reduce operation with tag " <<
@@ -1128,7 +1130,7 @@ bool ccoip::CCoIPClientHandler::allReduceAsync(const void *sendbuff, void *recvb
                                                   }
                                                   if (abort_packet_received) {
                                                       LOG(WARN) <<
-                                                              "Received abort packet during all reduce. Considering all reduce aborted.";
+                                                              "Received abort packet during all reduce with tag " << tag << ". Considering all reduce aborted.";
                                                       aborted = true;
                                                       success = false;
                                                   }
@@ -1211,17 +1213,24 @@ bool ccoip::CCoIPClientHandler::joinAsyncReduce(const uint64_t tag) {
         // that discarding all data at this point safely discards all data still associated with the old aborted
         // collective communication operation.
         for (auto &[peer_uuid, socket]: p2p_connections_rx) {
-            if (!socket->discardReceivedData(tag)) {
-                LOG(WARN) << "Failed to discard received data for peer " << uuid_to_string(peer_uuid);
-            }
+            socket->discardReceivedData(tag);
         }
 
         // In that next invocation, we need to have the new topology ready
         // as necessitated that a peer just dropped, causing the abort.
         // We thus re-establish p2p connections according to the new topology as determined by the master,
         // and obtain the new topology.
-        if (!requestAndEstablishP2PConnections(false)) {
-            LOG(ERR) << "Failed to request and establish p2p connections after collective comms operation was aborted";
+        // However, we only want to re-establish once. There might be multiple concurrent all reduce operations
+        // in flight, all of which could fail, and thus independently trigger a re-establishment of p2p connections,
+        // which would also cause restarted all reduce operations to fail, causing a cascade of all-reduce
+        // failures forever onwards.
+        // We thus check if the connection revision has changed since the start of the all reduce.
+        // If it has, we know that connections were already re-established, and we can safely skip this step.
+        const auto revision_at_collective_begin = client_state.getCollectiveConnectionRevision(tag);
+        if (connection_revision == revision_at_collective_begin) {
+            if (!requestAndEstablishP2PConnections(false)) {
+                LOG(ERR) << "Failed to request and establish p2p connections after collective comms operation was aborted";
+            }
         }
         return false;
     }

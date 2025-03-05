@@ -40,6 +40,10 @@ namespace ccoip {
 
         bool accepted = false;
 
+        /// Connection revision number;
+        /// Sequentially incremented each time p2p connections are re-established
+        uint64_t connection_revision;
+
         /// Thread that runs the currently ongoing bandwidth benchmark (if any).
         /// It runs the receiving side of the benchmark.
         /// Only one benchmark can run at a time.

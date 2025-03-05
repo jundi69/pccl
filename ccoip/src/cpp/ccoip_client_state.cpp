@@ -3,6 +3,15 @@
 #include <ccoip_inet_utils.hpp>
 #include <pccl_log.hpp>
 
+ccoip::CCoIPClientState::~CCoIPClientState() {
+    for (const std::unordered_set<uint64_t> remaining_tags = running_collective_coms_ops_tags;
+         const auto &tag: remaining_tags) {
+        if (!joinAsyncReduce(tag)) {
+            LOG(ERR) << "Failed to join collective comms op with tag " << tag << " during client state destruction";
+        }
+    }
+}
+
 bool ccoip::CCoIPClientState::registerPeer(const ccoip_socket_address_t &address, const ccoip_uuid_t uuid) {
     const auto internal_address = ccoip_socket_to_internal(address);
     if (const auto it = socket_addr_to_uuid.find(internal_address); it != socket_addr_to_uuid.end()) {
@@ -62,6 +71,10 @@ bool ccoip::CCoIPClientState::endCollectiveComsOp(const uint64_t tag) {
     if (const auto n = running_collective_coms_ops_tags.erase(tag); n == 0) {
         return false;
     }
+    if (const auto n = running_reduce_tasks.erase(tag); n == 0) {
+        return false;
+    }
+
     return true;
 }
 
@@ -77,9 +90,6 @@ bool ccoip::CCoIPClientState::launchAsyncCollectiveOp(const uint64_t tag,
     running_reduce_tasks[tag] = std::move(std::thread([this, tag, task = std::move(task)] {
         std::promise<bool> &promise = running_reduce_tasks_promises.at(tag);
         task(promise);
-        if (!endCollectiveComsOp(tag)) [[unlikely]] {
-            LOG(BUG) << "Collective comms op with tag " << tag << " was not started but is being ended";
-        }
     }));
     return true;
 }
@@ -87,7 +97,9 @@ bool ccoip::CCoIPClientState::launchAsyncCollectiveOp(const uint64_t tag,
 bool ccoip::CCoIPClientState::joinAsyncReduce(const uint64_t tag) {
     if (const auto it = running_reduce_tasks.find(tag); it != running_reduce_tasks.end()) {
         it->second.join();
-        running_reduce_tasks.erase(it);
+        if (!endCollectiveComsOp(tag)) [[unlikely]] {
+            LOG(BUG) << "Collective comms op with tag " << tag << " was not started but is being ended";
+        }
         return true;
     }
     return false;
@@ -122,7 +134,8 @@ void ccoip::CCoIPClientState::resetSharedStateSyncTxBytes() {
     shared_state_sync_tx_bytes = 0;
 }
 
-std::optional<size_t> ccoip::CCoIPClientState::getCollectiveComsRxBytes(const uint64_t tag) const {
+std::optional<size_t> ccoip::CCoIPClientState::getCollectiveComsRxBytes(const uint64_t tag) {
+    std::shared_lock lock(collective_coms_rx_bytes_mutex);
     const auto it = collective_coms_rx_bytes.find(tag);
     if (it == collective_coms_rx_bytes.end()) {
         return std::nullopt;
@@ -130,15 +143,32 @@ std::optional<size_t> ccoip::CCoIPClientState::getCollectiveComsRxBytes(const ui
     return it->second;
 }
 
+void ccoip::CCoIPClientState::setCollectiveConnectionRevision(const uint64_t tag, const uint64_t revision) {
+    std::unique_lock lock(collective_coms_connection_revisions_mutex);
+    collective_coms_connection_revisions[tag] = revision;
+}
+
+std::optional<uint64_t> ccoip::CCoIPClientState::getCollectiveConnectionRevision(const uint64_t tag) {
+    std::shared_lock lock(collective_coms_connection_revisions_mutex);
+    const auto it = collective_coms_connection_revisions.find(tag);
+    if (it == collective_coms_connection_revisions.end()) {
+        return std::nullopt;
+    }
+    return it->second;
+}
+
 void ccoip::CCoIPClientState::trackCollectiveComsRxBytes(const uint64_t tag, const size_t rx_bytes) {
+    std::unique_lock lock(collective_coms_rx_bytes_mutex);
     collective_coms_rx_bytes[tag] += rx_bytes;
 }
 
 void ccoip::CCoIPClientState::resetCollectiveComsRxBytes(const uint64_t tag) {
+    std::unique_lock lock(collective_coms_rx_bytes_mutex);
     collective_coms_rx_bytes.erase(tag);
 }
 
-std::optional<size_t> ccoip::CCoIPClientState::getCollectiveComsTxBytes(const uint64_t tag) const {
+std::optional<size_t> ccoip::CCoIPClientState::getCollectiveComsTxBytes(const uint64_t tag) {
+    std::shared_lock lock(collective_coms_rx_bytes_mutex);
     const auto it = collective_coms_tx_bytes.find(tag);
     if (it == collective_coms_tx_bytes.end()) {
         return std::nullopt;
@@ -146,7 +176,8 @@ std::optional<size_t> ccoip::CCoIPClientState::getCollectiveComsTxBytes(const ui
     return it->second;
 }
 
-std::optional<uint32_t> ccoip::CCoIPClientState::getCollectiveComsWorldSize(const uint64_t tag) const {
+std::optional<uint32_t> ccoip::CCoIPClientState::getCollectiveComsWorldSize(const uint64_t tag) {
+    std::shared_lock lock(collective_coms_rx_bytes_mutex);
     const auto it = running_collective_coms_ops_world_size.find(tag);
     if (it == running_collective_coms_ops_world_size.end()) {
         return std::nullopt;
@@ -155,14 +186,17 @@ std::optional<uint32_t> ccoip::CCoIPClientState::getCollectiveComsWorldSize(cons
 }
 
 void ccoip::CCoIPClientState::resetCollectiveComsWorldSize(const uint64_t tag) {
+    std::unique_lock lock(collective_coms_rx_bytes_mutex);
     running_collective_coms_ops_world_size.erase(tag);
 }
 
 void ccoip::CCoIPClientState::trackCollectiveComsTxBytes(const uint64_t tag, const size_t tx_bytes) {
+    std::unique_lock lock(collective_coms_tx_bytes_mutex);
     collective_coms_tx_bytes[tag] += tx_bytes;
 }
 
 void ccoip::CCoIPClientState::resetCollectiveComsTxBytes(const uint64_t tag) {
+    std::unique_lock lock(collective_coms_rx_bytes_mutex);
     collective_coms_tx_bytes.erase(tag);
 }
 

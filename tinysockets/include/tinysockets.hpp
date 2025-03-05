@@ -513,7 +513,7 @@ namespace tinysockets {
         }
 
         /// Discards all received data that was not yet consumed by @code receiveBytes@endcode for the specified tag
-        [[nodiscard]] bool discardReceivedData(uint64_t tag) const;
+        void discardReceivedData(uint64_t tag) const;
 
         void join();
 

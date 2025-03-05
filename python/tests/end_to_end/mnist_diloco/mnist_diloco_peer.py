@@ -1,15 +1,16 @@
 import os
+import time
+
 import zlib
 from time import sleep
 from typing import List
 
 import pccl
 from pccl import Communicator, SharedState, TensorInfo, ReduceOp, Attribute, PCCLError, ReduceOperandDescriptor, \
-    DataType, DistributionHint, QuantizationOptions
+    DataType, DistributionHint, QuantizationOptions, QuantizationAlgorithm
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from sympy.physics.units import momentum
 from torchvision import datasets, transforms
 from torch.utils.data import DataLoader
 
@@ -117,30 +118,50 @@ def random_projection_64(weights: torch.Tensor) -> torch.Tensor:
     return generate_random_vectors_64(len(weights)) @ weights
 
 
-def all_reduce_with_retry(communicator: pccl.Communicator, tensor: torch.Tensor, op: ReduceOp, it: int = 0):
+def all_reduce_multiple_with_retry(communicator: Communicator, tensors: List[torch.Tensor], op: ReduceOp, it: int = 0):
     world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
-    while world_size > 1:
-        log_debug(f"(RANK={RANK}, it={it}) all_reduce_async()")
+
+    def launch_all_reduce(x: torch.Tensor, tag: int):
         op_desc = ReduceOperandDescriptor(
             datatype=DataType.FLOAT,
             distribution_hint=DistributionHint.NORMAL
         )
         quant_desc = QuantizationOptions(
             quantized_datatype=DataType.FLOAT,
-            algorithm=pccl.QuantizationAlgorithm.NONE
+            algorithm=QuantizationAlgorithm.NONE
         )
-        handle = communicator.all_reduce_async(tensor, tensor, operand_descriptor=op_desc,
-                                               quantization_options=quant_desc, op=op)
-        is_success, status, info = handle.wait()
-        world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
-        if not is_success:
-            log_debug(f"(RANK={RANK}, it={it}) all_reduce_async() failed: {status}; retrying...")
-            continue
-        assert info is not None
-        log_debug(
-            f"(RANK={RANK}, it={it}) Reduce completed RX: {info.rx_bytes}, TX: {info.tx_bytes}; world_size: {info.world_size}")
-        break
+        return communicator.all_reduce_async(x, x, operand_descriptor=op_desc,
+                                               quantization_options=quant_desc,
+                                               op=op, tag=tag)
 
+    handles = []
+    for tensor_index in range(len(tensors)):
+        tensor = tensors[tensor_index]
+        handles.append(launch_all_reduce(tensor, tensor_index))
+
+    while world_size > 1:
+
+        all_done = True
+        for tensor_index in range(len(tensors)):
+            handle = handles[tensor_index]
+            if handle is None:
+                continue
+
+            log_debug(f"(RANK={RANK}, it={it}) all_reduce_async wait({tensor_index})")
+            is_success, status, info = handle.wait()
+            world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
+            if not is_success:
+                log_debug(f"(RANK={RANK}, it={it}) all_reduce_async({tensor_index}) failed; New world_size: {world_size}")
+                handles[tensor_index] = launch_all_reduce(tensors[tensor_index], tensor_index)
+                all_done = False
+                break
+            assert info is not None
+            log_debug(
+                f"(RANK={RANK}, it={it}) Reduce completed RX: {info.rx_bytes}, TX: {info.tx_bytes}; world_size: {info.world_size}")
+            handles[tensor_index] = None
+
+        if all_done:
+            break
 
 def print_outer_crc32s(outer_optimizer: optim.Optimizer, it: int):
     for outer_enry in outer_optimizer.state.values():
@@ -150,7 +171,7 @@ def print_outer_crc32s(outer_optimizer: optim.Optimizer, it: int):
                 log_debug(f"(RANK={RANK}, it={it}) {key} checksum: {checksum}")
 
 
-def update_topology_with_retries(communicator: pccl.Communicator, it: int = 0):
+def update_topology_with_retries(communicator: Communicator, it: int = 0):
     log_debug(f"(RANK={RANK}, it={it}) pccl::update_topology()")
     while True:
         try:
@@ -169,7 +190,7 @@ def main():
     inner_optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
     # communicator
-    communicator = pccl.Communicator('127.0.0.1:48148', 0)
+    communicator = Communicator('127.0.0.1:48148', 0)
     communicator.connect(n_attempts=15)
     log_info(f"(RANK={RANK}) Connected to the master node; PID={os.getpid()}")
 
@@ -201,9 +222,9 @@ def main():
         momentum_buffer = state["momentum_buffer"]
         shared_state_dict[f"{name}_momentum_buffer"] = momentum_buffer
 
-    entries = [pccl.TensorInfo.from_torch(tensor, name, allow_content_inequality=False)
+    entries = [TensorInfo.from_torch(tensor, name, allow_content_inequality=False)
                for name, tensor in shared_state_dict.items()]
-    shared_state = pccl.SharedState(entries)
+    shared_state = SharedState(entries)
     log_info(f"(RANK={RANK}) Initialized shared state")
 
     train_it = enumerate(train_loader)
@@ -268,7 +289,8 @@ def main():
             if outer_params is not None:
                 for outer_param, param in zip(outer_params_values, model.parameters()):
                     outer_param.grad = outer_param - param.data
-                    all_reduce_with_retry(communicator, outer_param.grad, pccl.ReduceOp.AVG, it)
+
+                all_reduce_multiple_with_retry(communicator, [outer_param.grad for outer_param in outer_params_values], ReduceOp.AVG, it)
 
             outer_optimizer.step()
             outer_optimizer.zero_grad(set_to_none=False)

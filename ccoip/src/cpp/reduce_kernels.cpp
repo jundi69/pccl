@@ -113,14 +113,14 @@ private:
     template<typename D, typename S>
     FORCE_INLINE static void apply_NoQuant(D *RESTRICT dst, const S *RESTRICT src, const size_t count) {
         for (size_t i = 0; i < count; ++i) {
-            dst[i] += src[i];
+            dst[i] *= src[i];
         }
     }
 
     template<typename D, typename S>
     FORCE_INLINE static void apply_MinMaxQuant(D *RESTRICT dst, const S *RESTRICT src, const size_t count, D min_val, D max_val) {
         for (size_t i = 0; i < count; ++i) {
-            dst[i] += ccoip::internal::quantize::deQuantizeMinMaxScalar(src[i], min_val, max_val);
+            dst[i] *= ccoip::internal::quantize::deQuantizeMinMaxScalar(src[i], min_val, max_val);
         }
     }
 
@@ -166,6 +166,7 @@ public:
             apply_NoQuant<D, S, UpT>(dst, src, count);
         } else if constexpr (quant_algo == ccoip::ccoipQuantizationMinMax) {
             DeQuantizationMetaDataInternal<D> meta_data_internal = DeQuantizationMetaDataInternal<D>::From(meta_data);
+            apply_MinMaxQuant<D, S, UpT>(dst, src, count, meta_data_internal.min_value, meta_data_internal.max_value);
         }
     }
 };
@@ -391,8 +392,9 @@ void ccoip::internal::reduce::performReduction(const std::span<std::byte> &dst,
 
 template<typename T>
 FORCE_INLINE static void performAvgFinalization(T *dst, const size_t count, const size_t world_size) {
+    const T value = static_cast<T>(world_size);
     for (size_t i = 0; i < count; ++i) {
-        dst[i] = dst[i] / static_cast<T>(world_size);
+        dst[i] = dst[i] / value;
     }
 }
 

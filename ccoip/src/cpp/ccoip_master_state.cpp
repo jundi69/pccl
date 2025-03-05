@@ -684,7 +684,7 @@ bool ccoip::CCoIPMasterState::transitionToCollectiveCommsCompletePhase(const uin
             info.connection_state = IDLE;
         }
     }
-    collective_comms_op_abort_states[peer_group].clear();
+    collective_comms_op_abort_states[peer_group].erase(tag);
     return true;
 }
 

@@ -123,6 +123,8 @@ namespace {
                 return {false, false};
             }
             constexpr size_t ltv_header = sizeof(uint64_t) + sizeof(ccoip::packetId_t);
+
+            // TODO: FIX THAT trackCollectiveComsTxBytes is called so often. We can batch this because it does lock onto a mutex briefly.
             client_state.trackCollectiveComsTxBytes(tag, ltv_header + packet.serializedSize());
         }
 
