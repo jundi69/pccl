@@ -408,7 +408,7 @@ def main():
                 if local_iter_num >= 5:  # let training loop warm up
                     mfu = raw_model.estimate_mfu(config["batch_size"] * config["gradient_accumulation_steps"], dt)
                     running_mfu = mfu if running_mfu < 0 else 0.9 * running_mfu + 0.1 * mfu
-                print(f"iter {iter_num}: loss {lossf:.4f}, time {dt * 1000:.2f}ms, mfu {running_mfu * 100:.2f}% (RTX 4090 165 TFLOPS BF16/F32 acc.)")
+                print(f"iter {iter_num}: loss {lossf:.4f}, time {dt * 1000:.2f}ms, mfu {running_mfu * 100:.2f}%")
 
             iter_num += 1
             local_iter_num += 1
