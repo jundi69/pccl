@@ -54,9 +54,7 @@ struct Set {
 private:
     template<typename D, typename S>
     FORCE_INLINE static void apply_NoQuant(D *RESTRICT dst, const S *RESTRICT src, const size_t count) {
-        for (size_t i = 0; i < count; ++i) {
-            dst[i] = src[i];
-        }
+        std::memcpy(dst, src, count * sizeof(D));
     }
 
     template<typename D, typename S>

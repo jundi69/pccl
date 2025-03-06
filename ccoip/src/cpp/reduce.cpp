@@ -211,6 +211,8 @@ namespace {
                                              op,
                                              received_meta_data);
                         }
+                    } else {
+                        std::this_thread::yield();
                     }
                 } else {
                     return {false, false};
@@ -376,6 +378,8 @@ namespace {
                                              ccoip::ccoipOpSet, // = copy
                                              received_meta_data);
                         }
+                    } else {
+                        std::this_thread::yield();
                     }
                 } else {
                     return {false, false};

@@ -67,7 +67,7 @@ int main() {
     std::vector<float *> all_weights{};
     std::vector<float *> all_gradients{};
 
-    constexpr size_t num_weights = 8;
+    constexpr size_t num_weights = 12;
 
     constexpr size_t n_elements = 1024 * 1024 * 256;
 
@@ -98,6 +98,7 @@ int main() {
             continue;
         }
 
+        std::cout << "Starting all reduces...";
         // NOTE: THIS IS NOT A SAFE PATTERN FOR RECOVERY, WE JUST DO THIS FOR EASY OF TESTING
         // WHETHER ALL REDUCES CAN RUN CONCURRENTLY AT ALL
         std::vector<pcclAsyncReduceOp_t> reduce_descriptors{};

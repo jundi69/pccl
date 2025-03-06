@@ -9,6 +9,12 @@
 #include <threadpark.h>
 #include "tinysockets.hpp"
 
+#ifndef _MSC_VER
+#define RESTRICT __restrict__
+#else
+#define RESTRICT __restrict
+#endif
+
 static bool configure_socket_fd(const int socket_fd) {
     constexpr int opt = 1;
 
