@@ -500,7 +500,7 @@ def main():
 
         # 4) Evaluate / checkpoint if needed
         #    (We do this before local steps, so it sees the "current" global model.)
-        if iter_num % config["eval_interval"] == 0 and master_process:
+        if iter_num % (config["eval_interval"] // config["inner_steps"]) == 0 and master_process:
             with profiler.session("estimate_loss"):
                 losses = estimate_loss(raw_model, ctx, config,
                                        get_batch, device_type, device)
