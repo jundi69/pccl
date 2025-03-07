@@ -50,6 +50,9 @@ def all_reduce_multiple_with_retry(communicator: Communicator,
     """
     world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
 
+    total_tx = 0
+    total_rx = 0
+
     def launch_all_reduce(x: torch.Tensor, tag: int):
         op_desc = ReduceOperandDescriptor(
             datatype=DataType.FLOAT,
@@ -123,6 +126,10 @@ def all_reduce_multiple_with_retry(communicator: Communicator,
             # success for this handle
             handles[tensor_index] = None
             done_handles.add(tensor_index)
+
+            total_tx += info.tx_bytes
+            total_rx += info.rx_bytes
+
             in_flight -= 1
 
         if all_done:
@@ -135,7 +142,7 @@ def all_reduce_multiple_with_retry(communicator: Communicator,
                 h.wait()
         return False
 
-    return True
+    return True, total_tx, total_rx
 
 
 def get_batch(split, config, device_type, device):
@@ -215,6 +222,7 @@ def get_lr(it, config):
 
 EXPORT_PROFILER_VIDEO = False
 
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -247,15 +255,14 @@ def main():
         device = f'cuda:{ddp_local_rank}'
         torch.cuda.set_device(device)
         master_process = (ddp_rank == 0)
-        seed_offset = ddp_rank
         # scale down gradient_accumulation_steps if you wish (not used in DiLoCo)
         gas = config["gradient_accumulation_steps"]
         if gas % ddp_world_size != 0:
-            raise ValueError("gradient_accumulation_steps must be divisible by WORLD_SIZE in the old logic. For DiLoCo, it's irrelevant.")
+            raise ValueError(
+                "gradient_accumulation_steps must be divisible by WORLD_SIZE in the old logic. For DiLoCo, it's irrelevant.")
         config["gradient_accumulation_steps"] = gas // ddp_world_size
     else:
         master_process = config["is_master_process"]
-        seed_offset = 0
         ddp_world_size = 1
         device = config["device"]
 
@@ -269,7 +276,7 @@ def main():
     # -------------------------------------------------------------------------
     if master_process:
         os.makedirs(config["out_dir"], exist_ok=True)
-    torch.manual_seed(1337 + seed_offset)
+
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
 
@@ -382,18 +389,18 @@ def main():
     raw_model = model.module if ddp else model
 
     # Outer parameters / outer optimizer
-    outer_params_dict = {
-        name: torch.nn.Parameter(p.detach().clone())
-        for (name, p) in raw_model.named_parameters()
-    }
-    outer_params_list = list(outer_params_dict.values())
+    outer_params_dict = {}
+    for name, local_p in raw_model.named_parameters():
+        outer_params_dict[name] = torch.nn.Parameter(local_p.detach().cpu())
+
+    outer_params_list = []
+    for name, local_p in raw_model.named_parameters():
+        outer_params_list.append(outer_params_dict[name])
 
     # Let's use SGD w/ momentum for aggregator
     outer_optimizer = optim.SGD(
         outer_params_list,
-        lr=config["outer_learning_rate"],
-        momentum=0.9,
-        nesterov=True
+        lr=config["outer_learning_rate"]
     )
     # do a dummy step to initialize outer optimizer state
     for op in outer_params_list:
@@ -411,21 +418,16 @@ def main():
     #   - The "outer_params" themselves
     #   - The outer optimizer state (e.g. momentum buffers)
     shared_state_dict = {}
-    for name, outer_p in outer_params_dict.items():
-        shared_state_dict[name] = outer_p
+    for name, param in model.named_parameters():
+        shared_state_dict[name] = param
 
     # Outer optimizer momentum buffers in shared state
     for name, outer_p in outer_params_dict.items():
         # momentum_buffer is allocated after the first step
         state = outer_optimizer.state[outer_p]
-        if "momentum_buffer" not in state:
-            # in case it didn't exist, do a step to force creation
-            pass
         momentum_buf = state.get("momentum_buffer", None)
-        if momentum_buf is None:
-            momentum_buf = torch.zeros_like(outer_p)
-            state["momentum_buffer"] = momentum_buf
-        shared_state_dict[f"{name}_momentum_buffer"] = momentum_buf
+        if momentum_buf is not None:
+            shared_state_dict[f"{name}_momentum_buffer"] = momentum_buf
 
     entries = [
         TensorInfo.from_torch(tensor, name, allow_content_inequality=False)
@@ -487,11 +489,18 @@ def main():
         # 3) Sync shared state => ensures we have the same aggregator (outer) parameters
         with profiler.session("pccl::sync_shared_state"):
             sync_info = communicator.sync_shared_state(shared_state)
+            print(f"sync_info tx_bytes: {sync_info.tx_bytes}, rx_bytes: {sync_info.rx_bytes}")
             iter_num = shared_state.revision
             num_syncs += 1
             if num_syncs > 1:
                 assert sync_info.rx_bytes == 0, "Shared state drifted unexpectedly in peers!"
 
+            # initialize outer state on first sync
+            if num_syncs == 1:
+                print("Initializing outer state...")
+                with torch.no_grad():
+                    for outer_param, inner_param in zip(outer_params_list, model.parameters()):
+                        outer_param.copy_(inner_param.data)
 
         # Set learning rate for both inner and outer optimizers
         lr = get_lr(iter_num, config)
@@ -564,48 +573,33 @@ def main():
                     })
                     pass
 
-        # 6) Outer step: compute param differences => all-reduce => aggregator => copy back
         with profiler.session("outer_step"):
-            # (a) param differences
-            param_diffs = []
-            param_diffs_cpu = []
-            for (name, local_p), (oname, outer_p) in zip(raw_model.named_parameters(),
-                                                         outer_params_dict.items()):
-                # difference is outer_p - local_p
-                # We'll store it in outer_p.grad
-                outer_p.grad = outer_p.detach() - local_p.detach()
-                cpu_grad = outer_p.grad.cpu()
-
-                param_diffs.append((outer_p.grad, cpu_grad))
-                param_diffs_cpu.append(cpu_grad)
-
+            outer_grads = []
+            for (local_p, outer_p) in zip(raw_model.parameters(), outer_params_list):
+                outer_p.grad = outer_p - local_p.data.to('cpu')
+                outer_grads.append(outer_p.grad)
 
             with profiler.session("all_reduce_multiple_with_retry"):
                 start_time = time.time()
 
                 all_reduce_success = all_reduce_multiple_with_retry(
                     communicator,
-                    param_diffs_cpu,
+                    outer_grads,
                     ReduceOp.AVG
                 )
-                for outer_p_grad, outer_p_grad_cpu in param_diffs:
-                    outer_p_grad.copy_(outer_p_grad_cpu, non_blocking=True)
 
                 end_time = time.time()
                 print(f"All-Reduce took {end_time - start_time} seconds")
                 if not all_reduce_success:
                     print("All peers left except me... continuing alone.")
-                    # We'll still do local steps, but aggregator is effectively us alone
 
-            # (c) Outer optimizer updates aggregator (outer) parameters
             outer_optimizer.step()
-            outer_optimizer.zero_grad(set_to_none=False)
+            outer_optimizer.zero_grad()
 
             # (d) Copy aggregator result into local model
             with torch.no_grad():
-                for (name, local_p), (oname, outer_p) in zip(raw_model.named_parameters(),
-                                                             outer_params_dict.items()):
-                    local_p.copy_(outer_p)
+                for (local_p, outer_p) in zip(raw_model.parameters(), outer_params_list):
+                    local_p.copy_(outer_p, non_blocking=True)
 
         # 7) Some logging / housekeeping
         t1 = time.time()
@@ -619,7 +613,8 @@ def main():
         running_mfu = mfu if running_mfu < 0 else 0.9 * running_mfu + 0.1 * mfu
 
         if iter_num % config["log_interval"] == 0 and master_process:
-            print(f"iter {iter_num}: time {dt * 1000:.2f}ms, local loss {loss.item():.4f}, mfu {running_mfu*100:.2f}%")
+            print(
+                f"iter {iter_num}: time {dt * 1000:.2f}ms, local loss {loss.item():.4f}, mfu {running_mfu * 100:.2f}%")
 
         iter_num += 1
         shared_state.revision = iter_num  # keep revision in sync
