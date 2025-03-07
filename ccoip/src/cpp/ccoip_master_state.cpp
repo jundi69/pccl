@@ -968,7 +968,7 @@ ccoip::CCoIPMasterState::isNewRevisionLegal(const ccoip_uuid_t &peer_uuid, const
         } else if (revision > next_shared_state_revision) {
             status = REVISION_INCREMENT_VIOLATION;
         }
-    } else {
+    } else if (revision > 0) {
         // We allow arbitrary values when the next expected state revision is zero; This is needed for resuming
         this->next_shared_state_revision[peer_group] = revision;
     }
