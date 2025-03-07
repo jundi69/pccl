@@ -1546,8 +1546,9 @@ TEST(SharedStateDistribution, TestOneIncrementRuleViolationSimple) {
     EXPECT_TRUE(master.join());
 };
 
-// Calling the first ever sync shared state with revision 1 also violates the one-increment rule
-TEST(SharedStateDistribution, TestOneIncrementRuleViolationFirstStepRev1) {
+// Calling the first ever sync shared state with revision 13 does not violate the one-increment rule because
+// we allow "initialization" for logical resume
+TEST(SharedStateDistribution, TestOneIncrementRuleViolationInitialization) {
     GUARD_PORT(CCOIP_PROTOCOL_PORT_MASTER);
 
     ccoip::CCoIPMaster master({
@@ -1591,15 +1592,14 @@ TEST(SharedStateDistribution, TestOneIncrementRuleViolationFirstStepRev1) {
 
         // Update value
         std::fill_n(value1.get(), value_size, static_cast<uint8_t>(42));
-        shared_state.revision = 1;
+        shared_state.revision = 13;
 
         ccoip_shared_state_sync_info_t info{};
-        EXPECT_FALSE(client1.syncSharedState(shared_state, info));
+        EXPECT_TRUE(client1.syncSharedState(shared_state, info));
     });
 
     std::this_thread::sleep_for(std::chrono::seconds(1));
 
-    // Client 2 does not violate the one-increment rule by starting at revision 0
     std::thread client2_main_thread([&client2, &value2, value_size] {
         ccoip_shared_state_t shared_state{};
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
@@ -1610,11 +1610,15 @@ TEST(SharedStateDistribution, TestOneIncrementRuleViolationFirstStepRev1) {
             .data_size = value_size,
             .allow_content_inequality = false
         });
-        shared_state.revision = 0; // Client 2 does not update revision
+        shared_state.revision = 0; // Client 2 should be updated to revision 13
 
         const std::unique_ptr<uint8_t[]> value1_inferred(new uint8_t[value_size]);
         ccoip_shared_state_sync_info_t info{};
         EXPECT_TRUE(client2.syncSharedState(shared_state, info)); // this one should succeed because it uses revision 0
+
+        EXPECT_EQ(info.tx_bytes, 0);
+        EXPECT_EQ(info.rx_bytes, value_size);
+        EXPECT_EQ(shared_state.revision, 13);
     });
 
     // Wait for both clients to finish

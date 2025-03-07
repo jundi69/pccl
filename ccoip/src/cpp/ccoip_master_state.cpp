@@ -32,14 +32,13 @@ bool ccoip::CCoIPMasterState::registerClient(const ccoip_socket_address_t &clien
                                              const CCoIPClientVariablePorts &variable_ports,
                                              const uint32_t peer_group,
                                              const ccoip_uuid_t uuid) {
-    const bool is_local = isLocalAddress(client_address);
-
     // If it is a local address, only allow it to join if only local clients have joined.
     // If only local clients have joined, do not allow any non-local clients to join.
     // This is crucial because the clients would have to talk to the peers through a different IP
     // other than 127.0.0.1 because they would just hit themselves.
     // If the master cannot tell the real IP of the client, we cannot reliably inform clients how to reach each other.
     {
+        const bool is_local = isLocalAddress(client_address);
         bool all_existing_local = true;
         for (const auto &[_, client_info]: client_info) {
             if (!isLocalAddress(client_info.socket_address)) {
@@ -950,6 +949,7 @@ std::unordered_set<ccoip_uuid_t> ccoip::CCoIPMasterState::getCurrentlyAcceptedPe
     return current_accepted_peers;
 }
 
+
 ccoip::CCoIPMasterState::SharedStateMismatchStatus
 ccoip::CCoIPMasterState::isNewRevisionLegal(const ccoip_uuid_t &peer_uuid, const uint64_t revision) {
     SharedStateMismatchStatus status = SUCCESSFUL_MATCH;
@@ -960,12 +960,19 @@ ccoip::CCoIPMasterState::isNewRevisionLegal(const ccoip_uuid_t &peer_uuid, const
         status = KEY_SET_MISMATCH;
     }
     const uint32_t peer_group = info_it->second.peer_group;
-    if (const uint64_t next_shared_state_revision = this->next_shared_state_revision[peer_group];
-        revision < next_shared_state_revision) {
-        status = REVISION_OUTDATED;
-    } else if (revision > next_shared_state_revision) {
-        status = REVISION_INCREMENT_VIOLATION;
+    const uint64_t next_shared_state_revision = this->next_shared_state_revision[peer_group];
+
+    if (next_shared_state_revision != 0) {
+        if (revision < next_shared_state_revision) {
+            status = REVISION_OUTDATED;
+        } else if (revision > next_shared_state_revision) {
+            status = REVISION_INCREMENT_VIOLATION;
+        }
+    } else {
+        // We allow arbitrary values when the next expected state revision is zero; This is needed for resuming
+        this->next_shared_state_revision[peer_group] = revision;
     }
+
     shared_state_statuses[peer_group][peer_uuid] = status;
     return status;
 }
