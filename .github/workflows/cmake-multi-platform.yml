@@ -91,6 +91,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
           submodules: recursive
 
       - name: Set reusable strings (Unix)
@@ -100,7 +101,7 @@ jobs:
         run: |
           build_output_dir="${{ github.workspace }}/build"
           echo "build-output-dir=$build_output_dir" >> "$GITHUB_OUTPUT"
-      
+
       - name: Set reusable strings (Windows)
         id: strings-windows
         if: runner.os == 'Windows'
@@ -108,7 +109,7 @@ jobs:
         run: |
           $build_output_dir = "${{ github.workspace }}/build"
           echo "build-output-dir=$build_output_dir" >> $env:GITHUB_OUTPUT
-      
+
       - name: Configure CMake (Linux)
         if: runner.os == 'Linux'
         run: >
@@ -132,8 +133,8 @@ jobs:
           "-DCMAKE_BUILD_TYPE=Debug" # Release builds on macOS are prone to overzealous loads, causing ASAN false positives
           "-DPCCL_BUILD_CUDA_SUPPORT=${{ matrix.pccl_build_cuda_support }}"
           -S "${{ github.workspace }}"
-          
-      
+
+
       - name: Configure CMake (Windows)
         if: runner.os == 'Windows'
         shell: cmd
@@ -166,7 +167,7 @@ jobs:
           set CMAKE_GENERATOR=${{ matrix.generator }}
           set PCCL_BUILD_CUDA_SUPPORT=${{ matrix.pccl_build_cuda_support }}
           cd ${{ github.workspace }}/python/framework && pip3 wheel --verbose -w dist .
-      
+
       - name: Compile Python wheel (Unix)
         if: runner.os != 'Windows'
         run: cd ${{ github.workspace }}/python/framework && CMAKE_GENERATOR="${{ matrix.generator }}" PCCL_BUILD_CUDA_SUPPORT=${{ matrix.pccl_build_cuda_support }} pip3 wheel --verbose -w dist .
@@ -174,7 +175,7 @@ jobs:
       - name: Create Python virtual environment (Unix)
         if: ${{ runner.os != 'Windows' && matrix.is_host_arch }}
         run: python3 -m venv ${{ github.workspace }}/venv
-      
+
       - name: Create Python virtual environment (Windows)
         if: ${{ runner.os == 'Windows' && matrix.is_host_arch }}
         run: python -m venv ${{ github.workspace }}/venv
@@ -189,7 +190,7 @@ jobs:
         run: |
           echo "${{ github.workspace }}\venv\Scripts" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-      
+
       - name: Install wheel (Windows)
         if: ${{ runner.os == 'Windows' && matrix.is_host_arch }}
         shell: pwsh
