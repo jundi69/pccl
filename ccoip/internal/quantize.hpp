@@ -9,10 +9,23 @@
 #include <network_order_utils.hpp>
 
 namespace ccoip::internal::quantize {
+
+    enum class DeQuantizationMetaType {
+        MIN_MAX,
+        ZERO_POINT_SCALE
+    };
     /// Contains meta-data needed for de-quantization.
     struct DeQuantizationMetaData {
+        /// Type of metadata
+        /// Determines whether min_value & max_value or zero_point & scale are used.
+        DeQuantizationMetaType meta_type;
+
         /// Defines the data type for how to interpret @code min_value@endcode and @code max_value@endcode.
-        ccoip_data_type_t data_type;
+        ccoip_data_type_t min_max_data_type;
+
+        /// Defines the data type for how to interpret @code zero_point@endcode and @code scale@endcode.
+        ccoip_data_type_t zero_point_type;
+        ccoip_data_type_t scale_type;
 
         /// Minimum value summary statistic
         std::vector<uint8_t> min_value;
@@ -20,14 +33,22 @@ namespace ccoip::internal::quantize {
         /// Maximum value summary statistic
         std::vector<uint8_t> max_value;
 
+        /// Zero point
+        std::vector<uint8_t> zero_point;
+
+        /// Scale factor
+        std::vector<uint8_t> scale;
+
         template<typename T, typename = std::enable_if_t<std::is_arithmetic_v<T>>>
         [[nodiscard]]
-        static DeQuantizationMetaData Make(T min_value, T max_value) {
+        static DeQuantizationMetaData MakeMinMax(T min_value, T max_value) {
             using namespace tinysockets;
             constexpr ccoip_data_type_t data_type = ccoip_data_type_from_type<T>();
 
             DeQuantizationMetaData meta_data{};
-            meta_data.data_type = data_type;
+            meta_data.meta_type = DeQuantizationMetaType::MIN_MAX;
+            meta_data.min_max_data_type = data_type;
+
             const size_t data_type_size = ccoip_data_type_size(data_type);
             assert(data_type_size == sizeof(T));
 
@@ -44,6 +65,44 @@ namespace ccoip::internal::quantize {
 
             std::memcpy(meta_data.min_value.data(), &min_value, data_type_size);
             std::memcpy(meta_data.max_value.data(), &max_value, data_type_size);
+
+            return meta_data;
+        }
+
+        template<typename Z, typename S, typename = std::enable_if_t<std::is_integral_v<Z> && std::is_floating_point_v<S>>>
+        [[nodiscard]]
+        static DeQuantizationMetaData MakeZeroPointScale(Z zero_point, S scale) {
+            using namespace tinysockets;
+            constexpr ccoip_data_type_t zero_point_type = ccoip_data_type_from_type<Z>();
+            constexpr ccoip_data_type_t scale_type = ccoip_data_type_from_type<S>();
+
+            DeQuantizationMetaData meta_data{};
+            meta_data.meta_type = DeQuantizationMetaType::ZERO_POINT_SCALE;
+            meta_data.zero_point_type = zero_point_type;
+            meta_data.scale_type = scale_type;
+
+            const size_t zero_point_type_size = ccoip_data_type_size(zero_point_type);
+            const size_t scale_type_size = ccoip_data_type_size(scale_type);
+            assert(zero_point_type_size == sizeof(Z));
+            assert(scale_type_size == sizeof(S));
+
+            if constexpr (std::is_integral_v<Z>) {
+                // if is integer, convert to network byte order
+                zero_point = network_order_utils::host_to_network(zero_point);
+            }
+
+            if constexpr (std::is_integral_v<S>) {
+                // if is integer, convert to network byte order
+                scale = network_order_utils::host_to_network(scale);
+            }
+
+            // floats and doubles are always in host byte order
+
+            meta_data.zero_point.resize(zero_point_type_size);
+            meta_data.scale.resize(scale_type_size);
+
+            std::memcpy(meta_data.zero_point.data(), &zero_point, zero_point_type_size);
+            std::memcpy(meta_data.scale.data(), &scale, scale_type_size);
 
             return meta_data;
         }

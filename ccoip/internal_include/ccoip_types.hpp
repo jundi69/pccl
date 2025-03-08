@@ -39,6 +39,7 @@ namespace ccoip {
     enum ccoip_quantization_algorithm_t {
         ccoipQuantizationNone = 0,
         ccoipQuantizationMinMax = 1,
+        ccoipQuantizationZeroPointScale = 2,
     };
 
     [[nodiscard]] inline size_t ccoip_data_type_size(const ccoip_data_type_t datatype) {

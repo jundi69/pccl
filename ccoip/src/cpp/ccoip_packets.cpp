@@ -1,5 +1,6 @@
 #include "ccoip_packets.hpp"
 
+#include <pccl_log.hpp>
 #include <random>
 
 size_t ccoip::EmptyPacket::serialized_size = 0;
@@ -33,7 +34,8 @@ bool ccoip::C2MPacketRequestSessionRegistration::deserialize(PacketReadBuffer &b
 }
 
 // C2MPacketRequestEstablishP2PConnections
-ccoip::packetId_t ccoip::C2MPacketRequestEstablishP2PConnections::packet_id = C2M_PACKET_REQUEST_ESTABLISH_P2P_CONNECTIONS;
+ccoip::packetId_t ccoip::C2MPacketRequestEstablishP2PConnections::packet_id =
+        C2M_PACKET_REQUEST_ESTABLISH_P2P_CONNECTIONS;
 
 void ccoip::C2MPacketRequestEstablishP2PConnections::serialize(PacketWriteBuffer &buffer) const {
     buffer.write<boolean>(accept_new_peers);
@@ -57,7 +59,7 @@ ccoip::packetId_t ccoip::C2MPacketP2PConnectionsEstablished::packet_id = C2M_PAC
 void ccoip::C2MPacketP2PConnectionsEstablished::serialize(PacketWriteBuffer &buffer) const {
     buffer.write<boolean>(success);
     buffer.write<uint64_t>(failed_peers.size());
-    for (const auto &[data] : failed_peers) {
+    for (const auto &[data]: failed_peers) {
         buffer.writeFixedArray(data);
     }
 }
@@ -397,16 +399,87 @@ ccoip::packetId_t ccoip::P2PPacketDequantizationMeta::packet_id = P2P_PACKET_DEQ
 
 void ccoip::P2PPacketDequantizationMeta::serialize(PacketWriteBuffer &buffer) const {
     buffer.write<uint64_t>(tag);
-    buffer.write<uint8_t>(static_cast<uint8_t>(dequantization_meta.data_type));
-    buffer.writeVarLenList(dequantization_meta.min_value);
-    buffer.writeVarLenList(dequantization_meta.max_value);
+
+    buffer.write<uint8_t>(static_cast<uint8_t>(dequantization_meta.meta_type));
+    switch (dequantization_meta.meta_type) {
+        case internal::quantize::DeQuantizationMetaType::MIN_MAX: {
+            buffer.write<uint8_t>(static_cast<uint8_t>(dequantization_meta.min_max_data_type));
+            for (const auto &val: dequantization_meta.min_value) {
+                buffer.write<uint8_t>(val);
+            }
+            for (const auto &val: dequantization_meta.max_value) {
+                buffer.write<uint8_t>(val);
+            }
+            break;
+        }
+        case internal::quantize::DeQuantizationMetaType::ZERO_POINT_SCALE: {
+            buffer.write<uint8_t>(static_cast<uint8_t>(dequantization_meta.zero_point_type));
+            for (const auto &val: dequantization_meta.zero_point) {
+                buffer.write<uint8_t>(val);
+            }
+            buffer.write<uint8_t>(static_cast<uint8_t>(dequantization_meta.scale_type));
+            for (const auto &val: dequantization_meta.scale) {
+                buffer.write<uint8_t>(val);
+            }
+            break;
+        }
+        default: {
+            LOG(BUG) << "Unsupported dequantization meta type: " << static_cast<uint8_t>(dequantization_meta.meta_type);
+        }
+    }
 }
 
 bool ccoip::P2PPacketDequantizationMeta::deserialize(PacketReadBuffer &buffer) {
     tag = buffer.read<uint64_t>();
-    dequantization_meta.data_type = static_cast<ccoip_data_type_t>(buffer.read<uint8_t>());
-    dequantization_meta.min_value = buffer.readVarLenList<uint8_t>();
-    dequantization_meta.max_value = buffer.readVarLenList<uint8_t>();
+    const auto meta_type = static_cast<internal::quantize::DeQuantizationMetaType>(buffer.read<uint8_t>());
+    dequantization_meta.meta_type = meta_type;
+    switch (meta_type) {
+        case internal::quantize::DeQuantizationMetaType::MIN_MAX: {
+            const auto data_type = static_cast<ccoip_data_type_t>(buffer.read<uint8_t>());
+            dequantization_meta.min_max_data_type = data_type;
+            const size_t n_bytes = ccoip_data_type_size(data_type);
+
+            // this resize is safe because it is not user controlled
+            // and thus not arbitrarily large
+            dequantization_meta.min_value.resize(n_bytes);
+            dequantization_meta.max_value.resize(n_bytes);
+            for (size_t i = 0; i < n_bytes; i++) {
+                dequantization_meta.min_value[i] = buffer.read<uint8_t>();
+            }
+            for (size_t i = 0; i < n_bytes; i++) {
+                dequantization_meta.max_value[i] = buffer.read<uint8_t>();
+            }
+            break;
+        }
+        case internal::quantize::DeQuantizationMetaType::ZERO_POINT_SCALE: {
+            const auto zero_point_type = static_cast<ccoip_data_type_t>(buffer.read<uint8_t>());
+            dequantization_meta.zero_point_type = zero_point_type;
+            const size_t zero_point_n_bytes = ccoip_data_type_size(zero_point_type);
+
+            // this resize is safe because it is not user controlled
+            // and thus not arbitrarily large
+            dequantization_meta.zero_point.resize(zero_point_n_bytes);
+            for (size_t i = 0; i < zero_point_n_bytes; i++) {
+                dequantization_meta.zero_point[i] = buffer.read<uint8_t>();
+            }
+
+            const auto scale_type = static_cast<ccoip_data_type_t>(buffer.read<uint8_t>());
+            dequantization_meta.scale_type = scale_type;
+            const size_t scale_n_bytes = ccoip_data_type_size(scale_type);
+
+            // this resize is safe because it is not user controlled
+            // and thus not arbitrarily large
+            dequantization_meta.scale.resize(scale_n_bytes);
+            for (size_t i = 0; i < scale_n_bytes; i++) {
+                dequantization_meta.scale[i] = buffer.read<uint8_t>();
+            }
+            break;
+        }
+        default: {
+            LOG(WARN) << "Cannot deserialize unsupported de-quantization meta type: " << static_cast<uint8_t>(meta_type);
+            return false;
+        }
+    }
     return true;
 }
 

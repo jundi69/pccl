@@ -50,11 +50,11 @@ FORCE_INLINE static DeQuantizationMetaData minMaxQuant(O *RESTRICT dst, const I 
         }
     } else {
         for (size_t i = 0; i < count; ++i) {
-            auto relative = static_cast<double>(src[i] - minmax.min);
+            const auto relative = static_cast<double>(src[i] - minmax.min);
             dst[i] = static_cast<O>(relative * static_cast<double>(std::numeric_limits<O>::max()));
         }
     }
-    return DeQuantizationMetaData::Make(minmax.min, minmax.max);
+    return DeQuantizationMetaData::MakeMinMax(minmax.min, minmax.max);
 }
 
 
