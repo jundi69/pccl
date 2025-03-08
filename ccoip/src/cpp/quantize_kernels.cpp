@@ -165,7 +165,7 @@ static constexpr fused_quant_and_dequant_fn_t make_fused_quant_and_dequant_fn(
 
 void ccoip::internal::quantize::performMinMaxQuantizationAndDequantization(const std::span<std::byte> &dst_span,
                                                                            const std::span<const std::byte> &src_bytes,
-                                                                           ccoip_data_type_t quantized_type,
+                                                                           const ccoip_data_type_t quantized_type,
                                                                            const ccoip_data_type_t data_type) {
     static std::unordered_map<DtypeVariant, fused_quant_and_dequant_fn_t> minmax_map = {
             // uint8 input with all floating point accumulation types (with fused de-quantization, hence only floating point dst types)
