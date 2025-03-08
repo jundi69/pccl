@@ -19,7 +19,7 @@ ccoip::internal::quantize::DeQuantizationMetaData ccoip::internal::quantize::per
             return performMinMaxQuantization(dst_span, src_span, quantized_type, data_type);
         }
         case ccoipQuantizationZeroPointScale: {
-            return performZeroPointScaleQuantization(dst_span, src_span, quantized_type, data_type);
+            LOG(BUG) << "Not yet implemented" << std::endl;
         }
         default: {
             LOG(BUG) << "Unsupported quantization algorithm: " << quantization_algorithm;
