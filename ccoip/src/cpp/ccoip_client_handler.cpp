@@ -1235,6 +1235,7 @@ bool ccoip::CCoIPClientHandler::joinAsyncReduce(const uint64_t tag) {
         if (connection_revision == revision_at_collective_begin) {
             if (!requestAndEstablishP2PConnections(false)) {
                 LOG(ERR) << "Failed to request and establish p2p connections after collective comms operation was aborted";
+                return false;
             }
         }
         return false;
