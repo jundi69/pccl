@@ -313,7 +313,6 @@ def main():
         dropout=config["dropout"]
     )
 
-    iter_num = 0
     best_val_loss = 1e9
     init_from = config["init_from"]
     checkpoint = None
@@ -342,8 +341,6 @@ def main():
             if k.startswith(unwanted_prefix):
                 state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
         model.load_state_dict(state_dict)
-
-        iter_num = checkpoint['iter_num']
         best_val_loss = checkpoint['best_val_loss']
 
     elif init_from.startswith('gpt2'):
@@ -374,8 +371,10 @@ def main():
         (config["beta1"], config["beta2"]),
         device_type
     )
+    start_iter_num = 0
     if init_from == 'resume':
         inner_optimizer.load_state_dict(checkpoint['optimizer'])
+        start_iter_num = checkpoint['iter_num']
         del checkpoint  # free memory
 
     if config["compile"]:
@@ -434,6 +433,8 @@ def main():
         for name, tensor in shared_state_dict.items()
     ]
     shared_state = SharedState(entries)
+    shared_state.revision = start_iter_num
+    print("start_iter_num:", start_iter_num)
 
     # If wandb logging is enabled
     if config["wandb_log"] and master_process:
