@@ -39,22 +39,25 @@ bool ccoip::CCoIPMasterState::registerClient(const ccoip_socket_address_t &clien
     // If the master cannot tell the real IP of the client, we cannot reliably inform clients how to reach each other.
     {
         const bool is_local = isLocalAddress(client_address);
-        bool all_existing_local = true;
-        for (const auto &[_, client_info]: client_info) {
-            if (!isLocalAddress(client_info.socket_address)) {
-                all_existing_local = false;
-                break;
+
+        if (!client_info.empty()) {
+            bool all_existing_local = true;
+            for (const auto &[_, client_info]: client_info) {
+                if (!isLocalAddress(client_info.socket_address)) {
+                    all_existing_local = false;
+                    break;
+                }
             }
-        }
-        if (all_existing_local && !is_local) {
-            LOG(WARN) << "Non-Local client " << ccoip_sockaddr_to_str(client_address)
-                    << " cannot join because only local clients have joined";
-            return false;
-        }
-        if (!all_existing_local && is_local) {
-            LOG(WARN) << "Local client " << ccoip_sockaddr_to_str(client_address)
-                    << " cannot join because non-local clients have joined";
-            return false;
+            if (all_existing_local && !is_local) {
+                LOG(WARN) << "Non-Local client " << ccoip_sockaddr_to_str(client_address)
+                        << " cannot join because only local clients have joined";
+                return false;
+            }
+            if (!all_existing_local && is_local) {
+                LOG(WARN) << "Local client " << ccoip_sockaddr_to_str(client_address)
+                        << " cannot join because non-local clients have joined";
+                return false;
+            }
         }
     }
 
