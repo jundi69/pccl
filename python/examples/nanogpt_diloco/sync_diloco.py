@@ -109,6 +109,7 @@ def all_reduce_multiple_with_retry(communicator: Communicator,
             is_success, status, info = handle.wait()
             world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
             if not is_success:
+                handles[tensor_index] = None
                 # Wait for all ongoing ops to finish or fail before retry
                 for j in range(len(tensors)):
                     if j == tensor_index:
@@ -118,8 +119,8 @@ def all_reduce_multiple_with_retry(communicator: Communicator,
                         s_j, _, _ = h_j.wait()
                         if s_j:
                             done_handles.add(j)
+                        in_flight -= 1
                     handles[j] = None
-                handles[tensor_index] = None
                 all_done = False
                 break
 
