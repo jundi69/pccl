@@ -526,6 +526,8 @@ namespace tinysockets {
 
     private:
         // Packet decoding / encoding functions
+        [[nodiscard]] std::optional<size_t> receivePacketLength() const;
+
         [[nodiscard]] bool receivePacketData(std::span<std::uint8_t> &dst) const;
 
         /// Closes the socket.

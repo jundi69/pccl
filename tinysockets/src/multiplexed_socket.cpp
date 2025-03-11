@@ -161,10 +161,8 @@ bool tinysockets::MultiplexedIOSocket::run() {
     if (flags & MODE_RX) {
         recv_thread = std::thread([this] {
             while (running.load(std::memory_order_acquire)) {
-                uint64_t header[2];
-                std::span header_span{reinterpret_cast<uint8_t *>(header), 2 * sizeof(uint64_t)};
-                const auto header_opt = receivePacketData(header_span);
-                if (!header_opt) {
+                const auto length_opt = receivePacketLength();
+                if (!length_opt) {
                     if (running.load(std::memory_order_acquire)) {
                         LOG(ERR) << "Connection was closed; exiting receive loop...";
                         if (!interrupt()) [[unlikely]] {
@@ -175,7 +173,7 @@ bool tinysockets::MultiplexedIOSocket::run() {
                     }
                     break;
                 }
-                size_t length = net_u64_to_host(header[0]);
+                const size_t length = *length_opt;
                 if (length == 0) {
                     LOG(ERR) << "Received packet with length 0; closing connection";
                     if (!interrupt()) [[unlikely]] {
@@ -183,23 +181,6 @@ bool tinysockets::MultiplexedIOSocket::run() {
                     }
                     break;
                 }
-
-                if (length < sizeof(uint64_t)) {
-                    LOG(ERR) << "Packet length for multiplex protocol should at least be 8 bytes; closing connection";
-                    if (!interrupt()) [[unlikely]] {
-                        LOG(ERR) << "Failed to interrupt MultiplexedIOSocket";
-                    }
-                    break;
-                }
-
-                const auto tag = net_u64_to_host(header[1]);
-                if (!internal_state->receive_queues.contains(tag)) {
-                    std::unique_lock guard{internal_state->receive_queues_mutex};
-                    internal_state->receive_queues[tag] =
-                            std::make_unique<::rigtorp::SPSCQueue<ReceiveQueueEntry>>(TXRX_QUEUE_DEPTH);
-                }
-                length -= sizeof(uint64_t);
-
                 auto data_ptr = std::unique_ptr<std::byte[]>(new std::byte[length]);
                 std::span data{reinterpret_cast<uint8_t *>(data_ptr.get()), length};
                 if (!receivePacketData(data)) {
@@ -213,19 +194,28 @@ bool tinysockets::MultiplexedIOSocket::run() {
                     }
                     break;
                 }
+                PacketReadBuffer buffer{data.data(), data.size_bytes()};
+                auto tag = buffer.read<uint64_t>();
+
+                if (!internal_state->receive_queues.contains(tag)) {
+                    std::unique_lock guard{internal_state->receive_queues_mutex};
+                    internal_state->receive_queues[tag] =
+                            std::make_unique<::rigtorp::SPSCQueue<ReceiveQueueEntry>>(TXRX_QUEUE_DEPTH);
+                }
 
                 // add entry to SPMC queue of tag
                 {
                     std::shared_lock guard{internal_state->receive_queues_mutex};
                     const auto &queue = internal_state->receive_queues.at(tag);
                     const auto data_raw_ptr = data_ptr.get();
-                    queue->push(ReceiveQueueEntry{
-                        .tag = tag,
-                        // we just pass this for the sake of ownership
-                        .data = std::move(data_ptr),
-                        .data_span = std::span(data_raw_ptr,
-                                               data.size_bytes())
-                    });
+                    queue->push(ReceiveQueueEntry{.tag = tag,
+
+                                                  // we just pass this for the sake of ownership
+                                                  .data = std::move(data_ptr),
+
+                                                  // don't include the tag in the data span
+                                                  .data_span = std::span(data_raw_ptr + sizeof(uint64_t),
+                                                                         data.size_bytes() - sizeof(uint64_t))});
                 }
             }
         });
@@ -361,6 +351,24 @@ std::pair</* success */ bool, /* aborted */ bool> tinysockets::fullDuplexSendRec
     return {
         /*success*/true, /*aborted*/false
     };
+}
+
+
+std::optional<size_t> tinysockets::MultiplexedIOSocket::receivePacketLength() const {
+    uint64_t length;
+    size_t n_received = 0;
+    do {
+        const ssize_t i = recvvp(socket_fd, &length, sizeof(length), 0);
+        if (const bool running = this->running.load(std::memory_order_acquire); i == -1 || i == 0 || !running) {
+            const std::string error_message = std::strerror(errno);
+            if (running) {
+                LOG(ERR) << "[MultiplexedIOSocket] Failed to receive packet length with error: " << error_message;
+            }
+            return std::nullopt;
+        }
+        n_received += i;
+    } while (n_received < sizeof(length));
+    return net_u64_to_host(length);
 }
 
 
