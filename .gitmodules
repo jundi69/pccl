@@ -14,7 +14,10 @@
 	path = third_party/threadpark
 	url = https://github.com/PrimeIntellect-ai/threadpark.git
 
-
 [submodule "third_party/quantization-kernels"]
 	path = third_party/quantization-kernels
 	url = https://github.com/PrimeIntellect-ai/quantization-kernels
+
+[submodule "third_party/threadpool"]
+	path = third_party/threadpool
+	url = https://github.com/PrimeIntellect-ai/threadpool

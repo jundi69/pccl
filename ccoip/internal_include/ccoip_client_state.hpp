@@ -12,6 +12,17 @@
 #include <unordered_set>
 #include <unordered_map>
 #include <thread>
+#include <pithreadpool/threadpool.hpp>
+
+#define DEFAULT_MAX_CONCURRENT_COLLECTIVE_OPS 16
+
+inline int GetMaxConcurrentCollectiveOps() {
+    const char *logLevel = getenv("PCCL_MAX_CONCURRENT_COLLECTIVE_OPS");
+    if (logLevel == nullptr) {
+        return DEFAULT_MAX_CONCURRENT_COLLECTIVE_OPS;
+    }
+    return std::stoi(logLevel);
+}
 
 namespace ccoip {
     class CCoIPClientState {
@@ -67,14 +78,17 @@ namespace ccoip {
         /// Tags of all running collective communications operations
         std::unordered_set<uint64_t> running_collective_coms_ops_tags{};
 
-        /// Maps tags of running collective operation tasks to their respective threads
-        std::unordered_map<uint64_t, std::thread> running_reduce_tasks{};
+        /// Threadpool for currently running collective communications operations
+        pi::threadpool::ThreadPool collective_coms_threadpool{GetMaxConcurrentCollectiveOps(), 64};
+
+        /// Maps tags of running collective operation tasks to their respective futures
+        std::unordered_map<uint64_t, pi::threadpool::TaskFuture> running_reduce_tasks{};
 
         /// Maps tags of running collective operation tasks to their respective failure states;
         /// These failure states are used to signal the completion of the collective operation task
         /// and indicate whether the operation was successful or not.
         /// 1=success, 0=failure, 2=not completed
-        std::unordered_map<uint64_t, std::atomic<uint32_t> > running_reduce_tasks_failure_states{};
+        std::unordered_map<uint64_t, std::atomic<uint32_t>> running_reduce_tasks_failure_states{};
         std::shared_mutex running_reduce_tasks_failure_states_mutex{};
 
         // TODO: THIS IS SUBJECT TO CHANGE AND A TEMPORARY HACK!!
@@ -82,6 +96,8 @@ namespace ccoip {
         std::vector<ccoip_uuid_t> ring_order;
 
     public:
+        CCoIPClientState();
+
         ~CCoIPClientState();
 
         /// Called to register a peer with the client state

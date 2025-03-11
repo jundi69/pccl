@@ -3,6 +3,10 @@
 #include <ccoip_inet_utils.hpp>
 #include <pccl_log.hpp>
 
+ccoip::CCoIPClientState::CCoIPClientState() {
+    collective_coms_threadpool.startup();
+}
+
 ccoip::CCoIPClientState::~CCoIPClientState() {
     for (const std::unordered_set<uint64_t> remaining_tags = running_collective_coms_ops_tags;
          const auto &tag: remaining_tags) {
@@ -10,6 +14,7 @@ ccoip::CCoIPClientState::~CCoIPClientState() {
             LOG(ERR) << "Failed to join collective comms op with tag " << tag << " during client state destruction";
         }
     }
+    collective_coms_threadpool.shutdown();
 }
 
 bool ccoip::CCoIPClientState::registerPeer(const ccoip_socket_address_t &address, const ccoip_uuid_t uuid) {
@@ -74,7 +79,6 @@ bool ccoip::CCoIPClientState::endCollectiveComsOp(const uint64_t tag) {
     if (const auto n = running_reduce_tasks.erase(tag); n == 0) {
         return false;
     }
-
     return true;
 }
 
@@ -92,7 +96,7 @@ bool ccoip::CCoIPClientState::launchAsyncCollectiveOp(const uint64_t tag,
         running_reduce_tasks_failure_states[tag].store(2, std::memory_order_relaxed); // not completed
     }
 
-    running_reduce_tasks[tag] = std::move(std::thread([this, tag, task = std::move(task)] {
+    auto op_future = collective_coms_threadpool.scheduleTask([this, tag, task = std::move(task)] {
         std::promise<bool> promise{};
         task(promise);
         std::future<bool> future = promise.get_future();
@@ -102,7 +106,8 @@ bool ccoip::CCoIPClientState::launchAsyncCollectiveOp(const uint64_t tag,
             std::unique_lock lock(running_reduce_tasks_failure_states_mutex);
             running_reduce_tasks_failure_states[tag].store(future.get() ? 1 : 0, std::memory_order_relaxed);
         }
-    }));
+    });
+    running_reduce_tasks.emplace(tag, std::move(op_future));
     return true;
 }
 
