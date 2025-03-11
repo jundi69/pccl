@@ -74,6 +74,7 @@ namespace ccoip {
         /// Accessible by @code getCollectiveComsWorldSize(uint32_t tag)@endcode
         /// Cleared by @code resetCollectiveComsRxBytes(uint32_t tag)@endcode
         std::unordered_map<uint64_t, uint32_t> running_collective_coms_ops_world_size{};
+        std::shared_mutex running_collective_coms_ops_world_size_mutex{};
 
         /// Tags of all running collective communications operations
         std::unordered_set<uint64_t> running_collective_coms_ops_tags{};

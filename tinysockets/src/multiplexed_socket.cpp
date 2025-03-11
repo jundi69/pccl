@@ -191,7 +191,7 @@ bool tinysockets::MultiplexedIOSocket::run() {
                     }
                     break;
                 }
-                auto data_ptr = std::make_unique<std::byte[]>(length);
+                auto data_ptr = std::unique_ptr<std::byte[]>(new std::byte[length]);
                 std::span data{reinterpret_cast<uint8_t *>(data_ptr.get()), length};
                 if (!receivePacketData(data)) {
                     if (running.load(std::memory_order_acquire)) {
@@ -322,7 +322,7 @@ bool tinysockets::MultiplexedIOSocket::sendBytes(const uint64_t tag, const std::
     }
     auto *entry = new SendQueueEntry();
     entry->tag = tag;
-    entry->data = std::make_unique<uint8_t[]>(data.size());
+    entry->data = std::unique_ptr<uint8_t[]>(new uint8_t[data.size()]);
     entry->size_bytes = data.size_bytes();
     std::memcpy(entry->data.get(), data.data(), data.size());
 

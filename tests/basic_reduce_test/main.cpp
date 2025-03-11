@@ -19,27 +19,6 @@ void panic(const int exit_code) { exit(exit_code); }
         }                                                                                                              \
     }
 
-#if defined(_MSC_VER)
-// MSVC: Turn on global optimization + favor speed
-#  define FORCE_OPTIMIZE_BEGIN __pragma(optimize("gt", on))
-#  define FORCE_OPTIMIZE_END   __pragma(optimize("", on))
-
-#elif defined(__GNUC__) || defined(__clang__)
-// GCC / Clang: Push current options, then force -O3
-#  define FORCE_OPTIMIZE_BEGIN \
-_Pragma("GCC push_options") \
-_Pragma("GCC optimize(\"O3\")")
-
-#  define FORCE_OPTIMIZE_END \
-_Pragma("GCC pop_options")
-
-#else
-// Fallback: do nothing
-#  define FORCE_OPTIMIZE_BEGIN
-#  define FORCE_OPTIMIZE_END
-#endif
-
-FORCE_OPTIMIZE_BEGIN
 void fill_uniform(float *data, const size_t count) {
     std::mt19937 gen(42);
     std::uniform_real_distribution dis(0.0f, 1.0f);
@@ -47,7 +26,6 @@ void fill_uniform(float *data, const size_t count) {
         data[i] = dis(gen);
     }
 }
-FORCE_OPTIMIZE_END
 
 #define MAX_STEPS 1000
 
@@ -88,7 +66,7 @@ int main() {
 
     size_t i = 0;
 
-    while (shared_state.revision < 10000) {
+    while (true) {
         i++;
         if (i > 1) {
             PCCL_CHECK(pcclUpdateTopology(communicator));

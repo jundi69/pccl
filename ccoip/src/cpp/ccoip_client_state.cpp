@@ -89,8 +89,14 @@ bool ccoip::CCoIPClientState::launchAsyncCollectiveOp(const uint64_t tag,
     }
     resetCollectiveComsTxBytes(tag);
     resetCollectiveComsRxBytes(tag);
-    running_collective_coms_ops_world_size[tag] = getWorldSize(); // retain applicable world size at the time of launch
 
+    // retain applicable world size at the time of launch
+    {
+        std::unique_lock lock(running_collective_coms_ops_world_size_mutex);
+        running_collective_coms_ops_world_size[tag] = getWorldSize();
+    }
+
+    // set initial failure state to not completed
     {
         std::unique_lock lock(running_reduce_tasks_failure_states_mutex);
         running_reduce_tasks_failure_states[tag].store(2, std::memory_order_relaxed); // not completed
