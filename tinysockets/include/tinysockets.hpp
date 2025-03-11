@@ -489,6 +489,7 @@ namespace tinysockets {
 
         [[nodiscard]] bool sendBytes(uint64_t tag, const std::span<const std::byte> &data) const;
 
+        /// @warning the user is responsible for ensuring that no two threads call receiveBytesInplace with the same tag
         [[nodiscard]] std::optional<ssize_t> receiveBytesInplace(uint64_t tag, const std::span<std::byte> &data) const;
 
         [[nodiscard]] std::optional<std::unique_ptr<std::byte[]>> receiveBytes(
@@ -525,8 +526,6 @@ namespace tinysockets {
 
     private:
         // Packet decoding / encoding functions
-        [[nodiscard]] std::optional<size_t> receivePacketLength() const;
-
         [[nodiscard]] bool receivePacketData(std::span<std::uint8_t> &dst) const;
 
         /// Closes the socket.
@@ -569,6 +568,28 @@ namespace tinysockets {
                                        complete_packet.size()));
         }
     };
+
+    /**
+     *
+     * @param tx_socket
+     * @param rx_socket
+     * @param tag
+     * @param tx_span
+     * @param recv_buffer_span
+     * @param chunk_size
+     * @param read_callback invoked when data is received from the rx_socket
+     * @param no_event_callback returns true or false; true means success, false means the operation should be aborted and fullDuplexSendReceive should return.
+     * bool no_event is true if no event (read/write) occurred during a loop iteration.
+     * The callback will also be invoked at least once with no_event = false when another event occurs the next time.
+     * If this callback returns false, fullDuplexSendReceive will return false for the aborted state.
+     * @returns a state pair (success, aborted)
+     */
+    std::pair</* success */ bool, /* aborted */ bool> fullDuplexSendReceive(const MultiplexedIOSocket &tx_socket, const MultiplexedIOSocket &rx_socket, uint64_t tag,
+                               const std::span<const std::byte> &tx_span, const std::span<std::byte> &recv_buffer_span,
+                               size_t chunk_size,
+                               const std::function<void(size_t n_read, size_t total_bytes_recvd)> &read_callback,
+                               const std::function<void(size_t n_sent, size_t total_bytes_sent)> &send_callback,
+                               const std::function<bool(bool no_event)> &no_event_callback);
 
     namespace poll {
         enum PollEvent {
