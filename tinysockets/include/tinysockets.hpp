@@ -467,11 +467,12 @@ namespace tinysockets {
         MultiplexedIOSocketInternalState *internal_state;
 
     public:
-        explicit MultiplexedIOSocket(const ccoip_socket_address_t &address, ConnectionModeFlags flags);
+        explicit MultiplexedIOSocket(const ccoip_socket_address_t &address, ConnectionModeFlags flags,
+                                     int max_connections);
 
-        explicit MultiplexedIOSocket(int socket_fd, ConnectionModeFlags flags);
+        explicit MultiplexedIOSocket(int socket_fd, ConnectionModeFlags flags, int max_connections);
 
-        explicit MultiplexedIOSocket(int socket_fd, const ccoip_socket_address_t &address, ConnectionModeFlags flags);
+        explicit MultiplexedIOSocket(int socket_fd, const ccoip_socket_address_t &address, ConnectionModeFlags flags, int max_connections);
 
         MultiplexedIOSocket(const MultiplexedIOSocket &other) = delete;
 
@@ -487,13 +488,15 @@ namespace tinysockets {
 
         [[nodiscard]] bool interrupt();
 
-        [[nodiscard]] bool sendBytes(uint64_t tag, const std::span<const std::byte> &data) const;
+        [[nodiscard]] bool sendBytesAsync(uint64_t tag, const std::span<const std::byte> &data) const;
+
+        void awaitSendOp(uint64_t tag) const;
 
         /// @warning the user is responsible for ensuring that no two threads call receiveBytesInplace with the same tag
         [[nodiscard]] std::optional<ssize_t> receiveBytesInplace(uint64_t tag, const std::span<std::byte> &data) const;
 
         [[nodiscard]] std::optional<std::unique_ptr<std::byte[]>> receiveBytes(
-            uint64_t tag, std::span<std::byte> &data, bool no_wait) const;
+            uint64_t tag, std::span<std::byte> &span_out) const;
 
         /// Sends a packet to the client associated with the given socket address
         /// Returns false if the server is not running or the client connection does not exist
@@ -508,9 +511,9 @@ namespace tinysockets {
 
         /// Receives a packet of the specified type
         template<typename T> requires std::is_base_of_v<ccoip::Packet, T>
-        [[nodiscard]] std::optional<T> receivePacket(const uint64_t tag, const bool no_wait) {
+        [[nodiscard]] std::optional<T> receivePacket(const uint64_t tag) {
             const ccoip::packetId_t id = T::packet_id;
-            return receiveNextPacket<T>(tag, id, no_wait);
+            return receiveNextPacket<T>(tag, id);
         }
 
         /// Discards all received data that was not yet consumed by @code receiveBytes@endcode for the specified tag
@@ -535,10 +538,9 @@ namespace tinysockets {
         [[nodiscard]] bool closeConnection();
 
         template<typename T> requires std::is_base_of_v<ccoip::Packet, T>
-        [[nodiscard]] std::optional<T> receiveNextPacket(const uint64_t tag, const ccoip::packetId_t packet_id,
-                                                         const bool no_wait) {
+        [[nodiscard]] std::optional<T> receiveNextPacket(const uint64_t tag, const ccoip::packetId_t packet_id) {
             std::span<std::byte> data_span{};
-            auto data_uptr_opt = receiveBytes(tag, data_span, no_wait);
+            auto data_uptr_opt = receiveBytes(tag, data_span);
             if (!data_uptr_opt) {
                 return std::nullopt;
             }
@@ -565,7 +567,7 @@ namespace tinysockets {
             PacketWriteBuffer complete_packet{};
             complete_packet.write(packet_id);
             complete_packet.writeContents(buffer.data(), buffer.size());
-            return sendBytes(tag,
+            return sendBytesAsync(tag,
                              std::span(reinterpret_cast<const std::byte *>(complete_packet.data()),
                                        complete_packet.size()));
         }
@@ -586,12 +588,13 @@ namespace tinysockets {
      * If this callback returns false, fullDuplexSendReceive will return false for the aborted state.
      * @returns a state pair (success, aborted)
      */
-    std::pair</* success */ bool, /* aborted */ bool> fullDuplexSendReceive(const MultiplexedIOSocket &tx_socket, const MultiplexedIOSocket &rx_socket, uint64_t tag,
-                               const std::span<const std::byte> &tx_span, const std::span<std::byte> &recv_buffer_span,
-                               size_t chunk_size,
-                               const std::function<void(size_t n_read, size_t total_bytes_recvd)> &read_callback,
-                               const std::function<void(size_t n_sent, size_t total_bytes_sent)> &send_callback,
-                               const std::function<bool(bool no_event)> &no_event_callback);
+    std::pair</* success */ bool, /* aborted */ bool> fullDuplexSendReceive(
+        const MultiplexedIOSocket &tx_socket, const MultiplexedIOSocket &rx_socket, uint64_t tag,
+        const std::span<const std::byte> &tx_span, const std::span<std::byte> &recv_buffer_span,
+        size_t chunk_size,
+        const std::function<void(size_t n_read, size_t total_bytes_recvd)> &read_callback,
+        const std::function<void(size_t n_sent, size_t total_bytes_sent)> &send_callback,
+        const std::function<bool(bool no_event)> &no_event_callback);
 
     namespace poll {
         enum PollEvent {

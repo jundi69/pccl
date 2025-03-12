@@ -2,6 +2,7 @@ add_library(tinysockets STATIC src/server_socket.cpp src/blocking_client_socket.
 
 add_subdirectory(mpsc)
 add_subdirectory(spsc)
+add_subdirectory(lockfree_map)
 
 target_include_directories(tinysockets PUBLIC include)
 target_include_directories(tinysockets PRIVATE internal)
@@ -13,4 +14,6 @@ target_link_libraries(tinysockets PRIVATE libuv::libuv)
 target_link_libraries(tinysockets PRIVATE threadpark)
 target_link_libraries(tinysockets PRIVATE mpsc)
 target_link_libraries(tinysockets PRIVATE spsc)
+target_link_libraries(tinysockets PRIVATE lockfree_map)
+
 add_subdirectory(tests)

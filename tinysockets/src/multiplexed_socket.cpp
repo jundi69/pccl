@@ -1,3 +1,5 @@
+#include "tinysockets.hpp"
+
 #include <ccoip_utils.hpp>
 #include <win_sock_bridge.h>
 
@@ -7,7 +9,7 @@
 #include <network_order_utils.hpp>
 #include <shared_mutex>
 #include <threadpark.h>
-#include "tinysockets.hpp"
+#include <lockfree_map.hpp>
 
 #ifndef _MSC_VER
 #define RESTRICT __restrict__
@@ -50,7 +52,7 @@ struct ReceiveQueueEntry {
 
 struct SendQueueEntry {
     uint64_t tag{};
-    std::unique_ptr<uint8_t[]> data;
+    std::span<const uint8_t> data;
     size_t size_bytes{};
 };
 
@@ -60,17 +62,38 @@ namespace tinysockets {
     struct MultiplexedIOSocketInternalState {
         MPSCQueue<SendQueueEntry> send_queue;
 
-        std::unordered_map<uint64_t, std::unique_ptr<::rigtorp::SPSCQueue<ReceiveQueueEntry>>> receive_queues{};
-        std::shared_mutex receive_queues_mutex{};
+        LockFreeMap<std::unique_ptr<::rigtorp::SPSCQueue<ReceiveQueueEntry>>> receive_queues;
+
+        /// @note This map differentiates three cases:
+        /// - no span exists for the tag -> the RX thread should block
+        /// - a span exists for the tag, but the span references a nullptr -> the RX thread should allocate the memory
+        /// - a span exists for the tag and the span references a valid memory location -> the RX thread should use the provided memory
+        /// After the RX thread has received the data, it will erase the entry from the map.
+        LockFreeMap<std::span<uint8_t>> receive_buffers;
+
+        LockFreeMap<std::atomic_bool> send_completed;
 
         tpark_handle_t *tx_park_handle = nullptr;
+        tpark_handle_t *rx_park_handle = nullptr;
 
-        MultiplexedIOSocketInternalState() : send_queue(TXRX_QUEUE_DEPTH) {
+        explicit MultiplexedIOSocketInternalState(const int max_connections) : send_queue(TXRX_QUEUE_DEPTH),
+                                                                               receive_queues(
+                                                                                   static_cast<size_t>(
+                                                                                       max_connections)),
+                                                                               receive_buffers(
+                                                                                   static_cast<size_t>(
+                                                                                       max_connections)),
+                                                                               send_completed(
+                                                                                   static_cast<size_t>(
+                                                                                       max_connections)) {
         }
 
         ~MultiplexedIOSocketInternalState() {
             if (tx_park_handle != nullptr) {
                 tparkDestroyHandle(tx_park_handle);
+            }
+            if (rx_park_handle != nullptr) {
+                tparkDestroyHandle(rx_park_handle);
             }
         }
     };
@@ -78,19 +101,22 @@ namespace tinysockets {
 
 
 tinysockets::MultiplexedIOSocket::MultiplexedIOSocket(const ccoip_socket_address_t &address,
-                                                      const ConnectionModeFlags flags) : socket_fd(0),
-    connect_sockaddr(address), flags(flags), internal_state(new MultiplexedIOSocketInternalState) {
+                                                      const ConnectionModeFlags flags,
+                                                      const int max_connections) : socket_fd(0),
+    connect_sockaddr(address), flags(flags), internal_state(new MultiplexedIOSocketInternalState(max_connections)) {
 }
 
 tinysockets::MultiplexedIOSocket::MultiplexedIOSocket(const int socket_fd,
-                                                      const ConnectionModeFlags flags) : socket_fd(socket_fd),
-    connect_sockaddr(), flags(flags), internal_state(new MultiplexedIOSocketInternalState) {
+                                                      const ConnectionModeFlags flags,
+                                                      const int max_connections) : socket_fd(socket_fd),
+    connect_sockaddr(), flags(flags), internal_state(new MultiplexedIOSocketInternalState(max_connections)) {
 }
 
 tinysockets::MultiplexedIOSocket::MultiplexedIOSocket(const int socket_fd, const ccoip_socket_address_t &address,
-                                                      const ConnectionModeFlags flags) : socket_fd(socket_fd),
+                                                      const ConnectionModeFlags flags,
+                                                      const int max_connections) : socket_fd(socket_fd),
     connect_sockaddr(address), flags(flags),
-    internal_state(new MultiplexedIOSocketInternalState) {
+    internal_state(new MultiplexedIOSocketInternalState(max_connections)) {
 }
 
 bool tinysockets::MultiplexedIOSocket::establishConnection() {
@@ -159,6 +185,7 @@ bool tinysockets::MultiplexedIOSocket::run() {
     }
     running.store(true, std::memory_order_release);
     if (flags & MODE_RX) {
+        internal_state->rx_park_handle = tparkCreateHandle();
         recv_thread = std::thread([this] {
             while (running.load(std::memory_order_acquire)) {
                 const auto length_opt = receivePacketLength();
@@ -196,8 +223,54 @@ bool tinysockets::MultiplexedIOSocket::run() {
                 }
                 const auto tag = *tag_opt;
 
-                auto data_ptr = std::unique_ptr<std::byte[]>(new std::byte[length]);
-                std::span data{reinterpret_cast<uint8_t *>(data_ptr.get()), length};
+                std::unique_ptr<std::byte[]> data_ptr;
+                std::span<uint8_t> data{};
+
+                // lookup the receive-buffer for the tag
+                {
+                    tparkBeginPark(internal_state->rx_park_handle);
+
+                    std::span<uint8_t> buffer{}; {
+                        if (!internal_state->receive_buffers.contains(tag)) {
+                            tparkWait(internal_state->rx_park_handle, true);
+
+                            // writes to queue may not be visible to this thread yet
+                            while (!internal_state->receive_buffers.contains(tag)) {
+                                // spin for the few cycles it takes for the write-access to become visible
+                                // yes, we hold on to the shared lock here preventing any write.
+                                // this is strictly waiting for a write-access that occurred during
+                                // the time we were not holding the lock.
+                            }
+                        } else {
+                            tparkEndPark(internal_state->rx_park_handle);
+                        }
+                        buffer = **internal_state->receive_buffers.get(tag);
+                    }
+                    // remove the buffer from the map
+                    {
+                        // NOTE: this erase will never be concurrent with
+                        // read accesses to receive_buffers for the same tag,
+                        // as the receiveBytes() generally just never reads
+                        // from receive_buffers at all, it only writes to it.
+                        // And we know this write has already happened because
+                        // we have waited for it above.
+                        // We also know that the receiveBytes() method
+                        // will wait until the receive-access is complete before
+                        // starting a new receiveBytes() invocation and
+                        // thus can also rule out contention for write access.
+                        internal_state->receive_buffers.erase(tag);
+                    }
+
+                    // if the buffer is nullptr, we need to allocate memory
+                    if (buffer.data() == nullptr) {
+                        data_ptr = std::unique_ptr<std::byte[]>(new std::byte[length]);
+                        data = std::span(reinterpret_cast<uint8_t *>(data_ptr.get()), length);
+                    } else {
+                        data_ptr = nullptr; // we don't own the memory
+                        data = std::span(buffer.data(), length);
+                    }
+                }
+
                 if (!receivePacketData(data)) {
                     if (running.load(std::memory_order_acquire)) {
                         LOG(ERR) << "Failed to receive packet data for packet with length " << length;
@@ -211,24 +284,25 @@ bool tinysockets::MultiplexedIOSocket::run() {
                 }
 
                 if (!internal_state->receive_queues.contains(tag)) {
-                    std::unique_lock guard{internal_state->receive_queues_mutex};
-                    internal_state->receive_queues[tag] =
-                            std::make_unique<::rigtorp::SPSCQueue<ReceiveQueueEntry>>(TXRX_QUEUE_DEPTH);
+                    internal_state->receive_queues.emplace(tag,
+                                                           std::make_unique<::rigtorp::SPSCQueue<ReceiveQueueEntry>>(
+                                                               TXRX_QUEUE_DEPTH)
+                    );
                 }
 
                 // add entry to SPMC queue of tag
                 {
-                    std::shared_lock guard{internal_state->receive_queues_mutex};
-                    const auto &queue = internal_state->receive_queues.at(tag);
-                    const auto data_raw_ptr = data_ptr.get();
-                    queue->push(ReceiveQueueEntry{.tag = tag,
+                    const auto &queue = **internal_state->receive_queues.get(tag);
+                    queue->push(ReceiveQueueEntry{
+                        .tag = tag,
 
-                                                  // we just pass this for the sake of ownership
-                                                  .data = std::move(data_ptr),
+                        // we just pass this for the sake of ownership
+                        .data = data_ptr == nullptr ? nullptr : std::move(data_ptr),
 
-                                                  // don't include the tag in the data span
-                                                  .data_span = std::span(data_raw_ptr,
-                                                                         data.size_bytes())});
+                        // don't include the tag in the data span
+                        .data_span = std::span(reinterpret_cast<std::byte *>(data.data()),
+                                               data.size_bytes())
+                    });
                 }
             }
         });
@@ -278,13 +352,20 @@ bool tinysockets::MultiplexedIOSocket::run() {
                 size_t n_sent = 0;
                 do {
                     const ssize_t i =
-                            sendvp(socket_fd, entry->data.get() + n_sent, entry->size_bytes - n_sent, MSG_NOSIGNAL);
+                            sendvp(socket_fd, entry->data.data() + n_sent, entry->size_bytes - n_sent, MSG_NOSIGNAL);
                     if (i == -1) {
                         LOG(ERR) << "Failed to send packet data for packet with tag " << entry->tag;
                         break;
                     }
                     n_sent += i;
                 } while (n_sent < entry->size_bytes);
+
+                // The send_completed created by the waking thread must already be visible to us because:
+                // - The insertion is a seq_cst operation, and we have already awaited whether the entry in the send queue
+                // is visible to us, where the insert is also a seq_cst operation that happened after the insert of
+                // the send completed flag. Since we know an event at t=2 happened, and we have sequential consistency,
+                // we know that the event at t=1 must be visible to us.
+                (*internal_state->send_completed.get(entry->tag))->store(true, std::memory_order_release);
                 delete entry;
             }
             LOG(INFO) << "MultiplexedIOSocket::run() interrupted, exiting send loop...";
@@ -315,7 +396,7 @@ std::pair</* success */ bool, /* aborted */ bool> tinysockets::fullDuplexSendRec
         if (bytes_sent < total_tx_size) {
             const size_t next_chunk_size = std::min(chunk_size, total_tx_size - bytes_sent);
             const auto send_sub = tx_span.subspan(bytes_sent, next_chunk_size);
-            if (tx_socket.sendBytes(tag, send_sub)) {
+            if (tx_socket.sendBytesAsync(tag, send_sub)) {
                 no_event = false;
                 const size_t n_sent = send_sub.size_bytes();
                 send_callback(send_sub.size_bytes(), bytes_sent);
@@ -341,6 +422,7 @@ std::pair</* success */ bool, /* aborted */ bool> tinysockets::fullDuplexSendRec
                 return {false, false};
             }
         }
+        tx_socket.awaitSendOp(tag);
 
         if (no_event) {
             if (!no_event_callback(true)) {
@@ -403,7 +485,7 @@ bool tinysockets::MultiplexedIOSocket::receivePacketData(std::span<std::uint8_t>
 }
 
 
-bool tinysockets::MultiplexedIOSocket::sendBytes(const uint64_t tag, const std::span<const std::byte> &data) const {
+bool tinysockets::MultiplexedIOSocket::sendBytesAsync(const uint64_t tag, const std::span<const std::byte> &data) const {
     if (!(flags & MODE_TX)) {
         LOG(ERR) << "MultiplexedIOSocket::sendBytes() called on a socket without TX mode";
         return false;
@@ -414,16 +496,32 @@ bool tinysockets::MultiplexedIOSocket::sendBytes(const uint64_t tag, const std::
     }
     auto *entry = new SendQueueEntry();
     entry->tag = tag;
-    entry->data = std::unique_ptr<uint8_t[]>(new uint8_t[data.size()]);
+    entry->data = std::span(reinterpret_cast<const uint8_t *>(data.data()), data.size());
     entry->size_bytes = data.size_bytes();
-    std::memcpy(entry->data.get(), data.data(), data.size()); {
+
+    // enqueue the SendQueueEntry
+    {
+        internal_state->send_completed.getOrCreate(tag)->store(false, std::memory_order_release);
         if (!internal_state->send_queue.enqueue(entry, true)) {
             LOG(ERR) << "MultiplexedIOSocket::sendBytes() failed to enqueue data; MPSC queue is full";
             return false;
         }
         tparkWake(internal_state->tx_park_handle);
     }
+
     return true;
+}
+
+void tinysockets::MultiplexedIOSocket::awaitSendOp(const uint64_t tag) const {
+    const auto completed = *internal_state->send_completed.get(tag);
+    // TODO: OPTIMIZE THIS
+    while (!completed->load(std::memory_order_acquire)) {
+        if (!running.load(std::memory_order_acquire)) {
+            LOG(ERR) << "MultiplexedIOSocket::sendBytes() called on a socket that is not running";
+            return;
+        }
+        std::this_thread::yield();
+    }
 }
 
 std::optional<ssize_t> tinysockets::MultiplexedIOSocket::receiveBytesInplace(const uint64_t tag,
@@ -432,59 +530,73 @@ std::optional<ssize_t> tinysockets::MultiplexedIOSocket::receiveBytesInplace(con
         LOG(ERR) << "MultiplexedIOSocket::receiveBytes() called on a socket without RX mode";
         return std::nullopt;
     }
+
+    if (!tparkIsParked(internal_state->rx_park_handle)) {
+        return 0;
+    }
+
+    // set the receive-buffer for the tag
+    {
+        internal_state->receive_buffers.emplace(
+            tag, std::span(reinterpret_cast<uint8_t *>(data.data()), data.size_bytes()));
+        tparkWake(internal_state->rx_park_handle);
+    }
+
+    ReceiveQueueEntry entry;
     while (true) {
         if (!running.load(std::memory_order_acquire) || socket_fd == 0) {
             return std::nullopt;
         }
-        std::shared_lock lock{internal_state->receive_queues_mutex};
         if (!internal_state->receive_queues.contains(tag)) {
             continue;
         }
-        const auto &queue = internal_state->receive_queues.at(tag);
+        const auto &queue = **internal_state->receive_queues.get(tag);
         const auto entry_ptr = queue->front();
         if (entry_ptr == nullptr) {
-            return 0;
+            continue;
         }
-        const auto entry = std::move(*entry_ptr);
+        entry = std::move(*entry_ptr);
         queue->pop();
-
-        if (entry.tag != tag) {
-            LOG(BUG) << "Obtained packet from SPSCQueue with unexpected tag " << entry.tag << "; expected " << tag;
-            continue;
-        }
-        // ensure buffer is large enough
-        if (data.size_bytes() < entry.data_span.size_bytes()) {
-            LOG(ERR) << "Buffer is too small to receive data; expected " << entry.data_span.size_bytes()
-                    << " bytes but got " << data.size_bytes();
-            continue;
-        }
-        std::memcpy(data.data(), entry.data_span.data(), entry.data_span.size_bytes());
-        return static_cast<ssize_t>(entry.data_span.size_bytes());
+        break;
     }
+
+    if (entry.tag != tag) {
+        LOG(BUG) << "Obtained packet from SPSCQueue with unexpected tag " << entry.tag << "; expected " << tag;
+        return std::nullopt;
+    }
+
+    assert(entry.data == nullptr && entry.data_span.data() == data.data());
+
+    return static_cast<ssize_t>(entry.data_span.size_bytes());
 }
 
 std::optional<std::unique_ptr<std::byte[]>> tinysockets::MultiplexedIOSocket::receiveBytes(const uint64_t tag,
-    std::span<std::byte> &data,
-    const bool no_wait) const {
+    std::span<std::byte> &span_out) const {
     if (!(flags & MODE_RX)) {
         LOG(ERR) << "MultiplexedIOSocket::receiveBytes() called on a socket without RX mode";
         return std::nullopt;
     }
+
+    if (!tparkIsParked(internal_state->rx_park_handle)) {
+        return nullptr;
+    }
+
+    // set the receive-buffer for the tag
+    {
+        internal_state->receive_buffers.emplace(tag, std::span(static_cast<uint8_t *>(nullptr), 0));
+        tparkWake(internal_state->rx_park_handle);
+    }
+
     while (true) {
         if (!running.load(std::memory_order_acquire) || socket_fd == 0) {
-            return std::nullopt;
+            continue;
         }
-        std::shared_lock lock{internal_state->receive_queues_mutex};
         if (!internal_state->receive_queues.contains(tag)) {
             continue;
         }
-        const auto &queue = internal_state->receive_queues.at(tag);
+        const auto &queue = **internal_state->receive_queues.get(tag);
         const auto entry_ptr = queue->front();
         if (entry_ptr == nullptr) {
-            std::this_thread::yield();
-            if (no_wait) {
-                return nullptr;
-            }
             continue;
         }
         auto entry = std::move(*entry_ptr);
@@ -492,20 +604,21 @@ std::optional<std::unique_ptr<std::byte[]>> tinysockets::MultiplexedIOSocket::re
 
         if (entry.tag != tag) {
             LOG(BUG) << "Obtained packet from SPMCQueue with unexpected tag " << entry.tag << "; expected " << tag;
-            continue;
+            return std::nullopt;
         }
-        data = std::span(entry.data_span.data(), entry.data_span.size_bytes());
+        assert(entry.data.get() != nullptr);
+        span_out = std::span(entry.data_span.data(), entry.data_span.size_bytes());
         return std::move(entry.data);
     }
 }
 
 void tinysockets::MultiplexedIOSocket::discardReceivedData(const uint64_t tag) const {
-    std::unique_lock lock{internal_state->receive_queues_mutex}; {
-        const auto it = internal_state->receive_queues.find(tag);
-        if (it == internal_state->receive_queues.end()) {
+    {
+        const auto opt = internal_state->receive_queues.get(tag);
+        if (!opt) {
             return;
         }
-        const auto &queue = it->second;
+        const auto &queue = **opt;
         while (queue->front() != nullptr) {
             queue->pop();
         }

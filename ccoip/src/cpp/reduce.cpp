@@ -21,11 +21,13 @@
 
 
 namespace {
+
     size_t GetPCCLMultiplexChunkSize() {
         static size_t chunk_size = -1;
         if (chunk_size == -1) {
             // check PCCL_MULTIPLEX_CHUNK_SIZE environment variable
-            if (const char *env_chunk_size = std::getenv("PCCL_MULTIPLEX_CHUNK_SIZE")) {
+            const char *env_chunk_size = std::getenv("PCCL_MULTIPLEX_CHUNK_SIZE");
+            if (env_chunk_size) {
                 chunk_size = std::stoull(env_chunk_size);
             } else {
                 chunk_size = DEFAULT_MULTIPLEX_CHUNK_SIZE;
@@ -42,9 +44,9 @@ namespace {
      *   boundaries[r] = {start_index, end_index}
      * in element (not byte) units.
      */
-    std::vector<std::pair<size_t, size_t>>
+    std::vector<std::pair<size_t, size_t> >
     computeChunkBoundaries(const size_t total_el, const size_t world_size) {
-        std::vector<std::pair<size_t, size_t>> boundaries(world_size, {0, 0});
+        std::vector<std::pair<size_t, size_t> > boundaries(world_size, {0, 0});
         if (world_size == 0) { return boundaries; }
 
         const size_t base = total_el / world_size;
@@ -88,12 +90,17 @@ namespace {
         const std::optional<ccoip::internal::quantize::DeQuantizationMetaData> &meta_data_self,
 
         const std::unordered_map<ccoip_uuid_t,
-            std::unique_ptr<tinysockets::MultiplexedIOSocket>> &peer_tx_sockets,
+            std::unique_ptr<tinysockets::MultiplexedIOSocket> > &peer_tx_sockets,
         const std::unordered_map<ccoip_uuid_t,
-            std::unique_ptr<tinysockets::MultiplexedIOSocket>> &peer_rx_sockets) {
+            std::unique_ptr<tinysockets::MultiplexedIOSocket> > &peer_rx_sockets) {
         using namespace tinysockets;
         using namespace ccoip::internal::reduce;
         using namespace ccoip::internal::quantize;
+
+        // We allow tx_span.size_bytes() != recv_buffer_span.size_bytes() because
+        // different chunks can have different sizes. Let’s track them separately:
+        const size_t total_tx_size = tx_span.size_bytes();
+        const size_t total_rx_size = recv_buffer_span.size_bytes();
 
         // In a ring, next rank is (rank+1) mod world_size, previous is (rank-1+world_size) mod world_size.
         const size_t rx_peer_idx = (rank + world_size - 1) % world_size;
@@ -126,7 +133,7 @@ namespace {
         if (quantized_type != data_type) {
             // wait until we receive a P2PPacketDequantizationMeta packet and wait for aborts in the meantime
             while (true) {
-                const auto metadata_packet = rx_socket->receivePacket<ccoip::P2PPacketDequantizationMeta>(tag, true);
+                const auto metadata_packet = rx_socket->receivePacket<ccoip::P2PPacketDequantizationMeta>(tag);
                 if (!metadata_packet) {
                     if (!rx_socket->isOpen()) {
                         return {false, false};
@@ -146,82 +153,96 @@ namespace {
             }
         }
 
-        // 3) Full-duplex send/recv
-        std::atomic_uint32_t no_event_ctr{0};
-        auto [success, aborted] = fullDuplexSendReceive(*tx_socket, *rx_socket, tag, tx_span, recv_buffer_span,
-                                                        GetPCCLMultiplexChunkSize(),
-                                                        [
-                                                            &client_state, &recv_buffer_span, &rx_span, &received_meta_data,
-                                                            tag, quantized_type, data_type, quantization_algorithm, op](
-                                                    const size_t n_read, size_t total_bytes_recvd) {
-                                                            client_state.trackCollectiveComsRxBytes(tag, n_read);
+        // 3) Full-duplex send/recv loop
+        size_t bytes_sent = 0;
+        size_t bytes_recvd = 0;
 
-                                                            const size_t quant_el_sz = ccoip_data_type_size(
-                                                                quantized_type);
+        size_t no_event_ctr = 0;
+        while (bytes_sent < total_tx_size || bytes_recvd < total_rx_size) {
+            bool no_event = true;
+            bool performed_send = false;
 
-                                                            // old_floor = how many *complete* quantized elements we had before
-                                                            const size_t old_floor =
-                                                                    (total_bytes_recvd / quant_el_sz) * quant_el_sz;
+            // 3a) Send if ready
+            if (bytes_sent < total_tx_size) {
+                const size_t chunk_size = std::min(GetPCCLMultiplexChunkSize(), total_tx_size - bytes_sent);
+                const auto send_sub = tx_span.subspan(bytes_sent, chunk_size);
+                if (tx_socket->sendBytesAsync(tag, send_sub)) {
+                    no_event = false;
+                    performed_send = true;
+                    bytes_sent += send_sub.size_bytes();
+                    client_state.trackCollectiveComsTxBytes(tag, send_sub.size_bytes());
+                } else {
+                    return {false, false};
+                }
+            }
 
-                                                            total_bytes_recvd += n_read;
+            // 3b) Receive if ready
+            if (bytes_recvd < total_rx_size) {
+                const auto recv_sub = recv_buffer_span.subspan(bytes_recvd);
+                if (auto n_read = rx_socket->receiveBytesInplace(tag, recv_sub)) {
+                    if (n_read > 0) {
+                        no_event = false;
+                        client_state.trackCollectiveComsRxBytes(tag, *n_read);
 
-                                                            // new_floor = how many *complete* quantized elements we have now
-                                                            const size_t new_floor =
-                                                                    (total_bytes_recvd / quant_el_sz) * quant_el_sz;
+                        const size_t quant_el_sz = ccoip_data_type_size(quantized_type);
 
-                                                            // If new_floor > old_floor, we have at least one fully-received element to reduce
-                                                            if (new_floor > old_floor) {
-                                                                const size_t chunk_bytes = new_floor - old_floor;
-                                                                const auto reduce_src_span =
-                                                                        recv_buffer_span.
-                                                                        subspan(old_floor, chunk_bytes);
+                        // old_floor = how many *complete* quantized elements we had before
+                        const size_t old_floor = (bytes_recvd / quant_el_sz) * quant_el_sz;
+                        bytes_recvd += *n_read;
+                        // new_floor = how many *complete* quantized elements we have now
+                        const size_t new_floor = (bytes_recvd / quant_el_sz) * quant_el_sz;
 
-                                                                // Map that to data_type-sized output range in rx_span
-                                                                const size_t data_type_el_sz = ccoip_data_type_size(
-                                                                    data_type);
-                                                                const auto reduce_dst_span =
-                                                                        rx_span.subspan(
-                                                                            (old_floor / quant_el_sz) * data_type_el_sz,
-                                                                            (chunk_bytes / quant_el_sz) *
-                                                                            data_type_el_sz);
+                        // If new_floor > old_floor, we have at least one fully-received element to reduce
+                        if (new_floor > old_floor) {
+                            const size_t chunk_bytes = new_floor - old_floor;
+                            auto reduce_src_span =
+                                    recv_buffer_span.subspan(old_floor, chunk_bytes);
 
-                                                                // Accumulate newly arrived data into rx_span
-                                                                performReduction(reduce_dst_span,
-                                                                    reduce_src_span,
-                                                                    data_type,
-                                                                    quantized_type,
-                                                                    quantization_algorithm,
-                                                                    op,
-                                                                    received_meta_data);
-                                                            }
-                                                        },
-                                                        [&client_state, tag](const size_t n_sent, const size_t) {
-                                                            client_state.trackCollectiveComsRxBytes(tag, n_sent);
-                                                        },
-                                                        [&no_event_ctr, &master_socket, tag](const bool no_event) {
-                                                            // no event callback
-                                                            if (no_event) {
-                                                                ++no_event_ctr;
-                                                            } else {
-                                                                no_event_ctr = 0;
-                                                            }
-                                                            if (no_event_ctr > 100) {
-                                                                const auto abort_packet = master_socket
-                                                                        .receiveMatchingPacket<
-                                                                            ccoip::M2CPacketCollectiveCommsAbort>(
-                                                                            [tag](
-                                                                        const ccoip::M2CPacketCollectiveCommsAbort &
-                                                                        packet) {
-                                                                                return packet.tag == tag;
-                                                                            }, true);
-                                                                if (abort_packet) {
-                                                                    return false;
-                                                                }
-                                                                no_event_ctr = 0;
-                                                            }
-                                                            return true;
-                                                        });
-        return {success, aborted};
+                            // Map that to data_type-sized output range in rx_span
+                            const size_t data_type_el_sz = ccoip_data_type_size(data_type);
+                            auto reduce_dst_span =
+                                    rx_span.subspan((old_floor / quant_el_sz) * data_type_el_sz,
+                                                    (chunk_bytes / quant_el_sz) * data_type_el_sz);
+
+                            // Accumulate newly arrived data into rx_span
+                            performReduction(reduce_dst_span,
+                                             reduce_src_span,
+                                             data_type,
+                                             quantized_type,
+                                             quantization_algorithm,
+                                             op,
+                                             received_meta_data);
+                        }
+                    } else {
+                        std::this_thread::yield();
+                    }
+                } else {
+                    if (performed_send) {
+                        tx_socket->awaitSendOp(tag);
+                    }
+                    return {false, false};
+                }
+            }
+            if (performed_send) {
+                tx_socket->awaitSendOp(tag);
+            }
+
+            if (no_event) {
+                no_event_ctr++;
+            } else {
+                no_event_ctr = 0;
+            }
+
+            if (no_event_ctr > 100) {
+                const auto abort_packet = master_socket.receiveMatchingPacket<ccoip::M2CPacketCollectiveCommsAbort>(
+                        [tag](const ccoip::M2CPacketCollectiveCommsAbort &packet) { return packet.tag == tag; }, true);
+                if (abort_packet) {
+                    return {true, true};
+                }
+                no_event_ctr = 0;
+            }
+        }
+        return {true, false};
     }
 
     /**
@@ -252,12 +273,15 @@ namespace {
         ccoip::internal::quantize::DeQuantizationMetaData &received_meta_data_out,
 
         const std::unordered_map<ccoip_uuid_t,
-            std::unique_ptr<tinysockets::MultiplexedIOSocket>> &peer_tx_sockets,
+            std::unique_ptr<tinysockets::MultiplexedIOSocket> > &peer_tx_sockets,
         const std::unordered_map<ccoip_uuid_t,
-            std::unique_ptr<tinysockets::MultiplexedIOSocket>> &peer_rx_sockets) {
+            std::unique_ptr<tinysockets::MultiplexedIOSocket> > &peer_rx_sockets) {
         using namespace tinysockets;
         using namespace ccoip::internal::quantize;
         using namespace ccoip::internal::reduce;
+
+        const size_t total_tx_size = tx_span.size_bytes();
+        const size_t total_rx_size = recv_buffer_span.size_bytes();
 
         const size_t rx_peer_idx = (rank + world_size - 1) % world_size;
         const size_t tx_peer_idx = (rank + 1) % world_size;
@@ -287,7 +311,7 @@ namespace {
         if (quantized_type != data_type) {
             // wait until we receive a P2PPacketDequantizationMeta packet and wait for aborts in the meantime
             while (true) {
-                const auto metadata_packet = rx_socket->receivePacket<ccoip::P2PPacketDequantizationMeta>(tag, true);
+                const auto metadata_packet = rx_socket->receivePacket<ccoip::P2PPacketDequantizationMeta>(tag);
                 if (!metadata_packet) {
                     if (!rx_socket->isOpen()) {
                         return {false, false};
@@ -309,81 +333,90 @@ namespace {
         received_meta_data_out = received_meta_data;
 
         // 2) Full-duplex send/recv
-        std::atomic_uint32_t no_event_ctr{0};
-        auto [success, aborted] = fullDuplexSendReceive(*tx_socket, *rx_socket, tag, tx_span, recv_buffer_span,
-                                                        GetPCCLMultiplexChunkSize(),
-                                                        [
-                                                            &client_state, &recv_buffer_span, &rx_span, &received_meta_data,
-                                                            tag, quantized_type, data_type, quantization_algorithm](
-                                                    const size_t n_read, size_t total_bytes_recvd) {
-                                                            client_state.trackCollectiveComsRxBytes(tag, n_read);
+        size_t bytes_sent = 0;
+        size_t bytes_recvd = 0;
 
-                                                            const size_t quant_el_sz = ccoip_data_type_size(
-                                                                quantized_type);
+        size_t no_event_ctr = 0;
+        while (bytes_sent < total_tx_size || bytes_recvd < total_rx_size) {
 
-                                                            // old_floor = how many *complete* quantized elements we had before
-                                                            const size_t old_floor =
-                                                                    (total_bytes_recvd / quant_el_sz) * quant_el_sz;
+            bool no_event = true;
+            bool performed_send = false;
 
-                                                            total_bytes_recvd += n_read;
+            // Send
+            if (bytes_sent < total_tx_size) {
+                const size_t chunk_size = std::min(GetPCCLMultiplexChunkSize(), total_tx_size - bytes_sent);
+                const auto send_sub = tx_span.subspan(bytes_sent, chunk_size);
+                if (tx_socket->sendBytesAsync(tag, send_sub)) {
+                    no_event = false;
+                    performed_send = true;
+                    bytes_sent += send_sub.size_bytes();
+                    client_state.trackCollectiveComsTxBytes(tag, send_sub.size_bytes());
+                } else {
+                    return {false, false};
+                }
+            }
 
-                                                            // new_floor = how many *complete* quantized elements we have now
-                                                            const size_t new_floor =
-                                                                    (total_bytes_recvd / quant_el_sz) * quant_el_sz;
+            // Receive
+            if (bytes_recvd < total_rx_size) {
+                const auto recv_sub = recv_buffer_span.subspan(bytes_recvd);
+                if (auto n_read = rx_socket->receiveBytesInplace(tag, recv_sub)) {
+                    if (*n_read > 0) {
+                        no_event = false;
+                        client_state.trackCollectiveComsRxBytes(tag, *n_read);
 
-                                                            // If new_floor > old_floor, we have at least one fully-received element to reduce
-                                                            if (new_floor > old_floor) {
-                                                                const size_t chunk_bytes = new_floor - old_floor;
-                                                                const auto reduce_src_span =
-                                                                        recv_buffer_span.
-                                                                        subspan(old_floor, chunk_bytes);
+                        const size_t quant_el_sz = ccoip_data_type_size(quantized_type);
 
-                                                                // Map that to data_type-sized output range in rx_span
-                                                                const size_t data_type_el_sz = ccoip_data_type_size(
-                                                                    data_type);
-                                                                const auto reduce_dst_span =
-                                                                        rx_span.subspan(
-                                                                            (old_floor / quant_el_sz) * data_type_el_sz,
-                                                                            (chunk_bytes / quant_el_sz) *
-                                                                            data_type_el_sz);
+                        const size_t old_floor = (bytes_recvd / quant_el_sz) * quant_el_sz;
+                        bytes_recvd += *n_read;
 
-                                                                // Accumulate newly arrived data into rx_span
-                                                                performReduction(reduce_dst_span,
-                                                                    reduce_src_span,
-                                                                    data_type,
-                                                                    quantized_type,
-                                                                    quantization_algorithm,
-                                                                    ccoip::ccoipOpSet,
-                                                                    received_meta_data);
-                                                            }
-                                                        },
-                                                        [&client_state, tag](const size_t n_sent, const size_t) {
-                                                            client_state.trackCollectiveComsTxBytes(tag, n_sent);
-                                                        },
-                                                        [&no_event_ctr, &master_socket, tag](const bool no_event) {
-                                                            // no event callback
-                                                            if (no_event) {
-                                                                ++no_event_ctr;
-                                                            } else {
-                                                                no_event_ctr = 0;
-                                                            }
-                                                            if (no_event_ctr > 100) {
-                                                                const auto abort_packet = master_socket
-                                                                        .receiveMatchingPacket<
-                                                                            ccoip::M2CPacketCollectiveCommsAbort>(
-                                                                            [tag](
-                                                                        const ccoip::M2CPacketCollectiveCommsAbort &
-                                                                        packet) {
-                                                                                return packet.tag == tag;
-                                                                            }, true);
-                                                                if (abort_packet) {
-                                                                    return false;
-                                                                }
-                                                                no_event_ctr = 0;
-                                                            }
-                                                            return true;
-                                                        });
-        return {success, aborted};
+                        if (const size_t new_floor = (bytes_recvd / quant_el_sz) * quant_el_sz; new_floor > old_floor) {
+                            const size_t chunk_bytes = new_floor - old_floor;
+                            // De-quantize + copy into rx_span
+                            auto copy_src_span = recv_buffer_span.subspan(old_floor, chunk_bytes);
+
+                            const size_t data_type_el_sz = ccoip_data_type_size(data_type);
+                            auto copy_dst_span = rx_span.subspan(
+                                (old_floor / quant_el_sz) * data_type_el_sz,
+                                (chunk_bytes / quant_el_sz) * data_type_el_sz);
+
+                            // We do not accumulate for allgather, just "copy" via performReduction w/ ccoipOpSet
+                            performReduction(copy_dst_span,
+                                             copy_src_span,
+                                             data_type,
+                                             quantized_type,
+                                             quantization_algorithm,
+                                             ccoip::ccoipOpSet, // = copy
+                                             received_meta_data);
+                        }
+                    } else {
+                        std::this_thread::yield();
+                    }
+                } else {
+                    if (performed_send) {
+                        tx_socket->awaitSendOp(tag);
+                    }
+                    return {false, false};
+                }
+            }
+            if (performed_send) {
+                tx_socket->awaitSendOp(tag);
+            }
+
+            if (no_event) {
+                no_event_ctr++;
+            } else {
+                no_event_ctr = 0;
+            }
+            if (no_event_ctr > 100) {
+                const auto abort_packet = master_socket.receiveMatchingPacket<ccoip::M2CPacketCollectiveCommsAbort>(
+                        [tag](const ccoip::M2CPacketCollectiveCommsAbort &packet) { return packet.tag == tag; }, true);
+                if (abort_packet) {
+                    return {true, true};
+                }
+                no_event_ctr = 0;
+            }
+        }
+        return {true, false};
     }
 } // end anonymous namespace
 
@@ -421,7 +454,7 @@ std::pair<bool, bool> ccoip::reduce::pipelineRingReduce(
     }
 
     // Handle potential overlap of src_buf and dst_buf:
-    std::optional<std::unique_ptr<std::byte[]>> maybe_src_copy;
+    std::optional<std::unique_ptr<std::byte[]> > maybe_src_copy;
 
     bool src_and_dest_identical_ptr = (src_buf.data() == dst_buf.data()); {
         const auto *src_beg = src_buf.data();
@@ -430,7 +463,7 @@ std::pair<bool, bool> ccoip::reduce::pipelineRingReduce(
         const auto *dst_end = dst_beg + dst_buf.size_bytes();
         const bool overlap = !((src_end <= dst_beg) || (dst_end <= src_beg));
         if (overlap) {
-            maybe_src_copy = std::unique_ptr<std::byte[]>(new std::byte[src_buf.size_bytes()]);
+            maybe_src_copy = std::make_unique<std::byte[]>(src_buf.size_bytes());
             std::memcpy(maybe_src_copy->get(), src_buf.data(), src_buf.size_bytes());
             src_buf = std::span<const std::byte>(maybe_src_copy->get(), src_buf.size_bytes());
         }
@@ -463,7 +496,7 @@ std::pair<bool, bool> ccoip::reduce::pipelineRingReduce(
         }
     }
     const size_t max_chunk_size_bytes_q = max_chunk_el * quant_type_el_size;
-    auto recv_buffer = std::unique_ptr<std::byte[]>(new std::byte[max_chunk_size_bytes_q]);
+    auto recv_buffer = std::make_unique<std::byte[]>(max_chunk_size_bytes_q);
     std::span recv_buffer_span{recv_buffer.get(), max_chunk_size_bytes_q};
 
 
@@ -493,7 +526,7 @@ std::pair<bool, bool> ccoip::reduce::pipelineRingReduce(
         std::unique_ptr<std::byte[]> quantized_data;
         std::optional<DeQuantizationMetaData> meta_data;
         if (quantized_type != data_type && quantization_algorithm != ccoipQuantizationNone && tx_size_el > 0) {
-            quantized_data = std::unique_ptr<std::byte[]>(new std::byte[tx_size_el * quant_type_el_size]);
+            quantized_data = std::make_unique<std::byte[]>(tx_size_el * quant_type_el_size);
             std::span q_span(quantized_data.get(), tx_size_el * quant_type_el_size);
             meta_data = performQuantization(q_span,
                                             tx_unquantized,
@@ -510,13 +543,13 @@ std::pair<bool, bool> ccoip::reduce::pipelineRingReduce(
 
         // Perform ring exchange & reduce
         auto [success, abort_packet_received] = runReduceStage(client_state, master_socket, tag,
-                                                               /*tx_span=*/ tx_unquantized,
-                                                               /*rx_span=*/ rx_span,
-                                                               /*recv_buffer_span=*/ recv_sub,
-                                                               data_type, quantized_type, quantization_algorithm, op,
-                                                               rank, world_size, ring_order,
-                                                               meta_data,
-                                                               peer_tx_sockets, peer_rx_sockets);
+                                      /*tx_span=*/ tx_unquantized,
+                                      /*rx_span=*/ rx_span,
+                                      /*recv_buffer_span=*/ recv_sub,
+                                      data_type, quantized_type, quantization_algorithm, op,
+                                      rank, world_size, ring_order,
+                                      meta_data,
+                                      peer_tx_sockets, peer_rx_sockets);
         if (!success || abort_packet_received) {
             return {success, abort_packet_received};
         }
@@ -603,12 +636,12 @@ std::pair<bool, bool> ccoip::reduce::pipelineRingReduce(
 
         // Ring exchange (no reduce-op)
         auto [success, abort_packet_received] = runAllgatherStage(client_state, master_socket, tag,
-                                                                  tx_span, rx_span, recv_sub,
-                                                                  data_type, quantized_type, quantization_algorithm,
-                                                                  rank, world_size, ring_order,
-                                                                  meta_data,
-                                                                  prev_meta_data, // out
-                                                                  peer_tx_sockets, peer_rx_sockets);
+                                         tx_span, rx_span, recv_sub,
+                                         data_type, quantized_type, quantization_algorithm,
+                                         rank, world_size, ring_order,
+                                         meta_data,
+                                         prev_meta_data, // out
+                                         peer_tx_sockets, peer_rx_sockets);
         if (!success || abort_packet_received) {
             return {success, abort_packet_received};
         }
