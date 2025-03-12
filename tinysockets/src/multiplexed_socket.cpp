@@ -173,7 +173,7 @@ bool tinysockets::MultiplexedIOSocket::run() {
                     }
                     break;
                 }
-                const size_t length = *length_opt;
+                size_t length = *length_opt;
                 if (length == 0) {
                     LOG(ERR) << "Received packet with length 0; closing connection";
                     if (!interrupt()) [[unlikely]] {
@@ -181,6 +181,7 @@ bool tinysockets::MultiplexedIOSocket::run() {
                     }
                     break;
                 }
+                length += sizeof(uint64_t);
                 auto data_ptr = std::unique_ptr<std::byte[]>(new std::byte[length]);
                 std::span data{reinterpret_cast<uint8_t *>(data_ptr.get()), length};
                 if (!receivePacketData(data)) {
@@ -253,7 +254,7 @@ bool tinysockets::MultiplexedIOSocket::run() {
 
                 const uint64_t preamble[2] = {
                     network_order_utils::host_to_network(
-                        entry->size_bytes + sizeof(uint64_t) // size including the subsequent tag
+                        entry->size_bytes
                     ),
                     network_order_utils::host_to_network(entry->tag)
                 };
