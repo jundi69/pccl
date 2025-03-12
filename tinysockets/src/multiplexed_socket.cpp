@@ -52,9 +52,7 @@ struct SendQueueEntry {
 #define TXRX_QUEUE_DEPTH 1024
 
 namespace tinysockets {
-
     struct MultiplexedIOSocketInternalState {
-
         MPSCQueue<SendQueueEntry> send_queue;
 
         std::shared_mutex receive_queues_mutex{};
@@ -62,7 +60,8 @@ namespace tinysockets {
 
         tpark_handle_t *tx_park_handle = nullptr;
 
-        MultiplexedIOSocketInternalState() : send_queue(TXRX_QUEUE_DEPTH) {}
+        MultiplexedIOSocketInternalState() : send_queue(TXRX_QUEUE_DEPTH) {
+        }
 
         ~MultiplexedIOSocketInternalState() {
             if (tx_park_handle != nullptr) {
@@ -70,21 +69,24 @@ namespace tinysockets {
             }
         }
     };
-
 } // namespace tinysockets
 
 
 tinysockets::MultiplexedIOSocket::MultiplexedIOSocket(const ccoip_socket_address_t &address,
-                                                      const ConnectionModeFlags flags) :
-    socket_fd(0), connect_sockaddr(address), flags(flags), internal_state(new MultiplexedIOSocketInternalState) {}
+                                                      const ConnectionModeFlags flags) : socket_fd(0),
+    connect_sockaddr(address), flags(flags), internal_state(new MultiplexedIOSocketInternalState) {
+}
 
-tinysockets::MultiplexedIOSocket::MultiplexedIOSocket(const int socket_fd, const ConnectionModeFlags flags) :
-    socket_fd(socket_fd), connect_sockaddr(), flags(flags), internal_state(new MultiplexedIOSocketInternalState) {}
+tinysockets::MultiplexedIOSocket::MultiplexedIOSocket(const int socket_fd,
+                                                      const ConnectionModeFlags flags) : socket_fd(socket_fd),
+    connect_sockaddr(), flags(flags), internal_state(new MultiplexedIOSocketInternalState) {
+}
 
 tinysockets::MultiplexedIOSocket::MultiplexedIOSocket(const int socket_fd, const ccoip_socket_address_t &address,
-                                                      const ConnectionModeFlags flags) :
-    socket_fd(socket_fd), connect_sockaddr(address), flags(flags),
-    internal_state(new MultiplexedIOSocketInternalState) {}
+                                                      const ConnectionModeFlags flags) : socket_fd(socket_fd),
+    connect_sockaddr(address), flags(flags),
+    internal_state(new MultiplexedIOSocketInternalState) {
+}
 
 bool tinysockets::MultiplexedIOSocket::establishConnection() {
     if (socket_fd != 0) {
@@ -191,6 +193,13 @@ bool tinysockets::MultiplexedIOSocket::run() {
                     }
                     break;
                 }
+                // safeguard against large packets
+                if (length > (1024 * 1024 * 1024)) {
+                    LOG(FATAL) << "Received excessive packet length " << length << "; closing connection";
+                    if (!interrupt()) [[unlikely]] {
+                        LOG(ERR) << "Failed to interrupt MultiplexedIOSocket";
+                    }
+                }
                 auto data_ptr = std::unique_ptr<std::byte[]>(new std::byte[length]);
                 std::span data{reinterpret_cast<uint8_t *>(data_ptr.get()), length};
                 if (!receivePacketData(data)) {
@@ -218,14 +227,16 @@ bool tinysockets::MultiplexedIOSocket::run() {
                     std::shared_lock guard{internal_state->receive_queues_mutex};
                     const auto &queue = internal_state->receive_queues.at(tag);
                     const auto data_raw_ptr = data_ptr.get();
-                    queue->push(ReceiveQueueEntry{.tag = tag,
+                    queue->push(ReceiveQueueEntry{
+                        .tag = tag,
 
-                                                  // we just pass this for the sake of ownership
-                                                  .data = std::move(data_ptr),
+                        // we just pass this for the sake of ownership
+                        .data = std::move(data_ptr),
 
-                                                  // don't include the tag in the data span
-                                                  .data_span = std::span(data_raw_ptr + sizeof(uint64_t),
-                                                                         data.size_bytes() - sizeof(uint64_t))});
+                        // don't include the tag in the data span
+                        .data_span = std::span(data_raw_ptr + sizeof(uint64_t),
+                                               data.size_bytes() - sizeof(uint64_t))
+                    });
                 }
             }
         });
@@ -235,9 +246,7 @@ bool tinysockets::MultiplexedIOSocket::run() {
         internal_state->tx_park_handle = tparkCreateHandle();
         send_thread = std::thread([this] {
             while (running.load(std::memory_order_acquire) && socket_fd != 0) {
-
-                const SendQueueEntry *entry{};
-                {
+                const SendQueueEntry *entry{}; {
                     tparkBeginPark(internal_state->tx_park_handle);
                     entry = internal_state->send_queue.dequeue(true);
                     if (entry == nullptr) {
@@ -264,10 +273,11 @@ bool tinysockets::MultiplexedIOSocket::run() {
                 }
 
                 const uint64_t preamble[2] = {
-                        network_order_utils::host_to_network(
-                                entry->size_bytes + sizeof(uint64_t) // size including the subsequent tag
-                                ),
-                        network_order_utils::host_to_network(entry->tag)};
+                    network_order_utils::host_to_network(
+                        entry->size_bytes + sizeof(uint64_t) // size including the subsequent tag
+                    ),
+                    network_order_utils::host_to_network(entry->tag)
+                };
                 if (sendvp(socket_fd, preamble, sizeof(preamble), MSG_NOSIGNAL) == -1) {
                     LOG(ERR) << "Failed to send preamble for packet with tag " << entry->tag;
                     delete entry;
@@ -314,7 +324,6 @@ bool tinysockets::MultiplexedIOSocket::sendBytes(const uint64_t tag, const std::
     if (!(flags & MODE_TX)) {
         LOG(ERR) << "MultiplexedIOSocket::sendBytes() called on a socket without TX mode";
         return false;
-
     }
     if (!running.load(std::memory_order_acquire)) {
         LOG(ERR) << "MultiplexedIOSocket::sendBytes() called on a socket that is not running";
@@ -324,9 +333,7 @@ bool tinysockets::MultiplexedIOSocket::sendBytes(const uint64_t tag, const std::
     entry->tag = tag;
     entry->data = std::unique_ptr<uint8_t[]>(new uint8_t[data.size()]);
     entry->size_bytes = data.size_bytes();
-    std::memcpy(entry->data.get(), data.data(), data.size());
-
-    {
+    std::memcpy(entry->data.get(), data.data(), data.size()); {
         if (!internal_state->send_queue.enqueue(entry, true)) {
             LOG(ERR) << "MultiplexedIOSocket::sendBytes() failed to enqueue data; MPSC queue is full";
             return false;
@@ -361,7 +368,7 @@ std::optional<ssize_t> tinysockets::MultiplexedIOSocket::receiveBytesInplace(con
         // ensure buffer is large enough
         if (data.size_bytes() < entry.data_span.size_bytes()) {
             LOG(ERR) << "Buffer is too small to receive data; expected " << entry.data_span.size_bytes()
-                     << " bytes but got " << data.size_bytes();
+                    << " bytes but got " << data.size_bytes();
             continue;
         }
         std::memcpy(data.data(), entry.data_span.data(), entry.data_span.size_bytes());
@@ -370,8 +377,8 @@ std::optional<ssize_t> tinysockets::MultiplexedIOSocket::receiveBytesInplace(con
 }
 
 std::optional<std::unique_ptr<std::byte[]>> tinysockets::MultiplexedIOSocket::receiveBytes(const uint64_t tag,
-                                                                                           std::span<std::byte> &data,
-                                                                                           const bool no_wait) const {
+    std::span<std::byte> &data,
+    const bool no_wait) const {
     if (!(flags & MODE_RX)) {
         LOG(ERR) << "MultiplexedIOSocket::receiveBytes() called on a socket without RX mode";
         return std::nullopt;
@@ -406,8 +413,7 @@ std::optional<std::unique_ptr<std::byte[]>> tinysockets::MultiplexedIOSocket::re
 }
 
 void tinysockets::MultiplexedIOSocket::discardReceivedData(const uint64_t tag) const {
-    std::unique_lock lock{internal_state->receive_queues_mutex};
-    {
+    std::unique_lock lock{internal_state->receive_queues_mutex}; {
         const auto it = internal_state->receive_queues.find(tag);
         if (it == internal_state->receive_queues.end()) {
             return;
