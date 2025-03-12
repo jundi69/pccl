@@ -115,6 +115,7 @@ int main() {
         const double mb_per_second = static_cast<double>(reduce_info.rx_bytes + reduce_info.tx_bytes) / 1e6 /
                                      (static_cast<double>(time_ms) / 1e3);
         std::cout << "Bandwidth: " << mb_per_second << " MB/s" << std::endl;
+        std::cout << "All reduce took " << time_ms << " ms" << std::endl;
 
         // print first 10 elements of the result
         for (size_t j = 0; j < 10; ++j) {
