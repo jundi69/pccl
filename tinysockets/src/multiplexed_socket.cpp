@@ -173,7 +173,7 @@ bool tinysockets::MultiplexedIOSocket::run() {
                     }
                     break;
                 }
-                size_t length = *length_opt;
+                const size_t length = *length_opt;
                 if (length == 0) {
                     LOG(ERR) << "Received packet with length 0; closing connection";
                     if (!interrupt()) [[unlikely]] {
@@ -181,7 +181,21 @@ bool tinysockets::MultiplexedIOSocket::run() {
                     }
                     break;
                 }
-                length += sizeof(uint64_t);
+
+                auto tag_opt = receivePacketLength();
+                if (!tag_opt) {
+                    if (running.load(std::memory_order_acquire)) {
+                        LOG(ERR) << "Connection was closed; exiting receive loop...";
+                        if (!interrupt()) [[unlikely]] {
+                            LOG(ERR) << "Failed to interrupt MultiplexedIOSocket";
+                        }
+                    } else {
+                        LOG(INFO) << "MultiplexedIOSocket::run() interrupted, exiting receive loop...";
+                    }
+                    break;
+                }
+                const auto tag = *tag_opt;
+
                 auto data_ptr = std::unique_ptr<std::byte[]>(new std::byte[length]);
                 std::span data{reinterpret_cast<uint8_t *>(data_ptr.get()), length};
                 if (!receivePacketData(data)) {
@@ -195,8 +209,6 @@ bool tinysockets::MultiplexedIOSocket::run() {
                     }
                     break;
                 }
-                PacketReadBuffer buffer{data.data(), data.size_bytes()};
-                auto tag = buffer.read<uint64_t>();
 
                 if (!internal_state->receive_queues.contains(tag)) {
                     std::unique_lock guard{internal_state->receive_queues_mutex};
@@ -215,8 +227,8 @@ bool tinysockets::MultiplexedIOSocket::run() {
                                                   .data = std::move(data_ptr),
 
                                                   // don't include the tag in the data span
-                                                  .data_span = std::span(data_raw_ptr + sizeof(uint64_t),
-                                                                         data.size_bytes() - sizeof(uint64_t))});
+                                                  .data_span = std::span(data_raw_ptr,
+                                                                         data.size_bytes())});
                 }
             }
         });
