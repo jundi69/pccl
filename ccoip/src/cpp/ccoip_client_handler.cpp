@@ -75,8 +75,7 @@ bool ccoip::CCoIPClientHandler::connect() {
             }
             const auto &rx_socket = p2p_connections_rx[hello_packet.peer_uuid] = std::make_unique<
                                         tinysockets::MultiplexedIOSocket>(
-                                            socket->getSocketFd(), tinysockets::ConnectionModeFlags::MODE_RX,
-                                            GetMaxConcurrentCollectiveOps());
+                                            socket->getSocketFd(), tinysockets::ConnectionModeFlags::MODE_RX);
             if (!rx_socket->run()) {
                 LOG(FATAL) << "Failed to start MultiplexedIOSocket for P2P connection with "
                         << ccoip_sockaddr_to_str(client_address);
@@ -843,8 +842,7 @@ bool ccoip::CCoIPClientHandler::establishP2PConnection(const PeerInfo &peer) {
     auto [it, inserted] = p2p_connections_tx.emplace(
             peer.peer_uuid,
             std::make_unique<tinysockets::MultiplexedIOSocket>(socket.getSocketFd(), socket.getConnectSockAddr(),
-                                                               tinysockets::ConnectionModeFlags::MODE_TX,
-                                                               GetMaxConcurrentCollectiveOps()));
+                                                               tinysockets::ConnectionModeFlags::MODE_TX));
     if (!inserted) {
         LOG(ERR) << "P2P connection with peer " << uuid_to_string(peer.peer_uuid) << " already exists";
         return false;
@@ -1051,6 +1049,7 @@ bool ccoip::CCoIPClientHandler::allReduceAsync(const void *sendbuff, void *recvb
         // can't start a new collective coms op while one is already running
         return false;
     }
+
 
     // Set connection revision active at the time of launching the collective comms operation.
     // If the connection revision has changed since then,
