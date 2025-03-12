@@ -1,0 +1,2 @@
+add_library(lockfree_map INTERFACE)
+target_include_directories(lockfree_map INTERFACE include)
