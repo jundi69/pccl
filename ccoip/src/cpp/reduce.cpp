@@ -133,7 +133,7 @@ namespace {
         if (quantized_type != data_type) {
             // wait until we receive a P2PPacketDequantizationMeta packet and wait for aborts in the meantime
             while (true) {
-                const auto metadata_packet = rx_socket->receivePacket<ccoip::P2PPacketDequantizationMeta>(tag);
+                const auto metadata_packet = rx_socket->receivePacket<ccoip::P2PPacketDequantizationMeta>(tag, true);
                 if (!metadata_packet) {
                     if (!rx_socket->isOpen()) {
                         return {false, false};
@@ -160,15 +160,13 @@ namespace {
         size_t no_event_ctr = 0;
         while (bytes_sent < total_tx_size || bytes_recvd < total_rx_size) {
             bool no_event = true;
-            bool performed_send = false;
 
             // 3a) Send if ready
             if (bytes_sent < total_tx_size) {
                 const size_t chunk_size = std::min(GetPCCLMultiplexChunkSize(), total_tx_size - bytes_sent);
                 const auto send_sub = tx_span.subspan(bytes_sent, chunk_size);
-                if (tx_socket->sendBytesAsync(tag, send_sub)) {
+                if (tx_socket->sendBytes(tag, send_sub)) {
                     no_event = false;
-                    performed_send = true;
                     bytes_sent += send_sub.size_bytes();
                     client_state.trackCollectiveComsTxBytes(tag, send_sub.size_bytes());
                 } else {
@@ -217,14 +215,8 @@ namespace {
                         std::this_thread::yield();
                     }
                 } else {
-                    if (performed_send) {
-                        tx_socket->awaitSendOp(tag);
-                    }
                     return {false, false};
                 }
-            }
-            if (performed_send) {
-                tx_socket->awaitSendOp(tag);
             }
 
             if (no_event) {
@@ -311,7 +303,7 @@ namespace {
         if (quantized_type != data_type) {
             // wait until we receive a P2PPacketDequantizationMeta packet and wait for aborts in the meantime
             while (true) {
-                const auto metadata_packet = rx_socket->receivePacket<ccoip::P2PPacketDequantizationMeta>(tag);
+                const auto metadata_packet = rx_socket->receivePacket<ccoip::P2PPacketDequantizationMeta>(tag, true);
                 if (!metadata_packet) {
                     if (!rx_socket->isOpen()) {
                         return {false, false};
@@ -340,15 +332,13 @@ namespace {
         while (bytes_sent < total_tx_size || bytes_recvd < total_rx_size) {
 
             bool no_event = true;
-            bool performed_send = false;
 
             // Send
             if (bytes_sent < total_tx_size) {
                 const size_t chunk_size = std::min(GetPCCLMultiplexChunkSize(), total_tx_size - bytes_sent);
                 const auto send_sub = tx_span.subspan(bytes_sent, chunk_size);
-                if (tx_socket->sendBytesAsync(tag, send_sub)) {
+                if (tx_socket->sendBytes(tag, send_sub)) {
                     no_event = false;
-                    performed_send = true;
                     bytes_sent += send_sub.size_bytes();
                     client_state.trackCollectiveComsTxBytes(tag, send_sub.size_bytes());
                 } else {
@@ -392,16 +382,9 @@ namespace {
                         std::this_thread::yield();
                     }
                 } else {
-                    if (performed_send) {
-                        tx_socket->awaitSendOp(tag);
-                    }
                     return {false, false};
                 }
             }
-            if (performed_send) {
-                tx_socket->awaitSendOp(tag);
-            }
-
             if (no_event) {
                 no_event_ctr++;
             } else {
@@ -463,7 +446,7 @@ std::pair<bool, bool> ccoip::reduce::pipelineRingReduce(
         const auto *dst_end = dst_beg + dst_buf.size_bytes();
         const bool overlap = !((src_end <= dst_beg) || (dst_end <= src_beg));
         if (overlap) {
-            maybe_src_copy = std::make_unique<std::byte[]>(src_buf.size_bytes());
+            maybe_src_copy = std::unique_ptr<std::byte[]>(new std::byte[src_buf.size_bytes()]);
             std::memcpy(maybe_src_copy->get(), src_buf.data(), src_buf.size_bytes());
             src_buf = std::span<const std::byte>(maybe_src_copy->get(), src_buf.size_bytes());
         }
@@ -496,7 +479,7 @@ std::pair<bool, bool> ccoip::reduce::pipelineRingReduce(
         }
     }
     const size_t max_chunk_size_bytes_q = max_chunk_el * quant_type_el_size;
-    auto recv_buffer = std::make_unique<std::byte[]>(max_chunk_size_bytes_q);
+    auto recv_buffer = std::unique_ptr<std::byte[]>(new std::byte[max_chunk_size_bytes_q]);
     std::span recv_buffer_span{recv_buffer.get(), max_chunk_size_bytes_q};
 
 
@@ -526,7 +509,7 @@ std::pair<bool, bool> ccoip::reduce::pipelineRingReduce(
         std::unique_ptr<std::byte[]> quantized_data;
         std::optional<DeQuantizationMetaData> meta_data;
         if (quantized_type != data_type && quantization_algorithm != ccoipQuantizationNone && tx_size_el > 0) {
-            quantized_data = std::make_unique<std::byte[]>(tx_size_el * quant_type_el_size);
+            quantized_data = std::unique_ptr<std::byte[]>(new std::byte[tx_size_el * quant_type_el_size]);
             std::span q_span(quantized_data.get(), tx_size_el * quant_type_el_size);
             meta_data = performQuantization(q_span,
                                             tx_unquantized,

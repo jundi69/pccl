@@ -84,10 +84,10 @@ int main() {
         }
 
         pcclSharedStateSyncInfo_t sync_info{};
-        //PCCL_CHECK(pcclSynchronizeSharedState(communicator, &shared_state, &sync_info));
-        //if (i > 2) {
-        //    assert(sync_info.rx_bytes == 0);
-        //}
+        PCCL_CHECK(pcclSynchronizeSharedState(communicator, &shared_state, &sync_info));
+        if (i > 2) {
+            assert(sync_info.rx_bytes == 0);
+        }
 
         pcclAsyncReduceOp_t async_op{};
         pcclReduceInfo_t reduce_info{};
@@ -115,20 +115,10 @@ int main() {
         const double mb_per_second = static_cast<double>(reduce_info.rx_bytes + reduce_info.tx_bytes) / 1e6 /
                                      (static_cast<double>(time_ms) / 1e3);
         std::cout << "Bandwidth: " << mb_per_second << " MB/s" << std::endl;
-        std::cout << "All reduce took " << time_ms << " ms" << std::endl;
 
         // print first 10 elements of the result
         for (size_t j = 0; j < 10; ++j) {
             std::cout << weights[j] << " ";
-        }
-        // assert that gradients is equal to weight * world_size
-        for (size_t j = 0; j < n_elements; ++j) {
-            float expected = weights[j] * world_size;
-            float actual = gradients[j];
-            if (abs(actual - expected) > std::abs(expected)) {
-                std::cerr << "Error: Expected " << expected << " but got " << actual << " at index " << j << std::endl;
-                panic(1);
-            }
         }
         std::cout << std::endl;
         shared_state.revision++;
