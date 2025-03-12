@@ -391,6 +391,7 @@ std::pair</* success */ bool, /* aborted */ bool> tinysockets::fullDuplexSendRec
     bool was_no_event = false;
     while (bytes_sent < total_tx_size || bytes_recvd < total_rx_size) {
         bool no_event = true;
+        bool performed_send = false;
 
         // 3a) Send if ready
         if (bytes_sent < total_tx_size) {
@@ -398,6 +399,7 @@ std::pair</* success */ bool, /* aborted */ bool> tinysockets::fullDuplexSendRec
             const auto send_sub = tx_span.subspan(bytes_sent, next_chunk_size);
             if (tx_socket.sendBytesAsync(tag, send_sub)) {
                 no_event = false;
+                performed_send = true;
                 const size_t n_sent = send_sub.size_bytes();
                 send_callback(send_sub.size_bytes(), bytes_sent);
                 bytes_sent += n_sent;
@@ -419,10 +421,15 @@ std::pair</* success */ bool, /* aborted */ bool> tinysockets::fullDuplexSendRec
                     std::this_thread::yield();
                 }
             } else {
+                if (performed_send) {
+                    tx_socket.awaitSendOp(tag);
+                }
                 return {false, false};
             }
         }
-        tx_socket.awaitSendOp(tag);
+        if (performed_send) {
+            tx_socket.awaitSendOp(tag);
+        }
 
         if (no_event) {
             if (!no_event_callback(true)) {

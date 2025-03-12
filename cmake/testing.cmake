@@ -1,4 +1,4 @@
-option(PCCL_SANITIZE_TESTS "Enable address sanitizer for tests" ON)
+option(PCCL_SANITIZE_TESTS "Enable address sanitizer for tests" OFF)
 
 if (DEFINED $ENV{IS_CI})
     message(STATUS "Running in CI, enabling sanitizers in tests")

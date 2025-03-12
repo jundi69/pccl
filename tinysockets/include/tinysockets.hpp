@@ -567,9 +567,13 @@ namespace tinysockets {
             PacketWriteBuffer complete_packet{};
             complete_packet.write(packet_id);
             complete_packet.writeContents(buffer.data(), buffer.size());
-            return sendBytesAsync(tag,
+            const auto success = sendBytesAsync(tag,
                              std::span(reinterpret_cast<const std::byte *>(complete_packet.data()),
                                        complete_packet.size()));
+            if (success) {
+                awaitSendOp(tag);
+            }
+            return success;
         }
     };
 
