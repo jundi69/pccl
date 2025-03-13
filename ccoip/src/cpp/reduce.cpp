@@ -20,6 +20,7 @@
 /// quantization runs less frequently but potentially for longer.
 #define DEFAULT_MULTIPLEX_CHUNK_SIZE size_t(8388608ull)
 
+#define CEIL_TO_MULTIPLE(x, m) (((x) + (m) - 1) / (m) * (m))
 
 namespace {
 
@@ -447,7 +448,7 @@ std::pair<bool, bool> ccoip::reduce::pipelineRingReduce(
         const auto *dst_end = dst_beg + dst_buf.size_bytes();
         const bool overlap = !((src_end <= dst_beg) || (dst_end <= src_beg));
         if (overlap) {
-            maybe_src_copy = std::unique_ptr<std::byte[]>(new std::byte[src_buf.size_bytes()]);
+            maybe_src_copy = std::unique_ptr<std::byte[]>(static_cast<std::byte *>(std::aligned_alloc(32, CEIL_TO_MULTIPLE(src_buf.size_bytes(), 32))));
             std::memcpy(maybe_src_copy->get(), src_buf.data(), src_buf.size_bytes());
             src_buf = std::span<const std::byte>(maybe_src_copy->get(), src_buf.size_bytes());
         }
@@ -480,7 +481,7 @@ std::pair<bool, bool> ccoip::reduce::pipelineRingReduce(
         }
     }
     const size_t max_chunk_size_bytes_q = max_chunk_el * quant_type_el_size;
-    auto recv_buffer = std::unique_ptr<std::byte[]>(new std::byte[max_chunk_size_bytes_q]);
+    auto recv_buffer = std::unique_ptr<std::byte[]>(static_cast<std::byte *>(std::aligned_alloc(32, CEIL_TO_MULTIPLE(max_chunk_size_bytes_q, 32))));
     std::span recv_buffer_span{recv_buffer.get(), max_chunk_size_bytes_q};
 
 
@@ -510,7 +511,7 @@ std::pair<bool, bool> ccoip::reduce::pipelineRingReduce(
         std::unique_ptr<std::byte[]> quantized_data;
         std::optional<DeQuantizationMetaData> meta_data;
         if (quantized_type != data_type && quantization_algorithm != ccoipQuantizationNone && tx_size_el > 0) {
-            quantized_data = std::unique_ptr<std::byte[]>(new std::byte[tx_size_el * quant_type_el_size]);
+            quantized_data = std::unique_ptr<std::byte[]>(static_cast<std::byte *>(std::aligned_alloc(32, CEIL_TO_MULTIPLE(tx_size_el * quant_type_el_size, 32))));
             std::span q_span(quantized_data.get(), tx_size_el * quant_type_el_size);
             meta_data = performQuantization(q_span,
                                             tx_unquantized,
@@ -590,7 +591,7 @@ std::pair<bool, bool> ccoip::reduce::pipelineRingReduce(
                 // if this is the first stage, we quantize our own finished chunk.
                 assert(step == 0); // only in stage 0 should this ever happen.
                 if (quantized_data == nullptr) {
-                    quantized_data = std::unique_ptr<std::byte[]>(new std::byte[tx_size_el * quant_type_el_size]);
+                    quantized_data = std::unique_ptr<std::byte[]>(static_cast<std::byte *>(std::aligned_alloc(32, CEIL_TO_MULTIPLE(tx_size_el * quant_type_el_size, 32))));
                     // only allocate once
                 }
                 std::span q_span(quantized_data.get(), tx_size_el * quant_type_el_size);
@@ -632,7 +633,7 @@ std::pair<bool, bool> ccoip::reduce::pipelineRingReduce(
 
         // we will hold on to the quantized data we just received and forward it verbatim in the next step.
         if (owned_data_ptr == nullptr) {
-            owned_data_ptr = std::unique_ptr<std::byte[]>(new std::byte[max_chunk_size_el * quant_type_el_size]);
+            owned_data_ptr = std::unique_ptr<std::byte[]>(static_cast<std::byte *>(std::aligned_alloc(32, CEIL_TO_MULTIPLE(max_chunk_size_el * quant_type_el_size, 32))));
             owned_data_span = std::span(owned_data_ptr.get(), max_chunk_size_el * quant_type_el_size);
         }
         std::memcpy(owned_data_span.data(), recv_sub.data(), owned_data_span.size_bytes());
