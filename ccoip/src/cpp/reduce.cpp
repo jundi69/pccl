@@ -143,7 +143,6 @@ namespace {
                     if (abort_packet) {
                         return {true, true};
                     }
-                    std::this_thread::yield();
                     continue;
                 }
                 received_meta_data = metadata_packet->dequantization_meta;
@@ -211,8 +210,6 @@ namespace {
                                              op,
                                              received_meta_data);
                         }
-                    } else {
-                        std::this_thread::yield();
                     }
                 } else {
                     return {false, false};
@@ -313,7 +310,6 @@ namespace {
                     if (abort_packet) {
                         return {true, true};
                     }
-                    std::this_thread::yield();
                     continue;
                 }
                 received_meta_data = metadata_packet->dequantization_meta;
@@ -378,8 +374,6 @@ namespace {
                                              ccoip::ccoipOpSet, // = copy
                                              received_meta_data);
                         }
-                    } else {
-                        std::this_thread::yield();
                     }
                 } else {
                     return {false, false};
