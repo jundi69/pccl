@@ -10,6 +10,7 @@
 #include <shared_mutex>
 #include <threadpark.h>
 #include "tinysockets.hpp"
+#include <pccl/common/alloc_utils.h>
 
 #ifndef _MSC_VER
 #define RESTRICT __restrict__
@@ -207,7 +208,7 @@ bool tinysockets::MultiplexedIOSocket::run() {
                         LOG(ERR) << "Failed to interrupt MultiplexedIOSocket";
                     }
                 }
-                auto data_ptr = std::unique_ptr<std::byte[]>(static_cast<std::byte *>(std::aligned_alloc(32, CEIL_TO_MULTIPLE(length, 32))));
+                auto data_ptr = std::unique_ptr<std::byte[]>(static_cast<std::byte *>(do_aligned_alloc(32, CEIL_TO_MULTIPLE(length, 32))));
                 std::span data{reinterpret_cast<uint8_t *>(data_ptr.get()), length};
                 if (!receivePacketData(data)) {
                     if (running.load(std::memory_order_acquire)) {
@@ -336,7 +337,7 @@ bool tinysockets::MultiplexedIOSocket::sendBytes(const uint64_t tag, const std::
     }
     auto *entry = new SendQueueEntry();
     entry->tag = tag;
-    entry->data = std::unique_ptr<uint8_t[]>(static_cast<uint8_t *>(std::aligned_alloc(32, CEIL_TO_MULTIPLE(data.size(), 32))));
+    entry->data = std::unique_ptr<uint8_t[]>(static_cast<uint8_t *>(do_aligned_alloc(32, CEIL_TO_MULTIPLE(data.size(), 32))));
     entry->size_bytes = data.size_bytes();
     std::memcpy(entry->data.get(), data.data(), data.size()); {
         if (!internal_state->send_queue.enqueue(entry, true)) {
