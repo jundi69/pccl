@@ -1,6 +1,7 @@
 #include "reduce.hpp"
 
 #include <cassert>
+#include <cstdlib>
 #include <algorithm>
 #include <ccoip_master_state.hpp>
 #include <cstring>

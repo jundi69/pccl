@@ -1,9 +1,11 @@
 #include <ccoip_utils.hpp>
 #include <win_sock_bridge.h>
 
+#include <cstdlib>
+#include <cstring>
+
 #include <MPSCQueue.hpp>
 #include <SPSCQueue.hpp>
-#include <cstring>
 #include <network_order_utils.hpp>
 #include <shared_mutex>
 #include <threadpark.h>
