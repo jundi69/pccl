@@ -10,7 +10,7 @@
 #include <reduce_kernels.hpp>
 #include <tinysockets.hpp>
 #include <win_sock_bridge.h>
-#include <pccl/common/pmemcpy.hpp>
+#include <pccl/common/fmemcpy.hpp>
 
 /// Chunk size passed to the send() function of the MultiplexedIOSocket.
 /// This determines the maximum size of a single local tagged chunk as managed by the multiplexer.
@@ -418,13 +418,14 @@ std::pair<bool, bool> ccoip::reduce::pipelineRingReduce(
     peer_tx_sockets,
     const std::unordered_map<ccoip_uuid_t, std::unique_ptr<tinysockets::MultiplexedIOSocket>> &
     peer_rx_sockets) {
+
     using namespace ccoip::internal::quantize;
     using namespace ccoip::internal::reduce;
 
     // If world_size < 2, just copy and finalize
     if (world_size < 2) {
         if (dst_buf.data() != src_buf.data()) {
-            pmemcpy(dst_buf.data(), src_buf.data(), src_buf.size_bytes());
+            fast_memcpy(dst_buf.data(), src_buf.data(), src_buf.size_bytes());
         }
         performReduceFinalization(dst_buf, data_type, world_size, op);
         return {true, false};
@@ -440,15 +441,15 @@ std::pair<bool, bool> ccoip::reduce::pipelineRingReduce(
         const auto *dst_end = dst_beg + dst_buf.size_bytes();
         const bool overlap = !((src_end <= dst_beg) || (dst_end <= src_beg));
         if (overlap) {
-            maybe_src_copy = std::unique_ptr<std::byte[]>(new std::byte[src_buf.size_bytes()]);
-            pmemcpy(maybe_src_copy->get(), src_buf.data(), src_buf.size_bytes());
+            maybe_src_copy = std::unique_ptr<std::byte[]>(static_cast<std::byte *>(std::aligned_alloc(32, src_buf.size_bytes())));
+            fast_memcpy(maybe_src_copy->get(), src_buf.data(), src_buf.size_bytes());
             src_buf = std::span<const std::byte>(maybe_src_copy->get(), src_buf.size_bytes());
         }
     }
 
     // Copy local data into dst_buf so we can reduce in place
     if (!src_and_dest_identical_ptr) {
-        pmemcpy(dst_buf.data(), src_buf.data(), src_buf.size_bytes());
+        fast_memcpy(dst_buf.data(), src_buf.data(), src_buf.size_bytes());
     } else {
         // if src and dest are identical, they definitely overlap
         // which means that we just created a copy of src buf and made it the src buf, leaving the original ptr in dst_buf,
@@ -473,7 +474,7 @@ std::pair<bool, bool> ccoip::reduce::pipelineRingReduce(
         }
     }
     const size_t max_chunk_size_bytes_q = max_chunk_el * quant_type_el_size;
-    auto recv_buffer = std::unique_ptr<std::byte[]>(new std::byte[max_chunk_size_bytes_q]);
+    auto recv_buffer = std::unique_ptr<std::byte[]>(static_cast<std::byte *>(std::aligned_alloc(32, max_chunk_size_bytes_q)));
     std::span recv_buffer_span{recv_buffer.get(), max_chunk_size_bytes_q};
 
 
@@ -503,7 +504,7 @@ std::pair<bool, bool> ccoip::reduce::pipelineRingReduce(
         std::unique_ptr<std::byte[]> quantized_data;
         std::optional<DeQuantizationMetaData> meta_data;
         if (quantized_type != data_type && quantization_algorithm != ccoipQuantizationNone && tx_size_el > 0) {
-            quantized_data = std::unique_ptr<std::byte[]>(new std::byte[tx_size_el * quant_type_el_size]);
+            quantized_data = std::unique_ptr<std::byte[]>(static_cast<std::byte *>(std::aligned_alloc(32, tx_size_el * quant_type_el_size)));
             std::span q_span(quantized_data.get(), tx_size_el * quant_type_el_size);
             meta_data = performQuantization(q_span,
                                             tx_unquantized,
@@ -583,7 +584,7 @@ std::pair<bool, bool> ccoip::reduce::pipelineRingReduce(
                 // if this is the first stage, we quantize our own finished chunk.
                 assert(step == 0); // only in stage 0 should this ever happen.
                 if (quantized_data == nullptr) {
-                    quantized_data = std::unique_ptr<std::byte[]>(new std::byte[tx_size_el * quant_type_el_size]);
+                    quantized_data = std::unique_ptr<std::byte[]>(static_cast<std::byte *>(std::aligned_alloc(32, tx_size_el * quant_type_el_size)));
                     // only allocate once
                 }
                 std::span q_span(quantized_data.get(), tx_size_el * quant_type_el_size);
@@ -625,10 +626,10 @@ std::pair<bool, bool> ccoip::reduce::pipelineRingReduce(
 
         // we will hold on to the quantized data we just received and forward it verbatim in the next step.
         if (owned_data_ptr == nullptr) {
-            owned_data_ptr = std::unique_ptr<std::byte[]>(new std::byte[max_chunk_size_el * quant_type_el_size]);
+            owned_data_ptr = std::unique_ptr<std::byte[]>(static_cast<std::byte *>(std::aligned_alloc(32, max_chunk_size_el * quant_type_el_size)));
             owned_data_span = std::span(owned_data_ptr.get(), max_chunk_size_el * quant_type_el_size);
         }
-        pmemcpy(owned_data_span.data(), recv_sub.data(), owned_data_span.size_bytes());
+        fast_memcpy(owned_data_span.data(), recv_sub.data(), owned_data_span.size_bytes());
 
         // The newly received chunk (inc_idx) becomes our "owned" chunk for the next step
         current_chunk_idx = inc_idx;
