@@ -10,7 +10,7 @@
 #include <reduce_kernels.hpp>
 #include <tinysockets.hpp>
 #include <win_sock_bridge.h>
-
+#include <pccl/common/pmemcpy.hpp>
 
 /// Chunk size passed to the send() function of the MultiplexedIOSocket.
 /// This determines the maximum size of a single local tagged chunk as managed by the multiplexer.
@@ -424,7 +424,7 @@ std::pair<bool, bool> ccoip::reduce::pipelineRingReduce(
     // If world_size < 2, just copy and finalize
     if (world_size < 2) {
         if (dst_buf.data() != src_buf.data()) {
-            std::memcpy(dst_buf.data(), src_buf.data(), src_buf.size_bytes());
+            pmemcpy(dst_buf.data(), src_buf.data(), src_buf.size_bytes());
         }
         performReduceFinalization(dst_buf, data_type, world_size, op);
         return {true, false};
@@ -441,14 +441,14 @@ std::pair<bool, bool> ccoip::reduce::pipelineRingReduce(
         const bool overlap = !((src_end <= dst_beg) || (dst_end <= src_beg));
         if (overlap) {
             maybe_src_copy = std::unique_ptr<std::byte[]>(new std::byte[src_buf.size_bytes()]);
-            std::memcpy(maybe_src_copy->get(), src_buf.data(), src_buf.size_bytes());
+            pmemcpy(maybe_src_copy->get(), src_buf.data(), src_buf.size_bytes());
             src_buf = std::span<const std::byte>(maybe_src_copy->get(), src_buf.size_bytes());
         }
     }
 
     // Copy local data into dst_buf so we can reduce in place
     if (!src_and_dest_identical_ptr) {
-        std::memcpy(dst_buf.data(), src_buf.data(), src_buf.size_bytes());
+        pmemcpy(dst_buf.data(), src_buf.data(), src_buf.size_bytes());
     } else {
         // if src and dest are identical, they definitely overlap
         // which means that we just created a copy of src buf and made it the src buf, leaving the original ptr in dst_buf,
@@ -628,7 +628,7 @@ std::pair<bool, bool> ccoip::reduce::pipelineRingReduce(
             owned_data_ptr = std::unique_ptr<std::byte[]>(new std::byte[max_chunk_size_el * quant_type_el_size]);
             owned_data_span = std::span(owned_data_ptr.get(), max_chunk_size_el * quant_type_el_size);
         }
-        std::memcpy(owned_data_span.data(), recv_sub.data(), owned_data_span.size_bytes());
+        pmemcpy(owned_data_span.data(), recv_sub.data(), owned_data_span.size_bytes());
 
         // The newly received chunk (inc_idx) becomes our "owned" chunk for the next step
         current_chunk_idx = inc_idx;
