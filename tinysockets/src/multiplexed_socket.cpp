@@ -8,7 +8,6 @@
 #include <shared_mutex>
 #include <threadpark.h>
 #include "tinysockets.hpp"
-#include <pccl/common/fmemcpy.hpp>
 
 #ifndef _MSC_VER
 #define RESTRICT __restrict__
@@ -333,7 +332,7 @@ bool tinysockets::MultiplexedIOSocket::sendBytes(const uint64_t tag, const std::
     entry->tag = tag;
     entry->data = std::unique_ptr<uint8_t[]>(static_cast<uint8_t *>(std::aligned_alloc(32, data.size())));
     entry->size_bytes = data.size_bytes();
-    fast_memcpy(entry->data.get(), data.data(), data.size()); {
+    std::memcpy(entry->data.get(), data.data(), data.size()); {
         if (!internal_state->send_queue.enqueue(entry, true)) {
             LOG(ERR) << "MultiplexedIOSocket::sendBytes() failed to enqueue data; MPSC queue is full";
             return false;
@@ -371,7 +370,7 @@ std::optional<ssize_t> tinysockets::MultiplexedIOSocket::receiveBytesInplace(con
                     << " bytes but got " << data.size_bytes();
             continue;
         }
-        fast_memcpy(data.data(), entry.data_span.data(), entry.data_span.size_bytes());
+        std::memcpy(data.data(), entry.data_span.data(), entry.data_span.size_bytes());
         return static_cast<ssize_t>(entry.data_span.size_bytes());
     }
 }
