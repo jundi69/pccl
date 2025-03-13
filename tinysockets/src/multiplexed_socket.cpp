@@ -1,7 +1,6 @@
 #include <ccoip_utils.hpp>
 #include <win_sock_bridge.h>
 
-#include <cstdlib>
 #include <cstring>
 
 #include <MPSCQueue.hpp>
@@ -10,15 +9,13 @@
 #include <shared_mutex>
 #include <threadpark.h>
 #include "tinysockets.hpp"
-#include <pccl/common/alloc_utils.h>
+#include <pccl/common/alloc_utils.hpp>
 
 #ifndef _MSC_VER
 #define RESTRICT __restrict__
 #else
 #define RESTRICT __restrict
 #endif
-
-#define CEIL_TO_MULTIPLE(x, m) (((x) + (m) - 1) / (m) * (m))
 
 
 static bool configure_socket_fd(const int socket_fd) {
@@ -45,13 +42,13 @@ static bool configure_socket_fd(const int socket_fd) {
 
 struct ReceiveQueueEntry {
     uint64_t tag{};
-    std::unique_ptr<std::byte[]> data;
+    std::unique_ptr<std::byte[], AlignedFreeDeleter> data;
     std::span<std::byte> data_span{};
 };
 
 struct SendQueueEntry {
     uint64_t tag{};
-    std::unique_ptr<uint8_t[]> data;
+    std::unique_ptr<uint8_t[], AlignedFreeDeleter> data;
     size_t size_bytes{};
 };
 
@@ -208,7 +205,7 @@ bool tinysockets::MultiplexedIOSocket::run() {
                         LOG(ERR) << "Failed to interrupt MultiplexedIOSocket";
                     }
                 }
-                auto data_ptr = std::unique_ptr<std::byte[]>(static_cast<std::byte *>(do_aligned_alloc(32, CEIL_TO_MULTIPLE(length, 32))));
+                auto data_ptr = do_aligned_alloc_unique<std::byte>(32, length);
                 std::span data{reinterpret_cast<uint8_t *>(data_ptr.get()), length};
                 if (!receivePacketData(data)) {
                     if (running.load(std::memory_order_acquire)) {
@@ -337,7 +334,7 @@ bool tinysockets::MultiplexedIOSocket::sendBytes(const uint64_t tag, const std::
     }
     auto *entry = new SendQueueEntry();
     entry->tag = tag;
-    entry->data = std::unique_ptr<uint8_t[]>(static_cast<uint8_t *>(do_aligned_alloc(32, CEIL_TO_MULTIPLE(data.size(), 32))));
+    entry->data = do_aligned_alloc_unique<uint8_t>(32, data.size());
     entry->size_bytes = data.size_bytes();
     std::memcpy(entry->data.get(), data.data(), data.size()); {
         if (!internal_state->send_queue.enqueue(entry, true)) {
@@ -382,7 +379,7 @@ std::optional<ssize_t> tinysockets::MultiplexedIOSocket::receiveBytesInplace(con
     }
 }
 
-std::optional<std::unique_ptr<std::byte[]>> tinysockets::MultiplexedIOSocket::receiveBytes(const uint64_t tag,
+std::optional<std::unique_ptr<std::byte[], AlignedFreeDeleter>> tinysockets::MultiplexedIOSocket::receiveBytes(const uint64_t tag,
     std::span<std::byte> &data,
     const bool no_wait) const {
     if (!(flags & MODE_RX)) {

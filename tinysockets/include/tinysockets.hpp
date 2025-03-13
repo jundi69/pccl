@@ -12,6 +12,7 @@
 #include <mutex>
 #include <atomic>
 #include <condition_variable>
+#include <pccl/common/alloc_utils.hpp>
 
 #ifdef WIN32
 typedef long long int ssize_t;
@@ -491,7 +492,7 @@ namespace tinysockets {
 
         [[nodiscard]] std::optional<ssize_t> receiveBytesInplace(uint64_t tag, const std::span<std::byte> &data) const;
 
-        [[nodiscard]] std::optional<std::unique_ptr<std::byte[]>> receiveBytes(
+        [[nodiscard]] std::optional<std::unique_ptr<std::byte[], AlignedFreeDeleter>> receiveBytes(
             uint64_t tag, std::span<std::byte> &data, bool no_wait) const;
 
         /// Sends a packet to the client associated with the given socket address
@@ -544,7 +545,7 @@ namespace tinysockets {
             if (data_uptr_opt == nullptr) {
                 return std::nullopt;
             }
-            const std::unique_ptr<std::byte[]> data_uptr = std::move(*data_uptr_opt);
+            const std::unique_ptr<std::byte[], AlignedFreeDeleter> data_uptr = std::move(*data_uptr_opt);
             PacketReadBuffer buffer{reinterpret_cast<uint8_t *>(data_span.data()), data_span.size_bytes()};
             if (const auto actual_packet_id = buffer.read<ccoip::packetId_t>(); actual_packet_id != packet_id) {
                 LOG(ERR) << "Expected packet ID " << packet_id << " but received " << actual_packet_id;
