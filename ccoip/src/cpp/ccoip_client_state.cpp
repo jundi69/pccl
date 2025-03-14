@@ -166,7 +166,6 @@ std::optional<bool> ccoip::CCoIPClientState::hasCollectiveComsOpFailed(const uin
 }
 
 const ccoip_shared_state_t &ccoip::CCoIPClientState::getCurrentSharedState() {
-    THREAD_GUARD(main_thread_id);
     std::shared_lock lock(current_shared_state_mutex);
     return current_shared_state;
 }
