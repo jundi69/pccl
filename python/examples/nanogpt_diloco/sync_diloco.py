@@ -141,7 +141,7 @@ def all_reduce_multiple_with_retry(communicator: Communicator,
         for h in handles:
             if h is not None:
                 h.wait()
-        return False
+        return False, total_tx, total_rx
 
     return True, total_tx, total_rx
 

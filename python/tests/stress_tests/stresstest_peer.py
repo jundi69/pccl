@@ -15,71 +15,107 @@ RANK: int = int(os.getenv('RANK', "0"))
 logging.basicConfig(level=logging.INFO)
 
 
-def all_reduce_multiple_with_retry(communicator: Communicator, tensors: List[torch.Tensor], op: ReduceOp, it: int = 0):
+def all_reduce_multiple_with_retry(communicator: Communicator,
+                                   tensors: list[torch.Tensor],
+                                   op: ReduceOp,
+                                   max_in_flight: int = 8):
+    """
+    Launches concurrent all-reduce operations on a list of tensors,
+    waits for them all, and retries if a peer fails or the world size changes.
+    """
     world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
+
+    total_tx = 0
+    total_rx = 0
 
     def launch_all_reduce(x: torch.Tensor, tag: int):
         op_desc = ReduceOperandDescriptor(
             datatype=DataType.FLOAT,
             distribution_hint=DistributionHint.NORMAL
         )
+        # Example uses min-max quantization to demonstrate concurrency
         quant_desc = QuantizationOptions(
-            quantized_datatype=DataType.UINT8,
-            algorithm=QuantizationAlgorithm.MIN_MAX
+            quantized_datatype=DataType.FLOAT,
+            algorithm=QuantizationAlgorithm.NONE
         )
-        return communicator.all_reduce_async(x, x, operand_descriptor=op_desc,
-                                             quantization_options=quant_desc,
-                                             op=op, tag=tag)
+        return communicator.all_reduce_async(
+            x, x,
+            operand_descriptor=op_desc,
+            quantization_options=quant_desc,
+            op=op,
+            tag=tag
+        )
 
-    handles: List[Optional[AsyncReduceHandle]] = [None for _ in range(len(tensors))]
+    handles = [None for _ in range(len(tensors))]
     done_handles = set()
 
+    in_flight = 0
     for tensor_index in range(len(tensors)):
-        handles[tensor_index] = launch_all_reduce(tensors[tensor_index], tensor_index)
+        dst_tensor = tensors[tensor_index]
+
+        if in_flight >= max_in_flight:
+            break
+
+        handles[tensor_index] = launch_all_reduce(
+            dst_tensor,
+            tensor_index
+        )
+        in_flight += 1
 
     while world_size > 1:
         all_done = True
         for tensor_index in range(len(tensors)):
             handle = handles[tensor_index]
+            dst_tensor = tensors[tensor_index]
+
             if handle is None:
                 if tensor_index in done_handles:
                     continue
-                else:
-                    handle = handles[tensor_index] = launch_all_reduce(tensors[tensor_index], tensor_index)
 
-            print(f"(RANK={RANK}, it={it}) all_reduce_async wait({tensor_index})")
+                if in_flight >= max_in_flight:
+                    continue
+
+                handle = handles[tensor_index] = launch_all_reduce(
+                    dst_tensor,
+                    tensor_index
+                )
+                in_flight += 1
+
             is_success, status, info = handle.wait()
             world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
             if not is_success:
-                print(f"(RANK={RANK}, it={it}) all_reduce_async({tensor_index}) failed; New world_size: {world_size}")
-                print(f"(RANK={RANK}, it={it}) waiting for all async operations to complete before retrying...")
+                handles[tensor_index] = None
+                # Wait for all ongoing ops to finish or fail before retry
                 for j in range(len(tensors)):
                     if j == tensor_index:
                         continue
-                    handle = handles[j]
-                    if handle is not None:
-                        is_success, status, info = handle.wait()
-                        if is_success:
+                    h_j = handles[j]
+                    if h_j is not None:
+                        s_j, _, _ = h_j.wait()
+                        if s_j:
                             done_handles.add(j)
-                        handles[tensor_index] = None
-                print(f"(RANK={RANK}, it={it}) all async operations awaited; retrying...")
-                handles[tensor_index] = None
+                        in_flight -= 1
+                    handles[j] = None
                 all_done = False
                 break
-            assert info is not None
-            print(
-                f"(RANK={RANK}, it={it}) Reduce completed RX: {info.rx_bytes}, TX: {info.tx_bytes}; world_size: {info.world_size}")
+
+            # success for this handle
             handles[tensor_index] = None
             done_handles.add(tensor_index)
+
+            total_tx += info.tx_bytes
+            total_rx += info.rx_bytes
+
+            in_flight -= 1
 
         if all_done:
             break
 
     if world_size == 1:
-        # await all handles
-        for handle in handles:
-            if handle is not None:
-                handle.wait()
+        # If we are alone, just finalize all handles and return
+        for h in handles:
+            if h is not None:
+                h.wait()
         return False
 
     return True
