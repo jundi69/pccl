@@ -40,16 +40,17 @@ namespace ccoip {
         /// References the current shared state to be distributed.
         /// Is only valid when @code is_syncing_shared_state@endcode is true and is otherwise empty.
         ccoip_shared_state_t current_shared_state{};
+        std::shared_mutex current_shared_state_mutex{};
 
         /// Whether the client is currently syncing shared state.
         /// If this flag is false while the shared state distribution server receives
         /// a shared state request, the server will respond with @code SHARED_STATE_NOT_DISTRIBUTED@endcode
-        bool is_syncing_shared_state = false;
+        std::atomic_bool is_syncing_shared_state = false;
 
         /// The number of bytes sent during the shared state sync phase
         /// Accessible by @code getSharedStateSyncTxBytes()@endcode
         /// Reset by @code resetSharedStateSyncTxBytes()@endcode
-        size_t shared_state_sync_tx_bytes = 0;
+        std::atomic_size_t shared_state_sync_tx_bytes = 0;
 
         /// The number of bytes sent during ongoing collective communications operations
         /// Accessible by @code getCollectiveComsTxBytes(uint32_t tag)@endcode
@@ -60,7 +61,7 @@ namespace ccoip {
         /// The number of bytes received during ongoing collective communications operations
         /// Accessible by @code trackCollectiveComsRxBytes(uint32_t tag)@endcode
         /// Cleared by @code resetCollectiveComsRxBytes(uint32_t tag)@endcode
-        std::unordered_map<uint64_t, size_t> collective_coms_rx_bytes{};
+        std::unordered_map<uint64_t, std::atomic_size_t> collective_coms_rx_bytes{};
         std::shared_mutex collective_coms_rx_bytes_mutex{};
 
         /// The connection revision active at the start of the collective communications operation with the specified tag
@@ -78,6 +79,7 @@ namespace ccoip {
 
         /// Tags of all running collective communications operations
         std::unordered_set<uint64_t> running_collective_coms_ops_tags{};
+        std::shared_mutex running_collective_coms_ops_tags_mutex{};
 
         /// Threadpool for currently running collective communications operations
         pi::threadpool::ThreadPool collective_coms_threadpool{GetMaxConcurrentCollectiveOps(), 64};
@@ -95,6 +97,8 @@ namespace ccoip {
         // TODO: THIS IS SUBJECT TO CHANGE AND A TEMPORARY HACK!!
         //  FOR NOW ASSERT THE TOPOLOGY TO BE A SIMPLE RING REDUCE WITH A NON-PIPELINED ORDER
         std::vector<ccoip_uuid_t> ring_order;
+
+        std::thread::id main_thread_id;
 
     public:
         CCoIPClientState();
@@ -143,7 +147,7 @@ namespace ccoip {
         [[nodiscard]] std::optional<bool> hasCollectiveComsOpFailed(uint64_t tag);
 
         /// Returns the currently synced shared state
-        [[nodiscard]] const ccoip_shared_state_t &getCurrentSharedState() const;
+        [[nodiscard]] const ccoip_shared_state_t &getCurrentSharedState();
 
         /// Returns the number of bytes sent during the shared state sync phase
         [[nodiscard]] size_t getSharedStateSyncTxBytes() const;
@@ -198,9 +202,7 @@ namespace ccoip {
         }
 
         /// Returns the world size. World size shall mean the number of peers participating in the peer group that this client is a part of.
-        [[nodiscard]] size_t getWorldSize() const {
-            return ring_order.size();
-        }
+        [[nodiscard]] size_t getWorldSize() const;
 
     private:
         /// Declares a collective communications operation with the specified tag started.
