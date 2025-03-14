@@ -1,22 +1,19 @@
 #include <ccoip_utils.hpp>
 #include <win_sock_bridge.h>
 
-#include <cstring>
-
 #include <MPSCQueue.hpp>
 #include <SPSCQueue.hpp>
+#include <cstring>
 #include <network_order_utils.hpp>
 #include <shared_mutex>
 #include <threadpark.h>
 #include "tinysockets.hpp"
-#include <pccl/common/alloc_utils.hpp>
 
 #ifndef _MSC_VER
 #define RESTRICT __restrict__
 #else
 #define RESTRICT __restrict
 #endif
-
 
 static bool configure_socket_fd(const int socket_fd) {
     constexpr int opt = 1;
@@ -42,13 +39,13 @@ static bool configure_socket_fd(const int socket_fd) {
 
 struct ReceiveQueueEntry {
     uint64_t tag{};
-    std::unique_ptr<std::byte[], AlignedFreeDeleter> data;
+    std::unique_ptr<std::byte[]> data;
     std::span<std::byte> data_span{};
 };
 
 struct SendQueueEntry {
     uint64_t tag{};
-    std::unique_ptr<uint8_t[], AlignedFreeDeleter> data;
+    std::unique_ptr<uint8_t[]> data;
     size_t size_bytes{};
 };
 
@@ -59,7 +56,7 @@ namespace tinysockets {
         MPSCQueue<SendQueueEntry> send_queue;
 
         std::shared_mutex receive_queues_mutex{};
-        std::unordered_map<uint64_t, std::unique_ptr<::rigtorp::SPSCQueue<ReceiveQueueEntry>>> receive_queues{};
+        std::unordered_map<uint64_t, std::unique_ptr<::rigtorp::SPSCQueue<ReceiveQueueEntry> > > receive_queues{};
 
         tpark_handle_t *tx_park_handle = nullptr;
 
@@ -177,8 +174,7 @@ bool tinysockets::MultiplexedIOSocket::run() {
         recv_thread = std::thread([this] {
             while (running.load(std::memory_order_acquire)) {
                 uint64_t header[2]{};
-                if (std::span header_span(reinterpret_cast<uint8_t *>(header), sizeof(header)); !receivePacketData(
-                    header_span)) {
+                if (std::span header_span(reinterpret_cast<uint8_t *>(header), sizeof(header)); !receivePacketData(header_span)) {
                     if (running.load(std::memory_order_acquire)) {
                         LOG(ERR) << "Failed to receive multiplex header for packet";
                         if (!interrupt()) [[unlikely]] {
@@ -205,7 +201,7 @@ bool tinysockets::MultiplexedIOSocket::run() {
                         LOG(ERR) << "Failed to interrupt MultiplexedIOSocket";
                     }
                 }
-                auto data_ptr = do_aligned_alloc_unique<std::byte>(32, length);
+                auto data_ptr = std::unique_ptr<std::byte[]>(new std::byte[length]);
                 std::span data{reinterpret_cast<uint8_t *>(data_ptr.get()), length};
                 if (!receivePacketData(data)) {
                     if (running.load(std::memory_order_acquire)) {
@@ -334,7 +330,7 @@ bool tinysockets::MultiplexedIOSocket::sendBytes(const uint64_t tag, const std::
     }
     auto *entry = new SendQueueEntry();
     entry->tag = tag;
-    entry->data = do_aligned_alloc_unique<uint8_t>(32, data.size());
+    entry->data = std::unique_ptr<uint8_t[]>(new uint8_t[data.size_bytes()]);
     entry->size_bytes = data.size_bytes();
     std::memcpy(entry->data.get(), data.data(), data.size()); {
         if (!internal_state->send_queue.enqueue(entry, true)) {
@@ -379,7 +375,7 @@ std::optional<ssize_t> tinysockets::MultiplexedIOSocket::receiveBytesInplace(con
     }
 }
 
-std::optional<std::unique_ptr<std::byte[], AlignedFreeDeleter>> tinysockets::MultiplexedIOSocket::receiveBytes(const uint64_t tag,
+std::optional<std::unique_ptr<std::byte[]> > tinysockets::MultiplexedIOSocket::receiveBytes(const uint64_t tag,
     std::span<std::byte> &data,
     const bool no_wait) const {
     if (!(flags & MODE_RX)) {
