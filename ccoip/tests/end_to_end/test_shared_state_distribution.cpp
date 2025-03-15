@@ -1185,6 +1185,7 @@ TEST(SharedStateDistribution, TestDragAlongClientNoAdvancedStateContents) {
 
     // Client 1 continuously updates shared state
     std::thread client1_main_thread([&client1, &value1, value_size, num_steps] {
+        client1.setMainThread(std::this_thread::get_id());
         ccoip_shared_state_t shared_state{};
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
             .key = "key1",
@@ -1217,6 +1218,7 @@ TEST(SharedStateDistribution, TestDragAlongClientNoAdvancedStateContents) {
 
     // Client 2 continuously updates shared state and distributes the same shared state as client 1
     std::thread client2_main_thread([&client2, &value2, value_size, num_steps] {
+        client2.setMainThread(std::this_thread::get_id());
         ccoip_shared_state_t shared_state{};
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
             .key = "key1",
@@ -1249,6 +1251,7 @@ TEST(SharedStateDistribution, TestDragAlongClientNoAdvancedStateContents) {
 
     // Client 3 does not update its own shared state but calls syncSharedState
     std::thread client3_main_thread([&client3, &value3, value_size, num_steps] {
+        client3.setMainThread(std::this_thread::get_id());
         ccoip_shared_state_t shared_state{};
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
             .key = "key1",
@@ -1353,6 +1356,7 @@ TEST(SharedStateDistribution, TestDragAlongClientWithAdvancedStateContents) {
 
     // Client 1 continuously updates shared state
     std::thread client1_main_thread([&client1, &value1, value_size, num_steps] {
+        client1.setMainThread(std::this_thread::get_id());
         ccoip_shared_state_t shared_state{};
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
             .key = "key1",
@@ -1385,6 +1389,7 @@ TEST(SharedStateDistribution, TestDragAlongClientWithAdvancedStateContents) {
 
     // Client 2 continuously updates shared state and distributes the same shared state as client 1
     std::thread client2_main_thread([&client2, &value2, value_size, num_steps] {
+        client2.setMainThread(std::this_thread::get_id());
         ccoip_shared_state_t shared_state{};
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
             .key = "key1",
@@ -1417,6 +1422,7 @@ TEST(SharedStateDistribution, TestDragAlongClientWithAdvancedStateContents) {
 
     // Client 3 does not update its own shared state but calls syncSharedState
     std::thread client3_main_thread([&client3, &value3, value_size, num_steps] {
+        client3.setMainThread(std::this_thread::get_id());
         ccoip_shared_state_t shared_state{};
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
             .key = "key1",
@@ -1500,6 +1506,7 @@ TEST(SharedStateDistribution, TestOneIncrementRuleViolationSimple) {
 
     // Client 1 continuously updates shared state, but violates the one-increment rule
     std::thread client1_main_thread([&client1, &value1, value_size, num_steps] {
+        client1.setMainThread(std::this_thread::get_id());
         ccoip_shared_state_t shared_state{};
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
             .key = "key1",
@@ -1532,6 +1539,7 @@ TEST(SharedStateDistribution, TestOneIncrementRuleViolationSimple) {
 
     // Client 2 does not update its own shared state but calls syncSharedState
     std::thread client2_main_thread([&client2, &value2, value_size, num_steps] {
+        client2.setMainThread(std::this_thread::get_id());
         ccoip_shared_state_t shared_state{};
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
             .key = "key1",
@@ -1603,6 +1611,7 @@ TEST(SharedStateDistribution, TestOneIncrementRuleViolationInitialization) {
 
     // Client 1 violates the one-increment rule by starting at revision 1
     std::thread client1_main_thread([&client1, &value1, value_size] {
+        client1.setMainThread(std::this_thread::get_id());
         ccoip_shared_state_t shared_state{};
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
             .key = "key1",
@@ -1624,6 +1633,7 @@ TEST(SharedStateDistribution, TestOneIncrementRuleViolationInitialization) {
     std::this_thread::sleep_for(std::chrono::seconds(1));
 
     std::thread client2_main_thread([&client2, &value2, value_size] {
+        client2.setMainThread(std::this_thread::get_id());
         ccoip_shared_state_t shared_state{};
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
             .key = "key1",
@@ -1704,6 +1714,7 @@ TEST(SharedStateDistribution, TestSharedStateMaskMismatchKick) {
 
     // Client 1 synchronizes shared state
     std::thread client1_main_thread([&client1, &value1, value_size] {
+        client1.setMainThread(std::this_thread::get_id());
         ccoip_shared_state_t shared_state{};
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
             .key = "key1",
@@ -1721,6 +1732,7 @@ TEST(SharedStateDistribution, TestSharedStateMaskMismatchKick) {
 
     // Client 2 synchronizes same shared state as client 1 with matching content as keys
     std::thread client2_main_thread([&client2, &value2, value_size] {
+        client2.setMainThread(std::this_thread::get_id());
         ccoip_shared_state_t shared_state{};
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
             .key = "key1",
@@ -1738,6 +1750,7 @@ TEST(SharedStateDistribution, TestSharedStateMaskMismatchKick) {
 
     // Client 3 attempts to sync shared state with mismatched keys; content is the same
     std::thread client3_main_thread([&client3, &value3, value_size] {
+        client3.setMainThread(std::this_thread::get_id());
         ccoip_shared_state_t shared_state{};
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
             .key = "key3", // Mismatched key
