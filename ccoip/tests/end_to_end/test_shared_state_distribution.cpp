@@ -1085,6 +1085,7 @@ TEST(SharedStateDistribution, TestMultiStepAdvancement) {
 
     // Main loop for clients
     auto client_main = [](ccoip::CCoIPClient &client, uint8_t *value) {
+        client.setMainThread(std::this_thread::get_id());
         ccoip_shared_state_t shared_state{};
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
             .key = "key1",
