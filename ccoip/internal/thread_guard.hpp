@@ -8,6 +8,6 @@
 
 #define THREAD_GUARD(thread_id) \
     if (std::this_thread::get_id() != thread_id) { \
-        LOG(FATAL) << "Function " << FUNC_SIGNATURE() << " must be called from the server thread! This is a fatal bug!"; \
+        LOG(FATAL) << "Function " << FUNC_SIGNATURE() << " must be called from the main thread! This is a fatal bug!"; \
         std::terminate(); \
     }

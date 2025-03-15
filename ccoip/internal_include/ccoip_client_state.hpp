@@ -130,10 +130,10 @@ namespace ccoip {
         [[nodiscard]] bool isSyncingSharedState() const;
 
         /// Returns true if there is a collective communications operation running with the specified tag
-        [[nodiscard]] bool isCollectiveComsOpRunning(uint64_t tag) const;
+        [[nodiscard]] bool isCollectiveComsOpRunning(uint64_t tag);
 
         /// Returns true if there is any collective communications operation running
-        [[nodiscard]] bool isAnyCollectiveComsOpRunning() const;
+        [[nodiscard]] bool isAnyCollectiveComsOpRunning();
 
         /// Launches an asynchronous all reduce operation
         [[nodiscard]] bool launchAsyncCollectiveOp(uint64_t tag, std::function<void(std::promise<bool> &)> &&task);
@@ -203,6 +203,9 @@ namespace ccoip {
 
         /// Returns the world size. World size shall mean the number of peers participating in the peer group that this client is a part of.
         [[nodiscard]] size_t getWorldSize() const;
+
+        /// Sets the thread id that the client considers to be the main thread.
+        void setMainThread(std::thread::id main_thread_id);
 
     private:
         /// Declares a collective communications operation with the specified tag started.

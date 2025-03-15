@@ -83,9 +83,11 @@ namespace ccoip {
 
         [[nodiscard]] bool getAsyncReduceInfo(uint64_t tag, std::optional<ccoip_reduce_info_t> &info_out);
 
-        [[nodiscard]] bool isAnyCollectiveComsOpRunning() const;
+        [[nodiscard]] bool isAnyCollectiveComsOpRunning();
 
         [[nodiscard]] size_t getWorldSize() const;
+
+        void setMainThread(const std::thread::id main_thread_id);
 
     private:
         enum EstablishP2PConnectionResult {

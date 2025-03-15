@@ -4,6 +4,7 @@
 #include <ccoip_shared_state.hpp>
 
 #include <optional>
+#include <thread>
 
 namespace ccoip {
     class CCoIPClientHandler;
@@ -17,6 +18,7 @@ namespace ccoip {
 
     class CCoIPClient {
         CCoIPClientHandler *client;
+        std::thread::id main_thread_id;
 
     public:
         explicit CCoIPClient(const ccoip_socket_address_t &master_socket_address, uint32_t peer_group);
@@ -73,6 +75,10 @@ namespace ccoip {
         /// Returns the current world size; World size shall mean the number of peers in the peer group that this client is part of;
         /// Includes the client itself
         [[nodiscard]] size_t getWorldSize() const;
+
+        /// Sets the thread id that the client considers to be the main thread.
+        /// It will be the only thread that the client will allow to call certain functions.
+        void setMainThread(std::thread::id main_thread_id);
 
         ~CCoIPClient();
     };

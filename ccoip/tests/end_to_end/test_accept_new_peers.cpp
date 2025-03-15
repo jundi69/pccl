@@ -16,19 +16,21 @@ TEST(AcceptNewPeers, TestBasic) {
     ASSERT_TRUE(master.launch());
 
     // client 1
-    const ccoip::CCoIPClient client1({
+    ccoip::CCoIPClient client1({
                                          .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                          .port = CCOIP_PROTOCOL_PORT_MASTER
                                      }, 0);
     ASSERT_TRUE(client1.connect());
 
     // client 2
-    const ccoip::CCoIPClient client2({
+    ccoip::CCoIPClient client2({
                                          .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                          .port = CCOIP_PROTOCOL_PORT_MASTER
                                      }, 0);
 
     std::thread client1_thread([&client1] {
+        client1.setMainThread(std::this_thread::get_id());
+
         while (!client1.isInterrupted()) {
             ASSERT_TRUE(client1.acceptNewPeers());
             const auto world_size = client1.getWorldSize();
@@ -39,6 +41,7 @@ TEST(AcceptNewPeers, TestBasic) {
         }
     });
     std::thread client2_thread([&client2] {
+        client2.setMainThread(std::this_thread::get_id());
         ASSERT_TRUE(client2.connect());
     });
 

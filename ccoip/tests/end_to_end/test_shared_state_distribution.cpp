@@ -10,7 +10,7 @@
 #include <ranges>
 
 // Helper function to establish p2p connection between two clients
-static void establishConnections(const std::vector<const ccoip::CCoIPClient *> &clients) {
+static void establishConnections(const std::vector<ccoip::CCoIPClient *> &clients) {
     size_t n_clients = clients.size();
 
     std::atomic_int clients_connected = 0;
@@ -18,6 +18,7 @@ static void establishConnections(const std::vector<const ccoip::CCoIPClient *> &
     std::vector<std::thread> client_threads{};
     for (const auto &client: clients) {
         std::thread client_thread([n_clients, &clients_connected, &client] {
+            client->setMainThread(std::this_thread::get_id());
             EXPECT_TRUE(client->connect());
             ++clients_connected;
             while (clients_connected < n_clients) {
@@ -51,15 +52,15 @@ TEST(SharedStateDistribution, TestBasic) {
     EXPECT_TRUE(master.launch());
 
     // client 1
-    const ccoip::CCoIPClient client1({
-                                         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
-                                         .port = CCOIP_PROTOCOL_PORT_MASTER,
-                                     }, 0);
+    ccoip::CCoIPClient client1({
+                                   .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                   .port = CCOIP_PROTOCOL_PORT_MASTER,
+                               }, 0);
     // client 2
-    const ccoip::CCoIPClient client2({
-                                         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
-                                         .port = CCOIP_PROTOCOL_PORT_MASTER
-                                     }, 0);
+    ccoip::CCoIPClient client2({
+                                   .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                   .port = CCOIP_PROTOCOL_PORT_MASTER
+                               }, 0);
 
     establishConnections({&client1, &client2});
 
@@ -67,6 +68,7 @@ TEST(SharedStateDistribution, TestBasic) {
     const std::unique_ptr<uint8_t[]> value1(new uint8_t[value_size]);
     std::fill_n(value1.get(), value_size, 42);
     std::thread client1_sync_thread([&client1, &value1, value_size] {
+        client1.setMainThread(std::this_thread::get_id());
         ccoip_shared_state_t shared_state{};
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
             .key = "key1",
@@ -96,6 +98,7 @@ TEST(SharedStateDistribution, TestBasic) {
     const std::unique_ptr<uint8_t[]> value2(new uint8_t[value_size]);
     std::fill_n(value2.get(), value_size, 0x0);
     std::thread client2_sync_thread([&client2, &value2, value_size] {
+        client2.setMainThread(std::this_thread::get_id());
         // client 2 requests shared state
         ccoip_shared_state_t shared_state{};
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
@@ -150,15 +153,15 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedState) {
     EXPECT_TRUE(master.launch());
 
     // client 1
-    const ccoip::CCoIPClient client1({
-                                         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
-                                         .port = CCOIP_PROTOCOL_PORT_MASTER
-                                     }, 0);
+    ccoip::CCoIPClient client1({
+                                   .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                   .port = CCOIP_PROTOCOL_PORT_MASTER
+                               }, 0);
     // client 2
-    const ccoip::CCoIPClient client2({
-                                         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
-                                         .port = CCOIP_PROTOCOL_PORT_MASTER
-                                     }, 0);
+    ccoip::CCoIPClient client2({
+                                   .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                   .port = CCOIP_PROTOCOL_PORT_MASTER
+                               }, 0);
 
     establishConnections({&client1, &client2});
 
@@ -166,6 +169,7 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedState) {
     const std::unique_ptr<uint8_t[]> value1(new uint8_t[value_size]);
     std::fill_n(value1.get(), value_size, 42);
     std::thread client1_sync_thread([&client1, &value1, value_size] {
+        client1.setMainThread(std::this_thread::get_id());
         // client 1 distributes shared state
         ccoip_shared_state_t shared_state{};
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
@@ -191,6 +195,7 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedState) {
     const std::unique_ptr<uint8_t[]> value2(new uint8_t[value_size]);
     std::fill_n(value2.get(), value_size, 42);
     std::thread client2_sync_thread([&client2, &value2, value_size] {
+        client2.setMainThread(std::this_thread::get_id());
         // client 2 requests shared state
         ccoip_shared_state_t shared_state{};
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
@@ -240,15 +245,15 @@ TEST(SharedStateDistribution, TestPartialSyncPartiallyDirtyState) {
     EXPECT_TRUE(master.launch());
 
     // client 1
-    const ccoip::CCoIPClient client1({
-                                         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
-                                         .port = CCOIP_PROTOCOL_PORT_MASTER
-                                     }, 0);
+    ccoip::CCoIPClient client1({
+                                   .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                   .port = CCOIP_PROTOCOL_PORT_MASTER
+                               }, 0);
     // client 2
-    const ccoip::CCoIPClient client2({
-                                         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
-                                         .port = CCOIP_PROTOCOL_PORT_MASTER
-                                     }, 0);
+    ccoip::CCoIPClient client2({
+                                   .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                   .port = CCOIP_PROTOCOL_PORT_MASTER
+                               }, 0);
 
     establishConnections({&client1, &client2});
 
@@ -267,6 +272,7 @@ TEST(SharedStateDistribution, TestPartialSyncPartiallyDirtyState) {
     std::fill_n(value2_p2.get(), value_size, 44);
 
     std::thread client1_sync_thread([&client1, &value1_p1, &value2_p1, value_size] {
+        client1.setMainThread(std::this_thread::get_id());
         // client 1 distributes shared state
         ccoip_shared_state_t shared_state{};
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
@@ -304,6 +310,7 @@ TEST(SharedStateDistribution, TestPartialSyncPartiallyDirtyState) {
     std::this_thread::sleep_for(std::chrono::seconds(1));
 
     std::thread client2_sync_thread([&client2, &value1_p2, &value2_p2, value_size] {
+        client2.setMainThread(std::this_thread::get_id());
         // client 2 requests shared state
         ccoip_shared_state_t shared_state{};
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
@@ -370,20 +377,20 @@ TEST(SharedStateDistribution, TestPopularHashPrevelance) {
     EXPECT_TRUE(master.launch());
 
     // client 1
-    const ccoip::CCoIPClient client1({
-                                         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
-                                         .port = CCOIP_PROTOCOL_PORT_MASTER
-                                     }, 0);
+    ccoip::CCoIPClient client1({
+                                   .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                   .port = CCOIP_PROTOCOL_PORT_MASTER
+                               }, 0);
     // client 2
-    const ccoip::CCoIPClient client2({
-                                         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
-                                         .port = CCOIP_PROTOCOL_PORT_MASTER
-                                     }, 0);
+    ccoip::CCoIPClient client2({
+                                   .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                   .port = CCOIP_PROTOCOL_PORT_MASTER
+                               }, 0);
     // client 3
-    const ccoip::CCoIPClient client3({
-                                         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
-                                         .port = CCOIP_PROTOCOL_PORT_MASTER
-                                     }, 0);
+    ccoip::CCoIPClient client3({
+                                   .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                   .port = CCOIP_PROTOCOL_PORT_MASTER
+                               }, 0);
 
     establishConnections({&client1, &client2, &client3});
 
@@ -406,6 +413,7 @@ TEST(SharedStateDistribution, TestPopularHashPrevelance) {
     // This test crucially tests whether despite the fact that client 1 is first to hit the master, the master will
     // chose later clients to be the determining peer for the accepted hashes.
     std::thread client1_sync_thread([&client1, &value1, value_size] {
+        client1.setMainThread(std::this_thread::get_id());
         // client 1 distributes shared state
         ccoip_shared_state_t shared_state{};
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
@@ -424,6 +432,7 @@ TEST(SharedStateDistribution, TestPopularHashPrevelance) {
     std::this_thread::sleep_for(std::chrono::seconds(1));
 
     std::thread client2_sync_thread([&client2, &value2, value_size] {
+        client2.setMainThread(std::this_thread::get_id());
         // client 2 distributes shared state
         ccoip_shared_state_t shared_state{};
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
@@ -442,6 +451,7 @@ TEST(SharedStateDistribution, TestPopularHashPrevelance) {
     std::this_thread::sleep_for(std::chrono::seconds(1));
 
     std::thread client3_sync_thread([&client3, &value3, value_size] {
+        client3.setMainThread(std::this_thread::get_id());
         // client 3 distributes shared state
         ccoip_shared_state_t shared_state{};
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
@@ -496,20 +506,20 @@ TEST(SharedStateDistribution, TestPopularHashPrevalenceWithMultipleKeys) {
     EXPECT_TRUE(master.launch()) << "Failed to launch CCoIP master.";
 
     // Initialize three clients with IPv4 settings pointing to the master
-    const ccoip::CCoIPClient client1({
-                                         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
-                                         .port = CCOIP_PROTOCOL_PORT_MASTER
-                                     }, 0);
+    ccoip::CCoIPClient client1({
+                                   .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                   .port = CCOIP_PROTOCOL_PORT_MASTER
+                               }, 0);
 
-    const ccoip::CCoIPClient client2({
-                                         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
-                                         .port = CCOIP_PROTOCOL_PORT_MASTER
-                                     }, 0);
+    ccoip::CCoIPClient client2({
+                                   .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                   .port = CCOIP_PROTOCOL_PORT_MASTER
+                               }, 0);
 
-    const ccoip::CCoIPClient client3({
-                                         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
-                                         .port = CCOIP_PROTOCOL_PORT_MASTER
-                                     }, 0);
+    ccoip::CCoIPClient client3({
+                                   .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                   .port = CCOIP_PROTOCOL_PORT_MASTER
+                               }, 0);
 
     // Establish connections between the master and the clients
     establishConnections({&client1, &client2, &client3});
@@ -518,7 +528,7 @@ TEST(SharedStateDistribution, TestPopularHashPrevalenceWithMultipleKeys) {
     constexpr size_t value_size = 1024;
 
     // Prepare backup data for client1 to verify post-synchronization state
-    std::vector<std::unique_ptr<uint8_t[]> > backup_values;
+    std::vector<std::unique_ptr<uint8_t[]>> backup_values;
     for (size_t i = 0; i < total_keys; ++i) {
         auto backup = std::make_unique<uint8_t[]>(value_size);
         std::fill_n(backup.get(), value_size, 42); // Initialize with default value
@@ -527,9 +537,9 @@ TEST(SharedStateDistribution, TestPopularHashPrevalenceWithMultipleKeys) {
 
     // Prepare shared state values for all clients
     // Clients 2 and 3 share the same values for the dirty keys, client1 has different values
-    std::vector<std::unique_ptr<uint8_t[]> > client1_values;
-    std::vector<std::unique_ptr<uint8_t[]> > client2_values;
-    std::vector<std::unique_ptr<uint8_t[]> > client3_values;
+    std::vector<std::unique_ptr<uint8_t[]>> client1_values;
+    std::vector<std::unique_ptr<uint8_t[]>> client2_values;
+    std::vector<std::unique_ptr<uint8_t[]>> client3_values;
 
     for (size_t i = 0; i < total_keys; ++i) {
         // Initialize all keys with the same value
@@ -556,7 +566,7 @@ TEST(SharedStateDistribution, TestPopularHashPrevalenceWithMultipleKeys) {
     }
 
     // Function to create shared state with multiple keys
-    auto create_shared_state = [&](const std::vector<std::unique_ptr<uint8_t[]> > &values) -> ccoip_shared_state_t {
+    auto create_shared_state = [&](const std::vector<std::unique_ptr<uint8_t[]>> &values) -> ccoip_shared_state_t {
         ccoip_shared_state_t shared_state;
         for (size_t i = 0; i < total_keys; ++i) {
             shared_state.entries.push_back(ccoip_shared_state_entry_t{
@@ -574,6 +584,7 @@ TEST(SharedStateDistribution, TestPopularHashPrevalenceWithMultipleKeys) {
 
     // Launch synchronization threads for each client
     std::thread client1_sync_thread([&client1, &client1_values, &create_shared_state] {
+        client1.setMainThread(std::this_thread::get_id());
         ccoip_shared_state_t shared_state = create_shared_state(client1_values);
         ccoip_shared_state_sync_info_t info{};
         EXPECT_TRUE(client1.syncSharedState(shared_state, info)) << "Client1 failed to sync shared state.";
@@ -583,6 +594,7 @@ TEST(SharedStateDistribution, TestPopularHashPrevalenceWithMultipleKeys) {
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
     std::thread client2_sync_thread([&client2, &client2_values, &create_shared_state] {
+        client2.setMainThread(std::this_thread::get_id());
         ccoip_shared_state_t shared_state = create_shared_state(client2_values);
         ccoip_shared_state_sync_info_t info{};
         EXPECT_TRUE(client2.syncSharedState(shared_state, info)) << "Client2 failed to sync shared state.";
@@ -592,6 +604,7 @@ TEST(SharedStateDistribution, TestPopularHashPrevalenceWithMultipleKeys) {
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
     std::thread client3_sync_thread([&client3, &client3_values, &create_shared_state] {
+        client3.setMainThread(std::this_thread::get_id());
         ccoip_shared_state_t shared_state = create_shared_state(client3_values);
         ccoip_shared_state_sync_info_t info{};
         EXPECT_TRUE(client3.syncSharedState(shared_state, info)) << "Client3 failed to sync shared state.";
@@ -651,36 +664,37 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedStateMultiplePeerGroups) 
     EXPECT_TRUE(master.launch());
 
     // group 1, client 1
-    const ccoip::CCoIPClient g1client1({
-                                           .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
-                                           .port = CCOIP_PROTOCOL_PORT_MASTER
-                                       }, 0);
+    ccoip::CCoIPClient g1client1({
+                                     .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                     .port = CCOIP_PROTOCOL_PORT_MASTER
+                                 }, 0);
     // group 2, client 2
-    const ccoip::CCoIPClient g1client2({
-                                           .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
-                                           .port = CCOIP_PROTOCOL_PORT_MASTER
-                                       }, 0);
+    ccoip::CCoIPClient g1client2({
+                                     .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                     .port = CCOIP_PROTOCOL_PORT_MASTER
+                                 }, 0);
 
     // group 2, client 1
-    const ccoip::CCoIPClient g2client1({
-                                           .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
-                                           .port = CCOIP_PROTOCOL_PORT_MASTER
-                                       }, 1);
+    ccoip::CCoIPClient g2client1({
+                                     .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                     .port = CCOIP_PROTOCOL_PORT_MASTER
+                                 }, 1);
     // group 2, client 2
-    const ccoip::CCoIPClient g2client2({
-                                           .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
-                                           .port = CCOIP_PROTOCOL_PORT_MASTER
-                                       }, 1);
+    ccoip::CCoIPClient g2client2({
+                                     .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                     .port = CCOIP_PROTOCOL_PORT_MASTER
+                                 }, 1);
     establishConnections({&g1client1, &g1client2, &g2client1, &g2client2});
 
     constexpr size_t value_size = 1024;
 
-    const auto launch_sync_func = [value_size](const ccoip::CCoIPClient &client1, const ccoip::CCoIPClient &client2,
+    const auto launch_sync_func = [value_size](ccoip::CCoIPClient &client1, ccoip::CCoIPClient &client2,
                                                const int peer_group) {
         const std::unique_ptr<uint8_t[]> value1(new uint8_t[value_size]);
         std::fill_n(value1.get(), value_size, 42 + peer_group);
 
         std::thread client1_sync_thread([&client1, value_size, &value1] {
+            client1.setMainThread(std::this_thread::get_id());
             // client 1 distributes shared state
             ccoip_shared_state_t shared_state{};
             shared_state.entries.push_back(ccoip_shared_state_entry_t{
@@ -705,6 +719,7 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedStateMultiplePeerGroups) 
         const std::unique_ptr<uint8_t[]> value2(new uint8_t[value_size]);
         std::fill_n(value2.get(), value_size, 42 + peer_group);
         std::thread client2_sync_thread([&client2, value_size, &value2] {
+            client2.setMainThread(std::this_thread::get_id());
             // client 2 requests shared state
             ccoip_shared_state_t shared_state{};
             shared_state.entries.push_back(ccoip_shared_state_entry_t{
@@ -763,36 +778,37 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedStateMultiplePeerGroupsDi
     EXPECT_TRUE(master.launch());
 
     // group 1, client 1
-    const ccoip::CCoIPClient g1client1({
-                                           .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
-                                           .port = CCOIP_PROTOCOL_PORT_MASTER
-                                       }, 0);
+    ccoip::CCoIPClient g1client1({
+                                     .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                     .port = CCOIP_PROTOCOL_PORT_MASTER
+                                 }, 0);
     // group 2, client 2
-    const ccoip::CCoIPClient g1client2({
-                                           .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
-                                           .port = CCOIP_PROTOCOL_PORT_MASTER
-                                       }, 0);
+    ccoip::CCoIPClient g1client2({
+                                     .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                     .port = CCOIP_PROTOCOL_PORT_MASTER
+                                 }, 0);
 
     // group 2, client 1
-    const ccoip::CCoIPClient g2client1({
-                                           .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
-                                           .port = CCOIP_PROTOCOL_PORT_MASTER
-                                       }, 1);
+    ccoip::CCoIPClient g2client1({
+                                     .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                     .port = CCOIP_PROTOCOL_PORT_MASTER
+                                 }, 1);
     // group 2, client 2
-    const ccoip::CCoIPClient g2client2({
-                                           .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
-                                           .port = CCOIP_PROTOCOL_PORT_MASTER
-                                       }, 1);
+    ccoip::CCoIPClient g2client2({
+                                     .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                     .port = CCOIP_PROTOCOL_PORT_MASTER
+                                 }, 1);
     establishConnections({&g1client1, &g1client2, &g2client1, &g2client2});
 
     constexpr size_t value_size = 1024;
 
-    const auto launch_sync_func = [value_size](const ccoip::CCoIPClient &client1, const ccoip::CCoIPClient &client2,
+    const auto launch_sync_func = [value_size](ccoip::CCoIPClient &client1, ccoip::CCoIPClient &client2,
                                                const int peer_group) {
         const std::unique_ptr<uint8_t[]> value1(new uint8_t[value_size]);
         std::fill_n(value1.get(), value_size, 42 + peer_group);
 
         std::thread client1_sync_thread([&client1, value_size, &value1, peer_group] {
+            client1.setMainThread(std::this_thread::get_id());
             // client 1 distributes shared state
             ccoip_shared_state_t shared_state{};
             shared_state.entries.push_back(ccoip_shared_state_entry_t{
@@ -817,6 +833,8 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedStateMultiplePeerGroupsDi
         const std::unique_ptr<uint8_t[]> value2(new uint8_t[value_size]);
         std::fill_n(value2.get(), value_size, 42 + peer_group);
         std::thread client2_sync_thread([&client2, value_size, &value2, peer_group] {
+            client2.setMainThread(std::this_thread::get_id());
+
             // client 2 requests shared state
             ccoip_shared_state_t shared_state{};
             shared_state.entries.push_back(ccoip_shared_state_entry_t{
@@ -874,26 +892,26 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedStateMultiplePeerGroupsDi
     EXPECT_TRUE(master.launch());
 
     // group 1, client 1
-    const ccoip::CCoIPClient g1client1({
-                                           .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
-                                           .port = CCOIP_PROTOCOL_PORT_MASTER
-                                       }, 0);
+    ccoip::CCoIPClient g1client1({
+                                     .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                     .port = CCOIP_PROTOCOL_PORT_MASTER
+                                 }, 0);
     // group 2, client 2
-    const ccoip::CCoIPClient g1client2({
-                                           .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
-                                           .port = CCOIP_PROTOCOL_PORT_MASTER
-                                       }, 0);
+    ccoip::CCoIPClient g1client2({
+                                     .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                     .port = CCOIP_PROTOCOL_PORT_MASTER
+                                 }, 0);
 
     // group 2, client 1
-    const ccoip::CCoIPClient g2client1({
-                                           .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
-                                           .port = CCOIP_PROTOCOL_PORT_MASTER
-                                       }, 1);
+    ccoip::CCoIPClient g2client1({
+                                     .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                     .port = CCOIP_PROTOCOL_PORT_MASTER
+                                 }, 1);
     // group 2, client 2
-    const ccoip::CCoIPClient g2client2({
-                                           .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
-                                           .port = CCOIP_PROTOCOL_PORT_MASTER
-                                       }, 1);
+    ccoip::CCoIPClient g2client2({
+                                     .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                     .port = CCOIP_PROTOCOL_PORT_MASTER
+                                 }, 1);
     establishConnections({&g1client1, &g1client2, &g2client1, &g2client2});
 
     constexpr size_t value_size = 1024;
@@ -911,6 +929,7 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedStateMultiplePeerGroupsDi
             [&value1_g1, &value1_g2, value_size, &g1client1, &g2client1, &client1_sync_ctr] {
                 // group 1 client 1 distributes shared state
                 std::thread g1client1_sync_thread([&g1client1, value_size, &value1_g1, &client1_sync_ctr] {
+                    g1client1.setMainThread(std::this_thread::get_id());
                     ccoip_shared_state_t shared_state{};
                     shared_state.entries.push_back(ccoip_shared_state_entry_t{
                         .key = "key1",
@@ -932,6 +951,7 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedStateMultiplePeerGroupsDi
 
                 // group 2 client 1 distributes shared state
                 std::thread g2client1_sync_thread([&g2client1, value_size, &value1_g2, &client1_sync_ctr] {
+                    g2client1.setMainThread(std::this_thread::get_id());
                     ccoip_shared_state_t shared_state{};
                     shared_state.entries.push_back(ccoip_shared_state_entry_t{
                         .key = "key2",
@@ -963,6 +983,7 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedStateMultiplePeerGroupsDi
         std::thread client2_sync_thread([&value1_g1, &value1_g2, value_size, &g1client2, &g2client2] {
             // group 1 client 2 requests shared state
             std::thread g1client2_sync_thread([&value1_g1, &g1client2, value_size] {
+                g1client2.setMainThread(std::this_thread::get_id());
                 ccoip_shared_state_t shared_state{};
                 shared_state.entries.push_back(ccoip_shared_state_entry_t{
                     .key = "key1",
@@ -983,6 +1004,7 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedStateMultiplePeerGroupsDi
 
             // group 2 client 2 requests shared state
             std::thread g2client2_sync_thread([&value1_g2, &g2client2, value_size] {
+                g2client2.setMainThread(std::this_thread::get_id());
                 ccoip_shared_state_t shared_state{};
                 shared_state.entries.push_back(ccoip_shared_state_entry_t{
                     .key = "key2",
@@ -1039,15 +1061,15 @@ TEST(SharedStateDistribution, TestMultiStepAdvancement) {
     EXPECT_TRUE(master.launch());
 
     // Client 1
-    const ccoip::CCoIPClient client1({
-                                         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
-                                         .port = CCOIP_PROTOCOL_PORT_MASTER
-                                     }, 0);
+    ccoip::CCoIPClient client1({
+                                   .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                   .port = CCOIP_PROTOCOL_PORT_MASTER
+                               }, 0);
     // Client 2
-    const ccoip::CCoIPClient client2({
-                                         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
-                                         .port = CCOIP_PROTOCOL_PORT_MASTER
-                                     }, 0);
+    ccoip::CCoIPClient client2({
+                                   .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                   .port = CCOIP_PROTOCOL_PORT_MASTER
+                               }, 0);
 
     establishConnections({&client1, &client2});
 
@@ -1062,7 +1084,7 @@ TEST(SharedStateDistribution, TestMultiStepAdvancement) {
     std::fill_n(value2.get(), value_size, 0);
 
     // Main loop for clients
-    auto client_main = [](const ccoip::CCoIPClient &client, uint8_t *value) {
+    auto client_main = [](ccoip::CCoIPClient &client, uint8_t *value) {
         ccoip_shared_state_t shared_state{};
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
             .key = "key1",
@@ -1095,7 +1117,7 @@ TEST(SharedStateDistribution, TestMultiStepAdvancement) {
         client_main(client2, value2.get());
     });
 
-    // Wait for both clients to finish
+    // Wait for both clients to finish`
     client1_main_thread.join();
     client2_main_thread.join();
 
@@ -1131,21 +1153,21 @@ TEST(SharedStateDistribution, TestDragAlongClientNoAdvancedStateContents) {
     EXPECT_TRUE(master.launch());
 
     // Client 1
-    const ccoip::CCoIPClient client1({
-                                         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
-                                         .port = CCOIP_PROTOCOL_PORT_MASTER
-                                     }, 0);
+    ccoip::CCoIPClient client1({
+                                   .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                   .port = CCOIP_PROTOCOL_PORT_MASTER
+                               }, 0);
     // Client 2
-    const ccoip::CCoIPClient client2({
-                                         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
-                                         .port = CCOIP_PROTOCOL_PORT_MASTER
-                                     }, 0);
+    ccoip::CCoIPClient client2({
+                                   .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                   .port = CCOIP_PROTOCOL_PORT_MASTER
+                               }, 0);
 
     // Client 3
-    const ccoip::CCoIPClient client3({
-                                         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
-                                         .port = CCOIP_PROTOCOL_PORT_MASTER
-                                     }, 0);
+    ccoip::CCoIPClient client3({
+                                   .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                   .port = CCOIP_PROTOCOL_PORT_MASTER
+                               }, 0);
 
     establishConnections({&client1, &client2, &client3});
 
@@ -1299,21 +1321,21 @@ TEST(SharedStateDistribution, TestDragAlongClientWithAdvancedStateContents) {
     EXPECT_TRUE(master.launch());
 
     // Client 1
-    const ccoip::CCoIPClient client1({
-                                         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
-                                         .port = CCOIP_PROTOCOL_PORT_MASTER
-                                     }, 0);
+    ccoip::CCoIPClient client1({
+                                   .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                   .port = CCOIP_PROTOCOL_PORT_MASTER
+                               }, 0);
     // Client 2
-    const ccoip::CCoIPClient client2({
-                                         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
-                                         .port = CCOIP_PROTOCOL_PORT_MASTER
-                                     }, 0);
+    ccoip::CCoIPClient client2({
+                                   .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                   .port = CCOIP_PROTOCOL_PORT_MASTER
+                               }, 0);
 
     // Client 3
-    const ccoip::CCoIPClient client3({
-                                         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
-                                         .port = CCOIP_PROTOCOL_PORT_MASTER
-                                     }, 0);
+    ccoip::CCoIPClient client3({
+                                   .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                   .port = CCOIP_PROTOCOL_PORT_MASTER
+                               }, 0);
 
     establishConnections({&client1, &client2, &client3});
 
@@ -1454,15 +1476,15 @@ TEST(SharedStateDistribution, TestOneIncrementRuleViolationSimple) {
     EXPECT_TRUE(master.launch());
 
     // Client 1
-    const ccoip::CCoIPClient client1({
-                                         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
-                                         .port = CCOIP_PROTOCOL_PORT_MASTER
-                                     }, 0);
+    ccoip::CCoIPClient client1({
+                                   .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                   .port = CCOIP_PROTOCOL_PORT_MASTER
+                               }, 0);
     // Client 2
-    const ccoip::CCoIPClient client2({
-                                         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
-                                         .port = CCOIP_PROTOCOL_PORT_MASTER
-                                     }, 0);
+    ccoip::CCoIPClient client2({
+                                   .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                   .port = CCOIP_PROTOCOL_PORT_MASTER
+                               }, 0);
 
     establishConnections({&client1, &client2});
 
@@ -1558,15 +1580,15 @@ TEST(SharedStateDistribution, TestOneIncrementRuleViolationInitialization) {
     EXPECT_TRUE(master.launch());
 
     // Client 1
-    const ccoip::CCoIPClient client1({
-                                         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
-                                         .port = CCOIP_PROTOCOL_PORT_MASTER
-                                     }, 0);
+    ccoip::CCoIPClient client1({
+                                   .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                   .port = CCOIP_PROTOCOL_PORT_MASTER
+                               }, 0);
     // Client 2
-    const ccoip::CCoIPClient client2({
-                                         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
-                                         .port = CCOIP_PROTOCOL_PORT_MASTER
-                                     }, 0);
+    ccoip::CCoIPClient client2({
+                                   .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                   .port = CCOIP_PROTOCOL_PORT_MASTER
+                               }, 0);
 
     establishConnections({&client1, &client2});
 
@@ -1651,21 +1673,21 @@ TEST(SharedStateDistribution, TestSharedStateMaskMismatchKick) {
     EXPECT_TRUE(master.launch());
 
     // Client 1
-    const ccoip::CCoIPClient client1({
-                                         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
-                                         .port = CCOIP_PROTOCOL_PORT_MASTER
-                                     }, 0);
+    ccoip::CCoIPClient client1({
+                                   .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                   .port = CCOIP_PROTOCOL_PORT_MASTER
+                               }, 0);
     // Client 2
-    const ccoip::CCoIPClient client2({
-                                         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
-                                         .port = CCOIP_PROTOCOL_PORT_MASTER
-                                     }, 0);
+    ccoip::CCoIPClient client2({
+                                   .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                   .port = CCOIP_PROTOCOL_PORT_MASTER
+                               }, 0);
 
     // Client 3
-    const ccoip::CCoIPClient client3({
-                                         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
-                                         .port = CCOIP_PROTOCOL_PORT_MASTER
-                                     }, 0);
+    ccoip::CCoIPClient client3({
+                                   .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                   .port = CCOIP_PROTOCOL_PORT_MASTER
+                               }, 0);
 
     establishConnections({&client1, &client2, &client3});
 
@@ -1763,24 +1785,24 @@ TEST(SharedStateDistribution, TestConcurrentAdvancementWithinPeerGroups) {
     EXPECT_TRUE(master.launch());
 
     // Peer group 1 clients
-    const ccoip::CCoIPClient g1client1({
-                                           .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
-                                           .port = CCOIP_PROTOCOL_PORT_MASTER
-                                       }, 0);
-    const ccoip::CCoIPClient g1client2({
-                                           .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
-                                           .port = CCOIP_PROTOCOL_PORT_MASTER
-                                       }, 0);
+    ccoip::CCoIPClient g1client1({
+                                     .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                     .port = CCOIP_PROTOCOL_PORT_MASTER
+                                 }, 0);
+    ccoip::CCoIPClient g1client2({
+                                     .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                     .port = CCOIP_PROTOCOL_PORT_MASTER
+                                 }, 0);
 
     // Peer group 2 clients
-    const ccoip::CCoIPClient g2client1({
-                                           .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
-                                           .port = CCOIP_PROTOCOL_PORT_MASTER
-                                       }, 1);
-    const ccoip::CCoIPClient g2client2({
-                                           .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
-                                           .port = CCOIP_PROTOCOL_PORT_MASTER
-                                       }, 1);
+    ccoip::CCoIPClient g2client1({
+                                     .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                     .port = CCOIP_PROTOCOL_PORT_MASTER
+                                 }, 1);
+    ccoip::CCoIPClient g2client2({
+                                     .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                     .port = CCOIP_PROTOCOL_PORT_MASTER
+                                 }, 1);
 
     establishConnections({&g1client1, &g1client2, &g2client1, &g2client2});
 
@@ -1788,8 +1810,9 @@ TEST(SharedStateDistribution, TestConcurrentAdvancementWithinPeerGroups) {
     constexpr int num_steps = 5;
 
     // Function to run client's main loop within a peer group
-    auto client_main = [](const ccoip::CCoIPClient &client, uint8_t *value, const std::string &key,
+    auto client_main = [](ccoip::CCoIPClient &client, uint8_t *value, const std::string &key,
                           const int delay_multiplier) {
+        client.setMainThread(std::this_thread::get_id());
         ccoip_shared_state_t shared_state{};
         shared_state.entries.push_back(ccoip_shared_state_entry_t{
             .key = key,
@@ -1888,9 +1911,9 @@ TEST(SharedStateDistribution, TestConcurrentDragAlongAcrossPeerGroups) {
     constexpr int num_steps = 4;
 
     // Initialize clients for each peer group
-    std::vector<std::vector<std::unique_ptr<ccoip::CCoIPClient> > > peer_groups;
+    std::vector<std::vector<std::unique_ptr<ccoip::CCoIPClient>>> peer_groups;
     for (int group = 0; group < num_peer_groups; ++group) {
-        std::vector<std::unique_ptr<ccoip::CCoIPClient> > group_clients;
+        std::vector<std::unique_ptr<ccoip::CCoIPClient>> group_clients;
         group_clients.reserve(clients_per_group);
         for (int client_id = 0; client_id < clients_per_group; ++client_id) {
             group_clients.emplace_back(std::make_unique<ccoip::CCoIPClient>(ccoip_socket_address_t{
@@ -1905,7 +1928,7 @@ TEST(SharedStateDistribution, TestConcurrentDragAlongAcrossPeerGroups) {
     }
 
     // Establish connections within each peer group
-    std::vector<const ccoip::CCoIPClient *> clients_ptrs;
+    std::vector<ccoip::CCoIPClient *> clients_ptrs;
     for (int group = 0; group < num_peer_groups; ++group) {
         for (auto &client: peer_groups[group]) {
             clients_ptrs.push_back(client.get());
@@ -1935,6 +1958,7 @@ TEST(SharedStateDistribution, TestConcurrentDragAlongAcrossPeerGroups) {
         auto launch_leader_thread = [&](const std::unique_ptr<ccoip::CCoIPClient> &leader,
                                         const std::unique_ptr<uint8_t[]> &leader_value) {
             std::thread leader_thread([&leader, &leader_value, value_size, num_steps, group] {
+                leader->setMainThread(std::this_thread::get_id());
                 ccoip_shared_state_t shared_state{};
                 shared_state.entries.push_back(ccoip_shared_state_entry_t{
                     .key = "drag_key_" + std::to_string(group),
@@ -1974,6 +1998,7 @@ TEST(SharedStateDistribution, TestConcurrentDragAlongAcrossPeerGroups) {
 
         // Follower requests synchronization without updating its own state
         std::thread follower_thread([&follower, &leader1_value, &follower_value, value_size, num_steps, group] {
+            follower->setMainThread(std::this_thread::get_id());
             ccoip_shared_state_t shared_state{};
             shared_state.entries.push_back(ccoip_shared_state_entry_t{
                 .key = "drag_key_" + std::to_string(group),
@@ -2044,9 +2069,9 @@ TEST(SharedStateDistribution, TestConflictOverlappingKeysAcrossPeerGroups) {
     constexpr int clients_per_group = 2;
     constexpr size_t value_size = 256;
 
-    std::vector<std::vector<std::unique_ptr<ccoip::CCoIPClient> > > peer_groups;
+    std::vector<std::vector<std::unique_ptr<ccoip::CCoIPClient>>> peer_groups;
     for (int group = 0; group < num_peer_groups; ++group) {
-        std::vector<std::unique_ptr<ccoip::CCoIPClient> > group_clients;
+        std::vector<std::unique_ptr<ccoip::CCoIPClient>> group_clients;
         group_clients.reserve(clients_per_group);
         for (int client_id = 0; client_id < clients_per_group; ++client_id) {
             group_clients.push_back(std::make_unique<ccoip::CCoIPClient>(ccoip_socket_address_t{
@@ -2061,7 +2086,7 @@ TEST(SharedStateDistribution, TestConflictOverlappingKeysAcrossPeerGroups) {
     }
 
     // Establish connections within each peer group
-    std::vector<const ccoip::CCoIPClient *> clients_ptrs;
+    std::vector<ccoip::CCoIPClient *> clients_ptrs;
     for (int group = 0; group < num_peer_groups; ++group) {
         for (auto &client: peer_groups[group]) {
             clients_ptrs.push_back(client.get());
@@ -2088,6 +2113,7 @@ TEST(SharedStateDistribution, TestConflictOverlappingKeysAcrossPeerGroups) {
 
         // Client 1 syncs
         std::thread client1_sync_thread([&client1, &value1, value_size, key] {
+            client1->setMainThread(std::this_thread::get_id());
             ccoip_shared_state_t shared_state{};
             shared_state.entries.push_back(ccoip_shared_state_entry_t{
                 .key = key,
@@ -2109,6 +2135,8 @@ TEST(SharedStateDistribution, TestConflictOverlappingKeysAcrossPeerGroups) {
 
         // Client 2 syncs
         std::thread client2_sync_thread([&client2, &value1, &value2, value_size, key] {
+            client2->setMainThread(std::this_thread::get_id());
+
             // Allow some time for client1 to sync first
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
@@ -2178,7 +2206,7 @@ TEST(SharedStateDistribution, TestChangingPeerGroupMembershipBetweenSynchronizat
     constexpr size_t value_size = 256;
     constexpr int num_steps = 3;
 
-    std::vector<std::unique_ptr<ccoip::CCoIPClient> > group_clients{};
+    std::vector<std::unique_ptr<ccoip::CCoIPClient>> group_clients{};
     group_clients.reserve(initial_clients + 1);
     for (int client_id = 0; client_id < initial_clients; ++client_id) {
         group_clients.push_back(std::make_unique<ccoip::CCoIPClient>(ccoip_socket_address_t{
@@ -2191,7 +2219,7 @@ TEST(SharedStateDistribution, TestChangingPeerGroupMembershipBetweenSynchronizat
     }
 
     // Establish initial connections
-    std::vector<const ccoip::CCoIPClient *> initial_clients_ptrs;
+    std::vector<ccoip::CCoIPClient *> initial_clients_ptrs;
     initial_clients_ptrs.reserve(group_clients.size());
     for (auto &client: group_clients) {
         initial_clients_ptrs.push_back(client.get());
@@ -2210,6 +2238,7 @@ TEST(SharedStateDistribution, TestChangingPeerGroupMembershipBetweenSynchronizat
     // Client 1 performs synchronization steps
     std::thread client1_thread([&group_clients, &value1, value_size, num_steps, group, &client3_joined] {
         const std::unique_ptr<ccoip::CCoIPClient> &client1 = group_clients[0];
+        client1->setMainThread(std::this_thread::get_id());
 
         for (int step = 0; step < num_steps; ++step) {
             // Update shared state
@@ -2247,6 +2276,7 @@ TEST(SharedStateDistribution, TestChangingPeerGroupMembershipBetweenSynchronizat
                 const std::unique_ptr<ccoip::CCoIPClient> &added_client = group_clients.emplace_back(
                     std::move(new_client));
                 std::thread added_client_thread([&added_client, &client3_joined] {
+                    added_client->setMainThread(std::this_thread::get_id());
                     std::cout << "Added client connecting" << std::endl;
                     EXPECT_TRUE(added_client->connect());
                     client3_joined = true;
@@ -2262,6 +2292,7 @@ TEST(SharedStateDistribution, TestChangingPeerGroupMembershipBetweenSynchronizat
     std::thread client2_thread([&group_clients, &value2, value_size, num_steps] {
         for (int step = 0; step < num_steps; ++step) {
             const std::unique_ptr<ccoip::CCoIPClient> &client2 = group_clients[1];
+            client2->setMainThread(std::this_thread::get_id());
 
             // Update local shared state
             std::fill_n(value2.get(), value_size, static_cast<uint8_t>(160 + step));
@@ -2299,6 +2330,7 @@ TEST(SharedStateDistribution, TestChangingPeerGroupMembershipBetweenSynchronizat
     // Client 3 performs last synchronization step (3)
     std::thread client3_thread([&group_clients, &value2, value_size, num_steps] {
         const std::unique_ptr<ccoip::CCoIPClient> &client3 = group_clients[2];
+        client3->setMainThread(std::this_thread::get_id());
 
         for (int step = 3; step < num_steps; ++step) {
             // Update local shared state

@@ -1266,8 +1266,12 @@ bool ccoip::CCoIPClientHandler::getAsyncReduceInfo(const uint64_t tag, std::opti
     return true;
 }
 
-bool ccoip::CCoIPClientHandler::isAnyCollectiveComsOpRunning() const {
+bool ccoip::CCoIPClientHandler::isAnyCollectiveComsOpRunning() {
     return client_state.isAnyCollectiveComsOpRunning();
 }
 
 size_t ccoip::CCoIPClientHandler::getWorldSize() const { return client_state.getWorldSize(); }
+
+void ccoip::CCoIPClientHandler::setMainThread(const std::thread::id main_thread_id) {
+    client_state.setMainThread(main_thread_id);
+}

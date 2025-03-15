@@ -13,7 +13,7 @@
 #include <span>
 
 // Helper function to establish p2p connection between two clients
-static void establishConnections(const std::vector<const ccoip::CCoIPClient *> &clients) {
+static void establishConnections(const std::vector<ccoip::CCoIPClient *> &clients) {
     size_t n_clients = clients.size();
 
     std::atomic_int clients_connected = 0;
@@ -21,6 +21,7 @@ static void establishConnections(const std::vector<const ccoip::CCoIPClient *> &
     std::vector<std::thread> client_threads{};
     for (const auto &client: clients) {
         std::thread client_thread([n_clients, &clients_connected, &client] {
+            client->setMainThread(std::this_thread::get_id());
             ASSERT_TRUE(client->connect());
             ++clients_connected;
             while (clients_connected < n_clients) {
@@ -104,7 +105,7 @@ void reduceTest(const ccoip::ccoip_reduce_op_t reduce_op,
     }
 
     // Establish connections (collect raw pointers for the helper function)
-    std::vector<const ccoip::CCoIPClient *> client_ptrs;
+    std::vector<ccoip::CCoIPClient *> client_ptrs;
     client_ptrs.reserve(num_clients);
     for (auto &client: clients) {
         client_ptrs.push_back(client.get());
@@ -166,6 +167,9 @@ void reduceTest(const ccoip::ccoip_reduce_op_t reduce_op,
     std::vector<std::unique_ptr<ValueType[]>> results(num_clients);
     for (size_t c = 0; c < num_clients; ++c) {
         const auto &client = clients[c];
+
+        client->setMainThread(std::this_thread::get_id());
+
         auto &result = results[c] = std::make_unique<ValueType[]>(n_elements);
         std::fill_n(result.get(), n_elements, ValueType{});
 
@@ -262,12 +266,12 @@ TYPED_TEST(QuantizeTypedAllReduceTest, TestSumQuantizedWorldSize2) {
     ASSERT_TRUE(master.launch());
 
     // client 1
-    const ccoip::CCoIPClient client1({
+    ccoip::CCoIPClient client1({
         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
         .port = CCOIP_PROTOCOL_PORT_MASTER,
     }, 0);
     // client 2
-    const ccoip::CCoIPClient client2({
+    ccoip::CCoIPClient client2({
         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
         .port = CCOIP_PROTOCOL_PORT_MASTER
     }, 0);
@@ -276,6 +280,7 @@ TYPED_TEST(QuantizeTypedAllReduceTest, TestSumQuantizedWorldSize2) {
 
     // For demonstration, both threads do a quantized allreduce
     std::thread client1_reduce_thread([&client1, ccoipType] {
+        client1.setMainThread(std::this_thread::get_id());
         const std::unique_ptr<ValueType[]> value1(new ValueType[1024]);
         std::fill_n(value1.get(), 1024, 42);
 
@@ -300,6 +305,7 @@ TYPED_TEST(QuantizeTypedAllReduceTest, TestSumQuantizedWorldSize2) {
     });
 
     std::thread client2_reduce_thread([&client2, ccoipType] {
+        client2.setMainThread(std::this_thread::get_id());
         const std::unique_ptr<ValueType[]> value2(new ValueType[1024]);
         std::fill_n(value2.get(), 1024, 43);
 
@@ -380,12 +386,12 @@ TEST(AllReduceTest, TestNoAcceptNewPeersDuringConcurrentReduce) {
     ASSERT_TRUE(master.launch());
 
     // client 1
-    const ccoip::CCoIPClient client1({
+    ccoip::CCoIPClient client1({
         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
         .port = CCOIP_PROTOCOL_PORT_MASTER,
     }, 0);
     // client 2
-    const ccoip::CCoIPClient client2({
+    ccoip::CCoIPClient client2({
         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
         .port = CCOIP_PROTOCOL_PORT_MASTER
     }, 0);
@@ -393,6 +399,7 @@ TEST(AllReduceTest, TestNoAcceptNewPeersDuringConcurrentReduce) {
     establishConnections({&client1, &client2});
 
     std::thread client1_reduce_thread([&client1] {
+        client1.setMainThread(std::this_thread::get_id());
         const std::unique_ptr<uint8_t[]> value1(new uint8_t[1024]);
         std::fill_n(value1.get(), 1024, 42);
 
@@ -413,6 +420,7 @@ TEST(AllReduceTest, TestNoAcceptNewPeersDuringConcurrentReduce) {
     });
 
     std::thread client2_reduce_thread([&client2] {
+        client2.setMainThread(std::this_thread::get_id());
         const std::unique_ptr<uint8_t[]> value2(new uint8_t[1024]);
         std::fill_n(value2.get(), 1024, 43);
 
@@ -456,12 +464,12 @@ TEST(AllReduceTest, TestNoSharedStateSyncDuringConcurrentReduce) {
     ASSERT_TRUE(master.launch());
 
     // client 1
-    const ccoip::CCoIPClient client1({
+    ccoip::CCoIPClient client1({
         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
         .port = CCOIP_PROTOCOL_PORT_MASTER,
     }, 0);
     // client 2
-    const ccoip::CCoIPClient client2({
+    ccoip::CCoIPClient client2({
         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
         .port = CCOIP_PROTOCOL_PORT_MASTER
     }, 0);
@@ -469,6 +477,7 @@ TEST(AllReduceTest, TestNoSharedStateSyncDuringConcurrentReduce) {
     establishConnections({&client1, &client2});
 
     std::thread client1_reduce_thread([&client1] {
+        client1.setMainThread(std::this_thread::get_id());
         const std::unique_ptr<uint8_t[]> value1(new uint8_t[1024]);
         std::fill_n(value1.get(), 1024, 42);
 
@@ -510,6 +519,7 @@ TEST(AllReduceTest, TestNoSharedStateSyncDuringConcurrentReduce) {
     });
 
     std::thread client2_reduce_thread([&client2] {
+        client2.setMainThread(std::this_thread::get_id());
         const std::unique_ptr<uint8_t[]> value2(new uint8_t[1024]);
         std::fill_n(value2.get(), 1024, 43);
 
@@ -593,11 +603,11 @@ TEST(AllReduceTest, TestMultipleConcurrentAllReduces) {
     ASSERT_TRUE(master.launch());
 
     // client 1 and client 2
-    const ccoip::CCoIPClient client1({
+    ccoip::CCoIPClient client1({
         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
         .port = CCOIP_PROTOCOL_PORT_MASTER,
     }, 0);
-    const ccoip::CCoIPClient client2({
+    ccoip::CCoIPClient client2({
         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
         .port = CCOIP_PROTOCOL_PORT_MASTER,
     }, 0);
@@ -628,6 +638,9 @@ TEST(AllReduceTest, TestMultipleConcurrentAllReduces) {
     // Tag 1 for the first reduce, Tag 2 for the second
     constexpr int TAG_1 = 123;
     constexpr int TAG_2 = 456;
+
+    client1.setMainThread(std::this_thread::get_id());
+    client2.setMainThread(std::this_thread::get_id());
 
     // Launch both reduces from client1
     ASSERT_TRUE(client1.allReduceAsync(c1_values_1.get(),
@@ -710,11 +723,11 @@ TEST(AllReduceTest, TestMultipleConcurrentAllReducesSameTagFail) {
     ASSERT_TRUE(master.launch());
 
     // client 1 and client 2
-    const ccoip::CCoIPClient client1({
+    ccoip::CCoIPClient client1({
         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
         .port = CCOIP_PROTOCOL_PORT_MASTER,
     }, 0);
-    const ccoip::CCoIPClient client2({
+    ccoip::CCoIPClient client2({
         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
         .port = CCOIP_PROTOCOL_PORT_MASTER,
     }, 0);
@@ -744,6 +757,9 @@ TEST(AllReduceTest, TestMultipleConcurrentAllReducesSameTagFail) {
 
     constexpr int TAG_1 = 123;
     constexpr int TAG_2 = 123;
+
+    client1.setMainThread(std::this_thread::get_id());
+    client2.setMainThread(std::this_thread::get_id());
 
     EXPECT_TRUE(client1.allReduceAsync(c1_values_1.get(),
                                        c1_results_1.get(),

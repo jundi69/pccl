@@ -19,6 +19,10 @@ ccoip::CCoIPClientState::~CCoIPClientState() {
     collective_coms_threadpool.shutdown();
 }
 
+void ccoip::CCoIPClientState::setMainThread(const std::thread::id main_thread_id) {
+    this->main_thread_id = main_thread_id;
+}
+
 bool ccoip::CCoIPClientState::registerPeer(const ccoip_socket_address_t &address, const ccoip_uuid_t uuid) {
     THREAD_GUARD(main_thread_id);
     const auto internal_address = ccoip_socket_to_internal(address);
@@ -71,13 +75,15 @@ bool ccoip::CCoIPClientState::isSyncingSharedState() const {
     return is_syncing_shared_state.load(std::memory_order_acquire);
 }
 
-bool ccoip::CCoIPClientState::isCollectiveComsOpRunning(const uint64_t tag) const {
+bool ccoip::CCoIPClientState::isCollectiveComsOpRunning(const uint64_t tag) {
     THREAD_GUARD(main_thread_id);
+    std::shared_lock lock(running_collective_coms_ops_tags_mutex);
     return running_collective_coms_ops_tags.contains(tag);
 }
 
-bool ccoip::CCoIPClientState::isAnyCollectiveComsOpRunning() const {
+bool ccoip::CCoIPClientState::isAnyCollectiveComsOpRunning() {
     THREAD_GUARD(main_thread_id);
+    std::shared_lock lock(running_collective_coms_ops_tags_mutex);
     return !running_collective_coms_ops_tags.empty();
 }
 
@@ -260,6 +266,5 @@ void ccoip::CCoIPClientState::resetCollectiveComsTxBytes(const uint64_t tag) {
 }
 
 void ccoip::CCoIPClientState::updateTopology(const std::vector<ccoip_uuid_t> &new_ring_order) {
-    THREAD_GUARD(main_thread_id);
     ring_order = new_ring_order;
 }
