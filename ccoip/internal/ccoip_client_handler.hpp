@@ -28,10 +28,10 @@ namespace ccoip {
         std::thread::id shared_state_server_thread_id;
 
         /// Open p2p connections; Tx connections (we have established this connection to the peer)
-        std::unordered_map<ccoip_uuid_t, std::unique_ptr<tinysockets::MultiplexedIOSocket> > p2p_connections_tx;
+        std::unordered_map<ccoip_uuid_t, std::shared_ptr<tinysockets::MultiplexedIOSocket> > p2p_connections_tx;
 
         /// Open p2p connections; Rx connections (peer has established this connection to us)
-        std::unordered_map<ccoip_uuid_t, std::unique_ptr<tinysockets::MultiplexedIOSocket> > p2p_connections_rx;
+        std::unordered_map<ccoip_uuid_t, std::shared_ptr<tinysockets::MultiplexedIOSocket> > p2p_connections_rx;
 
         /// Peer group of the client
         uint32_t peer_group;

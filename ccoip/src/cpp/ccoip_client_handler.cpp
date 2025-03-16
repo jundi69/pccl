@@ -688,6 +688,13 @@ bool ccoip::CCoIPClientHandler::interrupt() {
 }
 
 bool ccoip::CCoIPClientHandler::join() {
+    // await all running collective communications operations
+    for (const auto tag : client_state.getRunningCollectiveComsOpTags()) {
+        if (!client_state.joinAsyncCollectiveOp(tag)) {
+            return false;
+        }
+    }
+
     for (const auto &p2p_entry: p2p_connections_rx) {
         p2p_entry.second->join();
     }
@@ -1198,7 +1205,7 @@ bool ccoip::CCoIPClientHandler::allReduceAsync(const void *sendbuff, void *recvb
 }
 
 bool ccoip::CCoIPClientHandler::joinAsyncReduce(const uint64_t tag) {
-    if (!client_state.joinAsyncReduce(tag)) [[unlikely]] {
+    if (!client_state.joinAsyncCollectiveOp(tag)) [[unlikely]] {
         return false;
     }
     const auto failure_opt = client_state.hasCollectiveComsOpFailed(tag);

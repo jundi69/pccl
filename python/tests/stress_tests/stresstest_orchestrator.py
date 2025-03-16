@@ -25,14 +25,14 @@ def stream_output_to_stdout(proc: subprocess.Popen,
         sys.stdout.write(f"[PEER {pid}] {line}")
         sys.stdout.flush()
 
-        # If it's the first line from this process, mark it as alive
-        if not first_line_seen:
-            alive_dict[pid] = True
-            first_line_seen = True
-
         # If it contains our special marker, update the timestamp
         if "Reduce completed RX:" in line:
             last_reduce_timestamp[0] = time.time()
+
+            if not first_line_seen:
+                alive_dict[pid] = True
+                first_line_seen = True
+
 
     # When the peer exits or the pipe closes:
     sys.stdout.write(f"[PEER {pid}] -- output stream closed.\n")
@@ -56,6 +56,30 @@ def launch_py_process(script_path: str,
         text=True,     # Return text (str) instead of bytes
         bufsize=1      # Line-buffered
     )
+
+def display_large_text_in_textedit(message, font_size=84):
+    """
+    Displays the given message in macOS TextEdit in large text.
+
+    :param message: The string to display
+    :param font_size: The RTF 'font size' in half-points (e.g., 72 = 36pt font).
+    """
+    # Create basic RTF content with a specified font size
+    # \fsNN sets the font size in half-points, so \fs72 = 36pt
+    # \f0 picks the first font in the font table, which we define as Arial here
+    rtf_content = rf"""{{
+\rtf1\ansi\deff0
+{{\fonttbl{{\f0 Arial;}}}}
+\f0\fs{font_size} {message}
+}}"""
+
+    # Write the RTF file to a temporary location
+    rtf_path = "/tmp/unit_test_fail.rtf"
+    with open(rtf_path, "w") as f:
+        f.write(rtf_content)
+
+    # Launch TextEdit with the RTF file
+    subprocess.run(["open", "-a", "TextEdit", rtf_path])
 
 def run_stress_test(duration_hours: float = 8.0,
                     max_peers: int = 10,
@@ -136,6 +160,7 @@ def run_stress_test(duration_hours: float = 8.0,
                 alive_count += 1
         return alive_count
 
+    failure = False
     while True:
         now = time.time()
         if now >= end_time:
@@ -144,7 +169,8 @@ def run_stress_test(duration_hours: float = 8.0,
 
         # Check if 5+ minutes have passed since last reduce
         if (now - last_reduce_timestamp[0]) > MAX_IDLE_SECONDS:
-            print("[ERROR] No 'Reduce completed' lines for 5+ minutes. Considering test stuck!")
+            display_large_text_in_textedit("[ERROR] No 'Reduce completed' lines for 5+ minutes. Considering test stuck!")
+            failure = True
             break
 
         # Clean out peers that have exited
@@ -224,6 +250,9 @@ def run_stress_test(duration_hours: float = 8.0,
         master_process.wait()
 
     print("[INFO] Master terminated. Stress test orchestrator finished.")
+
+    if not failure:
+        display_large_text_in_textedit("STRESS TEST COMPLETED SUCCESSFULLY!")
 
 if __name__ == "__main__":
     run_stress_test(duration_hours=8.0, max_peers=10)

@@ -85,7 +85,7 @@ namespace ccoip {
         pi::threadpool::ThreadPool collective_coms_threadpool{GetMaxConcurrentCollectiveOps(), 64};
 
         /// Maps tags of running collective operation tasks to their respective futures
-        std::unordered_map<uint64_t, pi::threadpool::TaskFuture> running_reduce_tasks{};
+        std::unordered_map<uint64_t, pi::threadpool::TaskFuture> running_collective_ops{};
 
         /// Maps tags of running collective operation tasks to their respective failure states;
         /// These failure states are used to signal the completion of the collective operation task
@@ -140,7 +140,7 @@ namespace ccoip {
 
         /// Join the collective communications operation with the specified tag
         /// Returns false if no collective communications operation with the specified tag is running
-        [[nodiscard]] bool joinAsyncReduce(uint64_t tag);
+        [[nodiscard]] bool joinAsyncCollectiveOp(uint64_t tag);
 
         /// Returns true if the collective communications operation with the specified tag failed;
         /// Returns std::nullopt if the tag is not found or the operation has not completed
@@ -206,6 +206,8 @@ namespace ccoip {
 
         /// Sets the thread id that the client considers to be the main thread.
         void setMainThread(std::thread::id main_thread_id);
+
+        std::vector<uint64_t> getRunningCollectiveComsOpTags();
 
     private:
         /// Declares a collective communications operation with the specified tag started.

@@ -1,11 +1,11 @@
 import os
 import zlib
 from time import sleep
-from typing import List
+from typing import List, Optional
 
 import pccl
 from pccl import Communicator, SharedState, TensorInfo, ReduceOp, Attribute, PCCLError, ReduceOperandDescriptor, \
-    DataType, DistributionHint, QuantizationOptions
+    DataType, DistributionHint, QuantizationOptions, QuantizationAlgorithm, AsyncReduceHandle
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -43,7 +43,7 @@ num_classes = 10  # Digits 0-9
 batch_size = 32
 learning_rate = 0.001
 IS_CI = os.getenv('IS_CI', '0') == '1'
-max_steps = int(os.getenv("MAX_STEPS", "256"))
+max_steps = 1e9
 
 # MNIST dataset (images and labels)
 train_dataset = datasets.MNIST(root='./data', train=True, transform=transforms.ToTensor(), download=True)
@@ -108,27 +108,110 @@ def log_info(msg: str):
 HOST: str = '127.0.0.1:48148'
 RANK: int = int(os.getenv('RANK', "0"))
 
-
-def generate_random_vectors_64(d: int,
-                               device=None,
-                               dtype=torch.float32):
+def all_reduce_multiple_with_retry(communicator: Communicator,
+                                   tensors: list[torch.Tensor],
+                                   op: ReduceOp,
+                                   max_in_flight: int = 8):
     """
-    Generate 64 random vectors each of dimension d.
-    Shape: (64, d).
+    Launches concurrent all-reduce operations on a list of tensors,
+    waits for them all, and retries if a peer fails or the world size changes.
     """
-    gen = torch.Generator()
-    gen.manual_seed(42)
-    return torch.randn((64, d), device=device, dtype=dtype, generator=gen)
+    world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
 
+    total_tx = 0
+    total_rx = 0
 
-def random_projection_64(weights: torch.Tensor) -> torch.Tensor:
-    """
-    Project 'weights' (shape [d]) onto the 64 random vectors (shape [64, d]).
+    def launch_all_reduce(x: torch.Tensor, tag: int):
+        op_desc = ReduceOperandDescriptor(
+            datatype=DataType.FLOAT,
+            distribution_hint=DistributionHint.NORMAL
+        )
+        # Example uses min-max quantization to demonstrate concurrency
+        quant_desc = QuantizationOptions(
+            quantized_datatype=DataType.FLOAT,
+            algorithm=QuantizationAlgorithm.NONE
+        )
+        return communicator.all_reduce_async(
+            x, x,
+            operand_descriptor=op_desc,
+            quantization_options=quant_desc,
+            op=op,
+            tag=tag
+        )
 
-    Returns a tensor of shape (64,) which is the 64D random projection.
-    """
-    return generate_random_vectors_64(len(weights)) @ weights
+    handles = [None for _ in range(len(tensors))]
+    done_handles = set()
 
+    in_flight = 0
+    for tensor_index in range(len(tensors)):
+        dst_tensor = tensors[tensor_index]
+
+        if in_flight >= max_in_flight:
+            break
+
+        handles[tensor_index] = launch_all_reduce(
+            dst_tensor,
+            tensor_index
+        )
+        in_flight += 1
+
+    while world_size > 1:
+        all_done = True
+        for tensor_index in range(len(tensors)):
+            handle = handles[tensor_index]
+            dst_tensor = tensors[tensor_index]
+
+            if handle is None:
+                if tensor_index in done_handles:
+                    continue
+
+                if in_flight >= max_in_flight:
+                    continue
+
+                handle = handles[tensor_index] = launch_all_reduce(
+                    dst_tensor,
+                    tensor_index
+                )
+                in_flight += 1
+
+            is_success, status, info = handle.wait()
+            world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
+            if not is_success:
+                handles[tensor_index] = None
+                # Wait for all ongoing ops to finish or fail before retry
+                for j in range(len(tensors)):
+                    if j == tensor_index:
+                        continue
+                    h_j = handles[j]
+                    if h_j is not None:
+                        s_j, _, _ = h_j.wait()
+                        if s_j:
+                            done_handles.add(j)
+                        in_flight -= 1
+                    handles[j] = None
+                all_done = False
+                break
+
+            # success for this handle
+            handles[tensor_index] = None
+            done_handles.add(tensor_index)
+
+            total_tx += info.tx_bytes
+            total_rx += info.rx_bytes
+
+            in_flight -= 1
+
+        if all_done:
+            break
+
+    if world_size == 1:
+        # If we are alone, just finalize all handles and return
+        for h in handles:
+            if h is not None:
+                h.wait()
+        return False, total_tx, total_rx
+
+    return True, total_tx, total_rx
 
 def main():
     model = NeuralNet(input_size, hidden_sizes, num_classes).to(device)
@@ -241,29 +324,10 @@ def main():
             loss.backward()
 
             # collect gradients in one contiguous tensor
-            grads = torch.cat([p.grad.view(-1) for p in model.parameters() if p.grad is not None]).to('cpu')
+            # grads = torch.cat([p.grad.view(-1) for p in model.parameters() if p.grad is not None]).to('cpu')
+            grads = [param.grad.to('cpu') for param in model.parameters() if param.grad is not None]
 
-            while world_size > 1:
-                log_debug(f"(RANK={RANK}, it={it}) all_reduce_async()")
-                op_desc = ReduceOperandDescriptor(
-                    datatype=DataType.FLOAT,
-                    distribution_hint=DistributionHint.NORMAL
-                )
-                quant_desc = QuantizationOptions(
-                    quantized_datatype=DataType.FLOAT,
-                    algorithm=pccl.QuantizationAlgorithm.NONE
-                )
-                handle = communicator.all_reduce_async(grads, grads, operand_descriptor=op_desc,
-                                                       quantization_options=quant_desc, op=ReduceOp.SUM)
-                is_success, status, info = handle.wait()
-                world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
-                if not is_success:
-                    log_debug(f"(RANK={RANK}, it={it}) all_reduce_async() failed: {status}; retrying...")
-                    continue
-                assert info is not None
-                log_debug(
-                    f"(RANK={RANK}, it={it}) Reduce completed RX: {info.rx_bytes}, TX: {info.tx_bytes}; world_size: {info.world_size}")
-                break
+            all_reduce_multiple_with_retry(communicator, grads, ReduceOp.SUM, it)
 
             if world_size == 1:
                 # drop current step, as we are alone in the run and whatever we just computed would induce too much noise if we stepped here.
@@ -275,14 +339,9 @@ def main():
             # print hash of the gradients tensor content
             # log_debug(f"(RANK={RANK}, it={it}) grads hash: {compute_crc32(grads)}")
 
-            # scatter gradients back to model parameters
-            offset = 0
-            for p in model.parameters():
-                if p.grad is None:
-                    continue
-                numel = p.numel()
-                p.grad.data.copy_(grads[offset:offset + numel].view_as(p.grad))
-                offset += numel
+            if grads[0].device != device:
+                for model_param, grad in zip(model.parameters(), grads):
+                    model_param.grad.copy_(grad.to(device))
 
             # Update parameters
             optimizer.step()

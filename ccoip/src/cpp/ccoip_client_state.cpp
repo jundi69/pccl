@@ -12,7 +12,7 @@ ccoip::CCoIPClientState::CCoIPClientState() {
 ccoip::CCoIPClientState::~CCoIPClientState() {
     for (const std::unordered_set<uint64_t> remaining_tags = running_collective_coms_ops_tags;
          const auto &tag: remaining_tags) {
-        if (!joinAsyncReduce(tag)) {
+        if (!joinAsyncCollectiveOp(tag)) {
             LOG(ERR) << "Failed to join collective comms op with tag " << tag << " during client state destruction";
         }
     }
@@ -21,6 +21,17 @@ ccoip::CCoIPClientState::~CCoIPClientState() {
 
 void ccoip::CCoIPClientState::setMainThread(const std::thread::id main_thread_id) {
     this->main_thread_id = main_thread_id;
+}
+
+std::vector<uint64_t> ccoip::CCoIPClientState::getRunningCollectiveComsOpTags() {
+    std::vector<uint64_t> running_collective_coms_op_tags; {
+        std::shared_lock lock(running_collective_coms_ops_tags_mutex);
+        running_collective_coms_op_tags.reserve(running_collective_coms_ops_tags.size());
+        for (const auto tag: running_collective_coms_ops_tags) {
+            running_collective_coms_op_tags.push_back(tag);
+        }
+    }
+    return running_collective_coms_op_tags;
 }
 
 bool ccoip::CCoIPClientState::registerPeer(const ccoip_socket_address_t &address, const ccoip_uuid_t uuid) {
@@ -106,7 +117,7 @@ bool ccoip::CCoIPClientState::endCollectiveComsOp(const uint64_t tag) {
     if (const auto n = running_collective_coms_ops_tags.erase(tag); n == 0) {
         return false;
     }
-    if (const auto n = running_reduce_tasks.erase(tag); n == 0) {
+    if (const auto n = running_collective_ops.erase(tag); n == 0) {
         return false;
     }
     return true;
@@ -141,16 +152,16 @@ bool ccoip::CCoIPClientState::launchAsyncCollectiveOp(const uint64_t tag,
         // expose the result of the task to the client state
         {
             std::unique_lock lock(running_reduce_tasks_failure_states_mutex);
-            running_reduce_tasks_failure_states[tag].store(future.get() ? 1 : 0, std::memory_order_relaxed);
+            running_reduce_tasks_failure_states[tag].store(future.get() ? 1 : 0, std::memory_order_release);
         }
     });
-    running_reduce_tasks.emplace(tag, std::move(op_future));
+    running_collective_ops.emplace(tag, std::move(op_future));
     return true;
 }
 
-bool ccoip::CCoIPClientState::joinAsyncReduce(const uint64_t tag) {
+bool ccoip::CCoIPClientState::joinAsyncCollectiveOp(const uint64_t tag) {
     THREAD_GUARD(main_thread_id);
-    if (const auto it = running_reduce_tasks.find(tag); it != running_reduce_tasks.end()) {
+    if (const auto it = running_collective_ops.find(tag); it != running_collective_ops.end()) {
         it->second.join();
         if (!endCollectiveComsOp(tag)) [[unlikely]] {
             LOG(BUG) << "Collective comms op with tag " << tag << " was not started but is being ended";

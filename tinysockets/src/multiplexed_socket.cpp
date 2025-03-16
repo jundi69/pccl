@@ -287,6 +287,13 @@ bool tinysockets::MultiplexedIOSocket::run() {
                 do {
                     const ssize_t i =
                             sendvp(socket_fd, entry->data.get() + n_sent, entry->size_bytes - n_sent, MSG_NOSIGNAL);
+                    if (i == 0) {
+                        LOG(ERR) << "Connection was closed while sending packet data for packet with tag " << entry->tag << "; exiting send loop...";
+                        if (!interrupt()) {
+                            LOG(ERR) << "Failed to interrupt MultiplexedIOSocket";
+                        }
+                        break;
+                    }
                     if (i == -1) {
                         LOG(ERR) << "Failed to send packet data for packet with tag " << entry->tag;
                         break;
@@ -483,7 +490,7 @@ void tinysockets::MultiplexedIOSocket::join() {
     }
 }
 
-bool tinysockets::MultiplexedIOSocket::isOpen() const { return running; }
+bool tinysockets::MultiplexedIOSocket::isOpen() const { return running.load(std::memory_order_acquire); }
 
 const ccoip_socket_address_t &tinysockets::MultiplexedIOSocket::getConnectSockAddr() const { return connect_sockaddr; }
 

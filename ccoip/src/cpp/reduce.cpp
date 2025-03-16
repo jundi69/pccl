@@ -23,8 +23,8 @@
 namespace {
 
     size_t GetPCCLMultiplexChunkSize() {
-        static size_t chunk_size = -1;
-        if (chunk_size == -1) {
+        static size_t chunk_size = SIZE_MAX;
+        if (chunk_size == SIZE_MAX) {
             // check PCCL_MULTIPLEX_CHUNK_SIZE environment variable
             const char *env_chunk_size = std::getenv("PCCL_MULTIPLEX_CHUNK_SIZE");
             if (env_chunk_size) {
@@ -90,9 +90,9 @@ namespace {
         const std::optional<ccoip::internal::quantize::DeQuantizationMetaData> &meta_data_self,
 
         const std::unordered_map<ccoip_uuid_t,
-            std::unique_ptr<tinysockets::MultiplexedIOSocket> > &peer_tx_sockets,
+            std::shared_ptr<tinysockets::MultiplexedIOSocket> > &peer_tx_sockets,
         const std::unordered_map<ccoip_uuid_t,
-            std::unique_ptr<tinysockets::MultiplexedIOSocket> > &peer_rx_sockets) {
+            std::shared_ptr<tinysockets::MultiplexedIOSocket> > &peer_rx_sockets) {
         using namespace tinysockets;
         using namespace ccoip::internal::reduce;
         using namespace ccoip::internal::quantize;
@@ -265,9 +265,9 @@ namespace {
         ccoip::internal::quantize::DeQuantizationMetaData &received_meta_data_out,
 
         const std::unordered_map<ccoip_uuid_t,
-            std::unique_ptr<tinysockets::MultiplexedIOSocket> > &peer_tx_sockets,
+            std::shared_ptr<tinysockets::MultiplexedIOSocket> > &peer_tx_sockets,
         const std::unordered_map<ccoip_uuid_t,
-            std::unique_ptr<tinysockets::MultiplexedIOSocket> > &peer_rx_sockets) {
+            std::shared_ptr<tinysockets::MultiplexedIOSocket> > &peer_rx_sockets) {
         using namespace tinysockets;
         using namespace ccoip::internal::quantize;
         using namespace ccoip::internal::reduce;
@@ -420,9 +420,9 @@ std::pair<bool, bool> ccoip::reduce::pipelineRingReduce(
     const size_t rank,
     const size_t world_size,
     const std::vector<ccoip_uuid_t> &ring_order,
-    const std::unordered_map<ccoip_uuid_t, std::unique_ptr<tinysockets::MultiplexedIOSocket>> &
+    const std::unordered_map<ccoip_uuid_t, std::shared_ptr<tinysockets::MultiplexedIOSocket>> &
     peer_tx_sockets,
-    const std::unordered_map<ccoip_uuid_t, std::unique_ptr<tinysockets::MultiplexedIOSocket>> &
+    const std::unordered_map<ccoip_uuid_t, std::shared_ptr<tinysockets::MultiplexedIOSocket>> &
     peer_rx_sockets) {
     using namespace ccoip::internal::quantize;
     using namespace ccoip::internal::reduce;

@@ -84,6 +84,7 @@ def all_reduce_multiple_with_retry(communicator: Communicator,
             is_success, status, info = handle.wait()
             world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
             if not is_success:
+                print(f"(RANK={RANK}) Reduce failed: {status}; Starting recovery procedure")
                 handles[tensor_index] = None
                 # Wait for all ongoing ops to finish or fail before retry
                 for j in range(len(tensors)):
@@ -109,9 +110,12 @@ def all_reduce_multiple_with_retry(communicator: Communicator,
             in_flight -= 1
 
         if all_done:
+            print(
+                f"(RANK={RANK}) Reduce completed RX: {total_rx}, TX: {total_tx}; world_size: {world_size}")
             break
 
     if world_size == 1:
+        print(f"(RANK={RANK}) All peers have left except this peer. All reduce will do nothing.")
         # If we are alone, just finalize all handles and return
         for h in handles:
             if h is not None:
@@ -155,7 +159,8 @@ def main():
                         # it might just be true that the peer can indeed just not talk to those peers.
                         # If they had disconnected from the master too, they would already be considered removed from the
                         # run. But if that happens just a tick late, this unlucky situation can happen.
-                        print("Exiting because peer was likely kicked. This doesn't necessary entail a failure of the stress test, as long as the shared state revision is not lost and new peers continue on.")
+                        print(
+                            "Exiting because peer was likely kicked. This doesn't necessary entail a failure of the stress test, as long as the shared state revision is not lost and new peers continue on.")
                         exit(0)
                     print(f"(RANK={RANK}, it={it}) update_topology() failed: {ex}; retrying...")
                     continue
@@ -174,7 +179,6 @@ def main():
                     continue
             world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
 
-
         if world_size < 2:
             logging.info(f"(RANK={RANK}, it={it}) waiting...")
             sleep(1)
@@ -189,7 +193,7 @@ def main():
 
         # Create fake gradients
         gradients = [torch.randn(128, 128, dtype=torch.float32) for _ in range(10)]
-        all_reduce_multiple_with_retry(communicator, gradients, ReduceOp.SUM, it)
+        all_reduce_multiple_with_retry(communicator, gradients, ReduceOp.SUM, max_in_flight=8)
         if world_size == 1:
             # drop current step, as we are alone in the run and whatever we just computed would induce too much noise if we stepped here.
             # If one accepts the pattern that one waits until the world size is at least two, it would be erroneous to step here.
