@@ -21,7 +21,6 @@
 
 
 namespace {
-
     size_t GetPCCLMultiplexChunkSize() {
         static size_t chunk_size = SIZE_MAX;
         if (chunk_size == SIZE_MAX) {
@@ -44,9 +43,9 @@ namespace {
      *   boundaries[r] = {start_index, end_index}
      * in element (not byte) units.
      */
-    std::vector<std::pair<size_t, size_t> >
+    std::vector<std::pair<size_t, size_t>>
     computeChunkBoundaries(const size_t total_el, const size_t world_size) {
-        std::vector<std::pair<size_t, size_t> > boundaries(world_size, {0, 0});
+        std::vector<std::pair<size_t, size_t>> boundaries(world_size, {0, 0});
         if (world_size == 0) { return boundaries; }
 
         const size_t base = total_el / world_size;
@@ -90,9 +89,9 @@ namespace {
         const std::optional<ccoip::internal::quantize::DeQuantizationMetaData> &meta_data_self,
 
         const std::unordered_map<ccoip_uuid_t,
-            std::shared_ptr<tinysockets::MultiplexedIOSocket> > &peer_tx_sockets,
+            std::shared_ptr<tinysockets::MultiplexedIOSocket>> &peer_tx_sockets,
         const std::unordered_map<ccoip_uuid_t,
-            std::shared_ptr<tinysockets::MultiplexedIOSocket> > &peer_rx_sockets) {
+            std::shared_ptr<tinysockets::MultiplexedIOSocket>> &peer_rx_sockets) {
         using namespace tinysockets;
         using namespace ccoip::internal::reduce;
         using namespace ccoip::internal::quantize;
@@ -227,7 +226,7 @@ namespace {
 
             if (no_event_ctr > 100) {
                 const auto abort_packet = master_socket.receiveMatchingPacket<ccoip::M2CPacketCollectiveCommsAbort>(
-                        [tag](const ccoip::M2CPacketCollectiveCommsAbort &packet) { return packet.tag == tag; }, true);
+                    [tag](const ccoip::M2CPacketCollectiveCommsAbort &packet) { return packet.tag == tag; }, true);
                 if (abort_packet) {
                     return {true, true};
                 }
@@ -265,9 +264,9 @@ namespace {
         ccoip::internal::quantize::DeQuantizationMetaData &received_meta_data_out,
 
         const std::unordered_map<ccoip_uuid_t,
-            std::shared_ptr<tinysockets::MultiplexedIOSocket> > &peer_tx_sockets,
+            std::shared_ptr<tinysockets::MultiplexedIOSocket>> &peer_tx_sockets,
         const std::unordered_map<ccoip_uuid_t,
-            std::shared_ptr<tinysockets::MultiplexedIOSocket> > &peer_rx_sockets) {
+            std::shared_ptr<tinysockets::MultiplexedIOSocket>> &peer_rx_sockets) {
         using namespace tinysockets;
         using namespace ccoip::internal::quantize;
         using namespace ccoip::internal::reduce;
@@ -330,7 +329,6 @@ namespace {
 
         size_t no_event_ctr = 0;
         while (bytes_sent < total_tx_size || bytes_recvd < total_rx_size) {
-
             bool no_event = true;
 
             // Send
@@ -392,7 +390,7 @@ namespace {
             }
             if (no_event_ctr > 100) {
                 const auto abort_packet = master_socket.receiveMatchingPacket<ccoip::M2CPacketCollectiveCommsAbort>(
-                        [tag](const ccoip::M2CPacketCollectiveCommsAbort &packet) { return packet.tag == tag; }, true);
+                    [tag](const ccoip::M2CPacketCollectiveCommsAbort &packet) { return packet.tag == tag; }, true);
                 if (abort_packet) {
                     return {true, true};
                 }
@@ -420,10 +418,9 @@ std::pair<bool, bool> ccoip::reduce::pipelineRingReduce(
     const size_t rank,
     const size_t world_size,
     const std::vector<ccoip_uuid_t> &ring_order,
-    const std::unordered_map<ccoip_uuid_t, std::shared_ptr<tinysockets::MultiplexedIOSocket>> &
-    peer_tx_sockets,
-    const std::unordered_map<ccoip_uuid_t, std::shared_ptr<tinysockets::MultiplexedIOSocket>> &
-    peer_rx_sockets) {
+    const std::unordered_map<ccoip_uuid_t, std::shared_ptr<tinysockets::MultiplexedIOSocket>> &peer_tx_sockets,
+    const std::unordered_map<ccoip_uuid_t, std::shared_ptr<tinysockets::MultiplexedIOSocket>> &peer_rx_sockets
+) {
     using namespace ccoip::internal::quantize;
     using namespace ccoip::internal::reduce;
 
@@ -437,7 +434,7 @@ std::pair<bool, bool> ccoip::reduce::pipelineRingReduce(
     }
 
     // Handle potential overlap of src_buf and dst_buf:
-    std::optional<std::unique_ptr<std::byte[]> > maybe_src_copy;
+    std::optional<std::unique_ptr<std::byte[]>> maybe_src_copy;
 
     bool src_and_dest_identical_ptr = (src_buf.data() == dst_buf.data()); {
         const auto *src_beg = src_buf.data();
@@ -526,13 +523,13 @@ std::pair<bool, bool> ccoip::reduce::pipelineRingReduce(
 
         // Perform ring exchange & reduce
         auto [success, abort_packet_received] = runReduceStage(client_state, master_socket, tag,
-                                      /*tx_span=*/ tx_unquantized,
-                                      /*rx_span=*/ rx_span,
-                                      /*recv_buffer_span=*/ recv_sub,
-                                      data_type, quantized_type, quantization_algorithm, op,
-                                      rank, world_size, ring_order,
-                                      meta_data,
-                                      peer_tx_sockets, peer_rx_sockets);
+                                                               /*tx_span=*/ tx_unquantized,
+                                                               /*rx_span=*/ rx_span,
+                                                               /*recv_buffer_span=*/ recv_sub,
+                                                               data_type, quantized_type, quantization_algorithm, op,
+                                                               rank, world_size, ring_order,
+                                                               meta_data,
+                                                               peer_tx_sockets, peer_rx_sockets);
         if (!success || abort_packet_received) {
             return {success, abort_packet_received};
         }
@@ -619,12 +616,12 @@ std::pair<bool, bool> ccoip::reduce::pipelineRingReduce(
 
         // Ring exchange (no reduce-op)
         auto [success, abort_packet_received] = runAllgatherStage(client_state, master_socket, tag,
-                                         tx_span, rx_span, recv_sub,
-                                         data_type, quantized_type, quantization_algorithm,
-                                         rank, world_size, ring_order,
-                                         meta_data,
-                                         prev_meta_data, // out
-                                         peer_tx_sockets, peer_rx_sockets);
+                                                                  tx_span, rx_span, recv_sub,
+                                                                  data_type, quantized_type, quantization_algorithm,
+                                                                  rank, world_size, ring_order,
+                                                                  meta_data,
+                                                                  prev_meta_data, // out
+                                                                  peer_tx_sockets, peer_rx_sockets);
         if (!success || abort_packet_received) {
             return {success, abort_packet_received};
         }
