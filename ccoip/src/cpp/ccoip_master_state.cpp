@@ -631,6 +631,24 @@ bool ccoip::CCoIPMasterState::syncSharedStateCompleteConsensus(const uint32_t pe
 }
 
 bool ccoip::CCoIPMasterState::collectiveCommsInitiateConsensus(const uint32_t peer_group, const uint64_t tag) {
+    // TODO: DEBUG ONLY
+    for (const auto &[_, info]: client_info) {
+        if (info.peer_group != peer_group) {
+            continue;
+        }
+        if (info.connection_phase != PEER_ACCEPTED) {
+            continue;
+        }
+        auto ccomms_state_it = info.collective_coms_states.find(tag);
+
+        if (ccomms_state_it == info.collective_coms_states.end()) {
+            LOG(DEBUG) << "Client " << ccoip_sockaddr_to_str(info.socket_address) << " exists.";
+        } else {
+            LOG(DEBUG) << "Client " << ccoip_sockaddr_to_str(info.socket_address) << " exists with state "
+                    << ccomms_state_it->second;
+        }
+    }
+
     size_t voting_clients = 0;
     size_t n_accepted_peers = 0;
     for (const auto &[_, info]: client_info) {
@@ -648,6 +666,8 @@ bool ccoip::CCoIPMasterState::collectiveCommsInitiateConsensus(const uint32_t pe
         }
         n_accepted_peers++;
     }
+    LOG(DEBUG) << "collectiveCommsInitiateConsensus: voting_clients=" << voting_clients << ", n_accepted_peers=" <<
+            n_accepted_peers;
     return voting_clients == n_accepted_peers;
 }
 
@@ -914,8 +934,8 @@ std::vector<ccoip_socket_address_t> ccoip::CCoIPMasterState::getClientSocketAddr
     return addresses;
 }
 
-std::vector<std::pair<ccoip_uuid_t, ccoip_socket_address_t> > ccoip::CCoIPMasterState::getClientEntrySet() {
-    std::vector<std::pair<ccoip_uuid_t, ccoip_socket_address_t> > entries{};
+std::vector<std::pair<ccoip_uuid_t, ccoip_socket_address_t>> ccoip::CCoIPMasterState::getClientEntrySet() {
+    std::vector<std::pair<ccoip_uuid_t, ccoip_socket_address_t>> entries{};
     entries.reserve(client_uuids.size());
     for (const auto &[internal_address, uuid]: client_uuids) {
         entries.emplace_back(uuid, internal_to_ccoip_sockaddr(internal_address));
@@ -1276,7 +1296,7 @@ bool ccoip::CCoIPMasterState::topologyOptimizationCompleteConsensus() const {
     return voting_peers.size() == client_uuids.size();
 }
 
-std::optional<std::reference_wrapper<ccoip::ClientInfo> >
+std::optional<std::reference_wrapper<ccoip::ClientInfo>>
 ccoip::CCoIPMasterState::getClientInfo(const ccoip_uuid_t &client_uuid) {
     const auto it = client_info.find(client_uuid);
     if (it == client_info.end()) {
@@ -1432,7 +1452,7 @@ std::vector<ccoip_uuid_t> ccoip::CCoIPMasterState::buildBasicRingTopology() {
     return topology;
 }
 
-std::optional<std::vector<ccoip_uuid_t> > ccoip::CCoIPMasterState::buildReachableRingTopology() {
+std::optional<std::vector<ccoip_uuid_t>> ccoip::CCoIPMasterState::buildReachableRingTopology() {
     std::vector<ccoip_uuid_t> remaining_peers{};
     for (const auto &[peer_uuid, _]: getClientEntrySet()) {
         const auto peer_info_opt = getClientInfo(peer_uuid);
@@ -1464,7 +1484,7 @@ std::optional<std::vector<ccoip_uuid_t> > ccoip::CCoIPMasterState::buildReachabl
     }
 
     // 2. Build adjacency: an unordered_map<uuid, unordered_set<uuid>> for bidirectional reachability
-    std::unordered_map<ccoip_uuid_t, std::unordered_set<ccoip_uuid_t> > adjacency;
+    std::unordered_map<ccoip_uuid_t, std::unordered_set<ccoip_uuid_t>> adjacency;
     adjacency.reserve(remaining_peers.size());
 
     for (const auto &u: remaining_peers) {

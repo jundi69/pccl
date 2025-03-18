@@ -8,13 +8,13 @@
 #include <topology_optimizer.hpp>
 #include <uuid_utils.hpp>
 
-ccoip::CCoIPMasterHandler::CCoIPMasterHandler(const ccoip_socket_address_t &listen_address) :
-    server_socket(listen_address) {
+ccoip::CCoIPMasterHandler::CCoIPMasterHandler(const ccoip_socket_address_t &listen_address) : server_socket(
+    listen_address) {
     server_socket.addReadCallback([this](const ccoip_socket_address_t &client_address, const std::span<uint8_t> &data) {
         onClientRead(client_address, data);
     });
     server_socket.addCloseCallback(
-            [this](const ccoip_socket_address_t &client_address) { onClientDisconnect(client_address); });
+        [this](const ccoip_socket_address_t &client_address) { onClientDisconnect(client_address); });
 }
 
 bool ccoip::CCoIPMasterHandler::run() {
@@ -67,7 +67,7 @@ void ccoip::CCoIPMasterHandler::onClientRead(const ccoip_socket_address_t &clien
         C2MPacketRequestSessionRegistration packet{};
         if (!packet.deserialize(buffer)) {
             LOG(ERR) << "Failed to deserialize C2MPacketRequestSessionJoin from "
-                     << ccoip_sockaddr_to_str(client_address);
+                    << ccoip_sockaddr_to_str(client_address);
             if (!kickClient(client_address)) [[unlikely]] {
                 LOG(ERR) << "Failed to kick client " << ccoip_sockaddr_to_str(client_address);
             }
@@ -78,7 +78,7 @@ void ccoip::CCoIPMasterHandler::onClientRead(const ccoip_socket_address_t &clien
         C2MPacketRequestEstablishP2PConnections packet{};
         if (!packet.deserialize(buffer)) {
             LOG(ERR) << "Failed to deserialize C2MPacketRequestEstablishP2PConnections from "
-                     << ccoip_sockaddr_to_str(client_address);
+                    << ccoip_sockaddr_to_str(client_address);
             if (!kickClient(client_address)) [[unlikely]] {
                 LOG(ERR) << "Failed to kick client " << ccoip_sockaddr_to_str(client_address);
             }
@@ -89,7 +89,7 @@ void ccoip::CCoIPMasterHandler::onClientRead(const ccoip_socket_address_t &clien
         C2MPacketP2PConnectionsEstablished packet{};
         if (!packet.deserialize(buffer)) [[unlikely]] {
             LOG(ERR) << "Failed to deserialize C2MPacketP2PConnectionsEstablished from "
-                     << ccoip_sockaddr_to_str(client_address);
+                    << ccoip_sockaddr_to_str(client_address);
             if (!kickClient(client_address)) [[unlikely]] {
                 LOG(ERR) << "Failed to kick client " << ccoip_sockaddr_to_str(client_address);
             }
@@ -104,7 +104,7 @@ void ccoip::CCoIPMasterHandler::onClientRead(const ccoip_socket_address_t &clien
         C2MPacketReportPeerBandwidth packet{};
         if (!packet.deserialize(buffer)) {
             LOG(ERR) << "Failed to deserialize C2MPacketReportPeerBandwidth from "
-                     << ccoip_sockaddr_to_str(client_address);
+                    << ccoip_sockaddr_to_str(client_address);
             if (!kickClient(client_address)) [[unlikely]] {
                 LOG(ERR) << "Failed to kick client " << ccoip_sockaddr_to_str(client_address);
             }
@@ -133,7 +133,7 @@ void ccoip::CCoIPMasterHandler::onClientRead(const ccoip_socket_address_t &clien
         C2MPacketCollectiveCommsInitiate packet{};
         if (!packet.deserialize(buffer)) {
             LOG(ERR) << "Failed to deserialize C2MPacketCollectiveCommsInitiate from "
-                     << ccoip_sockaddr_to_str(client_address);
+                    << ccoip_sockaddr_to_str(client_address);
             if (!kickClient(client_address)) [[unlikely]] {
                 LOG(ERR) << "Failed to kick client " << ccoip_sockaddr_to_str(client_address);
             }
@@ -144,7 +144,7 @@ void ccoip::CCoIPMasterHandler::onClientRead(const ccoip_socket_address_t &clien
         C2MPacketCollectiveCommsComplete packet{};
         if (!packet.deserialize(buffer)) {
             LOG(ERR) << "Failed to deserialize C2MPacketCollectiveCommsComplete from "
-                     << ccoip_sockaddr_to_str(client_address);
+                    << ccoip_sockaddr_to_str(client_address);
             if (!kickClient(client_address)) [[unlikely]] {
                 LOG(ERR) << "Failed to kick client " << ccoip_sockaddr_to_str(client_address);
             }
@@ -178,7 +178,6 @@ void ccoip::CCoIPMasterHandler::handleRequestSessionJoin(const ccoip_socket_addr
     const uint16_t bandwidth_benchmark_listen_port = packet.bandwidth_benchmark_listen_port;
 
 
-
     // generate uuid for new peer
     ccoip_uuid_t new_uuid{};
     uuid_utils::generate_uuid(new_uuid.data);
@@ -190,11 +189,13 @@ void ccoip::CCoIPMasterHandler::handleRequestSessionJoin(const ccoip_socket_addr
 
     // register client uuid
     if (!server_state.registerClient(
-                client_address,
-                CCoIPClientVariablePorts{.p2p_listen_port = p2p_listen_port,
-                                         .shared_dist_state_listen_port = shared_state_listen_port,
-                                         .bandwidth_benchmark_listen_port = bandwidth_benchmark_listen_port},
-                packet.peer_group, new_uuid)) [[unlikely]] {
+        client_address,
+        CCoIPClientVariablePorts{
+            .p2p_listen_port = p2p_listen_port,
+            .shared_dist_state_listen_port = shared_state_listen_port,
+            .bandwidth_benchmark_listen_port = bandwidth_benchmark_listen_port
+        },
+        packet.peer_group, new_uuid)) [[unlikely]] {
         LOG(ERR) << "Failed to register client " << ccoip_sockaddr_to_str(client_address);
         response.accepted = false;
     }
@@ -287,7 +288,7 @@ bool ccoip::CCoIPMasterHandler::checkP2PConnectionsEstablished() {
 
             if (!server_socket.sendPacket<M2CPacketP2PConnectionsEstablished>(peer_address, packet)) {
                 LOG(ERR) << "Failed to send M2CPacketP2PConnectionsEstablished to "
-                         << ccoip_sockaddr_to_str(peer_address);
+                        << ccoip_sockaddr_to_str(peer_address);
             }
         }
         peer_dropped = false; // reset peer_dropped state
@@ -298,7 +299,8 @@ bool ccoip::CCoIPMasterHandler::checkP2PConnectionsEstablished() {
 bool ccoip::CCoIPMasterHandler::checkEstablishP2PConnectionConsensus() {
     // check if all clients have voted to accept new peers
     if (server_state.acceptNewPeersConsensus()) {
-        peer_dropped = false; // reset peer dropped state, as we are starting a completely new p2p connection establishment phase
+        peer_dropped = false;
+        // reset peer dropped state, as we are starting a completely new p2p connection establishment phase
         if (!server_state.transitionToP2PEstablishmentPhase(true)) [[unlikely]] {
             LOG(BUG) << "Failed to transition to P2P establishment phase. This is a bug!";
             return false;
@@ -308,7 +310,8 @@ bool ccoip::CCoIPMasterHandler::checkEstablishP2PConnectionConsensus() {
 
     // check if all clients have voted to establish p2p connections without accepting new peers
     if (server_state.noAcceptNewPeersEstablishP2PConnectionsConsensus()) {
-        peer_dropped = false; // reset peer dropped state, as we are starting a completely new p2p connection establishment phase
+        peer_dropped = false;
+        // reset peer dropped state, as we are starting a completely new p2p connection establishment phase
         if (!server_state.transitionToP2PEstablishmentPhase(false)) [[unlikely]] {
             LOG(BUG) << "Failed to transition to P2P establishment phase. This is a bug!";
             return false;
@@ -364,14 +367,16 @@ bool ccoip::CCoIPMasterHandler::checkTopologyOptimizationConsensus() {
                 if (peer_info.connection_phase != PEER_ACCEPTED) {
                     continue;
                 }
-                BenchmarkRequest request{from_peer_uuid, to_peer_uuid,
-                                         ccoip_socket_address_t{
-                                                 .inet = peer_info.socket_address.inet,
-                                                 .port = peer_info.variable_ports.bandwidth_benchmark_listen_port,
-                                         }};
+                BenchmarkRequest request{
+                    from_peer_uuid, to_peer_uuid,
+                    ccoip_socket_address_t{
+                        .inet = peer_info.socket_address.inet,
+                        .port = peer_info.variable_ports.bandwidth_benchmark_listen_port,
+                    }
+                };
                 LOG(DEBUG) << "Requesting bandwidth information from " << uuid_to_string(from_peer_uuid) << " to "
-                           << uuid_to_string(to_peer_uuid)
-                           << "; Endpoint: " << ccoip_sockaddr_to_str(request.to_peer_benchmark_endpoint);
+                        << uuid_to_string(to_peer_uuid)
+                        << "; Endpoint: " << ccoip_sockaddr_to_str(request.to_peer_benchmark_endpoint);
 
                 benchmark_requests.push_back(request);
             }
@@ -388,7 +393,6 @@ bool ccoip::CCoIPMasterHandler::checkTopologyOptimizationConsensus() {
 bool ccoip::CCoIPMasterHandler::checkTopologyOptimizationCompletionConsensus() {
     // check if at least one client is waiting for topology optimization to complete
     if (server_state.topologyOptimizationCompleteConsensus()) {
-
         /*
          * check if all bandwidth benchmark requests have been completed
         const bool success = server_state.isBandwidthStoreFullyPopulated();
@@ -408,9 +412,9 @@ bool ccoip::CCoIPMasterHandler::checkTopologyOptimizationCompletionConsensus() {
         // if we don't do this, we would constantly be running a benchmark that will time out, only stalling
         // the run with every invocation of optimize topology.
         if (!server_state.isBandwidthStoreFullyPopulated()) {
-            for (const auto &peer_uuid : server_state.getCurrentlyAcceptedPeers()) {
+            for (const auto &peer_uuid: server_state.getCurrentlyAcceptedPeers()) {
                 const auto missing_entries = server_state.getMissingBandwidthEntries(peer_uuid);
-                for (const auto &missing_entry : missing_entries) {
+                for (const auto &missing_entry: missing_entries) {
                     server_state.markBandwidthEntryUnreachable(missing_entry);
                 }
             }
@@ -433,14 +437,13 @@ bool ccoip::CCoIPMasterHandler::checkTopologyOptimizationCompletionConsensus() {
                 if (has_improved) {
                     if (!server_state.updateTopology(new_topology, is_optimal)) [[unlikely]] {
                         LOG(BUG) << "Failed to update topology. This means we tried to update a topology when it was "
-                                    "already optimal. This is a bug!";
+                                "already optimal. This is a bug!";
                         return false;
                     }
                 }
             } else if (!server_state.isTopologyOptimal()) {
                 // check if moon shot optimization is already running
                 if (!topology_optimization_moonshot_thread_running) {
-
                     // wait for the previous moon shot optimization to complete if one is running
                     if (topology_optimization_moonshot_thread.has_value() &&
                         topology_optimization_moonshot_thread->joinable()) {
@@ -497,7 +500,7 @@ bool ccoip::CCoIPMasterHandler::checkTopologyOptimizationCompletionConsensus() {
             packet.success = success;
             if (!server_socket.sendPacket<M2CPacketOptimizeTopologyComplete>(peer_address, packet)) {
                 LOG(ERR) << "Failed to send M2CPacketTopologyOptimizationComplete to "
-                         << ccoip_sockaddr_to_str(peer_address);
+                        << ccoip_sockaddr_to_str(peer_address);
             }
         }
     }
@@ -560,7 +563,7 @@ bool ccoip::CCoIPMasterHandler::checkSyncSharedStateConsensus(const uint32_t pee
         // elect mask from candidates
         if (!server_state.electSharedStateMask(peer_group)) [[unlikely]] {
             LOG(BUG) << "Failed to elect shared state mask; This may indicate no mask candidates were provided, "
-                        "despite the fact that shared state sync consensus was reached. This is a bug!";
+                    "despite the fact that shared state sync consensus was reached. This is a bug!";
             return false;
         }
 
@@ -585,12 +588,12 @@ bool ccoip::CCoIPMasterHandler::checkSyncSharedStateConsensus(const uint32_t pee
             const auto status_opt = server_state.getSharedStateMismatchStatus(peer_uuid);
             if (!status_opt) {
                 LOG(BUG) << "No shared state mismatch status found for client " << ccoip_sockaddr_to_str(peer_address)
-                         << " after checkMaskSharedStateMismatches was invoked. This is a bug!";
+                        << " after checkMaskSharedStateMismatches was invoked. This is a bug!";
                 return false;
             }
             if (*status_opt == CCoIPMasterState::KEY_SET_MISMATCH) {
                 LOG(WARN) << "Kicking client " << ccoip_sockaddr_to_str(peer_address)
-                          << " due to shared state mismatch";
+                        << " due to shared state mismatch";
                 if (!kickClient(peer_address)) [[unlikely]] {
                     LOG(ERR) << "Failed to kick client " << ccoip_sockaddr_to_str(peer_address);
                     return false;
@@ -624,8 +627,8 @@ bool ccoip::CCoIPMasterHandler::checkSyncSharedStateConsensus(const uint32_t pee
             if (peer_info.connection_state != DISTRIBUTE_SHARED_STATE &&
                 peer_info.connection_state != REQUEST_SHARED_STATE) {
                 LOG(BUG) << "Client " << ccoip_sockaddr_to_str(peer_address) << " in state "
-                         << peer_info.connection_state
-                         << " but expected DISTRIBUTE_SHARED_STATE or REQUEST_SHARED_STATE";
+                        << peer_info.connection_state
+                        << " but expected DISTRIBUTE_SHARED_STATE or REQUEST_SHARED_STATE";
                 continue;
             }
 
@@ -647,15 +650,15 @@ bool ccoip::CCoIPMasterHandler::checkSyncSharedStateConsensus(const uint32_t pee
                         const auto hash_type_opt = server_state.getSharedStateEntryHashType(peer_group, key);
                         if (!hash_type_opt) {
                             LOG(BUG) << "Hash type for shared state entry " << key
-                                     << " could not be found in peer group " << peer_group
-                                     << " despite the fact that a hash has been recorded. This is a bug.";
+                                    << " could not be found in peer group " << peer_group
+                                    << " despite the fact that a hash has been recorded. This is a bug.";
                             return false;
                         }
                         response.expected_hash_types.push_back(*hash_type_opt);
                     }
                 } else {
                     LOG(ERR) << "No peer found to distribute shared state to " << ccoip_sockaddr_to_str(peer_address)
-                             << " while peers is marked to request shared state.";
+                            << " while peers is marked to request shared state.";
                 }
             }
             if (!server_socket.sendPacket<M2CPacketSyncSharedState>(peer_address, response)) {
@@ -714,14 +717,14 @@ bool ccoip::CCoIPMasterHandler::checkSyncSharedStateCompleteConsensus(const uint
             // on shared state distribution completion is IDLE
             if (peer_info.connection_state != IDLE) {
                 LOG(BUG) << "Client " << ccoip_sockaddr_to_str(peer_address) << " in state "
-                         << peer_info.connection_state << " but expected IDLE";
+                        << peer_info.connection_state << " but expected IDLE";
                 continue;
             }
 
             // send confirmation packet
             if (!server_socket.sendPacket<M2CPacketSyncSharedStateComplete>(peer_address, {})) {
                 LOG(ERR) << "Failed to send M2CPacketSyncSharedStateComplete to "
-                         << ccoip_sockaddr_to_str(peer_address);
+                        << ccoip_sockaddr_to_str(peer_address);
             }
         }
     }
@@ -730,7 +733,11 @@ bool ccoip::CCoIPMasterHandler::checkSyncSharedStateCompleteConsensus(const uint
 
 bool ccoip::CCoIPMasterHandler::checkCollectiveCommsInitiateConsensus(const uint32_t peer_group, const uint64_t tag) {
     // check if all clients have voted to initiate the collective communications operation
-    if (server_state.collectiveCommsInitiateConsensus(peer_group, tag)) {
+    const auto has_collective_consensus = server_state.collectiveCommsInitiateConsensus(peer_group, tag);
+    LOG(DEBUG) << "Has collective comms initiate consensus in checkCollectiveCommsInitiateConsensus: "
+            << has_collective_consensus;
+
+    if (has_collective_consensus) {
         if (!server_state.transitionToPerformCollectiveCommsPhase(peer_group, tag)) {
             LOG(BUG) << "Failed to transition to collective communications initiate phase; This is a bug";
             return false;
@@ -757,7 +764,7 @@ bool ccoip::CCoIPMasterHandler::checkCollectiveCommsInitiateConsensus(const uint
             // on collective comms initiation is COLLECTIVE_COMMUNICATIONS_RUNNING
             if (peer_info.connection_state != COLLECTIVE_COMMUNICATIONS_RUNNING) {
                 LOG(BUG) << "Client " << ccoip_sockaddr_to_str(peer_address) << " in state "
-                         << peer_info.connection_state << " but expected COLLECTIVE_COMMUNICATIONS_RUNNING";
+                        << peer_info.connection_state << " but expected COLLECTIVE_COMMUNICATIONS_RUNNING";
                 continue;
             }
 
@@ -766,7 +773,7 @@ bool ccoip::CCoIPMasterHandler::checkCollectiveCommsInitiateConsensus(const uint
             confirm_packet.tag = tag;
             if (!server_socket.sendPacket<M2CPacketCollectiveCommsCommence>(peer_address, confirm_packet)) {
                 LOG(ERR) << "Failed to send M2CPacketCollectiveCommsCommence to "
-                         << ccoip_sockaddr_to_str(peer_address);
+                        << ccoip_sockaddr_to_str(peer_address);
             }
         }
     }
@@ -775,8 +782,14 @@ bool ccoip::CCoIPMasterHandler::checkCollectiveCommsInitiateConsensus(const uint
 
 bool ccoip::CCoIPMasterHandler::checkCollectiveCommsCompleteConsensus(const uint32_t peer_group, const uint64_t tag) {
     // check if all clients have voted to complete the collective communications operation
-    if (server_state.collectiveCommsCompleteConsensus(peer_group, tag)) {
-        if (!server_state.isCollectiveCommsOperationAborted(peer_group, tag)) {
+    const auto has_collective_consensus = server_state.collectiveCommsCompleteConsensus(peer_group, tag);
+    LOG(DEBUG) << "Collective comms complete consensus in checkCollectiveCommsCompleteConsensus: " <<
+            has_collective_consensus;
+    if (has_collective_consensus) {
+        const auto is_collective_aborted = server_state.isCollectiveCommsOperationAborted(peer_group, tag);
+        LOG(DEBUG) << "Collective comms operation aborted in checkCollectiveCommsCompleteConsensus: " <<
+                is_collective_aborted;
+        if (!is_collective_aborted) {
             // if this operation was never aborted, send abort packets with abort state = false
             // we do this such that for each collective comms operation, there is exactly one abort packet
             // sent to each peer - either during the operation to signal an abort, or after the operation
@@ -813,7 +826,7 @@ bool ccoip::CCoIPMasterHandler::checkCollectiveCommsCompleteConsensus(const uint
             // on collective comms completion is IDLE (or COLLECTIVE_COMMUNICATIONS_RUNNING when multiple collective ops are running concurrently)
             if (peer_info.connection_state != IDLE && peer_info.connection_state != COLLECTIVE_COMMUNICATIONS_RUNNING) {
                 LOG(BUG) << "Client " << ccoip_sockaddr_to_str(peer_address) << " in state "
-                         << peer_info.connection_state << " but expected IDLE";
+                        << peer_info.connection_state << " but expected IDLE";
                 continue;
             }
 
@@ -822,7 +835,7 @@ bool ccoip::CCoIPMasterHandler::checkCollectiveCommsCompleteConsensus(const uint
             confirm_packet.tag = tag;
             if (!server_socket.sendPacket<M2CPacketCollectiveCommsComplete>(peer_address, confirm_packet)) {
                 LOG(ERR) << "Failed to send M2CPacketCollectiveCommsComplete to "
-                         << ccoip_sockaddr_to_str(peer_address);
+                        << ccoip_sockaddr_to_str(peer_address);
             }
             peer_info.collective_coms_states.erase(tag);
         }
@@ -855,7 +868,7 @@ void ccoip::CCoIPMasterHandler::handleP2PConnectionsEstablished(const ccoip_sock
 
     if (!checkP2PConnectionsEstablished()) {
         LOG(BUG) << "checkP2PConnectionsEstablished() failed for " << ccoip_sockaddr_to_str(client_address)
-                 << " when handling a p2p connection established packet. This should never happen!";
+                << " when handling a p2p connection established packet. This should never happen!";
     }
 }
 
@@ -873,8 +886,8 @@ void ccoip::CCoIPMasterHandler::handleOptimizeTopology(const ccoip_socket_addres
         }
         return;
     }
-    if (const auto client_uuid = client_uuid_opt.value(); !server_state.voteOptimizeTopology(client_uuid))
-            [[unlikely]] {
+    if (const auto client_uuid = client_uuid_opt.value(); !server_state.voteOptimizeTopology(client_uuid)) [[unlikely]]
+    {
         LOG(WARN) << "Failed to vote to optimize topology from " << ccoip_sockaddr_to_str(client_address);
         if (!kickClient(client_address)) [[unlikely]] {
             LOG(ERR) << "Failed to kick client " << ccoip_sockaddr_to_str(client_address);
@@ -883,7 +896,7 @@ void ccoip::CCoIPMasterHandler::handleOptimizeTopology(const ccoip_socket_addres
     }
     if (!checkTopologyOptimizationConsensus()) {
         LOG(BUG) << "checkTopologyOptimizationConsensus() failed for " << ccoip_sockaddr_to_str(client_address)
-                 << " when handling collective comms initiate packet. This should never happen.";
+                << " when handling collective comms initiate packet. This should never happen.";
     }
 }
 
@@ -918,8 +931,8 @@ void ccoip::CCoIPMasterHandler::handleOptimizeTopologyWorkComplete(const ccoip_s
         }
         return;
     }
-    if (const auto client_uuid = client_uuid_opt.value(); !server_state.voteTopologyOptimizationComplete(client_uuid))
-            [[unlikely]] {
+    if (const auto client_uuid = client_uuid_opt.value(); !server_state.voteTopologyOptimizationComplete(client_uuid)) [
+        [unlikely]] {
         LOG(WARN) << "Failed to vote to optimize topology work complete from " << ccoip_sockaddr_to_str(client_address);
         if (!kickClient(client_address)) [[unlikely]] {
             LOG(ERR) << "Failed to kick client " << ccoip_sockaddr_to_str(client_address);
@@ -928,8 +941,8 @@ void ccoip::CCoIPMasterHandler::handleOptimizeTopologyWorkComplete(const ccoip_s
     }
     if (!checkTopologyOptimizationCompletionConsensus()) {
         LOG(BUG) << "checkTopologyOptimizationCompletionConsensus() failed for "
-                 << ccoip_sockaddr_to_str(client_address)
-                 << " when handling collective comms initiate packet. This should never happen.";
+                << ccoip_sockaddr_to_str(client_address)
+                << " when handling collective comms initiate packet. This should never happen.";
     }
 }
 
@@ -939,8 +952,7 @@ void ccoip::CCoIPMasterHandler::handleSyncSharedState(const ccoip_socket_address
     LOG(DEBUG) << "Received C2MPacketSyncSharedState from " << ccoip_sockaddr_to_str(client_address);
 
     // obtain client uuid from client address
-    ccoip_uuid_t client_uuid{};
-    {
+    ccoip_uuid_t client_uuid{}; {
         const auto client_uuid_opt = server_state.findClientUUID(client_address);
         if (!client_uuid_opt) [[unlikely]] {
             LOG(WARN) << "Client " << ccoip_sockaddr_to_str(client_address) << " not found";
@@ -963,8 +975,8 @@ void ccoip::CCoIPMasterHandler::handleSyncSharedState(const ccoip_socket_address
 
     if (status == CCoIPMasterState::REVISION_INCREMENT_VIOLATION) {
         LOG(WARN) << "Shared state revision increment violation for " << ccoip_sockaddr_to_str(client_address)
-                  << ". Please make sure all clients increment the shared state revision by exactly 1 each time before "
-                     "synchronizing shared state; Client will be kicked.";
+                << ". Please make sure all clients increment the shared state revision by exactly 1 each time before "
+                "synchronizing shared state; Client will be kicked.";
         if (!kickClient(client_address)) [[unlikely]] {
             LOG(ERR) << "Failed to kick client " << ccoip_sockaddr_to_str(client_address);
         }
@@ -973,7 +985,7 @@ void ccoip::CCoIPMasterHandler::handleSyncSharedState(const ccoip_socket_address
 
     if (status == CCoIPMasterState::KEY_SET_MISMATCH) {
         LOG(WARN) << "Shared state key set mismatch for " << ccoip_sockaddr_to_str(client_address)
-                  << ". Please make sure all clients have the same shared state keys; Client will be kicked.";
+                << ". Please make sure all clients have the same shared state keys; Client will be kicked.";
         if (!kickClient(client_address)) [[unlikely]] {
             LOG(ERR) << "Failed to kick client " << ccoip_sockaddr_to_str(client_address);
         }
@@ -998,7 +1010,7 @@ void ccoip::CCoIPMasterHandler::handleSyncSharedState(const ccoip_socket_address
     }
     if (const auto &info = info_opt->get(); !checkSyncSharedStateConsensus(info.peer_group)) {
         LOG(BUG) << "checkSyncSharedStateConsensus() failed for " << ccoip_sockaddr_to_str(client_address)
-                 << " when handling shared state sync packet. This should never happen.";
+                << " when handling shared state sync packet. This should never happen.";
     }
 }
 
@@ -1018,7 +1030,7 @@ void ccoip::CCoIPMasterHandler::handleSyncSharedStateComplete(const ccoip_socket
     const auto client_uuid = client_uuid_opt.value();
     if (!server_state.voteDistSharedStateComplete(client_uuid)) [[unlikely]] {
         LOG(WARN) << "Failed to vote to distribute shared state complete from "
-                  << ccoip_sockaddr_to_str(client_address);
+                << ccoip_sockaddr_to_str(client_address);
         if (!kickClient(client_address)) [[unlikely]] {
             LOG(ERR) << "Failed to kick client " << ccoip_sockaddr_to_str(client_address);
         }
@@ -1031,7 +1043,7 @@ void ccoip::CCoIPMasterHandler::handleSyncSharedStateComplete(const ccoip_socket
     }
     if (const auto &info = info_opt->get(); !checkSyncSharedStateCompleteConsensus(info.peer_group)) {
         LOG(BUG) << "checkSyncSharedStateCompleteConsensus() failed for " << ccoip_sockaddr_to_str(client_address)
-                 << " when handling shared state sync complete packet. This should never happen.";
+                << " when handling shared state sync complete packet. This should never happen.";
     }
 }
 
@@ -1051,7 +1063,7 @@ void ccoip::CCoIPMasterHandler::handleCollectiveCommsInitiate(const ccoip_socket
     const auto client_uuid = client_uuid_opt.value();
     if (!server_state.voteCollectiveCommsInitiate(client_uuid, packet.tag)) [[unlikely]] {
         LOG(WARN) << "Failed to vote to initiate a collective communications operation from "
-                  << ccoip_sockaddr_to_str(client_address);
+                << ccoip_sockaddr_to_str(client_address);
         if (!kickClient(client_address)) [[unlikely]] {
             LOG(ERR) << "Failed to kick client " << ccoip_sockaddr_to_str(client_address);
         }
@@ -1065,7 +1077,7 @@ void ccoip::CCoIPMasterHandler::handleCollectiveCommsInitiate(const ccoip_socket
     if (const auto &info = info_opt->get();
         !checkCollectiveCommsInitiateConsensus(info.peer_group, packet.tag)) {
         LOG(BUG) << "checkCollectiveCommsInitiateConsensus() failed for " << ccoip_sockaddr_to_str(client_address)
-                 << " when handling collective comms initiate packet. This should never happen.";
+                << " when handling collective comms initiate packet. This should never happen.";
     }
 }
 
@@ -1092,7 +1104,7 @@ void ccoip::CCoIPMasterHandler::sendCollectiveCommsAbortPackets(const uint32_t p
             LOG(ERR) << "Failed to send M2CPacketCollectiveCommsAbort to " << ccoip_sockaddr_to_str(peer_address);
         }
         LOG(DEBUG) << "Sent abort packet to " << ccoip_sockaddr_to_str(peer_address)
-                   << " with abort state: " << aborted << " for tag " << tag;
+                << " with abort state: " << aborted << " for tag " << tag;
     }
 }
 
@@ -1113,7 +1125,7 @@ void ccoip::CCoIPMasterHandler::handleCollectiveCommsComplete(const ccoip_socket
     const auto client_uuid = client_uuid_opt.value();
     if (!server_state.voteCollectiveCommsComplete(client_uuid, packet.tag)) [[unlikely]] {
         LOG(WARN) << "Failed to vote to complete a collective communications operation from "
-                  << ccoip_sockaddr_to_str(client_address);
+                << ccoip_sockaddr_to_str(client_address);
         if (!kickClient(client_address)) [[unlikely]] {
             LOG(ERR) << "Failed to kick client " << ccoip_sockaddr_to_str(client_address);
         }
@@ -1136,7 +1148,7 @@ void ccoip::CCoIPMasterHandler::handleCollectiveCommsComplete(const ccoip_socket
 
     if (!checkCollectiveCommsCompleteConsensus(info.peer_group, packet.tag)) {
         LOG(BUG) << "checkCollectiveCommsCompleteConsensus() failed for " << ccoip_sockaddr_to_str(client_address)
-                 << " when handling collective comms complete packet. This should never happen.";
+                << " when handling collective comms complete packet. This should never happen.";
     }
 }
 
@@ -1147,7 +1159,7 @@ void ccoip::CCoIPMasterHandler::onClientDisconnect(const ccoip_socket_address_t 
     if (!server_state.isClientRegistered(client_address)) {
         // client disconnected before ever requesting to register
         LOG(DEBUG) << "Client " << ccoip_sockaddr_to_str(client_address)
-                   << " disconnected before registering. Strange, but not impossible";
+                << " disconnected before registering. Strange, but not impossible";
         return;
     }
 
@@ -1186,29 +1198,40 @@ void ccoip::CCoIPMasterHandler::onClientDisconnect(const ccoip_socket_address_t 
 
     if (!checkP2PConnectionsEstablished()) {
         LOG(DEBUG) << "checkP2PConnectionsEstablished() returned false; This likely means no clients are waiting for "
-                      "other peers and is expected during disconnects.";
+                "other peers and is expected during disconnects.";
     }
 
     if (!checkSyncSharedStateConsensus(client_info.peer_group)) {
         LOG(DEBUG) << "checkSyncSharedStateConsensus() returned false; This likely means no clients are waiting for "
-                      "shared state sync and is expected during disconnects.";
+                "shared state sync and is expected during disconnects.";
     }
     if (!checkSyncSharedStateCompleteConsensus(client_info.peer_group)) {
         LOG(DEBUG) << "checkSyncSharedStateCompleteConsensus() returned false; This likely means no clients are "
-                      "waiting for shared state sync completion and is expected during disconnects.";
+                "waiting for shared state sync completion and is expected during disconnects.";
     }
 
-    for (const auto &tag: server_state.getOngoingCollectiveComsOpTags(client_info.peer_group)) {
+    const auto ongoing_tags = server_state.getOngoingCollectiveComsOpTags(client_info.peer_group);
+    std::string ongoing_tags_str{};
+    for (const auto &tag: ongoing_tags) {
+        ongoing_tags_str += std::to_string(tag) + ", ";
+    }
+    LOG(DEBUG) << "Ongoing collective comms operations for peer group " << client_info.peer_group << ": "
+            << ongoing_tags_str;
+    for (const auto &tag: ongoing_tags) {
         if (!checkCollectiveCommsInitiateConsensus(client_info.peer_group, tag)) {
             LOG(DEBUG) << "checkCollectiveCommsInitiateConsensus() returned false; This likely means no clients are "
-                          "waiting for collective comms initiation and is expected during disconnects.";
+                    "waiting for collective comms initiation and is expected during disconnects.";
         }
         if (!checkCollectiveCommsCompleteConsensus(client_info.peer_group, tag)) {
             LOG(DEBUG) << "checkCollectiveCommsCompleteConsensus() returned false; This likely means no clients are "
-                          "waiting for collective comms completion and is expected during disconnects.";
+                    "waiting for collective comms completion and is expected during disconnects.";
         }
-        if (server_state.isCollectiveOperationRunning(client_info.peer_group, tag)) {
-            if (server_state.abortCollectiveCommsOperation(client_info.peer_group, tag)) {
+        const auto collective_running = server_state.isCollectiveOperationRunning(client_info.peer_group, tag);
+        LOG(DEBUG) << "Collective comms operation with tag " << tag << " is running: " << collective_running;
+        if (collective_running) {
+            const auto collective_aborted = server_state.abortCollectiveCommsOperation(client_info.peer_group, tag);
+            LOG(DEBUG) << "Collective comms operation with tag " << tag << " was aborted: " << collective_aborted;
+            if (collective_aborted) {
                 // In this case, the master is the first to notice that a collective op needs to be aborted
                 // due to a client leaving that participated in said operation.
                 // Clients may report io failures themselves which also results in the collective op being aborted,
@@ -1235,7 +1258,7 @@ void ccoip::CCoIPMasterHandler::handleEstablishP2PConnections(const ccoip_socket
     if (const auto client_uuid = client_uuid_opt.value();
         !server_state.voteEstablishP2PConnections(client_uuid, packet.accept_new_peers)) [[unlikely]] {
         LOG(WARN) << "Failed to vote to establish p2p connections (with or without accepting new peers) from "
-                  << ccoip_sockaddr_to_str(client_address);
+                << ccoip_sockaddr_to_str(client_address);
         if (!kickClient(client_address)) [[unlikely]] {
             LOG(ERR) << "Failed to kick client " << ccoip_sockaddr_to_str(client_address);
         }
@@ -1244,7 +1267,7 @@ void ccoip::CCoIPMasterHandler::handleEstablishP2PConnections(const ccoip_socket
 
     if (!checkEstablishP2PConnectionConsensus()) [[unlikely]] {
         LOG(BUG) << "checkAcceptNewPeersConsensus() failed for " << ccoip_sockaddr_to_str(client_address)
-                 << " when handling request establish p2p connections packet. This should never happen.";
+                << " when handling request establish p2p connections packet. This should never happen.";
     }
 }
 
@@ -1262,9 +1285,13 @@ void ccoip::CCoIPMasterHandler::sendP2PConnectionInformation(const bool changed,
         for (const auto &client_info: peers) {
             // construct a new peers packet
             new_peers.all_peers.push_back(
-                    {.p2p_listen_addr = ccoip_socket_address_t{.inet = client_info.socket_address.inet,
-                                                               .port = client_info.variable_ports.p2p_listen_port},
-                     .peer_uuid = client_info.client_uuid});
+                {
+                    .p2p_listen_addr = ccoip_socket_address_t{
+                        .inet = client_info.socket_address.inet,
+                        .port = client_info.variable_ports.p2p_listen_port
+                    },
+                    .peer_uuid = client_info.client_uuid
+                });
         }
     }
 

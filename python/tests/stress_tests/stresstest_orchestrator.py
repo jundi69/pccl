@@ -11,7 +11,8 @@ MAX_IDLE_SECONDS = 5 * 60  # 5 minutes in seconds
 
 def stream_output_to_stdout(proc: subprocess.Popen,
                             alive_dict: Dict[int, bool],
-                            last_reduce_timestamp: List[float]):
+                            last_reduce_timestamp: List[float],
+                            is_master: bool = False):
     """
     Continuously read lines from `proc.stdout` and write them to sys.stdout.
     Once the first line is read, mark the process as alive in `alive_dict`.
@@ -22,7 +23,10 @@ def stream_output_to_stdout(proc: subprocess.Popen,
 
     for line in proc.stdout:
         # Echo the line to our own stdout (or could store it, parse further, etc.)
-        sys.stdout.write(f"[PEER {pid}] {line}")
+        if not is_master:
+            sys.stdout.write(f"[PEER {pid}] {line}")
+        else:
+            sys.stdout.write(f"[MASTER] {line}")
         sys.stdout.flush()
 
         # If it contains our special marker, update the timestamp
@@ -116,7 +120,7 @@ def run_stress_test(duration_hours: float = 8.0,
     # Start a thread to read & forward the master’s stdout
     master_thread = threading.Thread(
         target=stream_output_to_stdout,
-        args=(master_process, alive_flags, last_reduce_timestamp),
+        args=(master_process, alive_flags, last_reduce_timestamp, True),
         daemon=True
     )
     master_thread.start()
@@ -134,7 +138,7 @@ def run_stress_test(duration_hours: float = 8.0,
 
         th = threading.Thread(
             target=stream_output_to_stdout,
-            args=(p, alive_flags, last_reduce_timestamp),
+            args=(p, alive_flags, last_reduce_timestamp, False),
             daemon=True
         )
         th.start()

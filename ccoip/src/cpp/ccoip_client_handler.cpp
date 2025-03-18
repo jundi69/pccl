@@ -1067,9 +1067,11 @@ bool ccoip::CCoIPClientHandler::allReduceAsync(const void *sendbuff, void *recvb
     // but we will read them in the async operation
     std::unordered_map p2p_connections_tx(this->p2p_connections_tx);
     std::unordered_map p2p_connections_rx(this->p2p_connections_rx);
+    const auto ring_order = client_state.getRingOrder();
 
     if (!client_state.launchAsyncCollectiveOp(tag, [this, sendbuff, recvbuff, count, datatype, quantized_data_type,
                                                   quantization_algorithm, op, tag,
+                                                  ring_order,
                                                   p2p_connections_tx, p2p_connections_rx
                                               ](std::promise<bool> &promise) {
                                                   LOG(DEBUG) << "Vote to commence all reduce operation with tag " <<
@@ -1111,7 +1113,6 @@ bool ccoip::CCoIPClientHandler::allReduceAsync(const void *sendbuff, void *recvb
                                                                   << "; Collective communications consensus reached";
                                                       }
 
-                                                      const auto &ring_order = client_state.getRingOrder();
 
                                                       // no need to actually all reduce when there is no second peer.
                                                       if (ring_order.size() < 2) {
@@ -1157,8 +1158,6 @@ bool ccoip::CCoIPClientHandler::allReduceAsync(const void *sendbuff, void *recvb
                                                       success = false;
                                                   }
                                                   if (![&] {
-                                                      const auto &ring_order = client_state.getRingOrder();
-
                                                       // vote collective comms operation complete and await consensus
                                                       C2MPacketCollectiveCommsComplete complete_packet{};
                                                       complete_packet.tag = tag;
