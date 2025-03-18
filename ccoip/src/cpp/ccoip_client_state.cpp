@@ -5,7 +5,6 @@
 #include <thread_guard.hpp>
 
 ccoip::CCoIPClientState::CCoIPClientState() {
-    main_thread_id = std::this_thread::get_id();
     collective_coms_threadpool.startup();
 }
 

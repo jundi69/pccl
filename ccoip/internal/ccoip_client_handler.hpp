@@ -32,9 +32,13 @@ namespace ccoip {
 
         /// Open p2p connections; Rx connections (peer has established this connection to us)
         std::unordered_map<ccoip_uuid_t, std::shared_ptr<tinysockets::MultiplexedIOSocket> > p2p_connections_rx;
+        std::shared_mutex p2p_connections_rx_mutex;
 
         /// Peer group of the client
         uint32_t peer_group;
+
+        /// The id of the designated main thread
+        std::thread::id main_thread_id;
 
         bool interrupted = false;
 

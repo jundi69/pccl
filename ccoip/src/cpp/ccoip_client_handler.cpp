@@ -38,6 +38,9 @@ ccoip::CCoIPClientHandler::CCoIPClientHandler(const ccoip_socket_address_t &addr
 }
 
 bool ccoip::CCoIPClientHandler::connect() {
+    setMainThread(std::this_thread::get_id());
+    THREAD_GUARD(main_thread_id);
+
     if (accepted) {
         LOG(WARN) << "CCoIPClientHandler::connect() called while already connected";
         return false;
@@ -72,9 +75,13 @@ bool ccoip::CCoIPClientHandler::connect() {
                 }
                 return;
             }
+
+            p2p_connections_rx_mutex.lock();
             const auto &rx_socket = p2p_connections_rx[hello_packet.peer_uuid] = std::make_unique<
                                         tinysockets::MultiplexedIOSocket>(
                                         socket->getSocketFd(), tinysockets::ConnectionModeFlags::MODE_RX);
+            p2p_connections_rx_mutex.unlock();
+
             if (!rx_socket->run()) {
                 LOG(FATAL) << "Failed to start MultiplexedIOSocket for P2P connection with "
                         << ccoip_sockaddr_to_str(client_address);
@@ -656,12 +663,20 @@ bool ccoip::CCoIPClientHandler::optimizeTopology() {
 }
 
 bool ccoip::CCoIPClientHandler::interrupt() {
+    THREAD_GUARD(main_thread_id);
+
+
     if (interrupted) {
         return false;
     }
-    for (const auto &p2p_entry: p2p_connections_rx) {
-        if (!p2p_entry.second->interrupt()) [[unlikely]] {
-            return false;
+
+    // interrupt all p2p connections
+    {
+        std::shared_lock lock(p2p_connections_rx_mutex);
+        for (const auto &p2p_entry: p2p_connections_rx) {
+            if (!p2p_entry.second->interrupt()) [[unlikely]] {
+                return false;
+            }
         }
     }
 
@@ -687,6 +702,8 @@ bool ccoip::CCoIPClientHandler::interrupt() {
 }
 
 bool ccoip::CCoIPClientHandler::join() {
+    THREAD_GUARD(main_thread_id);
+
     // await all running collective communications operations
     for (const auto tag: client_state.getRunningCollectiveComsOpTags()) {
         if (!client_state.joinAsyncCollectiveOp(tag)) {
@@ -694,13 +711,18 @@ bool ccoip::CCoIPClientHandler::join() {
         }
     }
 
-    for (const auto &p2p_entry: p2p_connections_rx) {
-        p2p_entry.second->join();
+    // join all p2p connections
+    {
+        std::shared_lock lock(p2p_connections_rx_mutex);
+        for (const auto &p2p_entry: p2p_connections_rx) {
+            p2p_entry.second->join();
+        }
     }
 
     for (const auto &p2p_entry: p2p_connections_tx) {
         p2p_entry.second->join();
     }
+
     p2p_socket.join();
     shared_state_socket.join();
     benchmark_socket.join();
@@ -725,6 +747,8 @@ ccoip::CCoIPClientHandler::~CCoIPClientHandler() {
 }
 
 ccoip::CCoIPClientHandler::EstablishP2PConnectionResult ccoip::CCoIPClientHandler::establishP2PConnections() {
+    THREAD_GUARD(main_thread_id);
+
     // wait for connection info packet
     const auto connection_info_packet = master_socket.receivePacket<M2CPacketP2PConnectionInfo>();
     if (!connection_info_packet) {
@@ -752,10 +776,12 @@ ccoip::CCoIPClientHandler::EstablishP2PConnectionResult ccoip::CCoIPClientHandle
                 break;
             }
         }
-        // close p2p connections that are no longer needed
+
+        // close p2p tx connections that are no longer needed
         for (auto it = p2p_connections_tx.begin(); it != p2p_connections_tx.end();) {
-            if (std::ranges::find_if(connection_info_packet->all_peers, [&it](const PeerInfo &peer) {
-                return peer.peer_uuid == it->first;
+            const auto &peer_uuid = it->first;
+            if (std::ranges::find_if(connection_info_packet->all_peers, [peer_uuid](const PeerInfo &peer) {
+                return peer.peer_uuid == peer_uuid;
             }) == connection_info_packet->all_peers.end()) {
                 LOG(DEBUG) << "Closing p2p connection with peer " << uuid_to_string(it->first);
                 if (!closeP2PConnection(it->first, *it->second)) {
@@ -766,17 +792,23 @@ ccoip::CCoIPClientHandler::EstablishP2PConnectionResult ccoip::CCoIPClientHandle
                 ++it;
             }
         }
-        for (auto it = p2p_connections_rx.begin(); it != p2p_connections_rx.end();) {
-            if (std::ranges::find_if(connection_info_packet->all_peers, [&it](const PeerInfo &peer) {
-                return peer.peer_uuid == it->first;
-            }) == connection_info_packet->all_peers.end()) {
-                LOG(DEBUG) << "Interrupting p2p rx connection with peer " << uuid_to_string(it->first);
-                if (!it->second->interrupt()) [[unlikely]] {
-                    LOG(WARN) << "Failed to close p2p rx connection with peer " << uuid_to_string(it->first);
+
+        // close p2p rx connections that are no longer needed
+        {
+            std::unique_lock lock(p2p_connections_rx_mutex);
+            for (auto it = p2p_connections_rx.begin(); it != p2p_connections_rx.end();) {
+                const auto &peer_uuid = it->first;
+                if (std::ranges::find_if(connection_info_packet->all_peers, [peer_uuid](const PeerInfo &peer) {
+                    return peer.peer_uuid == peer_uuid;
+                }) == connection_info_packet->all_peers.end()) {
+                    LOG(DEBUG) << "Interrupting p2p rx connection with peer " << uuid_to_string(it->first);
+                    if (!it->second->interrupt()) [[unlikely]] {
+                        LOG(WARN) << "Failed to close p2p rx connection with peer " << uuid_to_string(it->first);
+                    }
+                    it = p2p_connections_rx.erase(it);
+                } else {
+                    ++it;
                 }
-                it = p2p_connections_rx.erase(it);
-            } else {
-                ++it;
             }
         }
     }
@@ -822,6 +854,8 @@ ccoip::CCoIPClientHandler::EstablishP2PConnectionResult ccoip::CCoIPClientHandle
 }
 
 bool ccoip::CCoIPClientHandler::establishP2PConnection(const PeerInfo &peer) {
+    THREAD_GUARD(main_thread_id);
+
     LOG(DEBUG) << "Establishing P2P connection with peer " << uuid_to_string(peer.peer_uuid);
     tinysockets::BlockingIOSocket socket(peer.p2p_listen_addr);
     if (!socket.establishConnection()) {
@@ -1051,6 +1085,8 @@ bool ccoip::CCoIPClientHandler::allReduceAsync(const void *sendbuff, void *recvb
                                                const ccoip_data_type_t quantized_data_type,
                                                const ccoip_quantization_algorithm_t quantization_algorithm,
                                                const ccoip_reduce_op_t op, const uint64_t tag) {
+    THREAD_GUARD(main_thread_id);
+
     if (client_state.isCollectiveComsOpRunning(tag)) {
         // can't start a new collective coms op while one is already running
         return false;
@@ -1066,7 +1102,11 @@ bool ccoip::CCoIPClientHandler::allReduceAsync(const void *sendbuff, void *recvb
     // p2p_connections_tx & p2p_connections_rx should only be modified by the main thread,
     // but we will read them in the async operation
     std::unordered_map p2p_connections_tx(this->p2p_connections_tx);
+
+    p2p_connections_rx_mutex.lock_shared();
     std::unordered_map p2p_connections_rx(this->p2p_connections_rx);
+    p2p_connections_rx_mutex.unlock_shared();
+
     const auto ring_order = client_state.getRingOrder();
 
     if (!client_state.launchAsyncCollectiveOp(tag, [this, sendbuff, recvbuff, count, datatype, quantized_data_type,
@@ -1214,6 +1254,8 @@ bool ccoip::CCoIPClientHandler::allReduceAsync(const void *sendbuff, void *recvb
 }
 
 bool ccoip::CCoIPClientHandler::joinAsyncReduce(const uint64_t tag) {
+    THREAD_GUARD(main_thread_id);
+
     if (!client_state.joinAsyncCollectiveOp(tag)) [[unlikely]] {
         return false;
     }
@@ -1233,8 +1275,11 @@ bool ccoip::CCoIPClientHandler::joinAsyncReduce(const uint64_t tag) {
         // collection operation, and we thus know that we will not receive more p2p data and in turn
         // that discarding all data at this point safely discards all data still associated with the old aborted
         // collective communication operation.
-        for (auto &[peer_uuid, socket]: p2p_connections_rx) {
-            socket->discardReceivedData(tag);
+        {
+            std::shared_lock lock(p2p_connections_rx_mutex);
+            for (auto &[peer_uuid, socket]: p2p_connections_rx) {
+                socket->discardReceivedData(tag);
+            }
         }
 
         // In that next invocation, we need to have the new topology ready
@@ -1290,5 +1335,6 @@ bool ccoip::CCoIPClientHandler::isAnyCollectiveComsOpRunning() {
 size_t ccoip::CCoIPClientHandler::getWorldSize() const { return client_state.getWorldSize(); }
 
 void ccoip::CCoIPClientHandler::setMainThread(const std::thread::id main_thread_id) {
+    this->main_thread_id = main_thread_id;
     client_state.setMainThread(main_thread_id);
 }
