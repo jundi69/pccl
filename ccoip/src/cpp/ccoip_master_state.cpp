@@ -631,24 +631,6 @@ bool ccoip::CCoIPMasterState::syncSharedStateCompleteConsensus(const uint32_t pe
 }
 
 bool ccoip::CCoIPMasterState::collectiveCommsInitiateConsensus(const uint32_t peer_group, const uint64_t tag) {
-    // TODO: DEBUG ONLY
-    for (const auto &[_, info]: client_info) {
-        if (info.peer_group != peer_group) {
-            continue;
-        }
-        if (info.connection_phase != PEER_ACCEPTED) {
-            continue;
-        }
-        auto ccomms_state_it = info.collective_coms_states.find(tag);
-
-        if (ccomms_state_it == info.collective_coms_states.end()) {
-            LOG(DEBUG) << "Client " << ccoip_sockaddr_to_str(info.socket_address) << " exists.";
-        } else {
-            LOG(DEBUG) << "Client " << ccoip_sockaddr_to_str(info.socket_address) << " exists with state "
-                    << ccomms_state_it->second;
-        }
-    }
-
     size_t voting_clients = 0;
     size_t n_accepted_peers = 0;
     for (const auto &[_, info]: client_info) {
@@ -666,8 +648,6 @@ bool ccoip::CCoIPMasterState::collectiveCommsInitiateConsensus(const uint32_t pe
         }
         n_accepted_peers++;
     }
-    LOG(DEBUG) << "collectiveCommsInitiateConsensus: voting_clients=" << voting_clients << ", n_accepted_peers=" <<
-            n_accepted_peers;
     return voting_clients == n_accepted_peers;
 }
 
