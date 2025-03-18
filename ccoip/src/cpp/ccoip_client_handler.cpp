@@ -663,9 +663,6 @@ bool ccoip::CCoIPClientHandler::optimizeTopology() {
 }
 
 bool ccoip::CCoIPClientHandler::interrupt() {
-    THREAD_GUARD(main_thread_id);
-
-
     if (interrupted) {
         return false;
     }
@@ -702,8 +699,6 @@ bool ccoip::CCoIPClientHandler::interrupt() {
 }
 
 bool ccoip::CCoIPClientHandler::join() {
-    THREAD_GUARD(main_thread_id);
-
     // await all running collective communications operations
     for (const auto tag: client_state.getRunningCollectiveComsOpTags()) {
         if (!client_state.joinAsyncCollectiveOp(tag)) {
