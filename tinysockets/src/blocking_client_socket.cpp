@@ -327,6 +327,10 @@ ssize_t tinysockets::BlockingIOSocket::receiveRawData(std::span<std::byte> &dst,
     ssize_t n_received = 0;
     do {
         const ssize_t i = recvvp(socket_fd, dst.data() + n_received, dst.size_bytes() - n_received, 0);
+        if (i == 0) {
+            // EOF
+            return -1;
+        }
         if (i == -1) {
             const std::string error_message = std::strerror(errno);
             LOG(WARN) << "Failed to receive packet data with error: " << error_message;

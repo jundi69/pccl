@@ -256,8 +256,7 @@ bool tinysockets::QueuedSocket::receivePacketData(std::span<std::uint8_t> &dst) 
     size_t n_received = 0;
     do {
         const ssize_t i = recvvp(socket_fd, dst.data() + n_received, dst.size_bytes() - n_received, 0);
-        if (i == -1) {
-            const std::string error_message = std::strerror(errno);
+         if (i == 0 || i == -1) {
             return false;
         }
         n_received += i;
