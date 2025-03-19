@@ -9,10 +9,10 @@ The following is a simple example of a complete program that uses PCCL to perfor
 ```c++
 #include <pccl.h>
 #include <iostream>
-#include <thread>    // for sleep_for
-#include <chrono>    // for seconds
-#include <cstdlib>   // for exit
-#include <cstring>   // for memset
+#include <thread>
+#include <chrono>
+#include <cstdlib>
+#include <cstring>
 
 // Helper macro for error-checking
 #define PCCL_CHECK(stmt) do {                             \
@@ -244,11 +244,8 @@ def main():
 
     # We'll store this dummy_weights in a single TensorInfo
     # The pccl.SharedState object can have multiple TensorInfo if you want to sync more keys
-    my_weights_info = pccl.TensorInfo(
-        name="myWeights",
-        data=dummy_weights,         # CPU array
-        allow_content_inequality=False
-    )
+    my_weights_info = pccl.TensorInfo.from_numpy(dummy_weights, "dummy_weights", allow_content_inequality=False)
+    
     # We'll wrap that in a SharedState
     shared_state = pccl.SharedState([my_weights_info])
     shared_state.revision = 0
@@ -348,10 +345,10 @@ def main():
             local_iter += 1
             continue
 
-        # G) increment the shared revision => sync
+        # Increment the shared revision => sync
         shared_state.revision += 1
 
-        # G) Stop if we've done enough steps
+        # Stop if we've done enough steps
         if shared_state.revision >= MAX_STEPS:
             print(f"[Peer] Reached revision {shared_state.revision} => done.\n")
             break

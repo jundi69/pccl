@@ -482,7 +482,12 @@ for (uint64_t i = 0;;i++) {
     }
     
     if (world_size > 1) {
-        PCCL_CHECK(pcclOptimizeTopology(communicator)); // optimize the ring order for better throughput
+        // optimize the ring order for better throughput
+        while (pcclOptimizeTopology(communicator) == pcclTopologyOptimizationFailed) {
+            std::cout << "[Peer] OptimizeTopology failed => retrying...\n";
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+        
         PCCL_CHECK(pcclGetAttribute(communicator, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size)); // get the new world size
     }
     

@@ -36,7 +36,6 @@ A lightweight “master” process keeps track of all currently accepted peers, 
 
 ### All-Reduce and Other Collective Ops
 PCCL supports ring-based All-Reduce (summing, averaging, min/max, etc.) with CPU- (and in the future GPU-side) buffers.
-NOTE: Although the library provides “async” variants (pcclAllReduceAsync), true concurrency of multiple All-Reduce ops in parallel is still incomplete—users should execute one collective at a time until concurrency is fully implemented.
 
 ###  Built-In Shared-State Sync
 Beyond simple collectives, PCCL provides a mechanism to keep large model parameters or optimizer states identical across peers. Each peer references its local CPU or GPU memory as “shared state,” and PCCL enforces bitwise equality (unless explicitly relaxed). If a mismatch is detected (via hashing), the correct data is retransmitted from a “popular” peer.
@@ -61,7 +60,7 @@ Overall, PCCL aspires to combine flexible, fault-tolerant distributed training w
 PCCL is under active development. While core features like ring-based All-Reduce, shared-state synchronization, and fault tolerance are functional, several aspects are still evolving and may change.
 
 #### Limitations
-- **Async Collectives**: The library exposes asynchronous calls (`pcclAllReduceAsync`), but full concurrency for multiple simultaneous reductions is not yet stable. Users should execute one collective at a time to avoid data collisions on the ring sockets.
+- **Async Collectives**: The library exposes asynchronous calls (`pcclAllReduceAsync`).
 - **Master Crash Handling**: If the master node fails, connected peers will eventually see connection errors. Automatic “master failover” is not yet implemented, so one must typically restart training from a saved checkpoint.
 - **GPU Support**: While GPU pointers are supported for shared state synchronization, PCCL’s ring reduce targets CPU-managed transfers over TCP.
 

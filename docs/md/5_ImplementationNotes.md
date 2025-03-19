@@ -90,7 +90,7 @@ PCCL’s All-Reduce uses a pipeline ring approach:
 ## Concurrency and Threading Model
 
 ### Master
-- **Single Thread**: The master’s event loop is not multi-threaded. This ensures consistent updates to `CCoIPMasterState`.
+- **Single Thread**: The master’s event loop is not multithreaded. This ensures consistent updates to `CCoIPMasterState`.
 
 ### Client
 
