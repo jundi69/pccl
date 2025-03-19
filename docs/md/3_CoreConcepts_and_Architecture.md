@@ -47,7 +47,7 @@ Below is a simplified overview:
 - `PEER_REGISTERED`: The peer has connected to the master but not been accepted by existing peers. Restricts the client to minimal actions (e.g. establishing p2p connections if it becomes and accept candidate or else merely waiting).
 - `PEER_ACCEPTED`: The peer is fully recognized and can participate in All-Reduce or shared-state sync within its group.
 
-2. ConnectionState (selected highlights)
+2. ConnectionState
 - `IDLE`: Default "do nothing" state.
 - `VOTE_ACCEPT_NEW_PEERS`: The peer is voting to let newly registered peers join. Once *all* peers do this, the run transitions to establishing p2p connections with the new arrivals.
 - `VOTE_NO_NEW_PEERS_ESTABLISH_P2P_CONNECTIONS`: State for re-establishing or re-wiring p2p connections (e.g. after a topology change) without allowing brand-new peers. Typically triggered by `pcclOptimizeTopology()` to update the p2p connections to reflect the neighbors of the new ring order.
@@ -62,7 +62,7 @@ Below is a simplified overview:
 ### Why So Many States?
 This fine-grained approach ensures that the master and all peers remain in **unanimous agreement** on the next action.
 Since PCCL does not rely on a single global barrier (like `MPI_Barrier`) for every possible transition, each step in the run (accepting peers, establishing connections, synchronizing states, etc.) is a carefully orchestrated micro-consensus. The advantage is that a single dropped connection or tardy peer can be gracefully handled; the run can progress with those who remain.
-With this archtecture, PCCL can handle a wide range of failure conditions without risking a complete job crash. Every IO-failure induced crash and or breaking of bit parity of shared state is a bug in PCCL as long as the application is following best practices.
+With this architecture, PCCL can handle a wide range of failure conditions without risking a complete job crash. Every IO-failure induced crash and or breaking of bit parity of shared state is a bug in PCCL as long as the application is following best practices.
 
 ### Peer Groups & Communicators
 Each communicator is tied to a **peer group** (an integer) that the master uses to partition the run. Only peers in the same group:
@@ -99,5 +99,5 @@ Each peer establishes an TX and an RX connection to each peer it has to connect 
 The peers then establish these connections and send a confirmation back to the master. The master then transitions newcomers to `PEER_ACCEPTED` and returns their connection state to `IDLE`. P2P connection establishment may also fail, in which case the only legal action for clients is to retry the connection establishment, potentially with a different set of peers, if e.g. a peer has disconnected/has been kicked from the run due to a failure or unexpected/malicious behavior.
 
 ### One Operation at a Time (Per Group)
-Because each phase (accept peers, optimize topology, sync shared state, run All-Reduce) requires all accepted peers in that group to do the same action, multiple distinct operations can’t truly run in parallel.
+Because each phase (update topology, optimize topology, sync shared state, run collective operations) requires all accepted peers in that group to do the same action, multiple distinct operations can’t truly run in parallel.
 

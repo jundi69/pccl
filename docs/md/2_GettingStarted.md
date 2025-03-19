@@ -473,9 +473,11 @@ int world_size{};
 PCCL_CHECK(pcclGetAttribute(communicator, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size));
 
 for (uint64_t i = 0;;i++) {
-
     if (i > 0) {
-        PCCL_CHECK(pcclUpdateTopology(communicator)); // update the topology to accept new peers or remove dropped ones
+        while (pcclUpdateTopology(comm) == pcclUpdateTopologyFailed) {
+            std::cout << "[Peer] UpdateTopology failed => retrying...\n";
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
         PCCL_CHECK(pcclGetAttribute(communicator, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size)); // get the new world size
     }
     

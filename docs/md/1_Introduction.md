@@ -66,8 +66,7 @@ PCCL is under active development. While core features like ring-based All-Reduce
 - **GPU Support**: While GPU pointers are supported for shared state synchronization, PCCL’s ring reduce targets CPU-managed transfers over TCP.
 
 #### Planned Improvements
-- **Multiplexed Ring Collectives**: A top priority is supporting multiple concurrent operations on the same peer-to-peer sockets, enabling true asynchronous reductions or partial sub-collectives.
-- **Enhanced Quantization Schemes**: Current min–max quantization may expand to advanced compression (4-bit or per-chunk scaling) for bandwidth-limited scenarios.
+- **Enhanced Quantization Schemes**: Current min–max quantization may expand to include stochastic rounding, 4-bit quantization or compression schemes for reducing bandwidth.
 
 ### Intended Use Cases
 The library is primarily aimed at training scenarios where nodes may run over commodity Ethernet or WAN connections, or in dynamic settings where peers come and go. Although it can be used on HPC clusters, specialized libraries like NCCL even over Ethernet will greatly outperform PCCL there—unless the extra fault tolerance is a higher priority.

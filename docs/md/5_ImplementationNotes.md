@@ -83,13 +83,9 @@ PCCL’s All-Reduce uses a pipeline ring approach:
 1. `Reduce-Scatter`: `In world_size-1` steps, each peer’s chunk is successively passed around the ring and accumulated (e.g., sum).
 2. `Reduce-Gather`: Another `world_size-1` steps to distribute final chunks so everyone ends up with the fully reduced array.
 
-#### Chunking & Possibly Quantizing
+#### Chunking & Quantization
 - The library divides the buffer among peers, so each rank “owns” a slice.
 - It optionally quantizes data if `pcclQuantMinMax` or others are selected. This can help reduce link usage on slower WAN connections. As quantization is also performed using optimized SIMD instructions, the overhead should be negligible for most WAN and even Ethernet connections.
-
-#### Current Limitations
-- **No True Concurrent Reduces**: The ring code currently does not multiplex multiple tags or concurrent operations. If you attempt to do two at once, you’ll likely see collisions. Future versions aim to fix this.
-
 
 ## Concurrency and Threading Model
 

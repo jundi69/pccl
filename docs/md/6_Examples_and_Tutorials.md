@@ -369,7 +369,7 @@ import time
 from typing import List
 
 import pccl
-from pccl import Communicator, SharedState, TensorInfo, ReduceOp, Attribute, PCCLError, ReduceOperandDescriptor, \
+from pccl import Communicator, SharedState, TensorInfo, ReduceOp, PCCLError, ReduceOperandDescriptor, \
     DataType, DistributionHint, QuantizationOptions
 import torch
 import torch.nn as nn
@@ -599,4 +599,142 @@ def main():
 
 if __name__ == '__main__':
     main()
+```
+
+### Concurrent All-Reduce Example
+
+To safely recover from failures when using multiple concurrent collective operations, a scheme such as the following must be employed
+to recover safely:
+
+```python
+import torch
+import os
+from pccl import Communicator, ReduceOp, Attribute, ReduceOperandDescriptor, DataType, DistributionHint, QuantizationOptions, QuantizationAlgorithm
+
+RANK: int = int(os.getenv('RANK', "0"))
+
+def all_reduce_multiple_with_retry(communicator: Communicator,
+                                   tensors: list[torch.Tensor],
+                                   op: ReduceOp,
+                                   max_in_flight: int = 8):
+    """
+    Launches concurrent all-reduce operations on a list of tensors,
+    waits for them all, and retries if a peer fails or the world size changes.
+    Will attempt to target :param max_in_flight: concurrent all-reduce operations.
+    The more similar your tensors are in size, the better this in flight system will work.
+    Future versions of PCCL may provide a "wait for any of multiple async ops" api to improve this pattern.
+    """
+    world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
+
+    total_tx = 0
+    total_rx = 0
+
+    def launch_all_reduce(x: torch.Tensor, tag: int):
+        op_desc = ReduceOperandDescriptor(
+            datatype=DataType.FLOAT,
+            distribution_hint=DistributionHint.NORMAL
+        )
+        # Example uses min-max quantization to demonstrate concurrency
+        quant_desc = QuantizationOptions(
+            quantized_datatype=DataType.FLOAT,
+            algorithm=QuantizationAlgorithm.NONE
+        )
+        return communicator.all_reduce_async(
+            x, x,
+            operand_descriptor=op_desc,
+            quantization_options=quant_desc,
+            op=op,
+            tag=tag
+        )
+
+    handles = [None for _ in range(len(tensors))]
+    done_handles = set()
+
+    in_flight = 0
+    for tensor_index in range(len(tensors)):
+        dst_tensor = tensors[tensor_index]
+
+        if in_flight >= max_in_flight:
+            break
+
+        handles[tensor_index] = launch_all_reduce(
+            dst_tensor,
+            tensor_index
+        )
+        in_flight += 1
+
+    while world_size > 1:
+        all_done = True
+        for tensor_index in range(len(tensors)):
+            handle = handles[tensor_index]
+            dst_tensor = tensors[tensor_index]
+
+            if handle is None:
+                if tensor_index in done_handles:
+                    continue
+
+                if in_flight >= max_in_flight:
+                    continue
+
+                handle = handles[tensor_index] = launch_all_reduce(
+                    dst_tensor,
+                    tensor_index
+                )
+                in_flight += 1
+
+            is_success, status, info = handle.wait()
+            world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
+            if not is_success:
+                print(f"(RANK={RANK}) Reduce failed: {status}; Starting recovery procedure")
+                handles[tensor_index] = None
+                # Wait for all ongoing ops to finish or fail before retry
+                for j in range(len(tensors)):
+                    if j == tensor_index:
+                        continue
+                    h_j = handles[j]
+                    if h_j is not None:
+                        s_j, _, _ = h_j.wait()
+                        if s_j:
+                            done_handles.add(j)
+                        in_flight -= 1
+                    handles[j] = None
+                all_done = False
+                break
+
+            # success for this handle
+            handles[tensor_index] = None
+            done_handles.add(tensor_index)
+
+            total_tx += info.tx_bytes
+            total_rx += info.rx_bytes
+
+            in_flight -= 1
+
+        if all_done:
+            print(
+                f"(RANK={RANK}) Reduce completed RX: {total_rx}, TX: {total_tx}; world_size: {world_size}")
+            break
+
+    if world_size == 1:
+        print(f"(RANK={RANK}) All peers have left except this peer. All reduce will do nothing.")
+        # If we are alone, just finalize all handles and return
+        for h in handles:
+            if h is not None:
+                h.wait()
+        return False
+
+    return True
+```
+
+This pattern can be utilized as follows in your main training loop:
+```python
+        gradients = [torch.randn(128, 128, dtype=torch.float32) for _ in range(10)]
+        all_reduce_multiple_with_retry(communicator, gradients, ReduceOp.SUM, max_in_flight=8)
+        if world_size == 1:
+            # drop current step, as we are alone in the run and whatever we just computed would induce too much noise if we stepped here.
+            # If one accepts the pattern that one waits until the world size is at least two, it would be erroneous to step here.
+            print(
+                "All peers have left except this peer. Dropping current step to avoid inducing too much variance with our local batch!")
+            shared_state.revision += 1
+            continue
 ```
