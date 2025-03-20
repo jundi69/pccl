@@ -74,7 +74,7 @@ jobs:
             msvc_cpu_arch: amd64_arm64 # cross compile arm64 on x86_64
             is_host_arch: false
             make_program: C:/Program Files/NinjaBuild/bin/ninja.exe
-            toolchain_file: ${{ github.workspace }}/cmake/toolchains/x86_64-cross-arm64-toolchain.cmake
+            toolchain_file: cmake/toolchains/x86_64-cross-arm64-toolchain.cmake
             generator: Ninja
             build_type: Release
             pccl_build_cuda_support: OFF
@@ -143,7 +143,7 @@ jobs:
           call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat" ${{ matrix.msvc_cpu_arch }}
           set TOOLCHAIN_OPTION=
           if not "${{ matrix.toolchain_file }}"=="" (
-            set TOOLCHAIN_OPTION=-DCMAKE_TOOLCHAIN_FILE=${{ matrix.toolchain_file }}
+            set TOOLCHAIN_OPTION=-DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/${{ matrix.toolchain_file }}
           )
           cmake -B ${{steps.strings-windows.outputs.build-output-dir }} -G ${{ matrix.generator }} "-DCMAKE_MAKE_PROGRAM=${{ matrix.make_program }}" "-DPCCL_BUILD_CUDA_SUPPORT=${{ matrix.pccl_build_cuda_support }}" "-DPCCL_SANITIZE_TESTS=OFF" -S "${{ github.workspace }}"
 
