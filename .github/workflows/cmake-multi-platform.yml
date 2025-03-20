@@ -136,12 +136,19 @@ jobs:
           -S "${{ github.workspace }}"
 
 
-      - name: Configure CMake (Windows)
-        if: runner.os == 'Windows'
+      - name: Configure CMake (Windows, cross-compile)
+        if: runner.os == 'Windows' && !matrix.is_host_arch
         shell: cmd
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat" ${{ matrix.msvc_cpu_arch }}
           cmake -B ${{steps.strings-windows.outputs.build-output-dir }} -G ${{ matrix.generator }} "-DCMAKE_MAKE_PROGRAM=${{ matrix.make_program }}" "-DPCCL_BUILD_CUDA_SUPPORT=${{ matrix.pccl_build_cuda_support }}" "-DPCCL_SANITIZE_TESTS=OFF" -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/${{ matrix.toolchain_file }} -S "${{ github.workspace }}"
+
+      - name: Configure CMake (Windows, native)
+        if: runner.os == 'Windows' && matrix.is_host_arch
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat" ${{ matrix.msvc_cpu_arch }}
+          cmake -B ${{steps.strings-windows.outputs.build-output-dir }} -G ${{ matrix.generator }} "-DCMAKE_MAKE_PROGRAM=${{ matrix.make_program }}" "-DPCCL_BUILD_CUDA_SUPPORT=${{ matrix.pccl_build_cuda_support }}" "-DPCCL_SANITIZE_TESTS=OFF" -S "${{ github.workspace }}"
 
       - name: Build (Unix)
         if: runner.os != 'Windows'
