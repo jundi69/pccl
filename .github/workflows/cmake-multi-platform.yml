@@ -103,20 +103,13 @@ jobs:
           build_output_dir="${{ github.workspace }}/build"
           echo "build-output-dir=$build_output_dir" >> "$GITHUB_OUTPUT"
 
-      - name: Configure CMake (Windows)
+      - name: Set reusable strings (Windows)
+        id: strings-windows
         if: runner.os == 'Windows'
-        shell: cmd
+        shell: powershell
         run: |
-          call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat" ${{ matrix.msvc_cpu_arch }}
-          set TOOLCHAIN_OPTION=
-          if not "${{ matrix.toolchain_file }}"=="" (
-            set TOOLCHAIN_OPTION=-DCMAKE_TOOLCHAIN_FILE=${{ matrix.toolchain_file }}
-          )
-          cmake -B "${{ steps.strings-windows.outputs.build-output-dir }}" -G ${{ matrix.generator }} %TOOLCHAIN_OPTION% \
-            "-DCMAKE_MAKE_PROGRAM=${{ matrix.make_program }}" \
-            "-DPCCL_BUILD_CUDA_SUPPORT=${{ matrix.pccl_build_cuda_support }}" \
-            "-DPCCL_SANITIZE_TESTS=OFF" \
-            -S "${{ github.workspace }}"
+          $build_output_dir = "${{ github.workspace }}/build"
+          echo "build-output-dir=$build_output_dir" >> $env:GITHUB_OUTPUT
 
       - name: Configure CMake (Linux)
         if: runner.os == 'Linux'
@@ -148,6 +141,10 @@ jobs:
         shell: cmd
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat" ${{ matrix.msvc_cpu_arch }}
+          set TOOLCHAIN_OPTION=
+          if not "${{ matrix.toolchain_file }}"=="" (
+            set TOOLCHAIN_OPTION=-DCMAKE_TOOLCHAIN_FILE=${{ matrix.toolchain_file }}
+          )
           cmake -B ${{steps.strings-windows.outputs.build-output-dir }} -G ${{ matrix.generator }} "-DCMAKE_MAKE_PROGRAM=${{ matrix.make_program }}" "-DPCCL_BUILD_CUDA_SUPPORT=${{ matrix.pccl_build_cuda_support }}" "-DPCCL_SANITIZE_TESTS=OFF" -S "${{ github.workspace }}"
 
       - name: Build (Unix)
