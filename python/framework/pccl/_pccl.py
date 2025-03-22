@@ -1,4 +1,4 @@
-from typing import Union, Optional, Tuple, List, Dict
+from typing import Union, Optional, Tuple, Dict
 import time
 from ipaddress import ip_address, IPv4Address, IPv6Address
 from enum import Enum
@@ -6,6 +6,8 @@ from pccl._loader import load_native_module
 import logging
 import importlib
 import pccl._cuda
+from torch.distributed.tensor import DTensor
+
 
 class ModuleDummy:
     def __init__(self, name: str):
@@ -135,15 +137,15 @@ class DataType(Enum):
     def to_numpy_dtype(self):
         """Converts a DataType to the corresponding Numpy dtype."""
         dtype_map = {
-            np.dtypes.UInt8DType: DataType.UINT8,
-            np.dtypes.Int8DType: DataType.INT8,
-            np.dtypes.UInt16DType: DataType.UINT16,
-            np.dtypes.UInt32DType: DataType.UINT32,
-            np.dtypes.Int32DType: DataType.INT32,
-            np.dtypes.UInt64DType: DataType.UINT64,
-            np.dtypes.Int64DType: DataType.INT64,
-            np.dtypes.Float32DType: DataType.FLOAT,
-            np.dtypes.Float64DType: DataType.DOUBLE,
+            DataType.UINT8: np.dtypes.UInt8DType,
+            DataType.INT8: np.dtypes.Int8DType,
+            DataType.UINT16: np.dtypes.UInt16DType,
+            DataType.UINT32: np.dtypes.UInt32DType,
+            DataType.INT32: np.dtypes.Int32DType,
+            DataType.UINT64: np.dtypes.UInt64DType,
+            DataType.INT64: np.dtypes.Int64DType,
+            DataType.FLOAT: np.dtypes.Float32DType,
+            DataType.DOUBLE: np.dtypes.Float64DType,
         }
         dtype_clazz = type(self)
         assert dtype_clazz in dtype_map, f'Unsupported dtype: {dtype_clazz}'
@@ -264,6 +266,8 @@ class ReduceDescriptor:
 class TensorInfo:
     def __init__(self, name: str, data_ptr: int, *, numel: int, dtype: DataType, device_type: DeviceType,
                  allow_content_inequality: bool):
+        if data_ptr == 0:
+            raise ValueError('Invalid data pointer: nullptr')
         self.name = name
         self.data_ptr = data_ptr
         self.numel = numel
@@ -274,6 +278,7 @@ class TensorInfo:
     @classmethod
     def from_torch(cls, tensor: 'torch.Tensor', name: str, *, allow_content_inequality: bool = False):
         """Creates a TensorInfo from a PyTorch tensor."""
+        assert not isinstance(tensor, DTensor), 'Input tensor must not be a distributed tensor'
         assert tensor.is_contiguous(), 'Input tensor must be contiguous'
         numel: int = tensor.numel()
         data_ptr: int = tensor.data_ptr()
