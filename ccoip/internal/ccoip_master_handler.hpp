@@ -6,6 +6,7 @@
 #include <tinysockets.hpp>
 #include <vector>
 #include <thread>
+#include <pithreadpool/threadpool.hpp>
 
 namespace ccoip {
     class CCoIPMasterHandler {
@@ -21,22 +22,6 @@ namespace ccoip {
         /// All administrative state and transactions are encapsulated in this object
         CCoIPMasterState server_state;
 
-        /// Topology optimization moonshot thread.
-        /// This thread is launched to asynchronously optimize the topology as well as possible.
-        std::optional<std::thread> topology_optimization_moonshot_thread = std::nullopt;
-
-        /// Flag to indicate if the topology optimization moonshot thread is running.
-        std::atomic_bool topology_optimization_moonshot_thread_running = false;
-
-        /// Temporary exchange variable used by the moonshot topology optimization thread to deposit the new topology.
-        /// Will be used to update the real topology in the master state afterward.
-        std::vector<ccoip_uuid_t> next_ring_topology{};
-
-        /// Temporary exchange variable used by the moonshot topology optimization thread to deposit the new topology.
-        /// Will be used to update the real topology in the master state afterward.
-        /// Indicates whether @code next_ring_topology@endcode is optimal.
-        bool next_ring_is_optimal = false;
-
         /// Indicates (when the master is currently in the midst of establishing p2p connections) the state of whether
         /// peers have left. This is needed to make sure the p2p connection establishment phase is guaranteed to fail
         /// when peers drop because the p2p connection information that has been distributed in the beginning of this
@@ -46,6 +31,12 @@ namespace ccoip {
         /// initiated by all clients.
         // This retry is enforced by the master via the CONNECTING_TO_PEERS_FAILED state.
         bool peer_dropped = false;
+
+        /// Thread pool for topology optimization
+        pi::threadpool::ThreadPool topology_optimization_threadpool;
+
+        /// Tasks for topology optimization
+        std::unordered_map<uint32_t, pi::threadpool::TaskFuture<pi::threadpool::void_t>> topology_optimization_tasks;
 
     public:
         volatile bool running = false;
@@ -71,6 +62,8 @@ namespace ccoip {
         [[nodiscard]] bool checkEstablishP2PConnectionConsensus();
 
         [[nodiscard]] bool checkTopologyOptimizationConsensus();
+
+        void performTopologyOptimization(uint32_t peer_group);
 
         [[nodiscard]] bool checkTopologyOptimizationCompletionConsensus();
 

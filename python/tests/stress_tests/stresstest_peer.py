@@ -23,7 +23,7 @@ def all_reduce_multiple_with_retry(communicator: Communicator,
     Launches concurrent all-reduce operations on a list of tensors,
     waits for them all, and retries if a peer fails or the world size changes.
     """
-    world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
+    world_size = communicator.get_attribute(Attribute.GLOBAL_WORLD_SIZE)
 
     total_tx = 0
     total_rx = 0
@@ -82,7 +82,7 @@ def all_reduce_multiple_with_retry(communicator: Communicator,
                 in_flight += 1
 
             is_success, status, info = handle.wait()
-            world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
+            world_size = communicator.get_attribute(Attribute.GLOBAL_WORLD_SIZE)
             if not is_success:
                 print(f"(RANK={RANK}) Reduce failed: {status}; Starting recovery procedure")
                 handles[tensor_index] = None
@@ -142,7 +142,7 @@ def main():
 
     n_performed_steps = 0
     it = 0
-    world_size: int = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
+    world_size: int = communicator.get_attribute(Attribute.GLOBAL_WORLD_SIZE)
     while True:
         # do step
         if it > 0:
@@ -165,7 +165,7 @@ def main():
                     print(f"(RANK={RANK}, it={it}) update_topology() failed: {ex}; retrying...")
                     continue
 
-            world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
+            world_size = communicator.get_attribute(Attribute.GLOBAL_WORLD_SIZE)
 
         if world_size > 1:
             while True:
@@ -177,7 +177,7 @@ def main():
                     sleep(0.1)
                     logging.info(f"(RANK={RANK}, it={it}) optimize_topology failed; retrying...")
                     continue
-            world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
+            world_size = communicator.get_attribute(Attribute.GLOBAL_WORLD_SIZE)
 
         if world_size < 2:
             logging.info(f"(RANK={RANK}, it={it}) waiting...")

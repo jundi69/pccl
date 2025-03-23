@@ -218,7 +218,6 @@ bool ccoip::CCoIPClientHandler::connect() {
         return false;
     }
     client_state.setAssignedUUID(response->assigned_uuid);
-
     const auto result = establishP2PConnections();
     if (result == RETRY_NEEDED) {
         accepted = true;
@@ -745,20 +744,23 @@ ccoip::CCoIPClientHandler::EstablishP2PConnectionResult ccoip::CCoIPClientHandle
     THREAD_GUARD(main_thread_id);
 
     // wait for connection info packet
-    const auto connection_info_packet = master_socket.receivePacket<M2CPacketP2PConnectionInfo>();
-    if (!connection_info_packet) {
+    const auto connection_info_packet_opt = master_socket.receivePacket<M2CPacketP2PConnectionInfo>();
+    if (!connection_info_packet_opt) {
         LOG(ERR) << "Failed to receive new peers packet";
         return FAILED;
     }
+    const auto &connection_info_packet = connection_info_packet_opt.value();
     LOG(DEBUG) << "Received M2CPacketNewPeers from master";
 
     bool all_peers_connected = true;
     std::vector<ccoip_uuid_t> failed_peers{};
-    if (!connection_info_packet->unchanged) {
+    client_state.setGlobalWorldSize(connection_info_packet.global_world_size);
+
+    if (!connection_info_packet.unchanged) {
         LOG(DEBUG) << "New peers list has changed";
 
         // establish p2p connections
-        for (auto &peer: connection_info_packet->all_peers) {
+        for (auto &peer: connection_info_packet.all_peers) {
             // check if connection already exists
             if (p2p_connections_tx.contains(peer.peer_uuid)) {
                 LOG(DEBUG) << "P2P connection with peer " << uuid_to_string(peer.peer_uuid) << " already exists";
@@ -775,9 +777,9 @@ ccoip::CCoIPClientHandler::EstablishP2PConnectionResult ccoip::CCoIPClientHandle
         // close p2p tx connections that are no longer needed
         for (auto it = p2p_connections_tx.begin(); it != p2p_connections_tx.end();) {
             const auto &peer_uuid = it->first;
-            if (std::ranges::find_if(connection_info_packet->all_peers, [peer_uuid](const PeerInfo &peer) {
+            if (std::ranges::find_if(connection_info_packet.all_peers, [peer_uuid](const PeerInfo &peer) {
                 return peer.peer_uuid == peer_uuid;
-            }) == connection_info_packet->all_peers.end()) {
+            }) == connection_info_packet.all_peers.end()) {
                 LOG(DEBUG) << "Closing p2p connection with peer " << uuid_to_string(it->first);
                 if (!closeP2PConnection(it->first, *it->second)) {
                     LOG(WARN) << "Failed to close p2p tx connection with peer " << uuid_to_string(it->first);
@@ -793,9 +795,9 @@ ccoip::CCoIPClientHandler::EstablishP2PConnectionResult ccoip::CCoIPClientHandle
             std::unique_lock lock(p2p_connections_rx_mutex);
             for (auto it = p2p_connections_rx.begin(); it != p2p_connections_rx.end();) {
                 const auto &peer_uuid = it->first;
-                if (std::ranges::find_if(connection_info_packet->all_peers, [peer_uuid](const PeerInfo &peer) {
+                if (std::ranges::find_if(connection_info_packet.all_peers, [peer_uuid](const PeerInfo &peer) {
                     return peer.peer_uuid == peer_uuid;
-                }) == connection_info_packet->all_peers.end()) {
+                }) == connection_info_packet.all_peers.end()) {
                     LOG(DEBUG) << "Interrupting p2p rx connection with peer " << uuid_to_string(it->first);
                     if (!it->second->interrupt()) [[unlikely]] {
                         LOG(WARN) << "Failed to close p2p rx connection with peer " << uuid_to_string(it->first);
@@ -1327,7 +1329,9 @@ bool ccoip::CCoIPClientHandler::isAnyCollectiveComsOpRunning() {
     return client_state.isAnyCollectiveComsOpRunning();
 }
 
-size_t ccoip::CCoIPClientHandler::getWorldSize() const { return client_state.getWorldSize(); }
+size_t ccoip::CCoIPClientHandler::getGlobalWorldSize() const { return client_state.getGlobalWorldSize(); }
+
+size_t ccoip::CCoIPClientHandler::getLocalWorldSize() const { return client_state.getLocalWorldSize(); }
 
 void ccoip::CCoIPClientHandler::setMainThread(const std::thread::id main_thread_id) {
     this->main_thread_id = main_thread_id;

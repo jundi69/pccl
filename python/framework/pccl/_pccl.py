@@ -6,7 +6,6 @@ from pccl._loader import load_native_module
 import logging
 import importlib
 import pccl._cuda
-from torch.distributed.tensor import DTensor
 
 
 class ModuleDummy:
@@ -103,7 +102,8 @@ class ReduceOp(Enum):
 
 class Attribute(Enum):
     """PCCL attributes."""
-    CURRENT_WORLD_SIZE = C.PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE
+    GLOBAL_WORLD_SIZE = C.PCCL_ATTRIBUTE_GLOBAL_WORLD_SIZE
+    LOCAL_WORLD_SIZE = C.PCCL_ATTRIBUTE_PEER_GROUP_WORLD_SIZE
 
 
 class DataType(Enum):
@@ -278,6 +278,7 @@ class TensorInfo:
     @classmethod
     def from_torch(cls, tensor: 'torch.Tensor', name: str, *, allow_content_inequality: bool = False):
         """Creates a TensorInfo from a PyTorch tensor."""
+        from torch.distributed.tensor import DTensor
         assert not isinstance(tensor, DTensor), 'Input tensor must not be a distributed tensor'
         assert tensor.is_contiguous(), 'Input tensor must be contiguous'
         numel: int = tensor.numel()
@@ -402,16 +403,6 @@ class Communicator:
         value = ffi.new('int*')
         PCCLError.check(C.pcclGetAttribute(self._comm[0], attribute.value, value), "pcclGetAttribute")
         return value[0]
-
-    def save_topology_graph(self, filename: str):
-        """Save the topology graph into a graphviz dot file for visualization."""
-        assert filename and filename.endswith('.dot')
-        PCCLError.check(C.pcclTopologySaveGraph(self._comm[0], bytes(filename, 'utf-8')), "pcclTopologySaveGraph")
-
-    def save_reduce_plan(self, filename: str):
-        """Save the reduce plan into a graphviz dot file for visualization."""
-        assert filename and filename.endswith('.dot')
-        PCCLError.check(C.pcclSaveReducePlan(self._comm[0], bytes(filename, 'utf-8')), "pcclSaveReducePlan")
 
     def connect(self, n_attempts: int = 5):
         """

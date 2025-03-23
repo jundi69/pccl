@@ -60,6 +60,11 @@ void ccoip::CCoIPClientState::setAssignedUUID(const ccoip_uuid_t &new_assigned_u
     assigned_uuid = new_assigned_uuid;
 }
 
+void ccoip::CCoIPClientState::setGlobalWorldSize(const size_t new_global_world_size) {
+    THREAD_GUARD(main_thread_id);
+    global_world_size = new_global_world_size;
+}
+
 const ccoip_uuid_t &ccoip::CCoIPClientState::getAssignedUUID() const {
     // may be called concurrently, but is only set once during initialization
     return assigned_uuid;
@@ -97,9 +102,14 @@ bool ccoip::CCoIPClientState::isAnyCollectiveComsOpRunning() {
     return !running_collective_coms_ops_tags.empty();
 }
 
-size_t ccoip::CCoIPClientState::getWorldSize() const {
+size_t ccoip::CCoIPClientState::getLocalWorldSize() const {
     THREAD_GUARD(main_thread_id);
     return ring_order.size();
+}
+
+size_t ccoip::CCoIPClientState::getGlobalWorldSize() const {
+    THREAD_GUARD(main_thread_id);
+    return global_world_size;
 }
 
 bool ccoip::CCoIPClientState::startCollectiveComsOp(const uint64_t tag) {
@@ -134,7 +144,7 @@ bool ccoip::CCoIPClientState::launchAsyncCollectiveOp(const uint64_t tag,
     // retain applicable world size at the time of launch
     {
         std::unique_lock lock(running_collective_coms_ops_world_size_mutex);
-        running_collective_coms_ops_world_size[tag] = getWorldSize();
+        running_collective_coms_ops_world_size[tag] = getLocalWorldSize();
     }
 
     // set initial failure state to not completed

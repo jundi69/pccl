@@ -89,7 +89,9 @@ namespace ccoip {
 
         [[nodiscard]] bool isAnyCollectiveComsOpRunning();
 
-        [[nodiscard]] size_t getWorldSize() const;
+        [[nodiscard]] size_t getGlobalWorldSize() const;
+
+        [[nodiscard]] size_t getLocalWorldSize() const;
 
         void setMainThread(const std::thread::id main_thread_id);
 

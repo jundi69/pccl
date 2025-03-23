@@ -194,6 +194,7 @@ static void writeSocketAddress(PacketWriteBuffer &buffer, const ccoip_socket_add
 // M2CPacketNewPeers
 void ccoip::M2CPacketP2PConnectionInfo::serialize(PacketWriteBuffer &buffer) const {
     buffer.write<boolean>(unchanged);
+    buffer.write<uint64_t>(global_world_size);
     if (unchanged) {
         return;
     }
@@ -225,6 +226,7 @@ static ccoip_socket_address_t readSocketAddress(PacketReadBuffer &buffer) {
 
 bool ccoip::M2CPacketP2PConnectionInfo::deserialize(PacketReadBuffer &buffer) {
     unchanged = buffer.read<boolean>();
+    global_world_size = buffer.read<uint64_t>();
     if (unchanged) {
         return true;
     }
@@ -476,7 +478,8 @@ bool ccoip::P2PPacketDequantizationMeta::deserialize(PacketReadBuffer &buffer) {
             break;
         }
         default: {
-            LOG(WARN) << "Cannot deserialize unsupported de-quantization meta type: " << static_cast<uint8_t>(meta_type);
+            LOG(WARN) << "Cannot deserialize unsupported de-quantization meta type: " << static_cast<uint8_t>(
+                meta_type);
             return false;
         }
     }

@@ -40,8 +40,13 @@ pcclResult_t pcclGetAttribute(const pcclComm_t *communicator,
     PCCL_VALIDATE(p_attribute_out != nullptr, pcclInvalidArgument);
 
     switch (attribute) {
-        case PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE: {
-            const size_t world_size = communicator->ccoip_client->getWorldSize();
+        case PCCL_ATTRIBUTE_GLOBAL_WORLD_SIZE: {
+            const size_t world_size = communicator->ccoip_client->getGlobalWorldSize();
+            *p_attribute_out = static_cast<int>(world_size);
+            break;
+        }
+        case PCCL_ATTRIBUTE_PEER_GROUP_WORLD_SIZE: {
+            const size_t world_size = communicator->ccoip_client->getLocalWorldSize();
             *p_attribute_out = static_cast<int>(world_size);
             break;
         }
@@ -49,14 +54,6 @@ pcclResult_t pcclGetAttribute(const pcclComm_t *communicator,
             [[unlikely]] return pcclInvalidArgument;
         }
     }
-    return pcclSuccess;
-}
-
-pcclResult_t pcclTopologySaveGraph(const pcclComm_t *communicator, const char *filename) {
-    return pcclSuccess;
-}
-
-pcclResult_t pcclSaveReducePlan(const pcclComm_t *communicator, const char *filename) {
     return pcclSuccess;
 }
 
@@ -196,7 +193,7 @@ pcclResult_t pcclOptimizeTopology(const pcclComm_t *communicator) {
     PCCL_VALIDATE(communicator->ccoip_client != nullptr, pcclInvalidUsage);
 
     // optimize the topology
-    if (communicator->ccoip_client->getWorldSize() > 1) {
+    if (communicator->ccoip_client->getGlobalWorldSize() > 1) {
         if (!communicator->ccoip_client->optimizeTopology()) {
             return pcclTopologyOptimizationFailed;
         }
@@ -345,7 +342,8 @@ pcclResult_t pcclSynchronizeSharedState(const pcclComm_t *communicator, pcclShar
 
 #ifndef PCCL_HAS_CUDA_SUPPORT
         if (device_type == pcclDeviceCuda) {
-            LOG(WARN) << "PCCL is not built with CUDA support. Please use a cuda-enabled distribution of PCCL to use cuda tensors with PCCL!";
+            LOG(WARN) <<
+                    "PCCL is not built with CUDA support. Please use a cuda-enabled distribution of PCCL to use cuda tensors with PCCL!";
             return pcclInvalidArgument;
         }
 #endif

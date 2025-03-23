@@ -3,6 +3,7 @@
 #include <ccoip_packets.hpp>
 #include <functional>
 #include <pccl_log.hpp>
+#include <thread_guard.hpp>
 #include <topology_optimizer.hpp>
 
 inline bool isLocalAddress(const ccoip_socket_address_t &client_address) {
@@ -489,7 +490,10 @@ bool ccoip::CCoIPMasterState::markP2PConnectionsEstablished(const ccoip_uuid_t &
                             "be kicked.";
                     return false; // returning false here returns in a kick.
                 }
-                setRingTopology(*topo_opt, false);
+                if (!setRingTopology(info.peer_group, *topo_opt, false)) {
+                    LOG(BUG) << "Failed to set ring topology for peer group " << info.peer_group
+                            << " after p2p connections establishment failure; Topology was already optimal. This is a bug";
+                }
             }
         }
         LOG(WARN) << "Client " << ccoip_sockaddr_to_str(info.socket_address) << " failed to establish p2p connections";
@@ -854,14 +858,14 @@ bool ccoip::CCoIPMasterState::transitionToTopologyOptimizationPhase() {
 }
 
 std::vector<ccoip::ClientInfo>
-ccoip::CCoIPMasterState::getPeersForClient(const ccoip_socket_address_t &client_address) {
-    // get the UUID of the client
-    const auto client_uuid = client_uuids.at(ccoip_socket_to_internal(client_address));
+ccoip::CCoIPMasterState::getPeersForClient(const ccoip_socket_address_t &client_address,
+                                           const ClientInfo &client_info) {
+    const auto client_uuid = client_info.client_uuid;
 
     std::vector<ClientInfo> peers{};
 
     // for now, simply return all clients except the client itself
-    const auto ring_topology = getRingTopology();
+    const auto ring_topology = getRingTopology(client_info.peer_group);
     if (ring_topology.empty()) {
         LOG(WARN) << "Ring topology is empty";
         return peers;
@@ -887,13 +891,13 @@ ccoip::CCoIPMasterState::getPeersForClient(const ccoip_socket_address_t &client_
     const ccoip_uuid_t &next_uuid = ring_topology[next];
 
     // find the client info for the previous and next clients
-    const auto previous_info_it = client_info.find(previous_uuid);
-    if (previous_info_it == client_info.end()) {
+    const auto previous_info_it = this->client_info.find(previous_uuid);
+    if (previous_info_it == this->client_info.end()) {
         LOG(WARN) << "Client " << uuid_to_string(previous_uuid) << " not found";
         return peers;
     }
-    const auto next_info_it = client_info.find(next_uuid);
-    if (next_info_it == client_info.end()) {
+    const auto next_info_it = this->client_info.find(next_uuid);
+    if (next_info_it == this->client_info.end()) {
         LOG(WARN) << "Client " << uuid_to_string(next_uuid) << " not found";
         return peers;
     }
@@ -1341,14 +1345,15 @@ std::vector<uint64_t> ccoip::CCoIPMasterState::getOngoingCollectiveComsOpTags(co
     return std::vector(tags.begin(), tags.end());
 }
 
-bool ccoip::CCoIPMasterState::performTopologyOptimization(const bool moonshot, std::vector<ccoip_uuid_t> &new_topology,
-                                                          bool &is_optimal, bool &has_improved) {
+bool ccoip::CCoIPMasterState::performTopologyOptimization(
+    const uint32_t peer_group,
+    const bool moonshot,
+    std::vector<ccoip_uuid_t> &new_topology, bool &is_optimal, bool &has_improved) {
     if (moonshot) {
-        auto topology = getRingTopology();
-        bool topology_has_improved = false;
+        auto topology = getRingTopology(peer_group);
 
-        // ReSharper disable once CppDFAConstantConditions ; go home CLion, you're drunk
-        if (!topology_is_optimal) {
+        if (!topology_is_optimal[peer_group]) {
+            bool topology_has_improved = false;
             bool topology_is_optimal = false;
             if (!TopologyOptimizer::ImproveTopologyMoonshot(bandwidth_store, topology, topology_is_optimal,
                                                             topology_has_improved)) {
@@ -1360,10 +1365,8 @@ bool ccoip::CCoIPMasterState::performTopologyOptimization(const bool moonshot, s
             has_improved = topology_has_improved;
         }
     } else {
-        auto topology = getRingTopology();
-
-        // ReSharper disable once CppDFAConstantConditions ; go home CLion, you're drunk
-        if (!topology_is_optimal) {
+        auto topology = getRingTopology(peer_group);
+        if (!topology_is_optimal[peer_group]) {
             bool topology_is_optimal = false;
             if (!TopologyOptimizer::OptimizeTopology(bandwidth_store, topology, topology_is_optimal)) {
                 LOG(WARN) << "Failed to optimize topology";
@@ -1373,31 +1376,15 @@ bool ccoip::CCoIPMasterState::performTopologyOptimization(const bool moonshot, s
             is_optimal = topology_is_optimal;
             has_improved = true;
         } else {
-            // ReSharper disable CppDFAUnreachableCode ; go home CLion, you're drunk
             has_improved = false;
-            // ReSharper restore CppDFAUnreachableCode
         }
     }
     return true;
 }
 
-bool ccoip::CCoIPMasterState::updateTopology(const std::vector<ccoip_uuid_t> &new_topology, const bool is_optimal) {
-    if (topology_is_optimal) {
-        if (new_topology.size() != ring_topology.size()) {
-            topology_is_optimal = false;
-        }
-    }
-    if (topology_is_optimal) {
-        LOG(WARN) << "Update topology called when topology is already optimal!";
-        return false;
-    }
-    setRingTopology(new_topology, is_optimal);
-    return true;
-}
+bool ccoip::CCoIPMasterState::isTopologyOptimal(const uint32_t peer_group) { return topology_is_optimal[peer_group]; }
 
-bool ccoip::CCoIPMasterState::isTopologyOptimal() const { return topology_is_optimal; }
-
-std::vector<ccoip_uuid_t> ccoip::CCoIPMasterState::buildBasicRingTopology() {
+std::vector<ccoip_uuid_t> ccoip::CCoIPMasterState::buildBasicRingTopology(const uint32_t peer_group) {
     std::vector<ccoip_uuid_t> topology{};
     for (const auto &[peer_uuid, _]: getClientEntrySet()) {
         const auto peer_info_opt = getClientInfo(peer_uuid);
@@ -1405,8 +1392,8 @@ std::vector<ccoip_uuid_t> ccoip::CCoIPMasterState::buildBasicRingTopology() {
             LOG(WARN) << "Client " << uuid_to_string(peer_uuid) << " not found";
             continue;
         }
-        if (const auto &peer_info = peer_info_opt->get();
-            peer_info.connection_phase != PEER_ACCEPTED && peer_info.connection_state != CONNECTING_TO_PEERS) {
+        const auto &peer_info = peer_info_opt->get();
+        if (peer_info.connection_phase != PEER_ACCEPTED && peer_info.connection_state != CONNECTING_TO_PEERS) {
             // if the peer is not accepted and is not in the process of connecting to peers, ignore it
             // a newly joined peer will be in the REGISTERED state, but will be part of the new topology.
             // To make sure it is included in the ring topology, there is an exception to the PEER_ACCEPTED rule:
@@ -1415,6 +1402,9 @@ std::vector<ccoip_uuid_t> ccoip::CCoIPMasterState::buildBasicRingTopology() {
             // topology, hence the CONNECTING_TO_PEERS state also allows the peer to be included in the ring topology.
             // It doesn't make sense to include other states after CONNECTING_TO_PEERS, as this peer will move to the
             // REGISTERED state shortly, if p2p connection establishment succeeds.
+            continue;
+        }
+        if (peer_info.peer_group != peer_group) {
             continue;
         }
         topology.push_back(peer_uuid);
@@ -1540,6 +1530,29 @@ std::optional<std::vector<ccoip_uuid_t>> ccoip::CCoIPMasterState::buildReachable
     return std::nullopt;
 }
 
+bool ccoip::CCoIPMasterState::setRingTopologyUnsafe(const uint32_t peer_group,
+                                                    const std::vector<ccoip_uuid_t> &new_topology,
+                                                    const bool optimal) {
+    if (topology_is_optimal[peer_group]) {
+        const auto &ring_topology = ring_topologies[peer_group];
+        if (new_topology.size() != ring_topology.size()) {
+            topology_is_optimal[peer_group] = false;
+        }
+    }
+    if (topology_is_optimal[peer_group]) {
+        LOG(WARN) << "Update topology called when topology is already optimal!";
+        return false;
+    }
+    ring_topologies[peer_group] = new_topology;
+    topology_is_optimal[peer_group] = optimal;
+
+    // mark topology changed
+    for (auto &[_, changed]: topology_changed) {
+        changed = true;
+    }
+    return true;
+}
+
 static bool isTopologyDirty(const std::vector<ccoip_uuid_t> &ring_topology,
                             const std::unordered_map<ccoip_uuid_t, ccoip::ClientInfo> &client_info) {
     if (ring_topology.size() != client_info.size()) {
@@ -1553,20 +1566,33 @@ static bool isTopologyDirty(const std::vector<ccoip_uuid_t> &ring_topology,
     return false;
 }
 
-std::vector<ccoip_uuid_t> ccoip::CCoIPMasterState::getRingTopology() {
-    if (isTopologyDirty(ring_topology, client_info)) {
-        const auto new_topology = buildBasicRingTopology();
-        setRingTopology(new_topology, false);
+std::vector<ccoip_uuid_t> ccoip::CCoIPMasterState::getRingTopology(const uint32_t peer_group) {
+    std::unique_lock lock{topology_mutex};
+    if (isTopologyDirty(ring_topologies[peer_group], client_info)) {
+        const auto new_topology = buildBasicRingTopology(peer_group);
+        if (!setRingTopologyUnsafe(peer_group, new_topology, false)) {
+            LOG(BUG) << "Topology was dirty, but failed to update it!";
+        }
     }
-    return ring_topology;
+    return ring_topologies.at(peer_group);
 }
 
-void ccoip::CCoIPMasterState::setRingTopology(const std::vector<ccoip_uuid_t> &new_topology, const bool optimal) {
-    ring_topology = new_topology;
-    topology_is_optimal = optimal;
-
-    // mark topology changed
-    for (auto &[_, changed]: topology_changed) {
-        changed = true;
+std::vector<uint32_t> ccoip::CCoIPMasterState::getExistingPeerGroups() {
+    std::vector<uint32_t> peer_groups{};
+    peer_groups.reserve(client_info.size());
+    for (const auto &[_, info]: client_info) {
+        peer_groups.push_back(info.peer_group);
     }
+    return peer_groups;
+}
+
+bool ccoip::CCoIPMasterState::setRingTopology(const uint32_t peer_group,
+                                              const std::vector<ccoip_uuid_t> &new_topology,
+                                              const bool optimal) {
+    std::unique_lock lock{topology_mutex};
+    return setRingTopologyUnsafe(peer_group, new_topology, optimal);
+}
+
+uint64_t ccoip::CCoIPMasterState::getGlobalWorldSize() {
+    return client_info.size();
 }

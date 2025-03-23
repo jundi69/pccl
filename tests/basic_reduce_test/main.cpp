@@ -40,7 +40,7 @@ int main() {
     PCCL_CHECK(pcclConnect(communicator));
 
     int world_size{};
-    pcclGetAttribute(communicator, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size);
+    pcclGetAttribute(communicator, PCCL_ATTRIBUTE_GLOBAL_WORLD_SIZE, &world_size);
 
     constexpr size_t n_weights = 1024 * 1024 * 256;
     const auto weights = new float[n_weights];
@@ -70,12 +70,12 @@ int main() {
         i++;
         if (i > 1) {
             PCCL_CHECK(pcclUpdateTopology(communicator));
-            PCCL_CHECK(pcclGetAttribute(communicator, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size));
+            PCCL_CHECK(pcclGetAttribute(communicator, PCCL_ATTRIBUTE_GLOBAL_WORLD_SIZE, &world_size));
         }
         
         if (world_size > 1) {
             // PCCL_CHECK(pcclOptimizeTopology(communicator));
-            PCCL_CHECK(pcclGetAttribute(communicator, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size));
+            PCCL_CHECK(pcclGetAttribute(communicator, PCCL_ATTRIBUTE_GLOBAL_WORLD_SIZE, &world_size));
         }
 
         if (world_size < 2) {
@@ -105,7 +105,7 @@ int main() {
             };
             pcclAllReduceAsync(gradients, weights, &desc, communicator, &async_op);
             result = pcclAwaitAsyncReduce(&async_op, &reduce_info);
-            pcclGetAttribute(communicator, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size);
+            pcclGetAttribute(communicator, PCCL_ATTRIBUTE_GLOBAL_WORLD_SIZE, &world_size);
             LOG(INFO) << "pcclAllReduce status " << result;
         } while (result != pcclSuccess && world_size > 1);
 

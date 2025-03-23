@@ -6,8 +6,9 @@
 #include <port_guard.h>
 #include <gtest/gtest.h>
 
-TEST(AcceptNewPeers, TestBasic) {
+TEST(TestPeerGroups, TestBasic) {
     GUARD_PORT(CCOIP_PROTOCOL_PORT_MASTER);
+
 
     ccoip::CCoIPMaster master({
         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {0, 0, 0, 0}}},
@@ -15,18 +16,21 @@ TEST(AcceptNewPeers, TestBasic) {
     });
     ASSERT_TRUE(master.launch());
 
+    constexpr uint32_t peer_group_0 = 0;
+    constexpr uint32_t peer_group_1 = 1;
+
     // client 1
     ccoip::CCoIPClient client1({
-                                         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
-                                         .port = CCOIP_PROTOCOL_PORT_MASTER
-                                     }, 0);
+                                   .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                   .port = CCOIP_PROTOCOL_PORT_MASTER
+                               }, peer_group_0);
     ASSERT_TRUE(client1.connect());
 
     // client 2
     ccoip::CCoIPClient client2({
-                                         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
-                                         .port = CCOIP_PROTOCOL_PORT_MASTER
-                                     }, 0);
+                                   .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                   .port = CCOIP_PROTOCOL_PORT_MASTER
+                               }, peer_group_1);
 
     std::thread client1_thread([&client1] {
         client1.setMainThread(std::this_thread::get_id());

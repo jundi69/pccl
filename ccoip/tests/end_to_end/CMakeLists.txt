@@ -12,3 +12,8 @@ target_include_directories(test_shared_state_distribution PRIVATE ${CMAKE_CURREN
 add_sanitized_gtest(test_all_reduce test_all_reduce.cpp)
 target_link_libraries(test_all_reduce PRIVATE ccoip_private)
 target_include_directories(test_all_reduce PRIVATE ${CMAKE_CURRENT_LIST_DIR})
+
+# test peer groups
+add_sanitized_gtest(test_peer_groups test_peer_groups.cpp)
+target_link_libraries(test_peer_groups PRIVATE ccoip_private)
+target_include_directories(test_peer_groups PRIVATE ${CMAKE_CURRENT_LIST_DIR})

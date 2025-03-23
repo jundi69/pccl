@@ -72,9 +72,13 @@ namespace ccoip {
         /// Returns true if there is any collective communications operation running
         [[nodiscard]] bool isAnyCollectiveComsOpRunning() const;
 
-        /// Returns the current world size; World size shall mean the number of peers in the peer group that this client is part of;
+        /// Returns the current local world size; World size here shall mean the number of peers in the peer group that this client is part of;
         /// Includes the client itself
-        [[nodiscard]] size_t getWorldSize() const;
+        [[nodiscard]] size_t getLocalWorldSize() const;
+
+        /// Returns the current global world size; World size here shall mean the total number of peers connected across all peer groups;
+        /// Includes the client itself
+        [[nodiscard]] size_t getGlobalWorldSize() const;
 
         /// Sets the thread id that the client considers to be the main thread.
         /// It will be the only thread that the client will allow to call certain functions.

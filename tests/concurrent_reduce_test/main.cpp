@@ -40,7 +40,7 @@ int main() {
     PCCL_CHECK(pcclConnect(communicator));
 
     int world_size{};
-    pcclGetAttribute(communicator, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size);
+    pcclGetAttribute(communicator, PCCL_ATTRIBUTE_GLOBAL_WORLD_SIZE, &world_size);
 
     std::vector<float *> all_weights{};
     std::vector<float *> all_gradients{};
@@ -63,12 +63,12 @@ int main() {
         i++;
         if (i > 1) {
             PCCL_CHECK(pcclUpdateTopology(communicator));
-            PCCL_CHECK(pcclGetAttribute(communicator, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size));
+            PCCL_CHECK(pcclGetAttribute(communicator, PCCL_ATTRIBUTE_GLOBAL_WORLD_SIZE, &world_size));
         }
         
         if (world_size > 1) {
             // PCCL_CHECK(pcclOptimizeTopology(communicator));
-            PCCL_CHECK(pcclGetAttribute(communicator, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size));
+            PCCL_CHECK(pcclGetAttribute(communicator, PCCL_ATTRIBUTE_GLOBAL_WORLD_SIZE, &world_size));
         }
 
         if (world_size < 2) {
@@ -103,7 +103,7 @@ int main() {
         }
 
 
-        pcclGetAttribute(communicator, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size);
+        pcclGetAttribute(communicator, PCCL_ATTRIBUTE_GLOBAL_WORLD_SIZE, &world_size);
 
         std::cout << "All reduces finished";
     }

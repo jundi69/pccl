@@ -56,9 +56,14 @@ bool ccoip::CCoIPClient::isAnyCollectiveComsOpRunning() const {
     return client->isAnyCollectiveComsOpRunning();
 }
 
-size_t ccoip::CCoIPClient::getWorldSize() const {
-    return client->getWorldSize();
+size_t ccoip::CCoIPClient::getGlobalWorldSize() const {
+    return client->getGlobalWorldSize();
 }
+
+size_t ccoip::CCoIPClient::getLocalWorldSize() const {
+    return client->getLocalWorldSize();
+}
+
 
 void ccoip::CCoIPClient::setMainThread(const std::thread::id main_thread_id) {
     this->main_thread_id = main_thread_id;

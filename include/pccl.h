@@ -65,7 +65,11 @@ typedef enum pcclRedOp_t {
 } pcclRedOp_t;
 
 typedef enum pcclAttribute_t {
-    PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE = 1
+    /// Total number of peers part of the run
+    PCCL_ATTRIBUTE_GLOBAL_WORLD_SIZE = 1,
+
+    /// Number of peers in the peer group that this peer is part of
+    PCCL_ATTRIBUTE_PEER_GROUP_WORLD_SIZE = 2
 } pcclAttribute_t;
 
 typedef struct pcclCommCreateParams_t {
@@ -195,25 +199,6 @@ PCCL_EXPORT pcclResult_t pcclCreateCommunicator(const pcclCommCreateParams_t *pa
  */
 PCCL_EXPORT pcclResult_t pcclGetAttribute(const pcclComm_t *communicator, pcclAttribute_t attribute,
                                           int *p_attribute_out);
-
-/**
- * Saves the topology of a communicator to a dot file for visual inspection.
- *
- * @param communicator The communicator to save the topology of.
- * @param filename The name of the file to save the topology to.
- *
- * @return pcclSuccess if the topology was saved successfully.
- */
-PCCL_EXPORT pcclResult_t pcclTopologySaveGraph(const pcclComm_t *communicator, const char *filename);
-
-/**
- * Saves the reduce plan instructions of a communicator to a file for inspection.
- * @param communicator The communicator to save the reduce plan of.
- * @param filename The name of the file to save the reduce plan to.
- *
- * @return pcclSuccess if the reduce plan was saved successfully.
- */
-PCCL_EXPORT pcclResult_t pcclSaveReducePlan(const pcclComm_t *communicator, const char *filename);
 
 /**
  * Destroys a communicator.

@@ -6,6 +6,7 @@
 #include <ccoip_types.hpp>
 #include <mutex>
 #include <optional>
+#include <shared_mutex>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -279,14 +280,18 @@ namespace ccoip {
         /// Flag per "callsite" to indicate if the peer list has changed;
         /// Each call-site defines separate scope for checking whether the peer list has changed since the last invocation from said call site.
         /// See @code hasPeerListChanged@endcode
-        std::unordered_map<uint32_t, bool> peer_list_changed{{CALLSITE_TOPOLOGY_OPTIMIZATION_COMPLETE, false},
-                                                             {CALLSITE_P2P_CONNECTION_INFORMATION, false}};
+        std::unordered_map<uint32_t, bool> peer_list_changed{
+            {CALLSITE_TOPOLOGY_OPTIMIZATION_COMPLETE, false},
+            {CALLSITE_P2P_CONNECTION_INFORMATION, false}
+        };
 
         /// Flag per "callsite" to indicate if the topology has changed;
         /// Each call-site defines separate scope for checking whether the peer list has changed since the last invocation from said call site.
         /// See @code hasTopologyChanged@endcode
-        std::unordered_map<uint32_t, bool> topology_changed{{CALLSITE_TOPOLOGY_OPTIMIZATION_COMPLETE, false},
-                                                            {CALLSITE_P2P_CONNECTION_INFORMATION, false}};
+        std::unordered_map<uint32_t, bool> topology_changed{
+            {CALLSITE_TOPOLOGY_OPTIMIZATION_COMPLETE, false},
+            {CALLSITE_P2P_CONNECTION_INFORMATION, false}
+        };
 
         /// Defines the "mask" of shared state entries for each peer group.
         /// The mask is defined by the identity of the set of shared state key strings and their corresponding hashes.
@@ -304,7 +309,7 @@ namespace ccoip {
         /// Peer group bin is cleared after the shared state distribution phase ends.
         /// Removed from on client leave/disconnect.
         std::unordered_map<uint32_t, std::vector<std::pair<ccoip_uuid_t, std::vector<SharedStateHashEntry>>>>
-                shared_state_mask_candidates{};
+        shared_state_mask_candidates{};
 
         /// Cache of the shared state hashes for all entries in the shared state mask for each peer group.
         /// by their key string.
@@ -315,7 +320,6 @@ namespace ccoip {
         /// by their key string.
         /// Peer group bin is cleared when the shared state distribution phase ends.
         std::unordered_map<uint32_t, std::unordered_map<std::string, ccoip_hash_type_t>> shared_state_hash_types{};
-
 
         /// The next shared state revision that is expected from peers synchronizing shared state, intending to
         /// distribute. Shared state revisions that do not match this value will either be considered outdated or a
@@ -338,14 +342,14 @@ namespace ccoip {
         /// sharedStateMatches@endcode. Grouped by peer group. Peer group bin is cleared when the shared state
         /// distribution phase ends.
         std::unordered_map<uint32_t, std::unordered_map<ccoip_uuid_t, SharedStateMismatchStatus>>
-                shared_state_statuses{};
+        shared_state_statuses{};
 
         /// Maps the client UUID to the set of shared state keys that have dirty content, meaning
         /// that the hash of the shared state entry does not match the hash in the shared state mask.
         /// Grouped by peer group.
         /// Peer group bin is cleared when the shared state distribution phase ends.
         std::unordered_map<uint32_t, std::unordered_map<ccoip_uuid_t, std::vector<std::string>>>
-                shared_state_dirty_keys{};
+        shared_state_dirty_keys{};
 
         /// Boolean state for each collective communications operation tag in every peer group that indicates if the
         /// operation has been aborted or not. true = aborted false = not aborted Cleared when the collective
@@ -362,12 +366,16 @@ namespace ccoip {
 
         // TODO: THIS IS SUBJECT TO CHANGE:
 
-        /// the current ring topology in the order of the ring
-        std::vector<ccoip_uuid_t> ring_topology{};
+        /// Mutex for the topology states
+        std::shared_mutex topology_mutex{};
+
+        /// Map current ring topology in use for each peer group.
+        /// List order defined the ring order.
+        std::unordered_map<uint32_t, std::vector<ccoip_uuid_t>> ring_topologies{};
 
         /// whether the current topology is optimal as determined by the topology optimizer.
         /// If we reach optimal topology, we stop continuous optimization.
-        bool topology_is_optimal = false;
+        std::unordered_map<uint32_t, bool> topology_is_optimal{};
 
     public:
         /// Registers a client
@@ -547,7 +555,8 @@ namespace ccoip {
         void voteSharedStateMask(const ccoip_uuid_t &peer_uuid, const std::vector<SharedStateHashEntry> &entries);
 
         /// Returns the peers that a particular client should establish p2p connections with
-        [[nodiscard]] std::vector<ClientInfo> getPeersForClient(const ccoip_socket_address_t &client_address);
+        [[nodiscard]] std::vector<ClientInfo> getPeersForClient(const ccoip_socket_address_t &client_address,
+                                                                const ClientInfo &client_info);
 
         /// Returns all client socket addresses
         [[nodiscard]] std::vector<ccoip_socket_address_t> getClientSocketAddresses();
@@ -651,7 +660,7 @@ namespace ccoip {
         /// The shared state mask needs to be populated by @code sharedStateMatches@endcode before calling this
         /// function.
         [[nodiscard]] std::optional<ccoip_hash_type_t> getSharedStateEntryHashType(uint32_t peer_group,
-                                                                                   const std::string &key);
+            const std::string &key);
 
         /// Returns the set of shared state keys
         [[nodiscard]] std::vector<std::string> getSharedStateKeys(uint32_t peer_group);
@@ -660,38 +669,47 @@ namespace ccoip {
         [[nodiscard]] std::vector<uint64_t> getOngoingCollectiveComsOpTags(uint32_t peer_group);
 
         /// Performs topology optimization on the current topology.
+        /// @param peer_group
         /// @param moonshot if true, the topology will be optimized with a moonshot approach, which will take longer but
         /// may yield better results.
         /// @param new_topology the new topology that was generated by the topology optimizer.
         /// @param is_optimal whether the new topology is optimal.
         /// @param has_improved whether the topology has changed.
         /// Returns true if the topology optimization was successful.
-        [[nodiscard]] bool performTopologyOptimization(bool moonshot, std::vector<ccoip_uuid_t> &new_topology,
-                                                       bool &is_optimal, bool &has_improved);
-
-        /// Updates the current topology with the new topology.
-        [[nodiscard]] bool updateTopology(const std::vector<ccoip_uuid_t> &new_topology, bool is_optimal);
+        [[nodiscard]] bool performTopologyOptimization(uint32_t peer_group, bool moonshot,
+                                                       std::vector<ccoip_uuid_t> &new_topology, bool &is_optimal, bool &has_improved);
 
         /// Returns true if the current topology is optimal
-        [[nodiscard]] bool isTopologyOptimal() const;
+        [[nodiscard]] bool isTopologyOptimal(uint32_t peer_group);
 
         // TODO: THIS IS SUBJECT TO CHANGE, AS IT ASSERTS THAT THE TOPOLOGY IS A RING ALWAYS
 
         /// Returns the ring topology
-        [[nodiscard]] std::vector<ccoip_uuid_t> getRingTopology();
+        [[nodiscard]] std::vector<ccoip_uuid_t> getRingTopology(uint32_t peer_group);
+
+        [[nodiscard]] std::vector<uint32_t> getExistingPeerGroups();
+
+        /// Sets the current ring reduce topology and the associated state whether it is optimal
+        /// NOTE: This function IS thread-safe and may be called from other threads than the main thread
+        [[nodiscard]] bool setRingTopology(uint32_t peer_group, const std::vector<ccoip_uuid_t> &new_topology, bool optimal);
+
+        /// Returns the global world size, which is the total number of clients in the session
+        [[nodiscard]] uint64_t getGlobalWorldSize();
 
     private:
         void onPeerAccepted(const ClientInfo &info);
 
         /// Builds a default non-optimized ring topology.
         /// NOTE: Does not respect the @code unreachability_map@endcode !!
-        [[nodiscard]] std::vector<ccoip_uuid_t> buildBasicRingTopology();
+        [[nodiscard]] std::vector<ccoip_uuid_t> buildBasicRingTopology(uint32_t peer_group);
 
         /// Builds a non-optimized ring topology while respecting the @code unreachability_map@encode
         /// Returns std::nullopt, if no tour is possible given the state of the unreachability_map
         [[nodiscard]] std::optional<std::vector<ccoip_uuid_t>> buildReachableRingTopology();
 
         /// Sets the current ring reduce topology and the associated state whether it is optimal
-        void setRingTopology(const std::vector<ccoip_uuid_t> &new_topology, bool optimal);
+        /// NOTE: This function IS NOT thread-safe. It is the unsafe version of @code setRingTopology@endcode
+        /// and should only be used internally when the mutex is already locked.
+        [[nodiscard]] bool setRingTopologyUnsafe(uint32_t peer_group, const std::vector<ccoip_uuid_t> &new_topology, bool optimal);
     };
 } // namespace ccoip

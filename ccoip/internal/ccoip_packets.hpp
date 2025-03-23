@@ -228,6 +228,7 @@ namespace ccoip {
         static packetId_t packet_id;
 
         bool unchanged = false;
+        uint64_t global_world_size;
 
         std::vector<PeerInfo> all_peers;
 

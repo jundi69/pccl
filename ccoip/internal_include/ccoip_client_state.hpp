@@ -29,6 +29,9 @@ namespace ccoip {
         /// UUID assigned to this client by the master
         ccoip_uuid_t assigned_uuid{};
 
+        /// The global world size as determined by the master
+        size_t global_world_size{};
+
         /// Maps p2p listen socket addresses of respective clients to their UUID assigned by the master.
         /// Populated by @code registerPeer()@endcode when this peer establishes a p2p connection to said p2p listen socket address.
         /// Cleared by @code unregisterPeer()@endcode when a client is no longer needed due to topology changes.
@@ -85,7 +88,7 @@ namespace ccoip {
         pi::threadpool::ThreadPool collective_coms_threadpool{GetMaxConcurrentCollectiveOps(), 64};
 
         /// Maps tags of running collective operation tasks to their respective futures
-        std::unordered_map<uint64_t, pi::threadpool::TaskFuture> running_collective_ops{};
+        std::unordered_map<uint64_t, pi::threadpool::TaskFuture<pi::threadpool::void_t>> running_collective_ops{};
 
         /// Maps tags of running collective operation tasks to their respective failure states;
         /// These failure states are used to signal the completion of the collective operation task
@@ -113,6 +116,9 @@ namespace ccoip {
 
         /// Sets the uuid assigned to this client by the master
         void setAssignedUUID(const ccoip_uuid_t &new_assigned_uuid);
+
+        /// Sets the global world size as determined by the master
+        void setGlobalWorldSize(size_t new_global_world_size);
 
         /// Returns the uuid assigned to this client by the master
         [[nodiscard]] const ccoip_uuid_t &getAssignedUUID() const;
@@ -201,13 +207,17 @@ namespace ccoip {
             return ring_order;
         }
 
-        /// Returns the world size. World size shall mean the number of peers participating in the peer group that this client is a part of.
-        [[nodiscard]] size_t getWorldSize() const;
+        /// Returns the local world size. World size here shall mean the number of peers participating in the peer group that this client is a part of.
+        [[nodiscard]] size_t getLocalWorldSize() const;
+
+        /// Returns the global world size. World size here shall mean the total number of peers connected across all peer groups.
+        [[nodiscard]] size_t getGlobalWorldSize() const;
 
         /// Sets the thread id that the client considers to be the main thread.
         void setMainThread(std::thread::id main_thread_id);
 
         std::vector<uint64_t> getRunningCollectiveComsOpTags();
+
 
     private:
         /// Declares a collective communications operation with the specified tag started.
