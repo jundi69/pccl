@@ -117,7 +117,7 @@ def all_reduce_multiple_with_retry(communicator: Communicator,
     Launches concurrent all-reduce operations on a list of tensors,
     waits for them all, and retries if a peer fails or the world size changes.
     """
-    world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
+    world_size = communicator.get_attribute(Attribute.GLOBAL_WORLD_SIZE)
 
     total_tx = 0
     total_rx = 0
@@ -176,7 +176,7 @@ def all_reduce_multiple_with_retry(communicator: Communicator,
                 in_flight += 1
 
             is_success, status, info = handle.wait()
-            world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
+            world_size = communicator.get_attribute(Attribute.GLOBAL_WORLD_SIZE)
             if not is_success:
                 handles[tensor_index] = None
                 # Wait for all ongoing ops to finish or fail before retry
@@ -273,7 +273,7 @@ def main():
                         log_debug(f"(RANK={RANK}, it={it}) update_topology() failed: {e}; retrying...")
                         continue
 
-            world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
+            world_size = communicator.get_attribute(Attribute.GLOBAL_WORLD_SIZE)
 
             if world_size < 2:
                 sleep(1)

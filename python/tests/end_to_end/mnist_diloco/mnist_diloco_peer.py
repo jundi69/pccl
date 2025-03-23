@@ -97,7 +97,7 @@ RANK: int = int(os.getenv('RANK', "0"))
 
 
 def all_reduce_multiple_with_retry(communicator: Communicator, tensors: List[torch.Tensor], op: ReduceOp, it: int = 0):
-    world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
+    world_size = communicator.get_attribute(Attribute.GLOBAL_WORLD_SIZE)
 
     def launch_all_reduce(x: torch.Tensor, tag: int):
         op_desc = ReduceOperandDescriptor(
@@ -130,7 +130,7 @@ def all_reduce_multiple_with_retry(communicator: Communicator, tensors: List[tor
 
             log_debug(f"(RANK={RANK}, it={it}) all_reduce_async wait({tensor_index})")
             is_success, status, info = handle.wait()
-            world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
+            world_size = communicator.get_attribute(Attribute.GLOBAL_WORLD_SIZE)
             if not is_success:
                 log_debug(f"(RANK={RANK}, it={it}) all_reduce_async({tensor_index}) failed; New world_size: {world_size}")
                 log_info(f"(RANK={RANK}, it={it}) waiting for all async operations to complete before retrying...")
@@ -238,7 +238,7 @@ def main():
             if it > 1:
                 update_topology_with_retries(communicator, it)
 
-            world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
+            world_size = communicator.get_attribute(Attribute.GLOBAL_WORLD_SIZE)
 
             if world_size < 2:
                 sleep(1)

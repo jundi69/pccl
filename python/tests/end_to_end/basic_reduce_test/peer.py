@@ -33,18 +33,18 @@ def main():
 
     n_performed_steps = 0
     it = 0
-    world_size: int = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
+    world_size: int = communicator.get_attribute(Attribute.GLOBAL_WORLD_SIZE)
     while shared_state.revision < STEPS:
         it += 1
         if it > 1:
             logging.info(f"(RANK={RANK}, it={it}) update_topology()")
             communicator.update_topology()
-            world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
+            world_size = communicator.get_attribute(Attribute.GLOBAL_WORLD_SIZE)
 
         if world_size > 1:
             try:
                 communicator.optimize_topology()
-                world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
+                world_size = communicator.get_attribute(Attribute.GLOBAL_WORLD_SIZE)
             except Exception as ex:
                 print(ex)
 
@@ -67,7 +67,7 @@ def main():
                                                                                             QuantizationAlgorithm.MIN_MAX))
 
             is_success, status, info = handle.wait()
-            world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
+            world_size = communicator.get_attribute(Attribute.GLOBAL_WORLD_SIZE)
             assert is_success, f"All reduce failed with status: {status}"
             assert info is not None
             logging.info(

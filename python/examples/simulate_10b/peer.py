@@ -33,7 +33,7 @@ def main():
     while n_performed_steps < STEPS:
         profiler = Profiler()
         with profiler.session("step"):
-            world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
+            world_size = communicator.get_attribute(Attribute.GLOBAL_WORLD_SIZE)
             if world_size > 1:
                 with profiler.session("pccl::communicator::optimize_topology"):
                     communicator.optimize_topology()

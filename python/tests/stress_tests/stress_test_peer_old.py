@@ -32,7 +32,7 @@ def main():
 
     n_performed_steps = 0
     it = 0
-    world_size: int = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
+    world_size: int = communicator.get_attribute(Attribute.GLOBAL_WORLD_SIZE)
     while True:
         # do step
         if it > 0:
@@ -54,7 +54,7 @@ def main():
                     print(f"(RANK={RANK}, it={it}) update_topology() failed: {ex}; retrying...")
                     continue
 
-            world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
+            world_size = communicator.get_attribute(Attribute.GLOBAL_WORLD_SIZE)
 
         if world_size > 1:
             while True:
@@ -66,7 +66,7 @@ def main():
                     sleep(0.1)
                     logging.info(f"(RANK={RANK}, it={it}) optimize_topology failed; retrying...")
                     continue
-            world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
+            world_size = communicator.get_attribute(Attribute.GLOBAL_WORLD_SIZE)
 
 
         if world_size < 2:
@@ -90,7 +90,7 @@ def main():
                                                    quantization_options=QuantizationOptions(DataType.UINT8,
                                                                                             QuantizationAlgorithm.MIN_MAX))
             is_success, status, info = handle.wait()
-            world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
+            world_size = communicator.get_attribute(Attribute.GLOBAL_WORLD_SIZE)
             if not is_success:
                 logging.info(f"(RANK={RANK}, it={it}) all reduce failed; retrying...")
                 continue

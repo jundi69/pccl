@@ -362,7 +362,7 @@ def main():
     # Prepare first batch
     x, y = get_batch_fn('train', config, device_type, device)
 
-    world_size: int = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
+    world_size: int = communicator.get_attribute(Attribute.GLOBAL_WORLD_SIZE)
 
     grads_dst = None
     grads = None
@@ -374,7 +374,7 @@ def main():
             if local_iter_num > 0 or world_size == 1:
                 with profiler.session("pccl::communicator::update_topology()"):
                     communicator.update_topology()
-            world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
+            world_size = communicator.get_attribute(Attribute.GLOBAL_WORLD_SIZE)
 
             if world_size < 2:
                 print("Waiting for more workers to join...")
@@ -389,7 +389,7 @@ def main():
                     except pccl.PCCLError as e:
                         print(f"[Peer] OptimizeTopology failed => {e}. Retrying...")
                         time.sleep(0.1)
-                world_size = communicator.get_attribute(pccl.Attribute.CURRENT_WORLD_SIZE)
+                world_size = communicator.get_attribute(pccl.Attribute.GLOBAL_WORLD_SIZE)
 
             torch.cuda.synchronize(device)
 
@@ -504,7 +504,7 @@ def main():
                         handle = communicator.all_reduce_async(grads, grads_dst, operand_descriptor=op_desc,
                                                                quantization_options=quant_desc, op=ReduceOp.SUM)
                         is_success, status, info = handle.wait()
-                        world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
+                        world_size = communicator.get_attribute(Attribute.GLOBAL_WORLD_SIZE)
 
                     end = time.time()
                     if not is_success:
