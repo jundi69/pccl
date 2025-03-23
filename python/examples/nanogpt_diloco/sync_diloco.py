@@ -415,7 +415,7 @@ def main():
     print("Connected to master via PCCL.")
 
     # Build the shared state that includes:
-    #   - The "outer_params" themselves
+    #   - The inner parameters
     #   - The outer optimizer state (e.g. momentum buffers)
     shared_state_dict = {}
     for name, param in model.named_parameters():

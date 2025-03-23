@@ -426,9 +426,9 @@ def main():
     shared_state_dict = {}
 
     name: str
-    param: DTensor
-    for name, param in model.named_parameters():
-        shared_state_dict[name] = param.to_local().detach().cpu()
+    param: torch.Tensor
+    for name, param in outer_params_dict.items():
+        shared_state_dict[name] = param
 
     # Outer optimizer momentum buffers in shared state
     for name, outer_p in outer_params_dict.items():
@@ -513,16 +513,16 @@ def main():
             if num_syncs > 1:
                 assert sync_info.rx_bytes == 0, "Shared state drifted unexpectedly in peers!"
 
-            # initialize outer state on first sync
+            # initialize inner state on first sync
             if num_syncs == 1:
-                print("Initializing outer state...")
+                print("Initializing inner state...")
                 with torch.no_grad():
-                    outer_param: torch.nn.Parameter  # [DTensor]
+                    outer_param: torch.nn.Parameter  # [torch.Tensor]
                     inner_param: torch.nn.Parameter  # [DTensor]
                     for outer_param, inner_param in zip(outer_params_list, model.parameters()):
                         # noinspection PyTypeChecker
                         inner_dtensor: DTensor = inner_param.data
-                        outer_param.data.copy_(inner_dtensor.to_local())
+                        inner_dtensor.to_local().copy_(outer_param.data)
 
 
         # Set learning rate for both inner and outer optimizers
