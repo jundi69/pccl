@@ -482,7 +482,7 @@ bool ccoip::CCoIPMasterState::markP2PConnectionsEstablished(const ccoip_uuid_t &
                         << " cannot communicate with any other peer! Peer will be kicked.";
                 return false; // returning false here returns in a kick.
             } {
-                const auto topo_opt = buildReachableRingTopology();
+                const auto topo_opt = buildReachableRingTopology(info.peer_group);
                 // if we cannot build a tour anymore, client will be kicked
                 if (!topo_opt) {
                     LOG(WARN) << "Peer " << ccoip_sockaddr_to_str(info.socket_address)
@@ -1422,7 +1422,8 @@ std::vector<ccoip_uuid_t> ccoip::CCoIPMasterState::buildBasicRingTopology(const 
     return topology;
 }
 
-std::optional<std::vector<ccoip_uuid_t>> ccoip::CCoIPMasterState::buildReachableRingTopology() {
+std::optional<std::vector<ccoip_uuid_t>>
+ccoip::CCoIPMasterState::buildReachableRingTopology(const uint32_t peer_group) {
     std::vector<ccoip_uuid_t> remaining_peers{};
     for (const auto &[peer_uuid, _]: getClientEntrySet()) {
         const auto peer_info_opt = getClientInfo(peer_uuid);
@@ -1430,8 +1431,8 @@ std::optional<std::vector<ccoip_uuid_t>> ccoip::CCoIPMasterState::buildReachable
             LOG(WARN) << "Client " << uuid_to_string(peer_uuid) << " not found";
             continue;
         }
-        if (const auto &peer_info = peer_info_opt->get();
-            peer_info.connection_phase != PEER_ACCEPTED && peer_info.connection_state != CONNECTING_TO_PEERS) {
+        const auto &peer_info = peer_info_opt->get();
+        if (peer_info.connection_phase != PEER_ACCEPTED && peer_info.connection_state != CONNECTING_TO_PEERS) {
             // if the peer is not accepted and is not in the process of connecting to peers, ignore it
             // a newly joined peer will be in the REGISTERED state, but will be part of the new topology.
             // To make sure it is included in the ring topology, there is an exception to the PEER_ACCEPTED rule:
@@ -1440,6 +1441,9 @@ std::optional<std::vector<ccoip_uuid_t>> ccoip::CCoIPMasterState::buildReachable
             // topology, hence the CONNECTING_TO_PEERS state also allows the peer to be included in the ring topology.
             // It doesn't make sense to include other states after CONNECTING_TO_PEERS, as this peer will move to the
             // REGISTERED state shortly, if p2p connection establishment succeeds.
+            continue;
+        }
+        if (peer_info.peer_group != peer_group) {
             continue;
         }
         remaining_peers.push_back(peer_uuid);

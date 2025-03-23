@@ -705,7 +705,7 @@ namespace ccoip {
 
         /// Builds a non-optimized ring topology while respecting the @code unreachability_map@encode
         /// Returns std::nullopt, if no tour is possible given the state of the unreachability_map
-        [[nodiscard]] std::optional<std::vector<ccoip_uuid_t>> buildReachableRingTopology();
+        [[nodiscard]] std::optional<std::vector<ccoip_uuid_t>> buildReachableRingTopology(uint32_t peer_group);
 
         /// Sets the current ring reduce topology and the associated state whether it is optimal
         /// NOTE: This function IS NOT thread-safe. It is the unsafe version of @code setRingTopology@endcode
