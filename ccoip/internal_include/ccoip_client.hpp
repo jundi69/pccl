@@ -37,6 +37,9 @@ namespace ccoip {
         /// Accept new peers if necessary and establish p2p connections
         [[nodiscard]] bool acceptNewPeers() const;
 
+        /// Returns true if there are any peers pending to be accepted
+        [[nodiscard]] bool arePeersPending(bool &pending_out) const;
+
         /// Synchronize the shared state
         /// @param shared_state the shared state object referencing user-owned memory to be synchronized
         /// @param info_out is populated with information about this sync operation such as the number of bytes sent/received to facilitate it

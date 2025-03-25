@@ -15,6 +15,10 @@ bool ccoip::CCoIPClient::acceptNewPeers() const {
     return client->requestAndEstablishP2PConnections(true);
 }
 
+bool ccoip::CCoIPClient::arePeersPending(bool &pending_out) const {
+    return client->arePeersPending(pending_out);
+}
+
 bool ccoip::CCoIPClient::syncSharedState(ccoip_shared_state_t &shared_state,
                                          ccoip_shared_state_sync_info_t &info_out) const {
     return client->syncSharedState(shared_state, info_out);

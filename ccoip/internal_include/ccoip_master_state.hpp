@@ -199,6 +199,20 @@ namespace ccoip {
         VOTE_COMPLETE_COLLECTIVE_COMMS
     };
 
+    /// State of the phase-independent vote for querying if there are pending peers.
+    /// In the instant of the last incoming vote for the has pending peers vote, the state of whether
+    /// there are peers pending is determined by the master and returned to the client.
+    enum VoteQueryHasPendingPeers {
+
+        /// The initial state.
+        /// No vote to obtain the pending peers state has been initiated by this peer.
+        NO_VOTE_INITIATED_QUERY_PENDING_PEERS,
+
+        /// The state to indicate that the client has voted to query if there are pending peers.
+        VOTE_QUERY_PENDING_PEERS
+
+    };
+
     struct CCoIPClientVariablePorts {
         /// The port the peer listens to for p2p connections
         uint16_t p2p_listen_port;
@@ -214,6 +228,8 @@ namespace ccoip {
         ccoip_uuid_t client_uuid{};
         ConnectionPhase connection_phase = PEER_REGISTERED;
         ConnectionState connection_state = IDLE;
+        VoteQueryHasPendingPeers vote_query_pending_peers = NO_VOTE_INITIATED_QUERY_PENDING_PEERS;
+
         std::unordered_map<uint64_t, CollectiveCommunicationState> collective_coms_states{};
 
         ccoip_socket_address_t socket_address{};
@@ -393,6 +409,13 @@ namespace ccoip {
         /// All clients must vote to accept new peers before all clients start the p2p establishment phase.
         [[nodiscard]] bool voteEstablishP2PConnections(const ccoip_uuid_t &peer_uuid, bool accept_new_peers);
 
+        /// Called when a client votes to check if peers are pending to be accepted.
+        /// All clients must vote to check for pending peers before the master can determine the state of whether peers are pending at the instant of the last vote.
+        /// This vote is independent of all other phases and can happen completely concurrently to any other phase.
+        /// The master does not strictly enforce the lifecycle of this vote as strictly as it does for other votes.
+        /// The reason for this is that peers should be able to obtain this information at any time to inform application branching for optimization purposes.
+        [[nodiscard]] bool voteQueryWaitingPeersPending(const ccoip_uuid_t &peer_uuid);
+
         /// Called when a client votes to optimize the topology
         /// All clients must vote to optimize the topology before topology optimization can begin.
         [[nodiscard]] bool voteOptimizeTopology(const ccoip_uuid_t &peer_uuid);
@@ -437,6 +460,9 @@ namespace ccoip {
 
         /// Returns true if all clients have voted to accept new peers
         [[nodiscard]] bool acceptNewPeersConsensus() const;
+
+        /// Returns true if all clients have voted to query if there are pending peers
+        [[nodiscard]] bool queryPendingPeersConsensus() const;
 
         /// Returns true if all clients have voted to establish p2p connections without accepting new peers
         [[nodiscard]] bool noAcceptNewPeersEstablishP2PConnectionsConsensus() const;
@@ -654,7 +680,6 @@ namespace ccoip {
         /// function.
         [[nodiscard]] uint64_t getSharedStateEntryHash(uint32_t peer_group, const std::string &key);
 
-
         /// Returns the shared state entry hash type for a particular key; returns std::nullopt if the key is not found
         /// For a key to be found, it must be present in the shared state mask.
         /// The shared state mask needs to be populated by @code sharedStateMatches@endcode before calling this
@@ -666,7 +691,7 @@ namespace ccoip {
         [[nodiscard]] std::vector<std::string> getSharedStateKeys(uint32_t peer_group);
 
         /// Returns the set of ongoing collective communications operation tags for a particular peer group
-        [[nodiscard]] std::vector<uint64_t> getOngoingCollectiveComsOpTags(uint32_t peer_group);
+        [[nodiscard]] std::vector<uint64_t> getOngoingCollectiveCommsOpTags(uint32_t peer_group);
 
         /// Performs topology optimization on the current topology.
         /// @param peer_group
@@ -695,6 +720,13 @@ namespace ccoip {
 
         /// Returns the global world size, which is the total number of clients in the session
         [[nodiscard]] uint64_t getGlobalWorldSize();
+
+        /// Returns true if there is any peer that has not yet been accepted into the run, aka has pending state.
+        [[nodiscard]] bool hasPendingPeers();
+
+        /// Resets the vote query pending peers state for all clients.
+        /// This is invoked after the query pending vote has been completed.
+        void resetVoteQueryPendingPeers();
 
     private:
         void onPeerAccepted(const ClientInfo &info);

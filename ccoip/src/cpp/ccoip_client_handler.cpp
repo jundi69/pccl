@@ -270,6 +270,33 @@ bool ccoip::CCoIPClientHandler::requestAndEstablishP2PConnections(const bool acc
     return true;
 }
 
+bool ccoip::CCoIPClientHandler::arePeersPending(bool &pending_out) {
+    if (!accepted) {
+        LOG(BUG) <<
+                "CCoIPClientHandler::arePeersPending() was called before peer was accepted into the run. This is a bug!";
+        return false;
+    }
+
+    if (!master_socket.isOpen()) {
+        LOG(ERR) << "Failed to accept check if peers are pending: Client socket has been closed; This may mean the client was kicked by "
+                "the master";
+        return false;
+    }
+
+    // collective ops may be running in the meantime
+    const C2MPacketCheckPeersPending packet{};
+    if (!master_socket.sendPacket<C2MPacketCheckPeersPending>(packet)) {
+        return false;
+    }
+    const auto peers_pending_opt = master_socket.receivePacket<M2CPacketPeersPendingResponse>();
+    if (!peers_pending_opt) {
+        LOG(WARN) << "Failed to receive M2CPacketPeersPending from master";
+        return false;
+    }
+    pending_out = peers_pending_opt->peers_pending;
+    return true;
+}
+
 bool ccoip::CCoIPClientHandler::syncSharedState(ccoip_shared_state_t &shared_state,
                                                 ccoip_shared_state_sync_info_t &info_out) {
     if (!accepted) {
@@ -741,7 +768,7 @@ ccoip::CCoIPClientHandler::~CCoIPClientHandler() {
 }
 
 ccoip::CCoIPClientHandler::EstablishP2PConnectionResult ccoip::CCoIPClientHandler::establishP2PConnections() {
-    THREAD_GUARD(main_thread_id);
+    // Note: intentionally no thread guard here, as this may be called when all reduces fail, which may be scheduled on concurrent threads
 
     // wait for connection info packet
     const auto connection_info_packet_opt = master_socket.receivePacket<M2CPacketP2PConnectionInfo>();
@@ -852,7 +879,9 @@ ccoip::CCoIPClientHandler::EstablishP2PConnectionResult ccoip::CCoIPClientHandle
 }
 
 bool ccoip::CCoIPClientHandler::establishP2PConnection(const PeerInfo &peer) {
-    THREAD_GUARD(main_thread_id);
+    // Note: intentionally no thread guard here, because this function may be called when an all reduce fails,
+    // which is an operation that is allowed to be scheduled by threads other
+    // than the communicator registered main thread.
 
     LOG(DEBUG) << "Establishing P2P connection with peer " << uuid_to_string(peer.peer_uuid);
     tinysockets::BlockingIOSocket socket(peer.p2p_listen_addr);
@@ -957,7 +986,6 @@ end:
     if (!shared_state_socket.sendPacket(client_address, response)) {
         LOG(ERR) << "Failed to send shared state response to " << ccoip_sockaddr_to_str(client_address);
     }
-    uint32_t last_device_ordinal = -1;
 
     for (const auto &entry: entries_to_send) {
         if (entry.device_type == ccoipDeviceCpu) {

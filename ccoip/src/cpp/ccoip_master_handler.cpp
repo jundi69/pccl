@@ -99,6 +99,17 @@ void ccoip::CCoIPMasterHandler::onClientRead(const ccoip_socket_address_t &clien
             return;
         }
         handleP2PConnectionsEstablished(client_address, packet);
+    } else if (packet_type == C2MPacketCheckPeersPending::packet_id) {
+        C2MPacketCheckPeersPending packet{};
+        if (!packet.deserialize(buffer)) {
+            LOG(ERR) << "Failed to deserialize C2MPacketCheckPeersPending from "
+                    << ccoip_sockaddr_to_str(client_address);
+            if (!kickClient(client_address)) [[unlikely]] {
+                LOG(ERR) << "Failed to kick client " << ccoip_sockaddr_to_str(client_address);
+            }
+            return;
+        }
+        handleCheckPeersPending(client_address, packet);
     } else if (packet_type == C2MPacketOptimizeTopology::packet_id) {
         C2MPacketOptimizeTopology packet{};
         packet.deserialize(buffer);
@@ -295,6 +306,23 @@ bool ccoip::CCoIPMasterHandler::checkP2PConnectionsEstablished() {
             }
         }
         peer_dropped = false; // reset peer_dropped state
+    }
+    return true;
+}
+
+bool ccoip::CCoIPMasterHandler::checkQueryPeersPendingConsensus() {
+    if (server_state.queryPendingPeersConsensus()) {
+        const bool has_pending_peers = server_state.hasPendingPeers();
+        M2CPacketPeersPendingResponse packet{};
+        packet.peers_pending = has_pending_peers;
+
+        // send query peers pending response packets to all clients
+        for (auto &[peer_uuid, peer_address]: server_state.getClientEntrySet()) {
+            if (!server_socket.sendPacket<M2CPacketPeersPendingResponse>(peer_address, packet)) {
+                LOG(ERR) << "Failed to send M2CPacketPeersPending to " << ccoip_sockaddr_to_str(peer_address);
+            }
+        }
+        server_state.resetVoteQueryPendingPeers();
     }
     return true;
 }
@@ -865,6 +893,35 @@ void ccoip::CCoIPMasterHandler::handleP2PConnectionsEstablished(const ccoip_sock
     }
 }
 
+void ccoip::CCoIPMasterHandler::handleCheckPeersPending(const ccoip_socket_address_t &client_address,
+                                                        const C2MPacketCheckPeersPending &) {
+    THREAD_GUARD(server_thread_id);
+    LOG(DEBUG) << "Received C2MPacketCheckPeersPending from " << ccoip_sockaddr_to_str(client_address);
+
+    const auto client_uuid_opt = server_state.findClientUUID(client_address);
+    if (!client_uuid_opt) {
+        LOG(WARN) << "Client " << ccoip_sockaddr_to_str(client_address) << " not found";
+        if (!kickClient(client_address)) {
+            LOG(ERR) << "Failed to kick client " << ccoip_sockaddr_to_str(client_address);
+        }
+        return;
+    }
+    const auto client_uuid = client_uuid_opt.value();
+
+    if (!server_state.voteQueryWaitingPeersPending(client_uuid)) {
+        LOG(WARN) << "Failed to mark peers pending for " << ccoip_sockaddr_to_str(client_address);
+        if (!kickClient(client_address)) {
+            LOG(ERR) << "Failed to kick client " << ccoip_sockaddr_to_str(client_address);
+        }
+        return;
+    }
+
+    if (!checkQueryPeersPendingConsensus()) {
+        LOG(BUG) << "checkPeersPendingConsensus() failed for " << ccoip_sockaddr_to_str(client_address)
+                << " when handling a check peers pending packet. This should never happen!";
+    }
+}
+
 
 void ccoip::CCoIPMasterHandler::handleOptimizeTopology(const ccoip_socket_address_t &client_address,
                                                        const C2MPacketOptimizeTopology &packet) {
@@ -1194,16 +1251,22 @@ void ccoip::CCoIPMasterHandler::onClientDisconnect(const ccoip_socket_address_t 
                 "other peers and is expected during disconnects.";
     }
 
+    if (!checkQueryPeersPendingConsensus()) {
+        LOG(BUG) << "checkPeersPendingConsensus() failed for " << ccoip_sockaddr_to_str(client_address)
+                << " when handling a check peers pending packet. This should never happen!";
+    }
+
     if (!checkSyncSharedStateConsensus(client_info.peer_group)) {
         LOG(DEBUG) << "checkSyncSharedStateConsensus() returned false; This likely means no clients are waiting for "
                 "shared state sync and is expected during disconnects.";
     }
+
     if (!checkSyncSharedStateCompleteConsensus(client_info.peer_group)) {
         LOG(DEBUG) << "checkSyncSharedStateCompleteConsensus() returned false; This likely means no clients are "
                 "waiting for shared state sync completion and is expected during disconnects.";
     }
 
-    const auto ongoing_tags = server_state.getOngoingCollectiveComsOpTags(client_info.peer_group);
+    const auto ongoing_tags = server_state.getOngoingCollectiveCommsOpTags(client_info.peer_group);
     std::string ongoing_tags_str{};
     for (const auto &tag: ongoing_tags) {
         ongoing_tags_str += std::to_string(tag) + ", ";

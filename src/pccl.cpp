@@ -187,6 +187,21 @@ pcclResult_t pcclUpdateTopology(pcclComm_t *communicator) {
     return pcclSuccess;
 }
 
+pcclResult_t pcclArePeersPending(const pcclComm_t *communicator, bool *pending_out) {
+    PCCL_VALIDATE_INITIALIZED();
+    PCCL_VALIDATE(communicator != nullptr, pcclInvalidArgument);
+    PCCL_VALIDATE(pending_out != nullptr, pcclInvalidArgument);
+    PCCL_VALIDATE(communicator->ccoip_client != nullptr, pcclInvalidUsage);
+
+    bool pending = false;
+    if (!communicator->ccoip_client->arePeersPending(pending)) {
+        return pcclInvalidUsage;
+    }
+    *pending_out = pending;
+
+    return pcclSuccess;
+}
+
 pcclResult_t pcclOptimizeTopology(const pcclComm_t *communicator) {
     PCCL_VALIDATE_INITIALIZED();
     PCCL_VALIDATE(communicator != nullptr, pcclInvalidArgument);

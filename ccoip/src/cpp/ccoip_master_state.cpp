@@ -223,6 +223,54 @@ bool ccoip::CCoIPMasterState::voteEstablishP2PConnections(const ccoip_uuid_t &pe
     return true;
 }
 
+bool ccoip::CCoIPMasterState::voteQueryWaitingPeersPending(const ccoip_uuid_t &peer_uuid) {
+    const auto info_opt = getClientInfo(peer_uuid);
+    if (!info_opt) {
+        LOG(WARN) << "Cannot mark client " << uuid_to_string(peer_uuid) << " as waiting for peers";
+        return false;
+    }
+    auto &info = info_opt->get();
+
+    // if the client is not yet accepted, it cannot be marked as waiting for other peers
+    if (info.connection_phase != PEER_ACCEPTED) {
+        LOG(WARN) << "Client " << ccoip_sockaddr_to_str(info.socket_address)
+                << " cannot be marked as waiting for other peers in phase " << info.connection_phase;
+        return false;
+    }
+
+    // if the client has already voted to query whether peers are pending, it cannot vote again
+    if (info.vote_query_pending_peers == VOTE_QUERY_PENDING_PEERS) {
+        LOG(WARN) << "Client " << ccoip_sockaddr_to_str(info.socket_address)
+                << " is already marked as waiting for other peers";
+        return false;
+    }
+    info.vote_query_pending_peers = VOTE_QUERY_PENDING_PEERS;
+    return true;
+}
+
+
+bool ccoip::CCoIPMasterState::hasPendingPeers() {
+    for (const auto &[_, info]: client_info) {
+        if (info.connection_phase == PEER_ACCEPTED && info.vote_query_pending_peers == VOTE_QUERY_PENDING_PEERS) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void ccoip::CCoIPMasterState::resetVoteQueryPendingPeers() {
+    for (auto &[_, info]: client_info) {
+        if (info.connection_phase != PEER_ACCEPTED) {
+            continue;
+        }
+        if (info.vote_query_pending_peers == NO_VOTE_INITIATED_QUERY_PENDING_PEERS) {
+            LOG(BUG) << "Client " << ccoip_sockaddr_to_str(info.socket_address)
+                    << " found to be in NO_VOTE_INITIATED_QUERY_PENDING_PEERS state when vote is reset. This is a bug";
+        }
+        info.vote_query_pending_peers = NO_VOTE_INITIATED_QUERY_PENDING_PEERS;
+    }
+}
+
 bool ccoip::CCoIPMasterState::voteOptimizeTopology(const ccoip_uuid_t &peer_uuid) {
     const auto info_opt = getClientInfo(peer_uuid);
     if (!info_opt) {
@@ -1243,6 +1291,22 @@ bool ccoip::CCoIPMasterState::acceptNewPeersConsensus() const {
     return voting_peers.size() == client_uuids.size();
 }
 
+bool ccoip::CCoIPMasterState::queryPendingPeersConsensus() const {
+    if (client_info.empty()) {
+        return false;
+    }
+    for (const auto &[_, info]: client_info) {
+        if (info.connection_phase != PEER_ACCEPTED) {
+            continue;
+        }
+
+        if (info.vote_query_pending_peers != VOTE_QUERY_PENDING_PEERS) {
+            return false;
+        }
+    }
+    return true;
+}
+
 bool ccoip::CCoIPMasterState::noAcceptNewPeersEstablishP2PConnectionsConsensus() const {
     std::unordered_set<ccoip_uuid_t> voting_peers{};
     for (const auto &[_, info]: client_info) {
@@ -1332,7 +1396,7 @@ std::vector<std::string> ccoip::CCoIPMasterState::getSharedStateKeys(const uint3
     return keys;
 }
 
-std::vector<uint64_t> ccoip::CCoIPMasterState::getOngoingCollectiveComsOpTags(const uint32_t peer_group) {
+std::vector<uint64_t> ccoip::CCoIPMasterState::getOngoingCollectiveCommsOpTags(const uint32_t peer_group) {
     std::unordered_set<uint64_t> tags{};
     for (const auto &[_, info]: client_info) {
         if (info.peer_group != peer_group) {

@@ -136,6 +136,23 @@ connections for the stable ones). This may also detect that certain peers have v
   `pcclUpdateTopologyFailed` status. The recommended action is to retry the optimization. The `Hello World` example from
   section 2 implements this best practice.
 
+### `pcclAreNewPeersPending`
+
+```c
+pcclResult_t pcclAreNewPeersPending(const pcclComm_t *communicator, bool *new_peers_pending_out);
+```
+
+Writes into `new_peers_pending_out` whether the communicator has pending peers to accept.
+This function can be used to determine if `pcclUpdateTopolgy` needs to be called.
+If the pending peers state is true, it is recommended to call `pcclUpdateTopology` to avoid keeping pending peers waiting.
+If the pending peers state is false, the call to `pcclUpdateTopology` can be skipped without risk of delaying pending peers.
+This is useful if async collective communications are ongoing that would otherwise have to be awaited before calling `pcclUpdateTopology`.
+All peers must call this function jointly. Only once all peers have called `pcclArePeersPending` will this function unblock - just like `pcclUpdateTopology` and other phase-changing functions.
+
+Note: This function could technically output a state that becomes dirty the next moment, so very unluckily timed peer joins would be skipped if `pcclUpdateTopology` is then not invoked based on the return value of this function.
+The worst that can happen here is that the peer is accepted in a subsequent call to `pcclUpdateTopology`, which would also have been the result if the peer joined single digit milliseconds later without employing the are peers pending guard.
+
+
 ### `pcclOptimizeTopology`
 
 ```c

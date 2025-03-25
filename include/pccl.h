@@ -239,6 +239,26 @@ PCCL_EXPORT pcclResult_t pcclConnect(pcclComm_t *communicator);
 PCCL_EXPORT pcclResult_t pcclUpdateTopology(pcclComm_t *communicator);
 
 /**
+ * Returns whether the communicator has pending peers to accept.
+ * This function can be used to determine if @ref pcclUpdateTopolgy needs to be called.
+ * If this function returns true, it is recommended to call @ref pcclUpdateTopology to avoid keeping pending peers waiting.
+ * If this function returns false, the call to @ref pcclUpdateTopology can be skipped without risk of delaying pending peers.
+ * This is useful if async collective communications are ongoing that would otherwise have to be awaited before calling @ref pcclUpdateTopology.
+ * All peers must call this function jointly. Only once all peers have called @ref pcclArePeersPending will this function unblock - just like @ref pcclUpdateTopology and other phase-changing functions.
+ * NOTE: This function could technically return a state that becomes dirty the next moment, so very unluckily timed peer joins would be skipped if @ref pcclUpdateTopology is then not invoked based on the return value of this function.
+ * The worst that can happen here is that the peer is accepted in a subsequent call to @ref pcclUpdateTopology, which would also have been the result if the peer joined single digit milliseconds later without employing the are peers pending guard.
+ *
+ * @param communicator The communicator to check for pending peers.
+ * @param pending_out Pointer to the boolean to be set to true if there are pending peers to accept, false otherwise.
+ *
+ * @return @code pcclSuccess@endcode if the pending status was successfully retrieved.
+ * @return @code pcclInvalidArgument@endcode if the communicator or pending_out is null.
+ * @return @code pcclNotInitialized@endcode if @code pcclInit@endcode has not been called yet.
+ */
+PCCL_EXPORT pcclResult_t pcclArePeersPending(const pcclComm_t *communicator, bool *pending_out);
+
+
+/**
  * Called to optimize the topology of a communicator.
  * After topology updates, it is recommended that the topology be optimized to improve performance of collective communications operations.
  * @param communicator the communicator

@@ -33,7 +33,8 @@ std::vector<uint64_t> ccoip::CCoIPClientState::getRunningCollectiveComsOpTags() 
 }
 
 bool ccoip::CCoIPClientState::registerPeer(const ccoip_socket_address_t &address, const ccoip_uuid_t uuid) {
-    THREAD_GUARD(main_thread_id);
+    // intentionally no thread guard here
+    std::unique_lock lock{socket_addr_to_uuid_mutex};
     const auto internal_address = ccoip_socket_to_internal(address);
     if (const auto it = socket_addr_to_uuid.find(internal_address); it != socket_addr_to_uuid.end()) {
         return false;
@@ -43,7 +44,8 @@ bool ccoip::CCoIPClientState::registerPeer(const ccoip_socket_address_t &address
 }
 
 bool ccoip::CCoIPClientState::unregisterPeer(const ccoip_socket_address_t &address) {
-    THREAD_GUARD(main_thread_id);
+    // intentionally no thread guard here
+    std::unique_lock lock{socket_addr_to_uuid_mutex};
     const auto internal_address = ccoip_socket_to_internal(address);
     if (const auto n = socket_addr_to_uuid.erase(internal_address); n == 0) {
         return false;

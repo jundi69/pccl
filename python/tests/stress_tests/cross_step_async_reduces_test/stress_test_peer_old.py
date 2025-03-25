@@ -3,13 +3,12 @@ import os
 import logging
 import torch
 from pccl import SharedState, TensorInfo, Communicator, Attribute, ReduceOp, QuantizationOptions, DataType, \
-    QuantizationAlgorithm
+    QuantizationAlgorithm, PCCLError
 
 HOST: str = '127.0.0.1:48148'
 STEPS: int = 1000
-WEIGHT_N: int = 1024
 PEERS: int = 1
-NUM_ELEMENTS: int = 1024
+NUM_ELEMENTS: int = 1024 * 1024
 RANK: int = int(os.getenv('RANK', "0"))
 
 logging.basicConfig(level=logging.INFO)
@@ -19,7 +18,7 @@ def main():
     logging.info(f"(RANK={RANK}) Starting peer node connecting to {HOST}")
 
     # Create a weight tensor
-    weights: torch.Tensor = torch.rand(WEIGHT_N, dtype=torch.float32)
+    weights: torch.Tensor = torch.rand(NUM_ELEMENTS, dtype=torch.float32)
 
     # Create shared state with tensor infos
     shared_state: SharedState = SharedState([
@@ -34,35 +33,53 @@ def main():
     n_performed_steps = 0
     it = 0
     world_size: int = communicator.get_attribute(Attribute.GLOBAL_WORLD_SIZE)
-    while shared_state.revision < STEPS:
-        it += 1
+    while True:
+        # do step
+        if it > 0:
+            for retry in range(10):
+                try:
+                    logging.info(f"(RANK={RANK}, it={it}) update_topology()")
+                    communicator.update_topology()
+                    break
+                except PCCLError as ex:
+                    if retry == 10:
+                        # The peer was likely kicked; this can happen be collateral damage in rare cases when lots of
+                        # people die at the same time, p2p connections cannot be established and the master thinks
+                        # the peer cannot communicate with enough peers to build a tour. This is unresolvable because
+                        # it might just be true that the peer can indeed just not talk to those peers.
+                        # If they had disconnected from the master too, they would already be considered removed from the
+                        # run. But if that happens just a tick late, this unlucky situation can happen.
+                        print("Exiting because peer was likely kicked. This doesn't necessary entail a failure of the stress test, as long as the shared state revision is not lost and new peers continue on.")
+                        exit(0)
+                    print(f"(RANK={RANK}, it={it}) update_topology() failed: {ex}; retrying...")
+                    continue
 
-        topology_updated = False
-        if it > 1:
-            logging.info(f"(RANK={RANK}, it={it}) update_topology()")
-            peers_pending = communicator.are_peers_pending()
-            if peers_pending:
-                communicator.update_topology()
-                world_size = communicator.get_attribute(Attribute.GLOBAL_WORLD_SIZE)
-                topology_updated = True
+            world_size = communicator.get_attribute(Attribute.GLOBAL_WORLD_SIZE)
 
         if world_size > 1:
-            if topology_updated or it == 1:
+            while True:
                 try:
-                    communicator.optimize_topology()
-                    world_size = communicator.get_attribute(Attribute.GLOBAL_WORLD_SIZE)
-                except Exception as ex:
-                    print(ex)
+                    logging.info(f"(RANK={RANK}, it={it}) optimize_topology()")
+                    # communicator.optimize_topology()
+                    break
+                except PCCLError:
+                    sleep(0.1)
+                    logging.info(f"(RANK={RANK}, it={it}) optimize_topology failed; retrying...")
+                    continue
+            world_size = communicator.get_attribute(Attribute.GLOBAL_WORLD_SIZE)
+
 
         if world_size < 2:
+            logging.info(f"(RANK={RANK}, it={it}) waiting...")
             sleep(1)
+            it += 1
             continue
 
-        if topology_updated:
-            logging.info(f"(RANK={RANK}, it={it}) sync_shared_state()")
-            info = communicator.sync_shared_state(shared_state)
-            assert info is not None
-            print(f"(RANK={RANK}, it={it}) tx_bytes={info.tx_bytes}, rx_bytes={info.rx_bytes}")
+        logging.info(f"(RANK={RANK}, it={it}) sync_shared_state()")
+
+        info = communicator.sync_shared_state(shared_state)
+        assert info is not None
+        print(f"(RANK={RANK}, it={it}) tx_bytes={info.tx_bytes}, rx_bytes={info.rx_bytes}")
 
         # Create gradients tensors
         grad: torch.Tensor = torch.rand(NUM_ELEMENTS, dtype=torch.float32)
@@ -72,11 +89,11 @@ def main():
                                                    op=ReduceOp.SUM,
                                                    quantization_options=QuantizationOptions(DataType.UINT8,
                                                                                             QuantizationAlgorithm.MIN_MAX))
-
             is_success, status, info = handle.wait()
             world_size = communicator.get_attribute(Attribute.GLOBAL_WORLD_SIZE)
-            assert is_success, f"All reduce failed with status: {status}"
-            assert info is not None
+            if not is_success:
+                logging.info(f"(RANK={RANK}, it={it}) all reduce failed; retrying...")
+                continue
             logging.info(
                 f"(RANK={RANK}, it={it}) Reduce completed RX: {info.rx_bytes}, TX: {info.tx_bytes}")
             break
@@ -85,10 +102,12 @@ def main():
             # If one accepts the pattern that one waits until the world size is at least two, it would be erroneous to step here.
             print(
                 "All peers have left except this peer. Dropping current step to avoid inducing too much variance with our local batch!")
+            shared_state.revision += 1
             continue
 
         shared_state.revision += 1
         n_performed_steps += 1
+        it += 1
 
     logging.info(f"(RANK={RANK}) Finished")
 

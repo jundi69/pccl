@@ -46,6 +46,9 @@ bool ccoip::C2MPacketRequestEstablishP2PConnections::deserialize(PacketReadBuffe
     return true;
 }
 
+// C2MPacketCheckPeersPending
+ccoip::packetId_t ccoip::C2MPacketCheckPeersPending::packet_id = C2M_PACKET_CHECK_PEERS_PENDING_ID;
+
 // C2MPacketOptimizeTopology
 ccoip::packetId_t ccoip::C2MPacketOptimizeTopology::packet_id = C2M_PACKET_OPTIMIZE_TOPOLOGY_ID;
 
@@ -265,9 +268,20 @@ bool ccoip::M2CPacketP2PConnectionsEstablished::deserialize(PacketReadBuffer &bu
     return true;
 }
 
+// M2CPacketPeersPending
+ccoip::packetId_t ccoip::M2CPacketPeersPendingResponse::packet_id = M2C_PACKET_PEERS_PENDING_RESPONSE_ID;
+
+void ccoip::M2CPacketPeersPendingResponse::serialize(PacketWriteBuffer &buffer) const {
+    buffer.write<boolean>(peers_pending);
+}
+
+bool ccoip::M2CPacketPeersPendingResponse::deserialize(PacketReadBuffer &buffer) {
+    peers_pending = buffer.read<boolean>();
+    return true;
+}
+
 // M2CPacketOptimizeTopologyResponse
 ccoip::packetId_t ccoip::M2CPacketOptimizeTopologyResponse::packet_id = M2C_PACKET_OPTIMIZE_TOPOLOGY_RESPONSE_ID;
-
 
 void ccoip::M2CPacketOptimizeTopologyResponse::serialize(PacketWriteBuffer &buffer) const {
     buffer.write<uint64_t>(bw_benchmark_requests.size());

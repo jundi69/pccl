@@ -431,6 +431,18 @@ class Communicator:
         """
         PCCLError.check(C.pcclUpdateTopology(self._comm[0]), "pcclUpdateTopology")
 
+    def are_peers_pending(self) -> bool:
+        """
+        Check if there are any pending peer connections.
+        If there are pending peers, it is recommended to call update_topology to establish connections.
+        If there are no pending peers, invoking update_topology can be skipped without risking delaying peer acceptance.
+        :return: True if there are pending peer connections, False otherwise.
+        """
+        pending = ffi.new('bool*')
+        PCCLError.check(C.pcclArePeersPending(self._comm[0], pending), "pcclArePeersPending")
+        return pending[0]
+
+
     def optimize_topology(self):
         """
         Optimize the topology of a communicator.

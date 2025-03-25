@@ -42,6 +42,7 @@ namespace ccoip {
         /// If a p2p connection drops, for now it is asserted that it will also disconnect from the master, triggering
         /// a topology update. TODO: Implement a more robust mechanism to handle this.
         std::unordered_map<internal_inet_socket_address_t, ccoip_uuid_t> socket_addr_to_uuid{};
+        std::shared_mutex socket_addr_to_uuid_mutex{};
 
         /// References the current shared state to be distributed.
         /// Is only valid when @code is_syncing_shared_state@endcode is true and is otherwise empty.

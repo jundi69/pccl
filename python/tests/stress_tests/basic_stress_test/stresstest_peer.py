@@ -145,11 +145,19 @@ def main():
     world_size: int = communicator.get_attribute(Attribute.GLOBAL_WORLD_SIZE)
     while True:
         # do step
+        topology_updated = False
+        if it == 0:
+            # Assume that the topology was updated when we just freshly joined the run
+            topology_updated = True
+
         if it > 0:
             for retry in range(10):
                 try:
                     logging.info(f"(RANK={RANK}, it={it}) update_topology()")
-                    communicator.update_topology()
+                    peers_pending = communicator.are_peers_pending()
+                    if peers_pending:
+                        communicator.update_topology()
+                        topology_updated = True
                     break
                 except PCCLError as ex:
                     if retry == 10:
@@ -168,15 +176,16 @@ def main():
             world_size = communicator.get_attribute(Attribute.GLOBAL_WORLD_SIZE)
 
         if world_size > 1:
-            while True:
-                try:
-                    logging.info(f"(RANK={RANK}, it={it}) optimize_topology()")
-                    # communicator.optimize_topology()
-                    break
-                except PCCLError:
-                    sleep(0.1)
-                    logging.info(f"(RANK={RANK}, it={it}) optimize_topology failed; retrying...")
-                    continue
+            if topology_updated:
+                while True:
+                    try:
+                        logging.info(f"(RANK={RANK}, it={it}) optimize_topology()")
+                        # communicator.optimize_topology()
+                        break
+                    except PCCLError:
+                        sleep(0.1)
+                        logging.info(f"(RANK={RANK}, it={it}) optimize_topology failed; retrying...")
+                        continue
             world_size = communicator.get_attribute(Attribute.GLOBAL_WORLD_SIZE)
 
         if world_size < 2:
@@ -185,11 +194,11 @@ def main():
             it += 1
             continue
 
-        logging.info(f"(RANK={RANK}, it={it}) sync_shared_state()")
-
-        info = communicator.sync_shared_state(shared_state)
-        assert info is not None
-        print(f"(RANK={RANK}, it={it}) tx_bytes={info.tx_bytes}, rx_bytes={info.rx_bytes}")
+        if topology_updated:
+            logging.info(f"(RANK={RANK}, it={it}) sync_shared_state()")
+            info = communicator.sync_shared_state(shared_state)
+            assert info is not None
+            print(f"(RANK={RANK}, it={it}) tx_bytes={info.tx_bytes}, rx_bytes={info.rx_bytes}")
 
         # Create fake gradients
         gradients = [torch.randn(128, 128, dtype=torch.float32) for _ in range(10)]

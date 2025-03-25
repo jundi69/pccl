@@ -69,6 +69,8 @@ namespace ccoip {
 
         [[nodiscard]] bool checkP2PConnectionsEstablished();
 
+        [[nodiscard]] bool checkQueryPeersPendingConsensus();
+
         [[nodiscard]] bool checkSyncSharedStateConsensus(uint32_t peer_group);
 
         [[nodiscard]] bool checkSyncSharedStateCompleteConsensus(uint32_t peer_group);
@@ -91,6 +93,9 @@ namespace ccoip {
 
         void handleP2PConnectionsEstablished(const ccoip_socket_address_t &client_address,
                                              const C2MPacketP2PConnectionsEstablished &packet);
+
+        void handleCheckPeersPending(const ccoip_socket_address_t & client_address, const C2MPacketCheckPeersPending & packet);
+
 
         void handleOptimizeTopology(const ccoip_socket_address_t &client_address,
                                    const C2MPacketOptimizeTopology &packet);
