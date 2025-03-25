@@ -201,6 +201,20 @@ to `pcclAwaitAsyncReduce` to wait for completion.
 Before calling functions like `pcclUpdateTopology`, `pcclOptimizeTopology`, or `pcclSynchronizeSharedState`, you should
 ensure that all outstanding async operations have completed.
 
+Note: `pcclAllReduceAsync` and `pcclAwaitAsyncReduce` may be called from a different thread than the main thread registered by the communicator.
+PCCL will enforce that user facing apis are called from the main thread.
+For `pcclAllReduceAsync` and `pcclAwaitAsyncReduce` however, the user is responsible for ensuring the following contract:
+- `pcclAwaitAsyncReduce` must always be called from the same thread that called `pcclAllReduceAsync`. No guarantees about behavior of awaiting handles created by different threads are provided.
+- The main thread registered by the communicator must not call other user facing apis while the concurrent thread is performing and awaiting collective communications operations using `pcclAllReduceAsync` and `pcclAwaitAsyncReduce`.
+- The main thread must await the work done by the concurrent thread before calling other user facing apis itself again.
+- Veracity of values returned by `pcclGetAttribute` calls for attributes `PCCL_ATTRIBUTE_GLOBAL_WORLD_SIZE` and `PCCL_ATTRIBUTE_PEER_GROUP_WORLD_SIZE` are only guaranteed up-to-date on the thread that called `pcclAwaitAsyncReduce`. Different threads may see outdated values and should only be relied upon for logging purposes.
+
+The communicator registered main-thread may however call `pcclAreNewPeersPending` even if there are outstanding async operations issued by other threads.
+If `pcclAreNewPeersPending` returns `true`, the main thread should call `pcclUpdateTopology` to ensure that the new peers are accepted into the run.
+However, before doing so, the main thread must ensure that all outstanding async operations have completed awaiting the concurrent thread which must call `pcclAwaitAsyncReduce`.
+If `pcclAreNewPeersPending` returns `false`, the main thread can safely skip calling `pcclUpdateTopology` without risking delaying the acceptance of new peers.
+This is useful such that new compute can be started from the main thread without waiting for the completion of outstanding async operations without risking delaying the acceptance of new peers.
+
 ### Shared-State Synchronization
 
 `pcclSynchronizeSharedState`
@@ -243,13 +257,13 @@ pcclResult_t pcclGetAttribute(const pcclComm_t *communicator,
 
 Retrieves specific integer-valued attributes from the communicator. Currently:
 
-- `PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE`: The total number of “accepted” peers in the same peer group as this communicator.
+- `PCCL_ATTRIBUTE_GLOBAL_WORLD_SIZE`: The total number of “accepted” peers in the same peer group as this communicator.
 
 Common use:
 
 ```c
 int world_size;
-pcclGetAttribute(communicator, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size);
+pcclGetAttribute(communicator, PCCL_ATTRIBUTE_GLOBAL_WORLD_SIZE, &world_size);
 ```
 
 `Important`: This is only up-to-date if called after the last invocation of `pcclUpdateTopology()` or `pcclConnect()` if

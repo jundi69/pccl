@@ -30,7 +30,10 @@ namespace ccoip {
         ccoip_uuid_t assigned_uuid{};
 
         /// The global world size as determined by the master
-        size_t global_world_size{};
+        std::atomic<size_t> global_world_size{};
+
+        /// The local world size as determined by the master
+        std::atomic<size_t> local_world_size{};
 
         /// Maps p2p listen socket addresses of respective clients to their UUID assigned by the master.
         /// Populated by @code registerPeer()@endcode when this peer establishes a p2p connection to said p2p listen socket address.
@@ -120,6 +123,9 @@ namespace ccoip {
         /// Sets the global world size as determined by the master
         void setGlobalWorldSize(size_t new_global_world_size);
 
+        /// Sets the local world size as determined by the master
+        void setLocalWorldSize(size_t new_local_world_size);
+
         /// Returns the uuid assigned to this client by the master
         [[nodiscard]] const ccoip_uuid_t &getAssignedUUID() const;
 
@@ -207,6 +213,11 @@ namespace ccoip {
             return ring_order;
         }
 
+        /// !!! A WORD OF CAUTION !!!
+        /// It is recommended to read the comment in ccoip_master_state.cpp called "A WORD OF CAUTION w.r.t getLocalWorldSize and getGlobalWorldSize"
+        /// There is a non-trivial amount of calling convention implied how getLocalWorldSize and getGlobalWorldSize are used.
+        /// This also has implications for
+
         /// Returns the local world size. World size here shall mean the number of peers participating in the peer group that this client is a part of.
         [[nodiscard]] size_t getLocalWorldSize() const;
 
@@ -217,7 +228,6 @@ namespace ccoip {
         void setMainThread(std::thread::id main_thread_id);
 
         std::vector<uint64_t> getRunningCollectiveComsOpTags();
-
 
     private:
         /// Declares a collective communications operation with the specified tag started.

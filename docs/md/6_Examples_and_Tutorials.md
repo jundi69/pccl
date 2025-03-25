@@ -92,7 +92,7 @@ int main() {
 
         // B) get the updated world size (always after updateTopology)
         int world_size{};
-        PCCL_CHECK(pcclGetAttribute(comm, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size));
+        PCCL_CHECK(pcclGetAttribute(comm, PCCL_ATTRIBUTE_GLOBAL_WORLD_SIZE, &world_size));
 
         // C) If multiple peers are present => optionally optimize ring
         if (world_size > 1) {
@@ -101,7 +101,7 @@ int main() {
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
             }
             // the world size may have changed after pcclOptimizeTopology, if a peer drops.
-            PCCL_CHECK(pcclGetAttribute(comm, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size));
+            PCCL_CHECK(pcclGetAttribute(comm, PCCL_ATTRIBUTE_GLOBAL_WORLD_SIZE, &world_size));
         } else {
             // alone => no ring-based operation => wait
             std::cout << "[Peer] alone => sleeping.\n";
@@ -167,7 +167,7 @@ int main() {
                 std::cout << "[Peer] All-Reduce fail: " << red_st << "; Retrying...\n";
                 
                 // the world size may have changed after a failed all reduce if a peer drops.
-                PCCL_CHECK(pcclGetAttribute(comm, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size));
+                PCCL_CHECK(pcclGetAttribute(comm, PCCL_ATTRIBUTE_GLOBAL_WORLD_SIZE, &world_size));
             
                 // if every peer but us dropped, we'll need to accept new peers and wait until we have at least 2 peers again
                 if (world_size < 2) {
@@ -267,7 +267,7 @@ def main():
 
             # B) get the updated world size
             #    after update_topology, it’s guaranteed to be fresh
-            world_size = comm.get_attribute(pccl.Attribute.CURRENT_WORLD_SIZE)
+            world_size = comm.get_attribute(pccl.Attribute.GLOBAL_WORLD_SIZE)
 
         # C) If multiple peers => optionally optimize ring
         if world_size > 1:
@@ -280,7 +280,7 @@ def main():
                     time.sleep(0.1)
             # D) get the updated world size
             #    after optimize_topology, it’s guaranteed to be fresh
-            world_size = comm.get_attribute(pccl.Attribute.CURRENT_WORLD_SIZE)
+            world_size = comm.get_attribute(pccl.Attribute.GLOBAL_WORLD_SIZE)
         
         
         if world_size < 2:
@@ -331,7 +331,7 @@ def main():
                 # Could be rank disconnect or partial ring failure
                 print(f"[Peer] All-Reduce fail => {e}; Retrying...")
                 # check if we are now alone
-                world_size = comm.get_attribute(pccl.Attribute.CURRENT_WORLD_SIZE)
+                world_size = comm.get_attribute(pccl.Attribute.GLOBAL_WORLD_SIZE)
                 if world_size < 2:
                     print("[Peer] All-Reduce failed and now world_size < 2 => waiting until a new peer joins")
                     # We'll just break from the reduce attempt, do next iteration
@@ -340,7 +340,7 @@ def main():
                 time.sleep(0.2)
 
         # If we ended up alone mid-collective, skip the rest of this iteration
-        world_size = comm.get_attribute(pccl.Attribute.CURRENT_WORLD_SIZE)
+        world_size = comm.get_attribute(pccl.Attribute.GLOBAL_WORLD_SIZE)
         if world_size < 2:
             local_iter += 1
             continue
@@ -478,7 +478,7 @@ def main():
                         print(f"(RANK={RANK}, it={it}) update_topology() failed: {e}; retrying...")
                         continue
 
-            world_size = communicator.get_attribute(pccl.Attribute.CURRENT_WORLD_SIZE)
+            world_size = communicator.get_attribute(pccl.Attribute.GLOBAL_WORLD_SIZE)
 
             if world_size > 1:
                 while True:
@@ -488,7 +488,7 @@ def main():
                     except pccl.PCCLError as e:
                         print(f"(RANK={RANK}, it={it}) OptimizeTopology failed => {e}. Retrying...")
                         time.sleep(0.1)
-                world_size = communicator.get_attribute(pccl.Attribute.CURRENT_WORLD_SIZE)
+                world_size = communicator.get_attribute(pccl.Attribute.GLOBAL_WORLD_SIZE)
     
 
             if world_size < 2:
@@ -546,7 +546,7 @@ def main():
                 handle = communicator.all_reduce_async(grads, grads, operand_descriptor=op_desc,
                                                        quantization_options=quant_desc, op=ReduceOp.SUM)
                 is_success, status, info = handle.wait()
-                world_size = communicator.get_attribute(pccl.Attribute.CURRENT_WORLD_SIZE)
+                world_size = communicator.get_attribute(pccl.Attribute.GLOBAL_WORLD_SIZE)
                 if not is_success:
                     print(f"(RANK={RANK}, it={it}) all_reduce_async() failed: {status}; retrying...")
                     continue
@@ -621,7 +621,7 @@ def all_reduce_multiple_with_retry(communicator: Communicator,
     The more similar your tensors are in size, the better this in flight system will work.
     Future versions of PCCL may provide a "wait for any of multiple async ops" api to improve this pattern.
     """
-    world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
+    world_size = communicator.get_attribute(Attribute.GLOBAL_WORLD_SIZE)
 
     total_tx = 0
     total_rx = 0
@@ -631,7 +631,6 @@ def all_reduce_multiple_with_retry(communicator: Communicator,
             datatype=DataType.FLOAT,
             distribution_hint=DistributionHint.NORMAL
         )
-        # Example uses min-max quantization to demonstrate concurrency
         quant_desc = QuantizationOptions(
             quantized_datatype=DataType.FLOAT,
             algorithm=QuantizationAlgorithm.NONE
@@ -680,7 +679,7 @@ def all_reduce_multiple_with_retry(communicator: Communicator,
                 in_flight += 1
 
             is_success, status, info = handle.wait()
-            world_size = communicator.get_attribute(Attribute.CURRENT_WORLD_SIZE)
+            world_size = communicator.get_attribute(Attribute.GLOBAL_WORLD_SIZE)
             if not is_success:
                 print(f"(RANK={RANK}) Reduce failed: {status}; Starting recovery procedure")
                 handles[tensor_index] = None

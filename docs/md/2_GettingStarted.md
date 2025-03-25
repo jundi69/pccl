@@ -441,7 +441,7 @@ In many distributed training loops, you'll repeat a sequence of:
 
 ```c++
 int world_size{};
-PCCL_CHECK(pcclGetAttribute(communicator, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size));
+PCCL_CHECK(pcclGetAttribute(communicator, PCCL_ATTRIBUTE_GLOBAL_WORLD_SIZE, &world_size));
 ```
 
 - *Pitfall*: When making branching decision based on world size, make sure it up-to-date *after* pcclUpdateTopology, as
@@ -470,7 +470,7 @@ PCCL_CHECK(pcclGetAttribute(communicator, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &wo
 
 ```c++
 int world_size{};
-PCCL_CHECK(pcclGetAttribute(communicator, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size));
+PCCL_CHECK(pcclGetAttribute(communicator, PCCL_ATTRIBUTE_GLOBAL_WORLD_SIZE, &world_size));
 
 for (uint64_t i = 0;;i++) {
     if (i > 0) {
@@ -478,7 +478,7 @@ for (uint64_t i = 0;;i++) {
             std::cout << "[Peer] UpdateTopology failed => retrying...\n";
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
-        PCCL_CHECK(pcclGetAttribute(communicator, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size)); // get the new world size
+        PCCL_CHECK(pcclGetAttribute(communicator, PCCL_ATTRIBUTE_GLOBAL_WORLD_SIZE, &world_size)); // get the new world size
     }
     
     if (world_size > 1) {
@@ -488,7 +488,7 @@ for (uint64_t i = 0;;i++) {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
         
-        PCCL_CHECK(pcclGetAttribute(communicator, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size)); // get the new world size
+        PCCL_CHECK(pcclGetAttribute(communicator, PCCL_ATTRIBUTE_GLOBAL_WORLD_SIZE, &world_size)); // get the new world size
     }
     
     if (world_size < 2) {
@@ -674,7 +674,7 @@ int main() {
     };
 
     int world_size{};
-    PCCL_CHECK(pcclGetAttribute(comm, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size));
+    PCCL_CHECK(pcclGetAttribute(comm, PCCL_ATTRIBUTE_GLOBAL_WORLD_SIZE, &world_size));
 
     // 5) Enter the training loop
     // We'll do up to MAX_STEPS. Each step => we do some ring operation and a shared-state sync.
@@ -686,7 +686,7 @@ int main() {
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
             }
             // get up-to-date world size
-            PCCL_CHECK(pcclGetAttribute(comm, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size));
+            PCCL_CHECK(pcclGetAttribute(comm, PCCL_ATTRIBUTE_GLOBAL_WORLD_SIZE, &world_size));
         }
 
         // C) If multiple peers are present => optionally optimize ring
@@ -696,7 +696,7 @@ int main() {
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
             }
             // get up-to-date world size
-            PCCL_CHECK(pcclGetAttribute(comm, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size));
+            PCCL_CHECK(pcclGetAttribute(comm, PCCL_ATTRIBUTE_GLOBAL_WORLD_SIZE, &world_size));
         } else {
             // alone => no ring-based operation => wait
             std::cout << "[Peer] alone => sleeping.\n";
@@ -742,7 +742,7 @@ int main() {
             } else {
                 std::cout << "[Peer] All-Reduce fail: " << red_st << "; Retrying...\n";
                 // the world size may have changed after a failed all reduce if a peer drops.
-                PCCL_CHECK(pcclGetAttribute(comm, PCCL_ATTRIBUTE_CURRENT_WORLD_SIZE, &world_size));
+                PCCL_CHECK(pcclGetAttribute(comm, PCCL_ATTRIBUTE_GLOBAL_WORLD_SIZE, &world_size));
             
                 // if every peer but us dropped, we'll need to accept new peers and wait until we have at least 2 peers again
                 if (world_size < 2) {

@@ -480,7 +480,7 @@ bool ccoip::CCoIPMasterState::markP2PConnectionsEstablished(const ccoip_uuid_t &
             if (unreachable_peers.size() == client_info.size()) {
                 LOG(WARN) << "Peer " << ccoip_sockaddr_to_str(info.socket_address)
                         << " cannot communicate with any other peer! Peer will be kicked.";
-                return false; // returning false here returns in a kick.
+                return false; // returning false here results in a kick.
             } {
                 const auto topo_opt = buildReachableRingTopology(info.peer_group);
                 // if we cannot build a tour anymore, client will be kicked
@@ -488,7 +488,7 @@ bool ccoip::CCoIPMasterState::markP2PConnectionsEstablished(const ccoip_uuid_t &
                     LOG(WARN) << "Peer " << ccoip_sockaddr_to_str(info.socket_address)
                             << " cannot communicate with enough peers such that any ring tour is possible! Peer will "
                             "be kicked.";
-                    return false; // returning false here returns in a kick.
+                    return false; // returning false here results in a kick.
                 }
                 if (!setRingTopology(info.peer_group, *topo_opt, false)) {
                     LOG(BUG) << "Failed to set ring topology for peer group " << info.peer_group

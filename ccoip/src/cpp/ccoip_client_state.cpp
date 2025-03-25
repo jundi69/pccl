@@ -61,8 +61,11 @@ void ccoip::CCoIPClientState::setAssignedUUID(const ccoip_uuid_t &new_assigned_u
 }
 
 void ccoip::CCoIPClientState::setGlobalWorldSize(const size_t new_global_world_size) {
-    THREAD_GUARD(main_thread_id);
-    global_world_size = new_global_world_size;
+    global_world_size.store(new_global_world_size, std::memory_order_release);
+}
+
+void ccoip::CCoIPClientState::setLocalWorldSize(const size_t new_local_world_size) {
+    local_world_size.store(new_local_world_size, std::memory_order_release);
 }
 
 const ccoip_uuid_t &ccoip::CCoIPClientState::getAssignedUUID() const {
@@ -102,14 +105,50 @@ bool ccoip::CCoIPClientState::isAnyCollectiveComsOpRunning() {
     return !running_collective_coms_ops_tags.empty();
 }
 
+/// !!! A WORD OF CAUTION w.r.t getLocalWorldSize and getGlobalWorldSize !!!
+///
+/// NOTE: getLocalWorldSize & getGlobalWorldSize are NOT guarded by THREAD_GUARD.
+/// That doesn't mean that there isn't an implied contract with the caller here though.
+/// The contract is that the local_world_size and global_world_size are only set
+/// by the same thread that will actually call these methods.
+/// Technically, the atomics here are unnecessary, given that this is the implied contract, as
+/// no tearing could occur in the absence of concurrent access.
+/// However, we still employ it as a defensive measure here that we don't actually rely on.
+/// The library user however can break this contract with get attribute calls, so it is useful
+/// to not return garbage values, even if the strict veracity of those values is not guaranteed.
+/// Veracity here shall mean up-to-date-ness. Value changes may not be instantly visible to the reading thread,
+/// if the writing thread is concurrent.
+/// This should not happen anyways though.
+/// The way you are *meant* to use these methods is that you only ever query them on the thread that is expected
+/// to modify the values.
+///
+/// How are they modified?
+/// setLocalWorldSize & setGlobalWorldSize will be called when p2p connections are (re)-established.
+/// This can happen as a side effect of failed collective communications operations.
+///
+/// NOTE: The user may launch and await collective communications operations on any thread, while
+/// other operations are only allowed on the main thread.
+///
+/// While a concurrent thread is performing collective communications operations,
+/// the main thread MUST NOT CALL ANY user facing functions EXCEPT @ref pcclAreNewPeersPending.
+/// The @ref pcclAreNewPeersPending function is an exception because it will only communicate with the master.
+/// P2P connections are neither used nor potentially invalidated by this function.
+///
+/// This function is necessary to be called on the main thread to enable cross-step communication overlap.
+/// If this function returns false, then update topology may be skipped, allowing us to not await the ongoing
+/// all reduces while we launch new computation.
+///
+/// If this function returns true, we must await the ongoing all reduces before we can proceed.
+/// HOWEVER, this does not mean simply calling await on the outstanding handles by the main thread when
+/// the handles were launched by another thread. It specifically means that we await the work ongoing
+/// by said concurrent thread to finish doing its business which itself will call await on the outstanding
+/// handles. No guarantees are made about whether awaiting the handles launched by a different thread is safe.
 size_t ccoip::CCoIPClientState::getLocalWorldSize() const {
-    THREAD_GUARD(main_thread_id);
-    return ring_order.size();
+    return local_world_size.load(std::memory_order_acquire);
 }
 
 size_t ccoip::CCoIPClientState::getGlobalWorldSize() const {
-    THREAD_GUARD(main_thread_id);
-    return global_world_size;
+    return global_world_size.load(std::memory_order_acquire);
 }
 
 bool ccoip::CCoIPClientState::startCollectiveComsOp(const uint64_t tag) {
