@@ -251,7 +251,7 @@ bool ccoip::CCoIPMasterState::voteQueryWaitingPeersPending(const ccoip_uuid_t &p
 
 bool ccoip::CCoIPMasterState::hasPendingPeers() {
     for (const auto &[_, info]: client_info) {
-        if (info.connection_phase == PEER_ACCEPTED && info.vote_query_pending_peers == VOTE_QUERY_PENDING_PEERS) {
+        if (info.connection_phase == PEER_REGISTERED) {
             return true;
         }
     }

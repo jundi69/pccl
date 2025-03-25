@@ -318,6 +318,15 @@ bool ccoip::CCoIPMasterHandler::checkQueryPeersPendingConsensus() {
 
         // send query peers pending response packets to all clients
         for (auto &[peer_uuid, peer_address]: server_state.getClientEntrySet()) {
+            const auto client_info_opt = server_state.getClientInfo(peer_uuid);
+            if (!client_info_opt) {
+                LOG(BUG) << "Client " << ccoip_sockaddr_to_str(peer_address) << " not found";
+                continue;
+            }
+            const auto client_info = client_info_opt->get();
+            if (client_info.connection_phase != PEER_ACCEPTED) {
+                continue;
+            }
             if (!server_socket.sendPacket<M2CPacketPeersPendingResponse>(peer_address, packet)) {
                 LOG(ERR) << "Failed to send M2CPacketPeersPending to " << ccoip_sockaddr_to_str(peer_address);
             }
@@ -1221,7 +1230,7 @@ void ccoip::CCoIPMasterHandler::onClientDisconnect(const ccoip_socket_address_t 
     const auto client_uuid = client_uuid_opt.value();
     const auto client_info_opt = server_state.getClientInfo(client_uuid);
     if (!client_info_opt) {
-        LOG(WARN) << "Client " << ccoip_sockaddr_to_str(client_address) << " not found";
+        LOG(BUG) << "Client " << ccoip_sockaddr_to_str(client_address) << " not found";
         return;
     }
     const ClientInfo client_info = client_info_opt->get();
