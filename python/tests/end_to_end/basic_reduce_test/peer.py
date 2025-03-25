@@ -38,6 +38,10 @@ def main():
         it += 1
 
         topology_updated = False
+        if it == 1:
+            # On join, we assume the topology was just updated because we got accepted
+            topology_updated = True
+
         if it > 1:
             logging.info(f"(RANK={RANK}, it={it}) update_topology()")
             peers_pending = communicator.are_peers_pending()
@@ -47,7 +51,7 @@ def main():
                 topology_updated = True
 
         if world_size > 1:
-            if topology_updated or it == 1:
+            if topology_updated:
                 try:
                     communicator.optimize_topology()
                     world_size = communicator.get_attribute(Attribute.GLOBAL_WORLD_SIZE)
