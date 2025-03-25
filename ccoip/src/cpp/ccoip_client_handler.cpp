@@ -987,6 +987,8 @@ end:
         LOG(ERR) << "Failed to send shared state response to " << ccoip_sockaddr_to_str(client_address);
     }
 
+    [[maybe_unused]] uint32_t last_device_ordinal = -1; // this is needed for CUDA support
+
     for (const auto &entry: entries_to_send) {
         if (entry.device_type == ccoipDeviceCpu) {
             // if the tensor is already on the cpu, send directly
