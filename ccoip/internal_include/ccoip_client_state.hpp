@@ -236,6 +236,7 @@ namespace ccoip {
 
         /// Declares a collective communications operation with the specified tag ended
         /// Returns false if no collective communications operation with the specified tag is running.
+        /// NOTE: asserts caller holds running_collective_coms_ops_tags_mutex
         [[nodiscard]] bool endCollectiveComsOp(uint64_t tag);
     };
 };

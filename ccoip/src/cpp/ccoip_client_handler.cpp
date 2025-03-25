@@ -1083,7 +1083,7 @@ bool ccoip::CCoIPClientHandler::allReduceAsync(const void *sendbuff, void *recvb
                                                const ccoip_data_type_t quantized_data_type,
                                                const ccoip_quantization_algorithm_t quantization_algorithm,
                                                const ccoip_reduce_op_t op, const uint64_t tag) {
-    THREAD_GUARD(main_thread_id);
+    // NOTE: intentionally no thread guard here!
 
     if (client_state.isCollectiveComsOpRunning(tag)) {
         // can't start a new collective coms op while one is already running
@@ -1252,7 +1252,7 @@ bool ccoip::CCoIPClientHandler::allReduceAsync(const void *sendbuff, void *recvb
 }
 
 bool ccoip::CCoIPClientHandler::joinAsyncReduce(const uint64_t tag) {
-    THREAD_GUARD(main_thread_id);
+    // NOTE: intentionally no thread guard here
 
     if (!client_state.joinAsyncCollectiveOp(tag)) [[unlikely]] {
         return false;

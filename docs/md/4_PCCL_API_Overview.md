@@ -183,7 +183,7 @@ A blocking All-Reduce call:
 - `pcclRankConnectionLost`: if a peer vanished mid-collective. You typically re-try the same reduce.
 - `pcclInvalidUsage`: if you haven’t connected or if the communicator is in an illegal state.
 
-### `pcclAllReduceAsync(...) / pcclAwaitAsyncReduce(...)
+### `pcclAllReduceAsync(...) / pcclAwaitAsyncReduce(...)`
 
 ```c
 pcclResult_t pcclAllReduceAsync(const void *sendbuff,
