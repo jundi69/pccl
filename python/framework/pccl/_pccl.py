@@ -341,8 +341,8 @@ class SharedStateSyncInfo:
 
 
 class ReduceInfo:
-    def __init__(self, world_size: int, tx_bytes: int, rx_bytes: int):
-        self.world_size = world_size
+    def __init__(self, local_world_size: int, tx_bytes: int, rx_bytes: int):
+        self.local_world_size = local_world_size
         self.tx_bytes = tx_bytes
         self.rx_bytes = rx_bytes
 
@@ -360,7 +360,7 @@ class AsyncReduceHandle:
         info: ffi.CData = ffi.new('pcclReduceInfo_t*')
         status = C.pcclAwaitAsyncReduce(self._handle, info)
         is_success: bool = status == Result.SUCCESS.value
-        self._info = (is_success, status, ReduceInfo(info.world_size, info.tx_bytes, info.rx_bytes))
+        self._info = (is_success, status, ReduceInfo(info.local_world_size, info.tx_bytes, info.rx_bytes))
         return self._info
 
 
@@ -519,7 +519,7 @@ class Communicator:
             C.pcclAllReduce(sendbuff, recvbuff, descriptor, self._comm[0], info),
             "pcclAllReduce"
         )
-        return ReduceInfo(info.world_size, info.tx_bytes, info.rx_bytes)
+        return ReduceInfo(info.local_world_size, info.tx_bytes, info.rx_bytes)
 
     def _all_reduce_np(self, send: 'np.ndarray', recv: 'np.ndarray', *, op: ReduceOp, tag: int,
                        operand_descriptor: Optional[ReduceOperandDescriptor],
@@ -560,7 +560,7 @@ class Communicator:
             C.pcclAllReduce(sendbuff, recvbuff, descriptor, self._comm[0], info),
             "pcclAllReduce"
         )
-        return ReduceInfo(info.world_size, info.tx_bytes, info.rx_bytes)
+        return ReduceInfo(info.local_world_size, info.tx_bytes, info.rx_bytes)
 
     def all_reduce_async(self, send: Union['torch.Tensor', 'np.ndarray'], recv: Union['torch.Tensor', 'np.ndarray'], *,
                          op: ReduceOp, tag: int = 0,

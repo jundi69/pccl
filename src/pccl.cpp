@@ -301,7 +301,7 @@ pcclResult_t pcclAwaitAsyncReduce(const pcclAsyncReduceOp_t *reduce_handle,
             return pcclInternalError;
         }
 
-        reduce_info_out->world_size = info->world_size;
+        reduce_info_out->local_world_size = info->world_size;
         reduce_info_out->tx_bytes = info->tx_bytes;
         reduce_info_out->rx_bytes = info->rx_bytes;
     }

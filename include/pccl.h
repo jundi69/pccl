@@ -92,7 +92,8 @@ typedef struct pcclComm_t pcclComm_t;
 typedef struct pcclRankInfo_t pcclRankInfo_t;
 
 typedef struct pcclReduceInfo_t {
-    uint32_t world_size;
+    /// The world size used for the reduce operation. Is equal to the number of peers that participated in the operation if completed successfully.
+    uint32_t local_world_size;
     uint64_t tx_bytes;
     uint64_t rx_bytes;
 } pcclReduceInfo_t;
