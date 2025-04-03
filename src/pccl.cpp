@@ -253,10 +253,18 @@ pcclResult_t pcclAllReduceAsync(const void *sendbuff, void *recvbuff,
     if (!ccoip_op) {
         return pcclInvalidArgument;
     }
+
+    int local_world_size{};
+    PCCL_ERR_PROPAGATE(pcclGetAttribute(communicator, PCCL_ATTRIBUTE_PEER_GROUP_WORLD_SIZE, &local_world_size));
+
+    if (local_world_size < 2) {
+        return pcclTooFewPeers;
+    }
+
     if (!communicator->ccoip_client->allReduceAsync(sendbuff, recvbuff, count, *ccoip_data_type,
                                                     *ccoip_quantized_data_type,
                                                     *ccoip_quantization_algorithm, *ccoip_op, tag)) {
-        return pcclInvalidUsage;
+        return pcclRankConnectionLost;
     }
 
     *reduce_handle_out = pcclAsyncReduceOp_t{

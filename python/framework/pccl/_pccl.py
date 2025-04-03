@@ -43,13 +43,10 @@ class Result(Enum):
     """PCCL result codes."""
     SUCCESS = C.pcclSuccess
     NOT_INITIALIZED = C.pcclNotInitialized
-    SYSTEM_ERROR = C.pcclSystemError
     INTERNAL_ERROR = C.pcclInternalError
     INVALID_ARGUMENT = C.pcclInvalidArgument
     INVALID_USAGE = C.pcclInvalidUsage
-    REMOTE_ERROR = C.pcclRemoteError
-    IN_PROGRESS = C.pcclInProgress
-    NUM_RESULTS = C.pcclNumResults
+    TOO_FEW_PEERS = C.pcclTooFewPeers
     MASTER_CONNECTION_FAILED = C.pcclMasterConnectionFailed
     RANK_CONNECTION_FAILED = C.pcclRankConnectionFailed
     RANK_CONNECTION_LOST = C.pcclRankConnectionLost
