@@ -160,9 +160,10 @@ def main():
                 try:
                     logging.info(f"(RANK={RANK}, it={it}) update_topology()")
                     peers_pending = communicator.are_peers_pending()
-                    if peers_pending and reduce_thread is not None:
-                        logging.info("(RANK={RANK}) Waiting for reduce_thread to finish before updating topology...")
-                        reduce_thread.join()
+                    if peers_pending:
+                        if reduce_thread is not None:
+                            logging.info("(RANK={RANK}) Waiting for reduce_thread to finish before updating topology...")
+                            reduce_thread.join()
                         communicator.update_topology()
                         topology_updated = True
                     break
