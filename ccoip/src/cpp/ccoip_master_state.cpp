@@ -1661,6 +1661,16 @@ bool ccoip::CCoIPMasterState::setRingTopology(const uint32_t peer_group,
     return setRingTopologyUnsafe(peer_group, new_topology, optimal);
 }
 
-uint64_t ccoip::CCoIPMasterState::getGlobalWorldSize() {
+uint64_t ccoip::CCoIPMasterState::getGlobalWorldSize() const {
     return client_info.size();
+}
+
+uint64_t ccoip::CCoIPMasterState::getLocalWorldSize(const uint32_t peer_group) const {
+    uint64_t world_size = 0;
+    for (const auto &[_, info]: client_info) {
+        if (info.peer_group == peer_group) {
+            world_size++;
+        }
+    }
+    return world_size;
 }

@@ -1342,6 +1342,7 @@ void ccoip::CCoIPMasterHandler::sendP2PConnectionInformation(const bool changed,
     M2CPacketP2PConnectionInfo new_peers{};
     new_peers.unchanged = !changed;
     new_peers.global_world_size = server_state.getGlobalWorldSize();
+    new_peers.local_world_size = server_state.getLocalWorldSize(peer_info.peer_group);
 
     const auto peer_address = peer_info.socket_address;
 

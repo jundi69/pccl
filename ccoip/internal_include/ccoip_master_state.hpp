@@ -719,7 +719,10 @@ namespace ccoip {
         [[nodiscard]] bool setRingTopology(uint32_t peer_group, const std::vector<ccoip_uuid_t> &new_topology, bool optimal);
 
         /// Returns the global world size, which is the total number of clients in the session
-        [[nodiscard]] uint64_t getGlobalWorldSize();
+        [[nodiscard]] uint64_t getGlobalWorldSize() const;
+
+        /// Returns the local world size for the specified peer group
+        [[nodiscard]] uint64_t getLocalWorldSize(uint32_t peer_group) const;
 
         /// Returns true if there is any peer that has not yet been accepted into the run, aka has pending state.
         [[nodiscard]] bool hasPendingPeers();

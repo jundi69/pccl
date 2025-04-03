@@ -198,6 +198,7 @@ static void writeSocketAddress(PacketWriteBuffer &buffer, const ccoip_socket_add
 void ccoip::M2CPacketP2PConnectionInfo::serialize(PacketWriteBuffer &buffer) const {
     buffer.write<boolean>(unchanged);
     buffer.write<uint64_t>(global_world_size);
+    buffer.write<uint64_t>(local_world_size);
     if (unchanged) {
         return;
     }
@@ -230,6 +231,7 @@ static ccoip_socket_address_t readSocketAddress(PacketReadBuffer &buffer) {
 bool ccoip::M2CPacketP2PConnectionInfo::deserialize(PacketReadBuffer &buffer) {
     unchanged = buffer.read<boolean>();
     global_world_size = buffer.read<uint64_t>();
+    local_world_size = buffer.read<uint64_t>();
     if (unchanged) {
         return true;
     }

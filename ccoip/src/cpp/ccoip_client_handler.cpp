@@ -782,7 +782,7 @@ ccoip::CCoIPClientHandler::EstablishP2PConnectionResult ccoip::CCoIPClientHandle
     bool all_peers_connected = true;
     std::vector<ccoip_uuid_t> failed_peers{};
     client_state.setGlobalWorldSize(connection_info_packet.global_world_size);
-    client_state.setLocalWorldSize(connection_info_packet.all_peers.size());
+    client_state.setLocalWorldSize(connection_info_packet.local_world_size);
 
     if (!connection_info_packet.unchanged) {
         LOG(DEBUG) << "New peers list has changed";
