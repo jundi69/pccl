@@ -3,6 +3,7 @@
 #include <optional>
 #include <ccoip_master.hpp>
 #include <pccl_log.hpp>
+#include <unordered_set>
 
 static constinit bool pccl_initialized = false;
 
@@ -264,7 +265,7 @@ pcclResult_t pcclAllReduceAsync(const void *sendbuff, void *recvbuff,
     if (!communicator->ccoip_client->allReduceAsync(sendbuff, recvbuff, count, *ccoip_data_type,
                                                     *ccoip_quantized_data_type,
                                                     *ccoip_quantization_algorithm, *ccoip_op, tag)) {
-        return pcclRankConnectionLost;
+        return pcclInvalidArgument;
     }
 
     *reduce_handle_out = pcclAsyncReduceOp_t{
@@ -296,7 +297,7 @@ pcclResult_t pcclAwaitAsyncReduce(const pcclAsyncReduceOp_t *reduce_handle,
     PCCL_VALIDATE(reduce_handle->comm->ccoip_client != nullptr, pcclInvalidUsage);
 
     if (!reduce_handle->comm->ccoip_client->joinAsyncReduce(reduce_handle->tag)) {
-        return pcclInvalidUsage;
+        return pcclRankConnectionLost;
     }
 
     if (reduce_info_out != nullptr) {
@@ -312,6 +313,157 @@ pcclResult_t pcclAwaitAsyncReduce(const pcclAsyncReduceOp_t *reduce_handle,
         reduce_info_out->local_world_size = info->world_size;
         reduce_info_out->tx_bytes = info->tx_bytes;
         reduce_info_out->rx_bytes = info->rx_bytes;
+    }
+
+    return pcclSuccess;
+}
+
+
+pcclResult_t pcclAllReduceMultipleWithRetry(const pcclReduceOpDescriptor_t *descriptors, const size_t count,
+                                            const pcclComm_t *communicator,
+                                            pcclReduceInfo_t *PCCL_NULLABLE reduce_info_out,
+                                            const int max_in_flight) {
+    PCCL_VALIDATE_INITIALIZED();
+
+    PCCL_VALIDATE(descriptors != nullptr, pcclInvalidArgument);
+    PCCL_VALIDATE(count > 0, pcclInvalidArgument);
+    PCCL_VALIDATE(communicator != nullptr, pcclInvalidArgument);
+    PCCL_VALIDATE(communicator->ccoip_client != nullptr, pcclInvalidUsage);
+    PCCL_VALIDATE(max_in_flight > 0, pcclInvalidArgument);
+
+    int local_world_size{};
+    if (pcclGetAttribute(communicator, PCCL_ATTRIBUTE_PEER_GROUP_WORLD_SIZE, &local_world_size) != pcclSuccess) {
+        return pcclInvalidUsage;
+    }
+
+    if (local_world_size < 2) {
+        return pcclTooFewPeers;
+    }
+
+    size_t total_tx = 0;
+    size_t total_rx = 0;
+
+    uint32_t in_flight = 0;
+
+    std::vector<std::optional<pcclAsyncReduceOp_t>> reduce_handles{};
+    reduce_handles.resize(count);
+
+    // launch as many async all reduce operations up-front
+    // as possible, up to the max_in_flight limit
+    for (size_t i = 0; i < count; ++i) {
+        const pcclReduceOpDescriptor_t &op_descriptor = descriptors[i];
+
+        pcclAsyncReduceOp_t handle{};
+        PCCL_ERR_PROPAGATE(pcclAllReduceAsync(
+            op_descriptor.recvbuf,
+            op_descriptor.recvbuf,
+            &op_descriptor.descriptor,
+            communicator,
+            &handle
+        ));
+        reduce_handles[i] = handle;
+
+        in_flight++;
+
+        if (in_flight >= static_cast<uint32_t>(max_in_flight)) {
+            break;
+        }
+    }
+
+    // stores all indices of completed reduce operations
+    // in range [0, count)
+    std::unordered_set<size_t> completed_ops{};
+
+    while (local_world_size > 1) {
+        bool all_done = true;
+        for (size_t i = 0; i < count; ++i) {
+            const auto &reduce_handle_opt = reduce_handles[i];
+            if (reduce_handle_opt == std::nullopt) {
+                // no reduce handle exists for this operation yet,
+                // so it needs to be launched.
+                if (completed_ops.contains(i)) {
+                    continue;
+                }
+                // the reduce handle is not yet completed
+                if (in_flight >= static_cast<uint32_t>(max_in_flight)) {
+                    continue;
+                }
+
+                const pcclReduceOpDescriptor_t &op_descriptor = descriptors[i];
+
+                pcclAsyncReduceOp_t handle{};
+                PCCL_ERR_PROPAGATE(pcclAllReduceAsync(
+                    op_descriptor.recvbuf,
+                    op_descriptor.recvbuf,
+                    &op_descriptor.descriptor,
+                    communicator,
+                    &handle
+                ));
+                reduce_handles[i] = handle;
+
+                in_flight++;
+            }
+
+            const auto &reduce_handle = reduce_handle_opt.value();
+
+            pcclReduceInfo_t reduce_info{};
+            const pcclResult_t reduce_status = pcclAwaitAsyncReduce(&reduce_handle, &reduce_info);
+            PCCL_ERR_PROPAGATE(pcclGetAttribute(communicator, PCCL_ATTRIBUTE_PEER_GROUP_WORLD_SIZE, &local_world_size));
+
+            if (reduce_status != pcclSuccess) {
+                reduce_handles[i] = std::nullopt;
+
+                // Wait for all ongoing ops to finish or fail before retry
+                for (size_t j = 0; j < count; ++j) {
+                    if (j == i) {
+                        continue;
+                    }
+                    const auto &h_j = reduce_handles[j];
+                    if (h_j != std::nullopt) {
+                        const pcclResult_t s_j = pcclAwaitAsyncReduce(&h_j.value(), nullptr);
+                        if (s_j == pcclSuccess) {
+                            completed_ops.insert(j);
+                        }
+                        in_flight--;
+                    }
+                    reduce_handles[i] = std::nullopt;
+                }
+
+                // some async operation failed, we are not done yet
+                all_done = false;
+            }
+
+            // success for this handle
+            reduce_handles[i] = std::nullopt;
+            completed_ops.insert(i);
+
+            total_tx += reduce_info.tx_bytes;
+            total_rx += reduce_info.rx_bytes;
+
+            in_flight--;
+        }
+        if (all_done) {
+            break;
+        }
+    }
+
+    if (reduce_info_out != nullptr) {
+        *reduce_info_out = pcclReduceInfo_t{
+            .local_world_size = static_cast<uint32_t>(local_world_size),
+            .tx_bytes = total_tx,
+            .rx_bytes = total_rx,
+        };
+    }
+
+    if (local_world_size == 1) {
+        // if we are alone, just finalize all handles and return
+        for (size_t i = 0; i < count; ++i) {
+            const auto &reduce_handle_opt = reduce_handles[i];
+            if (reduce_handle_opt != std::nullopt) {
+                pcclAwaitAsyncReduce(&reduce_handle_opt.value(), nullptr); // don't care about status
+            }
+        }
+        return pcclTooFewPeers;
     }
 
     return pcclSuccess;

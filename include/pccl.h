@@ -124,6 +124,12 @@ typedef struct pcclReduceDescriptor_t {
     pcclQuantizationOptions_t quantization_options;
 } pcclReduceDescriptor_t;
 
+typedef struct pcclReduceSingleDescriptor_t {
+    void *sendbuf;
+    void *recvbuf;
+    pcclReduceDescriptor_t descriptor;
+} pcclReduceOpDescriptor_t;
+
 typedef struct pcclAsyncReduceOp_t {
     pcclComm_t *comm;
     uint64_t tag;
@@ -306,6 +312,31 @@ PCCL_EXPORT pcclResult_t pcclAllReduceAsync(const void *sendbuff, void *recvbuff
                                             const pcclComm_t *communicator,
                                             pcclAsyncReduceOp_t *reduce_handle_out);
 
+
+/**
+ * Performs multiple all reduces concurrently.
+ * If any of the all reduce operations fail, the function will await all outstanding operations and retry the failed ones.
+ * The function will not complete until all operations have completed successfully or the local world size has dropped below 2.
+ *
+ * @note Different reduce operations may have been performed with different local world sizes if peers dropped out during the operation.
+ * The local world size populated in the reduce info will be the local world size after all operations have completed. No veracity guarantees are made about this value beyond for heuristic usage.
+ *
+ * @param descriptors the array of descriptors describing all reduce operations to perform. Each descriptor contains the send and receive buffers, the count, the operation type, and the tag.
+ * @param count the number of descriptors in the array. This is the number of all reduce operations to perform.
+ * @param communicator the communicator to perform the all reduce operations on.
+ * @param reduce_info_out the reduce info to be filled with information about the operation.
+ * @param max_in_flight the maximum number of all reduce operations to perform concurrently. This is the maximum number of all reduce operations that can be in flight at any given time. It is expected that the actual number of in-flight operations will be less than this value.
+ * @return @code pcclSuccess@endcode if all reduce operations were successful.
+ * @return @code pcclInvalidArgument@endcode if the descriptors array is null, the count is less than or equal to zero, the communicator is null, or the max_in_flight is less than or equal to zero.
+ * @return @code pcclNotInitialized@endcode if @code pcclInit@endcode has not been called yet.
+ * @return @code pcclInvalidUsage@endcode if the communicator is not connected to a master node.
+ */
+PCCL_EXPORT pcclResult_t pcclAllReduceMultipleWithRetry(const pcclReduceOpDescriptor_t *descriptors,
+                                                        size_t count,
+                                                        const pcclComm_t *communicator,
+                                                        pcclReduceInfo_t *PCCL_NULLABLE reduce_info_out,
+                                                        int max_in_flight);
+
 /**
  * Awaits the completion of an async reduce operation. Blocks until the operation is complete.
  *
@@ -314,6 +345,7 @@ PCCL_EXPORT pcclResult_t pcclAllReduceAsync(const void *sendbuff, void *recvbuff
  *
  * @return @code pcclSuccess@endcode if the async reduce operation was successful.
  * @return @code pcclInvalidArgument@endcode if the reduce handle is null or invalid.
+*  @return @code pcclRankConnectionLost@endcode if the connection to a peer was lost during the operation either gracefully or due to a network error.
  */
 PCCL_EXPORT pcclResult_t pcclAwaitAsyncReduce(const pcclAsyncReduceOp_t *reduce_handle,
                                               pcclReduceInfo_t *PCCL_NULLABLE reduce_info_out);

@@ -1116,7 +1116,7 @@ bool ccoip::CCoIPClientHandler::allReduceAsync(const void *sendbuff, void *recvb
     // NOTE: intentionally no thread guard here!
 
     if (client_state.isCollectiveComsOpRunning(tag)) {
-        // can't start a new collective coms op while one is already running
+        // tag is already in use
         return false;
     }
 

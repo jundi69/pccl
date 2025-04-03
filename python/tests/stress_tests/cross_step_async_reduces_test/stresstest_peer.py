@@ -4,7 +4,8 @@ import os
 import logging
 import torch
 from pccl import SharedState, TensorInfo, Communicator, Attribute, ReduceOp, QuantizationOptions, DataType, \
-    QuantizationAlgorithm, PCCLError, ReduceOperandDescriptor, DistributionHint, AsyncReduceHandle
+    QuantizationAlgorithm, PCCLError, ReduceOperandDescriptor, DistributionHint, AsyncReduceHandle, ReduceOpDescriptor, \
+    ReduceDescriptor
 from typing_extensions import Optional, List
 
 HOST: str = '127.0.0.1:48148'
@@ -212,7 +213,30 @@ def main():
         gradients = [torch.randn(128, 128, dtype=torch.float32) for _ in range(10)]
 
         def reduce_thread_fn():
-            all_reduce_multiple_with_retry(communicator, gradients, ReduceOp.SUM, max_in_flight=8)
+            descriptors = []
+            tag = 0
+            for grad in gradients:
+                reduce_op_descriptor = ReduceOpDescriptor.from_torch(
+                    send=grad,
+                    recv=grad,
+                    reduce_descriptor=ReduceDescriptor(
+                        count=grad.numel(),
+                        op=ReduceOp.SUM,
+                        tag=tag,
+                        operand_descriptor=ReduceOperandDescriptor(
+                            datatype=DataType.FLOAT,
+                            distribution_hint=DistributionHint.NORMAL
+                        ),
+                        quantization_options=QuantizationOptions(
+                            quantized_datatype=DataType.UINT8,
+                            algorithm=QuantizationAlgorithm.MIN_MAX
+                        )
+                    )
+                )
+                descriptors.append(reduce_op_descriptor)
+                tag += 1
+
+            communicator.all_reduce_multiple_with_retry(descriptors, max_in_flight=8)
 
         if reduce_thread is not None:
             reduce_thread.join()

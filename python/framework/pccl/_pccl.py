@@ -1,4 +1,4 @@
-from typing import Union, Optional, Tuple, Dict
+from typing import Union, Optional, Tuple, Dict, List
 import time
 from ipaddress import ip_address, IPv4Address, IPv6Address
 from enum import Enum
@@ -76,6 +76,7 @@ class PCCLError(Exception):
 # Init PCCL
 PCCLError.check(C.pcclInit(), "pcclInit")
 
+
 # Get PCCL build info
 
 def __get_build_info() -> Dict[str, any]:
@@ -85,8 +86,10 @@ def __get_build_info() -> Dict[str, any]:
         'has_cuda_support': build_info.has_cuda_support
     }
 
+
 _build_info = __get_build_info()
 pccl._cuda.is_cuda_available = _build_info['has_cuda_support']
+
 
 class ReduceOp(Enum):
     """PCCL reduction operations."""
@@ -259,6 +262,56 @@ class ReduceDescriptor:
         return c_desc
 
 
+class ReduceOpDescriptor:
+
+    def __init__(self, sendbuf_ptr, recvbuf_ptr, reduce_descriptor: ReduceDescriptor):
+        self.sendbuf_ptr = sendbuf_ptr
+        self.recvbuf_ptr = recvbuf_ptr
+        self.reduce_descriptor = reduce_descriptor
+
+    @staticmethod
+    def from_torch(send: 'torch.Tensor', recv: 'torch.Tensor', reduce_descriptor: ReduceDescriptor):
+        assert send.is_contiguous(), 'Input tensor must be contiguous'
+        assert recv.is_contiguous(), 'Output tensor must be contiguous'
+        assert send.device == recv.device, 'Input and output tensors must be on the same device'
+        assert send.dtype == recv.dtype, 'Input and output tensors must have the same dtype'
+        assert send.device.type == 'cpu', 'Only CPU tensors are supported'
+        assert send.numel() == recv.numel(), 'Input and output tensors must have the same number of elements'
+        return ReduceOpDescriptor(
+            send.data_ptr(),
+            recv.data_ptr(),
+            reduce_descriptor
+        )
+
+    @staticmethod
+    def from_numpy(send: 'np.ndarray', recv: 'np.ndarray', reduce_descriptor: ReduceDescriptor):
+        assert send.flags['C_CONTIGUOUS'], 'Input tensor must be contiguous'
+        assert recv.flags['C_CONTIGUOUS'], 'Output tensor must be contiguous'
+        assert send.dtype == recv.dtype, 'Input and output tensors must have the same dtype'
+        assert send.size == recv.size, 'Input and output tensors must have the same number of elements'
+        return ReduceOpDescriptor(
+            send.ctypes.data,
+            recv.ctypes.data,
+            reduce_descriptor
+        )
+
+    def to_c_inpl(self, c_desc):
+        c_desc.sendbuf = ffi.cast('void*', self.sendbuf_ptr)
+        c_desc.recvbuf = ffi.cast('void*', self.recvbuf_ptr)
+        c_desc.descriptor.count = self.reduce_descriptor.count
+        c_desc.descriptor.op = self.reduce_descriptor.op.value
+        c_desc.descriptor.tag = self.reduce_descriptor.tag
+        c_desc.descriptor.src_descriptor.datatype = self.reduce_descriptor.operand_descriptor.datatype.value
+        c_desc.descriptor.src_descriptor.distribution_hint = self.reduce_descriptor.operand_descriptor.distribution_hint.value
+        c_desc.descriptor.quantization_options.quantized_datatype = self.reduce_descriptor.quantization_options.quantized_datatype.value
+        c_desc.descriptor.quantization_options.algorithm = self.reduce_descriptor.quantization_options.algorithm.value
+
+    def to_c(self):
+        c_desc = ffi.new("pcclReduceOpDescriptor_t*")
+        self.to_c_inpl(c_desc)
+        return c_desc
+
+
 # Define TensorInfo and SharedState Classes
 class TensorInfo:
     def __init__(self, name: str, data_ptr: int, *, numel: int, dtype: DataType, device_type: DeviceType,
@@ -292,7 +345,8 @@ class TensorInfo:
         numel: int = tensor.size
         data_ptr: int = tensor.ctypes.data
         dtype: DataType = DataType.from_numpy_dtype(tensor.dtype)
-        return cls(name, data_ptr, numel=numel, dtype=dtype, allow_content_inequality=allow_content_inequality, device_type=DeviceType.CPU)
+        return cls(name, data_ptr, numel=numel, dtype=dtype, allow_content_inequality=allow_content_inequality,
+                   device_type=DeviceType.CPU)
 
 
 class SharedState:
@@ -438,7 +492,6 @@ class Communicator:
         pending = ffi.new('bool*')
         PCCLError.check(C.pcclArePeersPending(self._comm[0], pending), "pcclArePeersPending")
         return pending[0]
-
 
     def optimize_topology(self):
         """
@@ -658,6 +711,26 @@ class Communicator:
             "pcclAllReduceAsync"
         )
         return AsyncReduceHandle(handle)
+
+    def all_reduce_multiple_with_retry(self, descriptors: List[ReduceOpDescriptor], *,
+                                       max_in_flight: int = 4) -> ReduceInfo:
+        """
+        Performs multiple all reduces concurrently.
+        If any of the all reduce operations fail, the function will await all outstanding operations and retry the failed ones.
+        The function will not complete until all operations have completed successfully or the local world size has dropped below 2.
+        @note Different reduce operations may have been performed with different local world sizes if peers dropped out during the operation.
+        The local world size populated in the reduce info will be the local world size after all operations have completed. No veracity guarantees are made about this value beyond for heuristic usage.
+        """
+        descriptors_c = ffi.new('pcclReduceOpDescriptor_t[]', len(descriptors))
+        for i, desc in enumerate(descriptors):
+            desc.to_c_inpl(descriptors_c[i])
+
+        info: ffi.CData = ffi.new('pcclReduceInfo_t*')
+        PCCLError.check(
+            C.pcclAllReduceMultipleWithRetry(descriptors_c, len(descriptors), self._comm[0], info, max_in_flight),
+            "pcclAllReduceMultipleWithRetry"
+        )
+        return ReduceInfo(info.local_world_size, info.tx_bytes, info.rx_bytes)
 
 
 class MasterNode:

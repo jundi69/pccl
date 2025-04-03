@@ -6,6 +6,8 @@ from pccl import SharedState, TensorInfo, Communicator, Attribute, ReduceOp, Qua
     QuantizationAlgorithm, PCCLError, ReduceOperandDescriptor, DistributionHint, AsyncReduceHandle
 from typing_extensions import Optional, List
 
+from python.framework.pccl._pccl import ReduceOpDescriptor, ReduceDescriptor
+
 HOST: str = '127.0.0.1:48148'
 STEPS: int = 1000
 PEERS: int = 1
@@ -205,7 +207,31 @@ def main():
 
         # Create fake gradients
         gradients = [torch.randn(128, 128, dtype=torch.float32) for _ in range(10)]
-        all_reduce_multiple_with_retry(communicator, gradients, ReduceOp.SUM, max_in_flight=8)
+
+        descriptors = []
+        tag = 0
+        for grad in gradients:
+            reduce_op_descriptor = ReduceOpDescriptor.from_torch(
+                send=grad,
+                recv=grad,
+                reduce_descriptor=ReduceDescriptor(
+                    count=grad.numel(),
+                    op=ReduceOp.SUM,
+                    tag=tag,
+                    operand_descriptor=ReduceOperandDescriptor(
+                        datatype=DataType.FLOAT,
+                        distribution_hint=DistributionHint.NORMAL
+                    ),
+                    quantization_options=QuantizationOptions(
+                        quantized_datatype=DataType.UINT8,
+                        algorithm=QuantizationAlgorithm.MIN_MAX
+                    )
+                )
+            )
+            descriptors.append(reduce_op_descriptor)
+            tag += 1
+
+        communicator.all_reduce_multiple_with_retry(descriptors, max_in_flight=8)
         if world_size == 1:
             # drop current step, as we are alone in the run and whatever we just computed would induce too much noise if we stepped here.
             # If one accepts the pattern that one waits until the world size is at least two, it would be erroneous to step here.
