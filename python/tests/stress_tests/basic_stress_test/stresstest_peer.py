@@ -124,6 +124,7 @@ def all_reduce_multiple_with_retry(communicator: Communicator,
 
     return True
 
+
 def main():
     logging.info(f"(RANK={RANK}) Starting peer node connecting to {HOST}")
 
@@ -134,6 +135,7 @@ def main():
     shared_state: SharedState = SharedState([
         TensorInfo.from_torch(weights, 'weights')
     ])
+    shared_state.revision = 0
 
     # Create a communicator and connect to the master node
     communicator: Communicator = Communicator(HOST, 0)
@@ -197,6 +199,7 @@ def main():
         if topology_updated:
             logging.info(f"(RANK={RANK}, it={it}) sync_shared_state()")
             info = communicator.sync_shared_state(shared_state)
+            shared_state.revision += 1
             assert info is not None
             print(f"(RANK={RANK}, it={it}) tx_bytes={info.tx_bytes}, rx_bytes={info.rx_bytes}")
 
@@ -208,10 +211,8 @@ def main():
             # If one accepts the pattern that one waits until the world size is at least two, it would be erroneous to step here.
             print(
                 "All peers have left except this peer. Dropping current step to avoid inducing too much variance with our local batch!")
-            shared_state.revision += 1
             continue
 
-        shared_state.revision += 1
         n_performed_steps += 1
         it += 1
 

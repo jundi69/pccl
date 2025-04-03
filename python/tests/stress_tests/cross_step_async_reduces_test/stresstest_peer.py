@@ -136,6 +136,7 @@ def main():
     shared_state: SharedState = SharedState([
         TensorInfo.from_torch(weights, 'weights')
     ])
+    shared_state.revision = 0
 
     # Create a communicator and connect to the master node
     communicator: Communicator = Communicator(HOST, 0)
@@ -202,6 +203,7 @@ def main():
         if topology_updated:
             logging.info(f"(RANK={RANK}, it={it}) sync_shared_state()")
             info = communicator.sync_shared_state(shared_state)
+            shared_state.revision += 1
             assert info is not None
             print(f"(RANK={RANK}, it={it}) tx_bytes={info.tx_bytes}, rx_bytes={info.rx_bytes}")
 
@@ -217,7 +219,6 @@ def main():
         reduce_thread = threading.Thread(target=reduce_thread_fn, name="ReduceThread")
         reduce_thread.start()
 
-        shared_state.revision += 1
         n_performed_steps += 1
         it += 1
 
