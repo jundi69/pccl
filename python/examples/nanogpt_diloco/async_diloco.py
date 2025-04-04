@@ -26,7 +26,7 @@ from pccl import (
     QuantizationAlgorithm,
     ReduceOp,
     ReduceOperandDescriptor,
-    PCCLError
+    PCCLError, ReduceOpDescriptor, ReduceDescriptor
 )
 from typing_extensions import Optional
 
@@ -34,119 +34,37 @@ from model import GPTConfig, GPT
 from python.examples.nanogptddp.profiler import Profiler, ProfilerCollection
 
 
-def compute_crc32(tensor: torch.Tensor) -> int:
-    tensor_cpu = tensor.detach().cpu()
-    tensor_contiguous = tensor_cpu.contiguous()
-    tensor_np = tensor_contiguous.numpy()
-    tensor_bytes = tensor_np.tobytes()
-    return zlib.crc32(tensor_bytes)
-
-
 def all_reduce_multiple_with_retry(communicator: Communicator,
                                    tensors: list[torch.Tensor],
                                    op: ReduceOp,
                                    max_in_flight: int = 16):
-    """
-    Launches concurrent all-reduce operations on a list of tensors,
-    waits for them all, and retries if a peer fails or the world size changes.
-    """
-    world_size = communicator.get_attribute(Attribute.GLOBAL_WORLD_SIZE)
-
-    total_tx = 0
-    total_rx = 0
-
-    def launch_all_reduce(x: torch.Tensor, tag: int):
-        op_desc = ReduceOperandDescriptor(
-            datatype=DataType.FLOAT,
-            distribution_hint=DistributionHint.NORMAL
-        )
-        # Example uses min-max quantization to demonstrate concurrency
-        quant_desc = QuantizationOptions(
-            quantized_datatype=DataType.FLOAT,
-            algorithm=QuantizationAlgorithm.NONE
-        )
-        return communicator.all_reduce_async(
-            x, x,
-            operand_descriptor=op_desc,
-            quantization_options=quant_desc,
-            op=op,
-            tag=tag
-        )
-
-    handles = [None for _ in range(len(tensors))]
-    done_handles = set()
-
-    in_flight = 0
-    for tensor_index in range(len(tensors)):
-        dst_tensor = tensors[tensor_index]
-
-        if in_flight >= max_in_flight:
-            break
-
-        handles[tensor_index] = launch_all_reduce(
-            dst_tensor,
-            tensor_index
-        )
-        in_flight += 1
-
-    while world_size > 1:
-        all_done = True
-        for tensor_index in range(len(tensors)):
-            handle = handles[tensor_index]
-            dst_tensor = tensors[tensor_index]
-
-            if handle is None:
-                if tensor_index in done_handles:
-                    continue
-
-                if in_flight >= max_in_flight:
-                    continue
-
-                handle = handles[tensor_index] = launch_all_reduce(
-                    dst_tensor,
-                    tensor_index
+    descriptors = []
+    tag = 0
+    for tensor in tensors:
+        reduce_op_descriptor = ReduceOpDescriptor.from_torch(
+            send=tensor,
+            recv=tensor,
+            reduce_descriptor=ReduceDescriptor(
+                count=tensor.numel(),
+                op=op,
+                tag=tag,
+                operand_descriptor=ReduceOperandDescriptor(
+                    datatype=DataType.FLOAT,
+                    distribution_hint=DistributionHint.NORMAL
+                ),
+                quantization_options=QuantizationOptions(
+                    quantized_datatype=DataType.UINT8,
+                    algorithm=QuantizationAlgorithm.MIN_MAX
                 )
-                in_flight += 1
-
-            is_success, status, info = handle.wait()
-            world_size = communicator.get_attribute(Attribute.GLOBAL_WORLD_SIZE)
-            if not is_success:
-                handles[tensor_index] = None
-                # Wait for all ongoing ops to finish or fail before retry
-                for j in range(len(tensors)):
-                    if j == tensor_index:
-                        continue
-                    h_j = handles[j]
-                    if h_j is not None:
-                        s_j, _, _ = h_j.wait()
-                        if s_j:
-                            done_handles.add(j)
-                        in_flight -= 1
-                    handles[j] = None
-                all_done = False
-                break
-
-            # success for this handle
-            handles[tensor_index] = None
-            done_handles.add(tensor_index)
-
-            total_tx += info.tx_bytes
-            total_rx += info.rx_bytes
-
-            in_flight -= 1
-
-        if all_done:
-            break
-
-    if world_size == 1:
-        # If we are alone, just finalize all handles and return
-        for h in handles:
-            if h is not None:
-                h.wait()
-        return False, total_tx, total_rx
-
-    return True, total_tx, total_rx
-
+            )
+        )
+        descriptors.append(reduce_op_descriptor)
+        tag += 1
+    try:
+        info = communicator.all_reduce_multiple_with_retry(descriptors, max_in_flight=max_in_flight)
+        return True, info.tx_bytes, info.rx_bytes
+    except PCCLError:
+        return False, 0, 0
 
 def get_batch(split, config, device_type, device, train: bool):
     """
@@ -615,7 +533,7 @@ def main():
                 outer_grads.append(pseudo_grad)
 
             if can_outer_step:
-                outer_optimizer.step() # Note that there is no zero-grad because grads get re-instantiated every step
+                outer_optimizer.step()  # Note that there is no zero-grad because grads get re-instantiated every step
 
                 # (d) Copy aggregator result into local model
                 with torch.no_grad():
@@ -637,7 +555,8 @@ def main():
                     # The pre-existing peers first apply the outer optimizer and THEN call run_shared_state_sync
                     # because the new peer(s) need to obtain the shared state as it is after the all reduce
                     # is applied that they were not part of.
-                    print("Topology updated mid run; re-running shared state synchronization to properly insert new peer...")
+                    print(
+                        "Topology updated mid run; re-running shared state synchronization to properly insert new peer...")
                     run_shared_state_sync()
             else:
                 if topology_updated and iter_num > 0:
@@ -691,13 +610,12 @@ def main():
             # NOTE: no zero-grad on outer grads, as they continue to get referenced by this thread.
             all_reduce_thread.start()
 
-
         # 7) Some logging / housekeeping
         t1 = time.time()
         dt = t1 - t0
 
         # We'll do the MFU calculation for reference
-        tokens_this_iter = config["batch_size"] * config["gradient_accumulation_steps"]
+        tokens_this_iter = config["batch_size"] * config["gradient_accumulation_steps"] * config["inner_steps"] * config["block_size"]
         raw_model.eval()  # to call estimate_mfu
         mfu = raw_model.estimate_mfu(tokens_this_iter, dt)
         raw_model.train()

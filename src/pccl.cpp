@@ -283,8 +283,8 @@ pcclResult_t pcclAllReduce(const void *sendbuff, void *recvbuff,
     PCCL_VALIDATE(communicator != nullptr, pcclInvalidArgument);
     PCCL_VALIDATE(communicator->ccoip_client != nullptr, pcclInvalidUsage);
     pcclAsyncReduceOp_t reduce_handle{};
-    pcclAllReduceAsync(sendbuff, recvbuff, descriptor, communicator, &reduce_handle);
-    PCCL_VALIDATE(pcclAwaitAsyncReduce(&reduce_handle, reduce_info_out), pcclInvalidUsage);
+    PCCL_ERR_PROPAGATE(pcclAllReduceAsync(sendbuff, recvbuff, descriptor, communicator, &reduce_handle));
+    PCCL_ERR_PROPAGATE(pcclAwaitAsyncReduce(&reduce_handle, reduce_info_out));
     return pcclSuccess;
 }
 

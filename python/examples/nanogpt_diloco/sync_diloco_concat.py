@@ -27,6 +27,7 @@ from pccl import (
     ReduceOperandDescriptor,
     PCCLError, ReduceDescriptor
 )
+from triton.language import reduce
 
 from model import GPTConfig, GPT
 from python.examples.nanogptddp.profiler import Profiler, ProfilerCollection
@@ -141,7 +142,6 @@ def get_lr(it, config):
 
 
 EXPORT_PROFILER_VIDEO = False
-
 
 def main():
     parser = argparse.ArgumentParser()
@@ -305,10 +305,21 @@ def main():
 
     raw_model = model.module if ddp else model
 
+    # Allocate contiguous tensor for outer parameters
+    num_elements = sum(p.numel() for p in raw_model.parameters())
+    param_data_tensor = torch.zeros((num_elements,), dtype=torch.float32, device='cpu')
+    param_grad_tensor = torch.zeros((num_elements,), dtype=torch.float32, device='cpu')
+
     # Outer parameters / outer optimizer
     outer_params_dict = {}
+    offset = 0
     for name, local_p in raw_model.named_parameters():
-        outer_params_dict[name] = torch.nn.Parameter(local_p.detach().cpu())
+        p_numel = local_p.numel()
+        o_param = outer_params_dict[name] = torch.nn.Parameter(
+            param_data_tensor[offset:offset + p_numel].view(local_p.shape)
+        )
+        o_param.grad = param_grad_tensor[offset:offset + p_numel].view(local_p.shape)
+        offset += p_numel
 
     outer_params_list = []
     for name, local_p in raw_model.named_parameters():
@@ -319,9 +330,6 @@ def main():
         outer_params_list,
         lr=config["outer_learning_rate"]
     )
-    # do a dummy step to initialize outer optimizer state
-    for op in outer_params_list:
-        op.grad = torch.zeros_like(op)
     outer_optimizer.step()
 
     # -------------------------------------------------------------------------
@@ -475,28 +483,30 @@ def main():
                     pass
 
         with profiler.session("outer_step"):
-            outer_grads = []
-            for (local_p, outer_p) in zip(raw_model.parameters(), outer_params_list):
-                outer_p.grad = outer_p - local_p.data.to('cpu')
-                outer_grads.append(outer_p.grad)
+            with torch.no_grad():
+                for (local_p, outer_p) in zip(raw_model.parameters(), outer_params_list):
+                    outer_p.grad.copy_(outer_p - local_p.data.to('cpu'))
 
             with profiler.session("all_reduce_multiple_with_retry"):
                 start_time = time.time()
 
-                all_reduce_success = all_reduce_multiple_with_retry(
-                    communicator,
-                    outer_grads,
-                    ReduceOp.AVG,
-                    max_in_flight=128
+                operand_descriptor = ReduceOperandDescriptor(
+                    datatype=DataType.FLOAT,
+                    distribution_hint=DistributionHint.NORMAL
                 )
+                quantization_options = QuantizationOptions(
+                    quantized_datatype=DataType.FLOAT,
+                    algorithm=QuantizationAlgorithm.NONE
+                )
+                communicator.all_reduce(param_grad_tensor, param_grad_tensor, op=ReduceOp.AVG, tag=0,
+                                                          operand_descriptor=operand_descriptor,
+                                                          quantization_options=quantization_options)
 
                 end_time = time.time()
                 print(f"All-Reduce took {end_time - start_time} seconds")
-                if not all_reduce_success:
-                    print("All peers left except me... continuing alone.")
 
             outer_optimizer.step()
-            outer_optimizer.zero_grad()
+            outer_optimizer.zero_grad(set_to_none=False)
 
             # (d) Copy aggregator result into local model
             with torch.no_grad():
@@ -508,7 +518,8 @@ def main():
         dt = t1 - t0
 
         # We'll do the MFU calculation for reference
-        tokens_this_iter = config["batch_size"] * config["gradient_accumulation_steps"] * config["inner_steps"]
+        tokens_this_iter = config["batch_size"] * config["gradient_accumulation_steps"] * config["inner_steps"] * \
+                           config["block_size"]
         raw_model.eval()  # to call estimate_mfu
         mfu = raw_model.estimate_mfu(tokens_this_iter, dt)
         raw_model.train()
