@@ -610,9 +610,17 @@ std::pair<bool, bool> ccoip::reduce::pipelineRingReduce(
             }
         }
 
-        // We'll receive into the front of recv_buffer_span
+        // we will hold on to the quantized data we just received and forward it verbatim in the next step.
+        if (owned_data_ptr == nullptr) {
+            owned_data_ptr = std::unique_ptr<std::byte[]>(new std::byte[max_chunk_size_el * quant_type_el_size]);
+            owned_data_span = std::span(owned_data_ptr.get(), max_chunk_size_el * quant_type_el_size);
+        }
+
+        // We will receive into the owned data ptr memory
+        // owned_data_span has enough memory to fit the largest chunk size,
+        // however we sub-span to the actual size of the chunk we are receiving.
         std::span<std::byte> recv_sub =
-                recv_buffer_span.subspan(0, rx_size_el * quant_type_el_size);
+                owned_data_span.subspan(0, rx_size_el * quant_type_el_size);
 
         // Ring exchange (no reduce-op)
         auto [success, abort_packet_received] = runAllgatherStage(client_state, master_socket, tag,
@@ -625,13 +633,6 @@ std::pair<bool, bool> ccoip::reduce::pipelineRingReduce(
         if (!success || abort_packet_received) {
             return {success, abort_packet_received};
         }
-
-        // we will hold on to the quantized data we just received and forward it verbatim in the next step.
-        if (owned_data_ptr == nullptr) {
-            owned_data_ptr = std::unique_ptr<std::byte[]>(new std::byte[max_chunk_size_el * quant_type_el_size]);
-            owned_data_span = std::span(owned_data_ptr.get(), max_chunk_size_el * quant_type_el_size);
-        }
-        std::memcpy(owned_data_span.data(), recv_sub.data(), owned_data_span.size_bytes());
 
         // The newly received chunk (inc_idx) becomes our "owned" chunk for the next step
         current_chunk_idx = inc_idx;
