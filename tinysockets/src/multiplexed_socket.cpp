@@ -51,8 +51,12 @@ struct SendQueueEntry {
 };
 
 #define TXRX_QUEUE_DEPTH 1024
+#define POOLED_ALLOCATOR_MAX_ENTRIES 128
 
 namespace tinysockets {
+    // Note: this allocator can be this stupid because our sizes are
+    // deterministic and are also the same on both RX and TX side.
+    // Also note: This allocator is crucial for high all reduce performance.
     class PooledAllocator {
         std::vector<std::pair<void *, size_t>> pool;
         std::mutex mutex;
@@ -73,7 +77,11 @@ namespace tinysockets {
         void release(const void *ptr, size_t size) {
             // we trust the user to set size correctly; there is only one intended call-site anyways
             std::unique_lock lock(mutex);
-            pool.emplace_back(const_cast<void *>(ptr), size);
+            if (pool.size() >= POOLED_ALLOCATOR_MAX_ENTRIES) {
+                free(const_cast<void *>(ptr));
+            } else {
+                pool.emplace_back(const_cast<void *>(ptr), size);
+            }
         }
 
         ~PooledAllocator() {
