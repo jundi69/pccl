@@ -45,18 +45,53 @@ struct ReceiveQueueEntry {
 
 struct SendQueueEntry {
     uint64_t tag{};
-    std::unique_ptr<uint8_t[]> data;
+    uint8_t *data;
     size_t size_bytes{};
 };
 
 #define TXRX_QUEUE_DEPTH 1024
 
 namespace tinysockets {
+    class PooledAllocator {
+        std::vector<std::pair<void *, size_t>> pool;
+        std::mutex mutex;
+
+    public:
+        void *allocate(const size_t size) {
+            std::unique_lock lock(mutex);
+            for (auto it = pool.begin(); it != pool.end(); ++it) {
+                if (it->second >= size) {
+                    void *ptr = it->first;
+                    pool.erase(it);
+                    return ptr;
+                }
+            }
+            return malloc(size);
+        }
+
+        void release(const void *ptr, size_t size) {
+            // we trust the user to set size correctly; there is only one intended call-site anyways
+
+            std::unique_lock lock(mutex);
+            pool.emplace_back(const_cast<void *>(ptr), size);
+        }
+
+        ~PooledAllocator() {
+            for (auto &[ptr, size]: pool) {
+                free(ptr);
+            }
+            pool.clear();
+        }
+    };
+
+
     struct MultiplexedIOSocketInternalState {
         MPSCQueue<SendQueueEntry> send_queue;
 
         std::shared_mutex receive_queues_mutex{};
         std::unordered_map<uint64_t, std::unique_ptr<::rigtorp::SPSCQueue<ReceiveQueueEntry>>> receive_queues{};
+
+        PooledAllocator allocator{};
 
         tpark_handle_t *tx_park_handle = nullptr;
 
@@ -70,7 +105,6 @@ namespace tinysockets {
         }
     };
 } // namespace tinysockets
-
 
 tinysockets::MultiplexedIOSocket::MultiplexedIOSocket(const ccoip_socket_address_t &address,
                                                       const ConnectionModeFlags flags) : socket_fd(0),
@@ -287,7 +321,7 @@ bool tinysockets::MultiplexedIOSocket::run() {
                 size_t n_sent = 0;
                 do {
                     const ssize_t i =
-                            sendvp(socket_fd, entry->data.get() + n_sent, entry->size_bytes - n_sent, MSG_NOSIGNAL);
+                            sendvp(socket_fd, entry->data + n_sent, entry->size_bytes - n_sent, MSG_NOSIGNAL);
                     if (i == 0) {
                         LOG(ERR) << "Connection was closed while sending packet data for packet with tag " << entry->tag
                                 << "; exiting send loop...";
@@ -301,7 +335,8 @@ bool tinysockets::MultiplexedIOSocket::run() {
                         // if we are sending too fast and are exceeding the kernel's send buffer, we need to sleep a bit.
                         // We will re-try sending the same data in the next iteration
                         if (errno == ENOBUFS) {
-                            LOG(DEBUG) << "Kernel send buffer is full; Tried to send too much data without opposite peer catching up. Backing off...";
+                            LOG(DEBUG) <<
+                                    "Kernel send buffer is full; Tried to send too much data without opposite peer catching up. Backing off...";
                             std::this_thread::sleep_for(std::chrono::milliseconds(100));
                             continue;
                         }
@@ -312,6 +347,7 @@ bool tinysockets::MultiplexedIOSocket::run() {
                     }
                     n_sent += i;
                 } while (n_sent < entry->size_bytes);
+                internal_state->allocator.release(entry->data, entry->size_bytes);
                 delete entry;
             }
             LOG(INFO) << "MultiplexedIOSocket::run() interrupted, exiting send loop...";
@@ -349,9 +385,9 @@ bool tinysockets::MultiplexedIOSocket::sendBytes(const uint64_t tag, const std::
     }
     auto *entry = new SendQueueEntry();
     entry->tag = tag;
-    entry->data = std::unique_ptr<uint8_t[]>(new uint8_t[data.size()]);
+    entry->data = static_cast<uint8_t *>(internal_state->allocator.allocate(data.size_bytes()));
     entry->size_bytes = data.size_bytes();
-    std::memcpy(entry->data.get(), data.data(), data.size()); {
+    std::memcpy(entry->data, data.data(), data.size()); {
         if (!internal_state->send_queue.enqueue(entry, true)) {
             LOG(ERR) << "MultiplexedIOSocket::sendBytes() failed to enqueue data; MPSC queue is full";
             return false;

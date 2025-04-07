@@ -142,7 +142,6 @@ namespace {
                     if (abort_packet) {
                         return {true, true};
                     }
-                    std::this_thread::yield();
                     continue;
                 }
                 received_meta_data = metadata_packet->dequantization_meta;
@@ -210,8 +209,6 @@ namespace {
                                              op,
                                              received_meta_data);
                         }
-                    } else {
-                        std::this_thread::yield();
                     }
                 } else {
                     return {false, false};
@@ -312,7 +309,6 @@ namespace {
                     if (abort_packet) {
                         return {true, true};
                     }
-                    std::this_thread::yield();
                     continue;
                 }
                 received_meta_data = metadata_packet->dequantization_meta;
@@ -376,8 +372,6 @@ namespace {
                                              ccoip::ccoipOpSet, // = copy
                                              received_meta_data);
                         }
-                    } else {
-                        std::this_thread::yield();
                     }
                 } else {
                     return {false, false};
@@ -544,7 +538,7 @@ std::pair<bool, bool> ccoip::reduce::pipelineRingReduce(
     // NOTE: we only quantize the chunk we "own". Subsequent chunks we get to own are received quantized and forwarded as such.
     // This is to prevent double-quantization of the same data, which would lead to loss of precision.
     // We don't want to guarantee q = Q(x); Q(D(q)) = q for Q(x) being the quantization function and D(q) being the de-quantization function.
-    std::unique_ptr<std::byte[]> owned_data_ptr = nullptr;
+    std::unique_ptr<std::byte[]> owned_data_ptr =  nullptr;
     std::span<std::byte> owned_data_span{};
     DeQuantizationMetaData prev_meta_data{};
 
