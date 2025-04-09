@@ -18,7 +18,7 @@
 /// The higher the chunk size, the less overhead is incurred by the multiplexer, but it is also less fine-granular.
 /// The reduce algorithm also uses this chunk size to quantize chunks as they are received. Higher chunk sizes means
 /// quantization runs less frequently but potentially for longer.
-#define DEFAULT_MULTIPLEX_CHUNK_SIZE size_t(8388608ull)
+#define DEFAULT_MULTIPLEX_CHUNK_SIZE size_t(8388608ull * 8)
 
 
 namespace {

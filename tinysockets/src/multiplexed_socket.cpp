@@ -213,26 +213,33 @@ bool tinysockets::MultiplexedIOSocket::run() {
     if (flags & MODE_RX) {
         recv_thread = std::thread([this] {
             while (running.load(std::memory_order_acquire)) {
-                const auto length_opt = receivePacketLength();
-                if (!length_opt) {
-                    if (running.load(std::memory_order_acquire)) {
-                        LOG(ERR) << "Connection was closed; exiting receive loop...";
-                        if (!interrupt()) [[unlikely]] {
-                            LOG(ERR) << "Failed to interrupt MultiplexedIOSocket";
+                constexpr size_t PREAMBLE_SIZE = sizeof(uint64_t) * 2;
+                uint64_t preamble[2] = {};
+                size_t n_received = 0;
+
+                // Keep reading until we either receive all 16 bytes,
+                // or encounter an error/remote close/interrupt.
+                do {
+                    const ssize_t i = recvvp(socket_fd, reinterpret_cast<uint8_t *>(preamble) + n_received, PREAMBLE_SIZE - n_received, 0);
+                    const bool still_running = running.load(std::memory_order_acquire);
+
+                    // If error, remote closure, or we’re no longer “running,” bail out.
+                    if (i == -1 || i == 0 || !still_running) {
+                        if (still_running) {
+                            LOG(ERR) << "[MultiplexedIOSocket] Failed to receive 16-byte preamble: "
+                                     << std::strerror(errno);
                         }
-                    } else {
-                        LOG(INFO) << "MultiplexedIOSocket::run() interrupted, exiting receive loop...";
+                        return;
                     }
-                    break;
-                }
-                size_t length = *length_opt;
-                if (length == 0) {
-                    LOG(ERR) << "Received packet with length 0; closing connection";
-                    if (!interrupt()) [[unlikely]] {
-                        LOG(ERR) << "Failed to interrupt MultiplexedIOSocket";
-                    }
-                    break;
-                }
+                    n_received += i;
+                } while (n_received < PREAMBLE_SIZE);
+
+                uint64_t length = preamble[0];
+                uint64_t tag = preamble[1];
+
+                length = network_order_utils::network_to_host(length);
+                tag = network_order_utils::network_to_host(tag);
+
                 // safeguard against large packets
                 if (length > (1024 * 1024 * 1024)) {
                     LOG(FATAL) << "Received excessive packet length " << length << "; closing connection";
@@ -241,24 +248,7 @@ bool tinysockets::MultiplexedIOSocket::run() {
                     }
                 }
 
-                uint64_t tag{};
-
-                if (length >= sizeof(uint64_t)) {
-                    const auto tag_opt = receivePacketLength();
-                    if (!tag_opt) {
-                        if (running.load(std::memory_order_acquire)) {
-                            LOG(ERR) << "Connection was closed; exiting receive loop...";
-                            if (!interrupt()) [[unlikely]] {
-                                LOG(ERR) << "Failed to interrupt MultiplexedIOSocket";
-                            }
-                        } else {
-                            LOG(INFO) << "MultiplexedIOSocket::run() interrupted, exiting receive loop...";
-                        }
-                        break;
-                    }
-                    tag = *tag_opt;
-                    length -= sizeof(uint64_t);
-                }
+                length -= sizeof(uint64_t); // subtract the tag size
 
                 auto *data_ptr = static_cast<uint8_t *>(internal_state->rx_allocator.allocate(length));
                 std::span data{data_ptr, length};
