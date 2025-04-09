@@ -1336,7 +1336,9 @@ void ccoip::CCoIPMasterHandler::handleEstablishP2PConnections(const ccoip_socket
     }
 }
 
-ccoip::CCoIPMasterHandler::~CCoIPMasterHandler() = default;
+ccoip::CCoIPMasterHandler::~CCoIPMasterHandler() {
+    topology_optimization_threadpool.shutdown();
+}
 
 void ccoip::CCoIPMasterHandler::sendP2PConnectionInformation(const bool changed, const ClientInfo &peer_info) {
     M2CPacketP2PConnectionInfo new_peers{};

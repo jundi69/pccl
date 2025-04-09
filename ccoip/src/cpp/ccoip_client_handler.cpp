@@ -697,6 +697,7 @@ bool ccoip::CCoIPClientHandler::interrupt() {
             if (!p2p_entry.second->interrupt()) [[unlikely]] {
                 return false;
             }
+            p2p_entry.second->join();
         }
     }
 
@@ -704,6 +705,7 @@ bool ccoip::CCoIPClientHandler::interrupt() {
         if (!p2p_entry.second->interrupt()) [[unlikely]] {
             return false;
         }
+        p2p_entry.second->join();
     }
     if (!p2p_socket.interrupt()) [[unlikely]] {
         return false;
