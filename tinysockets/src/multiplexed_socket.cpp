@@ -4,6 +4,7 @@
 #include <MPSCQueue.hpp>
 #include <SPSCQueue.hpp>
 #include <cstring>
+#include <iostream>
 #include <network_order_utils.hpp>
 #include <shared_mutex>
 #include <threadpark.h>
@@ -98,7 +99,8 @@ namespace tinysockets {
         std::shared_mutex receive_queues_mutex{};
         std::unordered_map<uint64_t, std::unique_ptr<::rigtorp::SPSCQueue<ReceiveQueueEntry>>> receive_queues{};
 
-        PooledAllocator allocator{};
+        PooledAllocator tx_allocator{};
+        PooledAllocator rx_allocator{};
 
         tpark_handle_t *tx_park_handle = nullptr;
 
@@ -226,7 +228,7 @@ bool tinysockets::MultiplexedIOSocket::run() {
                     }
                     break;
                 }
-                const size_t length = *length_opt;
+                size_t length = *length_opt;
                 if (length == 0) {
                     LOG(ERR) << "Received packet with length 0; closing connection";
                     if (!interrupt()) [[unlikely]] {
@@ -241,7 +243,27 @@ bool tinysockets::MultiplexedIOSocket::run() {
                         LOG(ERR) << "Failed to interrupt MultiplexedIOSocket";
                     }
                 }
-                auto *data_ptr = static_cast<uint8_t*>(internal_state->allocator.allocate(length));
+
+                uint64_t tag{};
+
+                if (length >= sizeof(uint64_t)) {
+                    const auto tag_opt = receivePacketLength();
+                    if (!tag_opt) {
+                        if (running.load(std::memory_order_acquire)) {
+                            LOG(ERR) << "Connection was closed; exiting receive loop...";
+                            if (!interrupt()) [[unlikely]] {
+                                LOG(ERR) << "Failed to interrupt MultiplexedIOSocket";
+                            }
+                        } else {
+                            LOG(INFO) << "MultiplexedIOSocket::run() interrupted, exiting receive loop...";
+                        }
+                        break;
+                    }
+                    tag = *tag_opt;
+                    length -= sizeof(uint64_t);
+                }
+
+                auto *data_ptr = static_cast<uint8_t*>(internal_state->rx_allocator.allocate(length));
                 std::span data{data_ptr, length};
                 if (!receivePacketData(data)) {
                     if (running.load(std::memory_order_acquire)) {
@@ -255,8 +277,6 @@ bool tinysockets::MultiplexedIOSocket::run() {
                     }
                     break;
                 }
-                PacketReadBuffer buffer{data.data(), data.size_bytes()};
-                auto tag = buffer.read<uint64_t>();
 
                 if (!internal_state->receive_queues.contains(tag)) {
                     std::unique_lock guard{internal_state->receive_queues_mutex};
@@ -266,6 +286,7 @@ bool tinysockets::MultiplexedIOSocket::run() {
 
                 // add entry to SPMC queue of tag
                 {
+                    const auto raw_ptr = reinterpret_cast<std::byte *>(data_ptr);
                     std::shared_lock guard{internal_state->receive_queues_mutex};
                     const auto &queue = internal_state->receive_queues.at(tag);
                     queue->push(ReceiveQueueEntry{
@@ -280,8 +301,8 @@ bool tinysockets::MultiplexedIOSocket::run() {
                         .data_size = length,
 
                         // don't include the tag in the data span
-                        .data_span = std::span(reinterpret_cast<std::byte *>(data_ptr + sizeof(uint64_t)),
-                                               data.size_bytes() - sizeof(uint64_t))
+                        .data_span = std::span(raw_ptr,
+                                               data.size_bytes())
                     });
                 }
             }
@@ -358,7 +379,7 @@ bool tinysockets::MultiplexedIOSocket::run() {
                     }
                     n_sent += i;
                 } while (n_sent < entry->size_bytes);
-                internal_state->allocator.release(entry->data, entry->size_bytes);
+                internal_state->tx_allocator.release(entry->data, entry->size_bytes);
                 delete entry;
             }
             LOG(INFO) << "MultiplexedIOSocket::run() interrupted, exiting send loop...";
@@ -396,7 +417,7 @@ bool tinysockets::MultiplexedIOSocket::sendBytes(const uint64_t tag, const std::
     }
     auto *entry = new SendQueueEntry();
     entry->tag = tag;
-    entry->data = static_cast<uint8_t *>(internal_state->allocator.allocate(data.size_bytes()));
+    entry->data = static_cast<uint8_t *>(internal_state->tx_allocator.allocate(data.size_bytes()));
     entry->size_bytes = data.size_bytes();
     std::memcpy(entry->data, data.data(), data.size()); {
         if (!internal_state->send_queue.enqueue(entry, true)) {
@@ -438,7 +459,7 @@ std::optional<ssize_t> tinysockets::MultiplexedIOSocket::receiveBytesInplace(con
         }
         std::memcpy(data.data(), entry.data_span.data(), entry.data_span.size_bytes());
 
-        internal_state->allocator.release(entry.data, entry.data_size);
+        internal_state->rx_allocator.release(entry.data, entry.data_size);
 
         return static_cast<ssize_t>(entry.data_span.size_bytes());
     }
@@ -479,7 +500,7 @@ std::optional<std::unique_ptr<std::byte[]>> tinysockets::MultiplexedIOSocket::re
 
         auto data_ptr = std::unique_ptr<std::byte[]>(new std::byte[entry.data_span.size_bytes()]);
         std::memcpy(data_ptr.get(), entry.data_span.data(), entry.data_span.size_bytes());
-        internal_state->allocator.release(entry.data, entry.data_size);
+        internal_state->rx_allocator.release(entry.data, entry.data_size);
 
         return std::move(data_ptr);
     }
