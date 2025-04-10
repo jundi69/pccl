@@ -104,7 +104,7 @@ class Attribute(Enum):
     """PCCL attributes."""
     GLOBAL_WORLD_SIZE = C.PCCL_ATTRIBUTE_GLOBAL_WORLD_SIZE
     LOCAL_WORLD_SIZE = C.PCCL_ATTRIBUTE_PEER_GROUP_WORLD_SIZE
-
+    NUM_DISTINCT_PEER_GROUPS = C.PCCL_ATTRIBUTE_NUM_DISTINCT_PEER_GROUPS
 
 class DataType(Enum):
     """PCCL primitive data types."""
@@ -449,7 +449,7 @@ class Communicator:
     def __del__(self):
         C.pcclDestroyCommunicator(self._comm[0])
 
-    def get_attribute(self, attribute: Enum) -> int:
+    def get_attribute(self, attribute: Attribute) -> int:
         """Get a communicator attribute."""
         value = ffi.new('int*')
         PCCLError.check(C.pcclGetAttribute(self._comm[0], attribute.value, value), "pcclGetAttribute")
