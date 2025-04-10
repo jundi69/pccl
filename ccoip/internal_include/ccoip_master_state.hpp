@@ -731,6 +731,10 @@ namespace ccoip {
         /// @param include_registered whether to count peers that are currently in the REGISTERED state
         [[nodiscard]] uint64_t getNumDistinctPeerGroups(bool include_registered) const;
 
+        /// Returns the largest peer group's local world size. E.i. the number of peers in the largest peer group.
+        /// @param include_registered whether to count peers that are currently in the REGISTERED state
+        uint64_t getLargestPeerGroupWorldSize(bool include_registered);
+
         /// Returns true if there is any peer that has not yet been accepted into the run, aka has pending state.
         [[nodiscard]] bool hasPendingPeers();
 

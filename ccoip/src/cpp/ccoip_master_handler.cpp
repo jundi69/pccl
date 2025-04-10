@@ -1351,6 +1351,7 @@ void ccoip::CCoIPMasterHandler::sendP2PConnectionInformation(const bool changed,
     new_peers.global_world_size = server_state.getGlobalWorldSize();
     new_peers.local_world_size = server_state.getLocalWorldSize(peer_info.peer_group, include_registered);
     new_peers.num_distinct_peer_groups = server_state.getNumDistinctPeerGroups(include_registered);
+    new_peers.largest_peer_group_world_size = server_state.getLargestPeerGroupWorldSize(include_registered);
 
     const auto peer_address = peer_info.socket_address;
 

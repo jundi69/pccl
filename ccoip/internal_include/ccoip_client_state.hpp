@@ -38,6 +38,9 @@ namespace ccoip {
         /// The number of distinct peer groups defined in the run as determined by the master
         std::atomic<size_t> num_distinct_peer_groups{};
 
+        /// The number of peers in the largest peer group as determined by the master
+        std::atomic<size_t> largest_peer_group_world_size{};
+
         /// Maps p2p listen socket addresses of respective clients to their UUID assigned by the master.
         /// Populated by @code registerPeer()@endcode when this peer establishes a p2p connection to said p2p listen socket address.
         /// Cleared by @code unregisterPeer()@endcode when a client is no longer needed due to topology changes.
@@ -132,6 +135,9 @@ namespace ccoip {
 
         /// Sets the number of distinct peer groups as determined by the master
         void setNumDistinctPeerGroups(size_t new_num_distinct_peer_groups);
+
+        /// Sets the number of peers in the largest peer group as determined by the master
+        void setLargestPeerGroupWorldSize(size_t new_largest_peer_group_world_size);
 
         /// Returns the uuid assigned to this client by the master
         [[nodiscard]] const ccoip_uuid_t &getAssignedUUID() const;
@@ -234,6 +240,11 @@ namespace ccoip {
         /// Returns the number of distinct peer groups defined in the run. A peer group is considered defined once one or more peers that declares the particular value as its peer group
         /// is accepted into the run.
         [[nodiscard]] size_t getNumDistinctPeerGroups() const;
+
+        /// Returns the number of peers in the largest peer group defined in the run. A peer group is considered defined once on or more peers that declares the particular value as its peer group
+        /// is accepted into the run.
+        /// This value will return the same value on all peers in the run and across all peer groups.
+        [[nodiscard]] size_t getLargestPeerGroupWorldSize() const;
 
         /// Sets the thread id that the client considers to be the main thread.
         void setMainThread(std::thread::id main_thread_id);

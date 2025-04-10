@@ -1697,3 +1697,22 @@ uint64_t ccoip::CCoIPMasterState::getNumDistinctPeerGroups(const bool include_re
 
     return distinct_peer_groups.size();
 }
+
+uint64_t ccoip::CCoIPMasterState::getLargestPeerGroupWorldSize(const bool include_registered) {
+    std::unordered_map<uint32_t, uint64_t> peer_group_sizes{};
+    for (const auto &[_, info]: client_info) {
+        if (!include_registered) {
+            if (info.connection_phase != PEER_ACCEPTED) {
+                continue;
+            }
+        }
+        peer_group_sizes[info.peer_group]++;
+    }
+    uint64_t largest_peer_group_world_size = 0;
+    for (const auto &[_, size]: peer_group_sizes) {
+        if (size > largest_peer_group_world_size) {
+            largest_peer_group_world_size = size;
+        }
+    }
+    return largest_peer_group_world_size;
+}

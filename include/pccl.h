@@ -70,6 +70,10 @@ typedef enum pcclAttribute_t {
 
     /// Number of distinct peer groups in the run
     PCCL_ATTRIBUTE_NUM_DISTINCT_PEER_GROUPS = 3,
+
+    /// Number of peers in the largest peer group
+    PCCL_ATTRIBUTE_LARGEST_PEER_GROUP_WORLD_SIZE = 4,
+
 } pcclAttribute_t;
 
 typedef struct pcclCommCreateParams_t {

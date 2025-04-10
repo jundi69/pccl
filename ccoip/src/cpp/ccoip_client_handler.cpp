@@ -783,6 +783,7 @@ ccoip::CCoIPClientHandler::EstablishP2PConnectionResult ccoip::CCoIPClientHandle
     client_state.setGlobalWorldSize(connection_info_packet.global_world_size);
     client_state.setLocalWorldSize(connection_info_packet.local_world_size);
     client_state.setNumDistinctPeerGroups(connection_info_packet.num_distinct_peer_groups);
+    client_state.setLargestPeerGroupWorldSize(connection_info_packet.largest_peer_group_world_size);
 
     if (!connection_info_packet.unchanged) {
         LOG(DEBUG) << "New peers list has changed";
@@ -1365,6 +1366,8 @@ size_t ccoip::CCoIPClientHandler::getGlobalWorldSize() const { return client_sta
 size_t ccoip::CCoIPClientHandler::getLocalWorldSize() const { return client_state.getLocalWorldSize(); }
 
 size_t ccoip::CCoIPClientHandler::getNumDistinctPeerGroups() const { return client_state.getNumDistinctPeerGroups(); }
+
+size_t ccoip::CCoIPClientHandler::getLargestPeerGroupWorldSize() const { return client_state.getLargestPeerGroupWorldSize(); }
 
 void ccoip::CCoIPClientHandler::setMainThread(const std::thread::id main_thread_id) {
     this->main_thread_id = main_thread_id;
