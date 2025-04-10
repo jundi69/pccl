@@ -35,6 +35,9 @@ namespace ccoip {
         /// The local world size as determined by the master
         std::atomic<size_t> local_world_size{};
 
+        /// The number of distinct peer groups defined in the run as determined by the master
+        std::atomic<size_t> num_distinct_peer_groups{};
+
         /// Maps p2p listen socket addresses of respective clients to their UUID assigned by the master.
         /// Populated by @code registerPeer()@endcode when this peer establishes a p2p connection to said p2p listen socket address.
         /// Cleared by @code unregisterPeer()@endcode when a client is no longer needed due to topology changes.
@@ -126,6 +129,9 @@ namespace ccoip {
 
         /// Sets the local world size as determined by the master
         void setLocalWorldSize(size_t new_local_world_size);
+
+        /// Sets the number of distinct peer groups as determined by the master
+        void setNumDistinctPeerGroups(size_t new_num_distinct_peer_groups);
 
         /// Returns the uuid assigned to this client by the master
         [[nodiscard]] const ccoip_uuid_t &getAssignedUUID() const;
@@ -224,6 +230,10 @@ namespace ccoip {
 
         /// Returns the global world size. World size here shall mean the total number of peers connected across all peer groups.
         [[nodiscard]] size_t getGlobalWorldSize() const;
+
+        /// Returns the number of distinct peer groups defined in the run. A peer group is considered defined once one or more peers that declares the particular value as its peer group
+        /// is accepted into the run.
+        [[nodiscard]] size_t getNumDistinctPeerGroups() const;
 
         /// Sets the thread id that the client considers to be the main thread.
         void setMainThread(std::thread::id main_thread_id);

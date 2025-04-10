@@ -51,6 +51,11 @@ pcclResult_t pcclGetAttribute(const pcclComm_t *communicator,
             *p_attribute_out = static_cast<int>(world_size);
             break;
         }
+        case PCCL_ATTRIBUTE_NUM_DISTINCT_PEER_GROUPS: {
+            const size_t num_peer_groups = communicator->ccoip_client->getNumDistinctPeerGroups();
+            *p_attribute_out = static_cast<int>(num_peer_groups);
+            break;
+        }
         default: {
             [[unlikely]] return pcclInvalidArgument;
         }

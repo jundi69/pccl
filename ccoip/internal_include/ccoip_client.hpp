@@ -83,6 +83,10 @@ namespace ccoip {
         /// Includes the client itself
         [[nodiscard]] size_t getGlobalWorldSize() const;
 
+        /// Returns the current number of peer groups defined in the run. A peer group is considered defined once a peer that specifies the particular integer value as its peer group
+        /// is accepted into the run by the master.
+        [[nodiscard]] size_t getNumDistinctPeerGroups() const;
+
         /// Sets the thread id that the client considers to be the main thread.
         /// It will be the only thread that the client will allow to call certain functions.
         void setMainThread(std::thread::id main_thread_id);

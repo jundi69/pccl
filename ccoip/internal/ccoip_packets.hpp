@@ -238,6 +238,7 @@ namespace ccoip {
         bool unchanged = false;
         uint64_t global_world_size;
         uint64_t local_world_size;
+        uint64_t num_distinct_peer_groups;
 
         std::vector<PeerInfo> all_peers;
 
