@@ -70,11 +70,14 @@ if local_iter_num > 1 or local_world_size == 1:
             time.sleep(1)
 
 global_world_size = communicator.get_attribute(Attribute.GLOBAL_WORLD_SIZE)  # obtain global world-size after join
-if mpi_config is not None:
-    largest_peer_group_size = communicator.get_attribute(Attribute.LARGEST_PEER_GROUP_WORLD_SIZE)
-    mpi_ranks_pending = global_world_size < (mpi_config.mpi_world_size * largest_peer_group_size)
+largest_peer_group_size = communicator.get_attribute(Attribute.LARGEST_PEER_GROUP_WORLD_SIZE)
+mpi_ranks_pending = global_world_size < (mpi_config.mpi_world_size * largest_peer_group_size)
 
 if mpi_ranks_pending:
     time.sleep(1)
     continue # wait for more peers
 ```
+
+If the sharding strategy differs between PCCL ranks, we recommend using a single-process per peer approach without using the concept of PCCL peer groups at all.
+This may mean a dedicated master PCCL process which memory-maps the different shards of the FSDP subprocesses into its memory space
+into one contiguously addressable memory region to then reference in the PCCL shared state. Alternatively, the master process could gather and scatter the state from its worker processes, however, at the cost of avoidable memcopies.
