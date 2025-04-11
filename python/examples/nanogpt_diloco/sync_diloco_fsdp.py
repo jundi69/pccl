@@ -152,11 +152,25 @@ def main():
         default="default_config.json",
         help="Path to JSON configuration file."
     )
+
+    # dummy arguments that are not used in the script, but torchrun sets for some reason
     parser.add_argument(
         "--local-rank",
         type=int,
         default=0,
         help="FSDP rank"
+    )
+    parser.add_argument(
+        "--nproc-per-node",
+        type=int,
+        default=0,
+        help="Number of processes per node"
+    )
+    parser.add_argument(
+        "--master_port",
+        type=int,
+        default=0,
+        help="Master port"
     )
     args = parser.parse_args()
 
