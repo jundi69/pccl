@@ -220,14 +220,20 @@ bool tinysockets::MultiplexedIOSocket::run() {
                 // Keep reading until we either receive all 16 bytes,
                 // or encounter an error/remote close/interrupt.
                 do {
-                    const ssize_t i = recvvp(socket_fd, reinterpret_cast<uint8_t *>(preamble) + n_received, PREAMBLE_SIZE - n_received, 0);
+                    const ssize_t i = recvvp(socket_fd, reinterpret_cast<uint8_t *>(preamble) + n_received,
+                                             PREAMBLE_SIZE - n_received, 0);
                     const bool still_running = running.load(std::memory_order_acquire);
 
                     // If error, remote closure, or we’re no longer “running,” bail out.
                     if (i == -1 || i == 0 || !still_running) {
                         if (still_running) {
-                            LOG(ERR) << "[MultiplexedIOSocket] Failed to receive 16-byte preamble: "
-                                     << std::strerror(errno);
+                            LOG(ERR) << "[MultiplexedIOSocket] Failed to receive 16-byte preamble; error: "
+                                     << std::strerror(errno) << "; exiting receive loop...";
+                            if (!interrupt()) [[unlikely]] {
+                                LOG(ERR) << "Failed to interrupt MultiplexedIOSocket";
+                            }
+                        } else {
+                            LOG(INFO) << "MultiplexedIOSocket::run() interrupted, exiting receive loop...";
                         }
                         return;
                     }
