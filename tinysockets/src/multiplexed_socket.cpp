@@ -370,6 +370,9 @@ bool tinysockets::MultiplexedIOSocket::run() {
                         std::string error_message = std::strerror(errno);
                         LOG(ERR) << "Failed to send packet data for packet with tag " << entry->tag
                                  << " with error: " << error_message;
+                        if (!interrupt()) {
+                            LOG(ERR) << "Failed to interrupt MultiplexedIOSocket";
+                        }
                         break;
                     }
                     n_sent += i;
