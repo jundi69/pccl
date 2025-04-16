@@ -399,6 +399,8 @@ pcclResult_t pcclAllReduceMultipleWithRetry(const pcclReduceOpDescriptor_t *desc
 
                 const pcclReduceOpDescriptor_t &op_descriptor = descriptors[i];
 
+                LOG(DEBUG) << "pcclAllReduceMultipleWithRetry: "
+                          << "Launching async reduce operation for index " << i;
                 pcclAsyncReduceOp_t handle{};
                 PCCL_ERR_PROPAGATE(pcclAllReduceAsync(
                     op_descriptor.recvbuf,
@@ -419,7 +421,11 @@ pcclResult_t pcclAllReduceMultipleWithRetry(const pcclReduceOpDescriptor_t *desc
             PCCL_ERR_PROPAGATE(pcclGetAttribute(communicator, PCCL_ATTRIBUTE_PEER_GROUP_WORLD_SIZE, &local_world_size));
 
             if (reduce_status != pcclSuccess) {
+                LOG(WARN) << "pcclAllReduceMultipleWithRetry: "
+                          << "Async reduce operation failed with status: " << reduce_status << ". Retrying...";
                 reduce_handles[i] = std::nullopt;
+
+                LOG(DEBUG) << "Waiting for all in-flight operations to finish before retrying...";
 
                 // Wait for all ongoing ops to finish or fail before retry
                 for (size_t j = 0; j < count; ++j) {
@@ -436,6 +442,7 @@ pcclResult_t pcclAllReduceMultipleWithRetry(const pcclReduceOpDescriptor_t *desc
                     }
                     reduce_handles[i] = std::nullopt;
                 }
+                LOG(DEBUG) << "Finished waiting for all in-flight operations to finish before retrying.";
 
                 // some async operation failed, we are not done yet
                 all_done = false;
