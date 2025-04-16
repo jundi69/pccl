@@ -436,6 +436,8 @@ pcclResult_t pcclAllReduceMultipleWithRetry(const pcclReduceOpDescriptor_t *desc
                     if (h_j != std::nullopt) {
                         const pcclResult_t s_j = pcclAwaitAsyncReduce(&h_j.value(), nullptr);
                         if (s_j == pcclSuccess) {
+                            total_tx += reduce_info.tx_bytes;
+                            total_rx += reduce_info.rx_bytes;
                             completed_ops.insert(j);
                         }
                         in_flight--;
@@ -447,13 +449,6 @@ pcclResult_t pcclAllReduceMultipleWithRetry(const pcclReduceOpDescriptor_t *desc
                 // some async operation failed, we are not done yet
                 all_done = false;
             }
-
-            // success for this handle
-            reduce_handles[i] = std::nullopt;
-            completed_ops.insert(i);
-
-            total_tx += reduce_info.tx_bytes;
-            total_rx += reduce_info.rx_bytes;
 
             in_flight--;
         }
