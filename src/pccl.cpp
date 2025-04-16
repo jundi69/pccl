@@ -448,6 +448,7 @@ pcclResult_t pcclAllReduceMultipleWithRetry(const pcclReduceOpDescriptor_t *desc
 
                 // some async operation failed, we are not done yet
                 all_done = false;
+                break;
             }
 
             in_flight--;
