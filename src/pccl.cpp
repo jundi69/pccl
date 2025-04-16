@@ -458,6 +458,7 @@ pcclResult_t pcclAllReduceMultipleWithRetry(const pcclReduceOpDescriptor_t *desc
             in_flight--;
         }
         if (all_done) {
+            LOG(DEBUG) << "pcclAllReduceMultipleWithRetry: All done";
             break;
         }
     }
@@ -471,6 +472,7 @@ pcclResult_t pcclAllReduceMultipleWithRetry(const pcclReduceOpDescriptor_t *desc
     }
 
     if (local_world_size == 1) {
+        LOG(DEBUG) << "pcclAllReduceMultipleWithRetry: Local world size has dropped to 1. Awaiting all pending handles and reporting 'Too few peers'...";
         // if we are alone, just finalize all handles and return
         for (size_t i = 0; i < count; ++i) {
             const auto &reduce_handle_opt = reduce_handles[i];
