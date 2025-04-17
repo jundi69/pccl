@@ -519,11 +519,12 @@ std::optional<std::unique_ptr<std::byte[]>> tinysockets::MultiplexedIOSocket::re
             LOG(BUG) << "Obtained packet from SPMCQueue with unexpected tag " << entry.tag << "; expected " << tag;
             continue;
         }
-        data = std::span(entry.data_span.data(), entry.data_span.size_bytes());
 
         auto data_ptr = std::unique_ptr<std::byte[]>(new std::byte[entry.data_span.size_bytes()]);
         std::memcpy(data_ptr.get(), entry.data_span.data(), entry.data_span.size_bytes());
         internal_state->rx_allocator.release(entry.data, entry.data_size);
+
+        data = std::span(entry.data_span.data(), entry.data_span.size_bytes());
 
         LOG(DEBUG) << "receiveBytes() received " << entry.data_size << " bytes of data with tag " << entry.tag;
         return std::move(data_ptr);
