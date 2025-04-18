@@ -64,18 +64,6 @@ bool ccoip::CCoIPClientHandler::connect() {
             }
             const auto &hello_packet = hello_packet_opt.value();
 
-            p2p_connections_rx_mutex.lock();
-            const auto &rx_socket = p2p_connections_rx[hello_packet.peer_uuid] = std::make_unique<
-                                        tinysockets::MultiplexedIOSocket>(
-                                        socket->getSocketFd(), tinysockets::ConnectionModeFlags::MODE_RX);
-            p2p_connections_rx_mutex.unlock();
-
-            if (!rx_socket->run()) {
-                LOG(FATAL) << "Failed to start MultiplexedIOSocket for P2P connection with "
-                        << ccoip_sockaddr_to_str(client_address);
-                return;
-            }
-
             // send hello ack packet only after our rx socket is confirmed running
             if (!socket->sendPacket<P2PPacketHelloAck>({})) {
                 LOG(ERR) << "Failed to send P2PPacketHelloAck to " << ccoip_sockaddr_to_str(client_address);
@@ -84,6 +72,20 @@ bool ccoip::CCoIPClientHandler::connect() {
                 }
                 return;
             }
+
+            p2p_connections_rx_mutex.lock();
+            const auto &rx_socket = p2p_connections_rx[hello_packet.peer_uuid] = std::make_unique<
+                                        tinysockets::MultiplexedIOSocket>(
+                                        socket->getSocketFd(), tinysockets::ConnectionModeFlags::MODE_RX);
+            p2p_connections_rx_mutex.unlock();
+
+
+            if (!rx_socket->run()) {
+                LOG(FATAL) << "Failed to start MultiplexedIOSocket for P2P connection with "
+                        << ccoip_sockaddr_to_str(client_address);
+                return;
+            }
+
             LOG(INFO) << "P2P connection established with " << ccoip_sockaddr_to_str(client_address);
         });
 

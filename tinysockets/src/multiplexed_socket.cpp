@@ -306,7 +306,7 @@ bool tinysockets::MultiplexedIOSocket::run() {
                             .data_span = std::span(raw_ptr, data.size_bytes())});
                 }
             }
-            LOG(INFO) << "MultiplexedIOSocket::run() interrupted, exiting receive loop...";
+            LOG(INFO) << "MultiplexedIOSocket::run() loop exited, cleaning up...";
 
             // drain the receive-queues and release all allocated memory back into the pool
             for (auto &[tag, queue] : internal_state->receive_queues) {
@@ -621,8 +621,7 @@ void tinysockets::MultiplexedIOSocket::discardReceivedData_Unsafe(const uint64_t
 }
 
 bool tinysockets::MultiplexedIOSocket::interrupt() {
-    if (running.load(std::memory_order_acquire)) {
-        running.store(false, std::memory_order_release);
+    if (running.exchange(false, std::memory_order_acquire)) {
         if (internal_state->tx_park_handle != nullptr) {
             tparkWake(internal_state->tx_park_handle); // wake up tx thread such that it can exit
         }
