@@ -194,7 +194,7 @@ bool tinysockets::MultiplexedIOSocket::establishConnection() {
 
 std::optional<size_t> tinysockets::MultiplexedIOSocket::receivePacketLength() const {
     uint64_t length;
-    auto* data = reinterpret_cast<uint8_t*>(&length);
+    auto *data = reinterpret_cast<uint8_t *>(&length);
     size_t n_received = 0;
     do {
         const ssize_t i = recvvp(socket_fd, data + n_received, sizeof(length) - n_received, 0);
@@ -309,7 +309,7 @@ bool tinysockets::MultiplexedIOSocket::run() {
             LOG(INFO) << "MultiplexedIOSocket::run() loop exited, cleaning up...";
 
             // drain the receive-queues and release all allocated memory back into the pool
-            for (auto &[tag, queue] : internal_state->receive_queues) {
+            for (auto &[tag, queue]: internal_state->receive_queues) {
                 const ReceiveQueueEntry *entry{};
                 while ((entry = queue->front()) != nullptr) {
                     internal_state->rx_allocator.release(entry->data, entry->data_size);
@@ -621,16 +621,14 @@ void tinysockets::MultiplexedIOSocket::discardReceivedData_Unsafe(const uint64_t
 }
 
 bool tinysockets::MultiplexedIOSocket::interrupt() {
-    if (running.exchange(false, std::memory_order_acquire)) {
-        if (internal_state->tx_park_handle != nullptr) {
-            tparkWake(internal_state->tx_park_handle); // wake up tx thread such that it can exit
-        }
+    LOG(DEBUG) << "MultiplexedIOSocket::interrupt() called";
+
+    if (!running.exchange(false, std::memory_order_acquire)) {
+        return true;
     }
 
-    // still close the socket even if we are not running if we have one.
-    // e.g. if run() was never called, we still want to close the socket.
-    if (socket_fd == 0) {
-        return false;
+    if (internal_state->tx_park_handle != nullptr) {
+        tparkWake(internal_state->tx_park_handle); // wake up tx thread such that it can exit
     }
 
     // Shutdown both sides of the connection.
