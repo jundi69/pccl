@@ -25,6 +25,28 @@ static bool configure_socket_fd(const int socket_fd) {
         closesocket(socket_fd);
         return false;
     }
+
+    // set SO_KEEPALIVE after a delay of 30 seconds
+    if (setsockoptvp(socket_fd, SOL_SOCKET, SO_KEEPALIVE, &opt, sizeof(opt)) < 0) [[unlikely]] {
+        LOG(ERR) << "Failed to set SO_KEEPALIVE option on server socket";
+        closesocket(socket_fd);
+        return false;
+    }
+    constexpr int keepalive_delay = 30;
+#ifdef TCP_KEEPIDLE
+    if (setsockoptvp(socket_fd, IPPROTO_TCP, TCP_KEEPIDLE, &keepalive_delay, sizeof(keepalive_delay)) < 0) [[unlikely]] {
+        LOG(ERR) << "Failed to set TCP_KEEPIDLE option on server socket";
+        closesocket(socket_fd);
+        return false;
+    }
+#else
+    if (setsockoptvp(socket_fd, IPPROTO_TCP, TCP_KEEPALIVE, &keepalive_delay, sizeof(keepalive_delay)) < 0) [[unlikely]] {
+        LOG(ERR) << "Failed to set TCP_KEEPIDLE option on server socket";
+        closesocket(socket_fd);
+        return false;
+    }
+#endif
+
     // enable SO_BUSY_POLL if available
 #ifdef SO_BUSY_POLL
     setsockoptvp(socket_fd, SOL_SOCKET, SO_BUSY_POLL, &opt, sizeof(opt));
