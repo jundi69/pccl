@@ -217,12 +217,6 @@ namespace tinysockets {
         /// Sends a packet to the connected socket
         [[nodiscard]] bool sendLtvPacket(ccoip::packetId_t packet_id, const PacketWriteBuffer &buffer) const;
 
-        /// Attempts to grow the send-buffer to the maximum size
-        void maximizeSendBuffer() const;
-
-        /// Attempts to grow the receive-buffer to the maximum size
-        void maximizeReceiveBuffer() const;
-
         /// Receives n bytes from the socket and writes them into dst
         [[nodiscard]] ssize_t receiveRawData(std::span<std::byte> &dst, size_t n_bytes);
 

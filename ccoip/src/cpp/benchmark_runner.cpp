@@ -42,11 +42,6 @@ ccoip::NetworkBenchmarkRunner::BenchmarkResult ccoip::NetworkBenchmarkRunner::ru
 
     const int socket_fd = socket.getSocketFd();
 
-    // request insanely large send and receive buffer sizes and let the kernel clamp them
-    constexpr int desired_size = 64 * 1024 * 1024; // 64 MB
-    setsockoptvp(socket_fd, SOL_SOCKET, SO_SNDBUF, &desired_size, sizeof(desired_size));
-    setsockoptvp(socket_fd, SOL_SOCKET, SO_RCVBUF, &desired_size, sizeof(desired_size));
-
     // get socket send buffer size
     size_t send_buffer_size = 0;
     socklen_t optlen = sizeof(send_buffer_size);
@@ -104,11 +99,6 @@ double ccoip::NetworkBenchmarkRunner::getOutputBandwidthMbitsPerSecond() const {
 
 bool ccoip::NetworkBenchmarkHandler::runBlocking(const int socket_fd) {
     size_t total_bytes_received = 0;
-
-    // request insanely large send and receive buffer sizes and let the kernel clamp them
-    constexpr int desired_size = 64 * 1024 * 1024; // 64 MB
-    setsockoptvp(socket_fd, SOL_SOCKET, SO_SNDBUF, &desired_size, sizeof(desired_size));
-    setsockoptvp(socket_fd, SOL_SOCKET, SO_RCVBUF, &desired_size, sizeof(desired_size));
 
     // get socket receive buffer size
     size_t buffer_size = 0;

@@ -33,7 +33,7 @@ int main() {
     PCCL_CHECK(pcclInit());
 
     pcclComm_t *communicator{};
-    constexpr pcclCommCreateParams_t params{.master_address = {.inet = {.protocol = inetIPv4, .ipv4 = {127, 0, 0, 1}},
+    constexpr pcclCommCreateParams_t params{.master_address = {.inet = {.protocol = inetIPv4, .ipv4 = {64, 247, 196, 75}},
                                                                .port = CCOIP_PROTOCOL_PORT_MASTER},
                                             .peer_group = 0};
     PCCL_CHECK(pcclCreateCommunicator(&params, &communicator));
@@ -42,12 +42,12 @@ int main() {
     int world_size{};
     pcclGetAttribute(communicator, PCCL_ATTRIBUTE_GLOBAL_WORLD_SIZE, &world_size);
 
-    constexpr size_t n_elements = 1024 * 1024 * 4;
+    constexpr size_t n_elements = 1024 * 1024 * 8;
     const auto weights = new float[n_elements];
-    fill_uniform(weights, n_elements);
+    //fill_uniform(weights, n_elements);
 
     const auto gradients = new float[n_elements];
-    fill_uniform(gradients, n_elements);
+    //fill_uniform(gradients, n_elements);
 
     // Create shared state
     pcclTensorInfo_t infos[1] = {
@@ -73,8 +73,9 @@ int main() {
         }
         
         if (world_size > 1) {
-            // PCCL_CHECK(pcclOptimizeTopology(communicator));
+            PCCL_CHECK(pcclOptimizeTopology(communicator));
             PCCL_CHECK(pcclGetAttribute(communicator, PCCL_ATTRIBUTE_GLOBAL_WORLD_SIZE, &world_size));
+            return 0;
         }
 
         if (world_size < 2) {
