@@ -75,7 +75,6 @@ int main() {
         if (world_size > 1) {
             PCCL_CHECK(pcclOptimizeTopology(communicator));
             PCCL_CHECK(pcclGetAttribute(communicator, PCCL_ATTRIBUTE_GLOBAL_WORLD_SIZE, &world_size));
-            return 0;
         }
 
         if (world_size < 2) {
