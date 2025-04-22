@@ -92,3 +92,11 @@ This may mean a dedicated master PCCL process which memory-maps the different sh
 memory space
 into one contiguously addressable memory region to then reference in the PCCL shared state. Alternatively, the master
 process could gather and scatter the state from its worker processes, however, at the cost of avoidable memcopies.
+
+
+## Connecting via 127.0.0.1
+When connecting via `127.0.0.1`, the master node will also see the peer's IP as `127.0.0.1` and will be logged as such.
+When other peers that do not connect to the master via loopback attempt to connect, they would obtain return information
+referencing `127.0.0.1` - attempting to connect to p2p connect to themselves.
+For this reason, the master disallows connections of non-loopback peers when at least one peer has connected via loopback.
+It is recommended to always connect via the public IP of the master node to avoid this issue.
