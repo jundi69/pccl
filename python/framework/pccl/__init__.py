@@ -9,6 +9,7 @@ from pccl._pccl import *
 import pccl._cuda as cuda
 
 __all__ = ["cuda",
-           "Communicator", "MasterNode", "ReduceOp", "Attribute", "DataType", "DistributionHint",
-           "QuantizationAlgorithm", "ReduceOperandDescriptor", "QuantizationOptions", "ReduceDescriptor",
-           "TensorInfo", "SharedState", "SharedStateSyncInfo", "ReduceInfo", "ReduceOpDescriptor", "AsyncReduceHandle", "PCCLError"]
+           "Communicator", "MasterNode", "ReduceOp", "Attribute", "SharedStateSyncStrategy",
+           "DataType", "DistributionHint", "QuantizationAlgorithm", "ReduceOperandDescriptor", "QuantizationOptions",
+           "ReduceDescriptor", "TensorInfo", "SharedState", "SharedStateSyncInfo", "ReduceInfo", "ReduceOpDescriptor",
+           "AsyncReduceHandle", "PCCLError"]
