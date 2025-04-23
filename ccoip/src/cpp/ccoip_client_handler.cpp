@@ -383,6 +383,7 @@ bool ccoip::CCoIPClientHandler::syncSharedState(ccoip_shared_state_t &shared_sta
         // vote for shared state sync
         C2MPacketSyncSharedState packet{};
         packet.shared_state_revision = shared_state.revision;
+        packet.shared_state_sync_strategy = shared_state.sync_strategy;
         packet.shared_state_hashes = shared_state_hashes;
         if (!master_socket.sendPacket<C2MPacketSyncSharedState>(packet)) {
             LOG(ERR) << "Failed to sync shared state: Failed to send C2MPacketSyncSharedState to master";

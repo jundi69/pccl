@@ -311,8 +311,16 @@ The local world size populated in the reduce info will be the local world size a
 `pcclSynchronizeSharedState`
 
 ```c
+
+typedef enum pcclSharedStateSyncStrategy_t {
+    PCCL_SHARED_STATE_SYNC_STRATEGY_ENFORCE_POPULAR = 0,
+    PCCL_SHARED_STATE_SYNC_STRATEGY_RECEIVE_ONLY = 1,
+    PCCL_SHARED_STATE_SYNC_STRATEGY_SEND_ONLY = 2,
+} pcclSharedStateSyncStrategy_t;
+
 pcclResult_t pcclSynchronizeSharedState(const pcclComm_t *communicator,
                                         pcclSharedState_t *shared_state,
+                                        pcclSharedStateSyncStrategy_t strategy,
                                         pcclSharedStateSyncInfo_t *sync_info_out);
 ```
 
@@ -324,6 +332,26 @@ Performs a group-wide check of user-defined “shared state” arrays (e.g., mod
   and a flag `allow_content_inequality`.
 - If any mismatch is found (by hashing each tensor), that peer is told to re-request data from a designated “correct”
   peer.
+- `strategy` can be:
+  - `PCCL_SHARED_STATE_SYNC_STRATEGY_ENFORCE_POPULAR`: The most common has content is distributed to all peers. Peers send and receive accordingly as requested by the master to facilitate this outcome.
+  - `PCCL_SHARED_STATE_SYNC_STRATEGY_RECEIVE_ONLY`:
+     The user has indicated that they expect to receive shared state only during this shared state sync.
+     Never must the shared state synchronization result in bytes being transmitted from this peer.
+     When this strategy is used, the peer's shared state contents are not considered for hash popularity.
+     The shared state chosen can never be the shared state provided by this peer.
+     This can be interpreted to mean that the peer deliberately declares that it has "incorrect shared state" which should be overwritten.
+  - `PCCL_SHARED_STATE_SYNC_STRATEGY_SEND_ONLY`:
+     The user has indicated that they expect to send shared state only during this shared state sync.
+     Never must the shared state synchronization result in bytes being received by this peer - meaning its shared
+     state contents may not be overwritten by a different shared state content candidate.
+     When this strategy is used, the peer's shared state contents must be the popular shared state.
+     If multiple peers specify this strategy and the shared state contents are not identical for the set of peers
+     declaring send-only, this peer will be kicked by the master.
+     The shared state chosen must be the shared state provided by this peer or from a peer with identical contents.
+     If this method call succeeds, all peers are guaranteed to have the same shared state as this peer had before
+     the call and still has after the shared state sync call.
+     This can be interpreted to mean that hte peer deliberately declares that it has the "correct shared state" which should be sent to all peers. If multiple peers declare this, the hash content of the shared state must match for all peers that declare this strategy.
+
 - Once the entire group is consistent at that revision, the function returns.
 - `sync_info_out->tx_bytes` / `sync_info_out->rx_bytes`: Tells you how many bytes were actually transmitted or received
   in that sync (often zero if you are already identical).

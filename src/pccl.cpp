@@ -400,7 +400,7 @@ pcclResult_t pcclAllReduceMultipleWithRetry(const pcclReduceOpDescriptor_t *desc
                 const pcclReduceOpDescriptor_t &op_descriptor = descriptors[i];
 
                 LOG(DEBUG) << "pcclAllReduceMultipleWithRetry: "
-                          << "Launching async reduce operation for index " << i;
+                        << "Launching async reduce operation for index " << i;
                 pcclAsyncReduceOp_t handle{};
                 PCCL_ERR_PROPAGATE(pcclAllReduceAsync(
                     op_descriptor.recvbuf,
@@ -422,7 +422,7 @@ pcclResult_t pcclAllReduceMultipleWithRetry(const pcclReduceOpDescriptor_t *desc
 
             if (reduce_status != pcclSuccess) {
                 LOG(WARN) << "pcclAllReduceMultipleWithRetry: "
-                          << "Async reduce operation failed with status: " << reduce_status << ". Retrying...";
+                        << "Async reduce operation failed with status: " << reduce_status << ". Retrying...";
                 reduce_handles[i] = std::nullopt;
 
                 LOG(DEBUG) << "Waiting for all in-flight operations to finish before retrying...";
@@ -472,7 +472,8 @@ pcclResult_t pcclAllReduceMultipleWithRetry(const pcclReduceOpDescriptor_t *desc
     }
 
     if (local_world_size == 1) {
-        LOG(DEBUG) << "pcclAllReduceMultipleWithRetry: Local world size has dropped to 1. Awaiting all pending handles and reporting 'Too few peers'...";
+        LOG(DEBUG) <<
+                "pcclAllReduceMultipleWithRetry: Local world size has dropped to 1. Awaiting all pending handles and reporting 'Too few peers'...";
         // if we are alone, just finalize all handles and return
         for (size_t i = 0; i < count; ++i) {
             const auto &reduce_handle_opt = reduce_handles[i];
@@ -507,6 +508,7 @@ inline size_t pcclDataTypeSize(const pcclDataType_t datatype) {
 }
 
 pcclResult_t pcclSynchronizeSharedState(const pcclComm_t *communicator, pcclSharedState_t *shared_state,
+                                        pcclSharedStateSyncStrategy_t strategy,
                                         pcclSharedStateSyncInfo_t *PCCL_NULLABLE sync_info_out) {
     PCCL_VALIDATE_INITIALIZED();
     PCCL_VALIDATE(communicator != nullptr, pcclInvalidArgument);
@@ -517,9 +519,26 @@ pcclResult_t pcclSynchronizeSharedState(const pcclComm_t *communicator, pcclShar
         return pcclPendingAsyncOps;
     }
 
+    ccoip_shared_state_sync_strategy_t sync_strategy;
+    switch (strategy) {
+        case PCCL_SHARED_STATE_SYNC_STRATEGY_ENFORCE_POPULAR:
+            sync_strategy = ccoip_enforce_popular;
+            break;
+        case PCCL_SHARED_STATE_SYNC_STRATEGY_SEND_ONLY:
+            sync_strategy = ccoip_tx_only;
+            break;
+        case PCCL_SHARED_STATE_SYNC_STRATEGY_RECEIVE_ONLY:
+            sync_strategy = ccoip_rx_only;
+            break;
+        default:
+            return pcclInvalidArgument;
+    }
     // sync shared state
-    ccoip_shared_state_t shared_state_internal{};
-    shared_state_internal.revision = shared_state->revision;
+    ccoip_shared_state_t shared_state_internal{
+        .sync_strategy = sync_strategy,
+        .revision = shared_state->revision,
+        .entries = {}
+    };
     for (size_t i = 0; i < shared_state->count; ++i) {
         const pcclTensorInfo_t &entry = shared_state->infos[i];
         const size_t entry_bytes = entry.count * pcclDataTypeSize(entry.datatype);

@@ -44,10 +44,10 @@ int main() {
 
     constexpr size_t n_elements = 1024 * 1024 * 8;
     const auto weights = new float[n_elements];
-    //fill_uniform(weights, n_elements);
+    fill_uniform(weights, n_elements);
 
     const auto gradients = new float[n_elements];
-    //fill_uniform(gradients, n_elements);
+    fill_uniform(gradients, n_elements);
 
     // Create shared state
     pcclTensorInfo_t infos[1] = {
@@ -57,7 +57,7 @@ int main() {
             .count = n_elements,
             .datatype = pcclFloat,
             .device_type = pcclDeviceCpu,
-            .allow_content_inequality = true
+            .allow_content_inequality = false
         }
     };
 
@@ -73,7 +73,7 @@ int main() {
         }
         
         if (world_size > 1) {
-            PCCL_CHECK(pcclOptimizeTopology(communicator));
+            // PCCL_CHECK(pcclOptimizeTopology(communicator));
             PCCL_CHECK(pcclGetAttribute(communicator, PCCL_ATTRIBUTE_GLOBAL_WORLD_SIZE, &world_size));
         }
 
@@ -83,7 +83,7 @@ int main() {
         }
 
         pcclSharedStateSyncInfo_t sync_info{};
-        PCCL_CHECK(pcclSynchronizeSharedState(communicator, &shared_state, &sync_info));
+        PCCL_CHECK(pcclSynchronizeSharedState(communicator, &shared_state, PCCL_SHARED_STATE_SYNC_STRATEGY_SEND_ONLY, &sync_info));
         if (i > 2) {
             assert(sync_info.rx_bytes == 0);
         }

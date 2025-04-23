@@ -27,7 +27,14 @@ struct ccoip_shared_state_entry_t {
     bool allow_content_inequality = false;
 };
 
+enum ccoip_shared_state_sync_strategy_t {
+    ccoip_enforce_popular,
+    ccoip_rx_only,
+    ccoip_tx_only
+};
+
 struct ccoip_shared_state_t {
+    ccoip_shared_state_sync_strategy_t sync_strategy;
     uint64_t revision;
     std::vector<ccoip_shared_state_entry_t> entries;
 };

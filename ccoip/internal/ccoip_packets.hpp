@@ -171,6 +171,7 @@ namespace ccoip {
         static packetId_t packet_id;
 
         uint64_t shared_state_revision;
+        ccoip_shared_state_sync_strategy_t shared_state_sync_strategy;
         std::vector<SharedStateHashEntry> shared_state_hashes;
 
         void serialize(PacketWriteBuffer &buffer) const override;

@@ -162,6 +162,7 @@ bool ccoip::CCoIPMasterState::unregisterClient(const ccoip_socket_address_t &cli
         votes_optimize_topology.erase(peer_uuid);
         votes_complete_topology_optimization.erase(peer_uuid);
         votes_sync_shared_state[peer_group].erase(peer_uuid);
+        shared_state_sync_strategies.erase(peer_uuid);
         votes_sync_shared_state_complete[peer_group].erase(peer_uuid);
         client_uuids.erase(it);
 
@@ -271,6 +272,15 @@ void ccoip::CCoIPMasterState::resetVoteQueryPendingPeers() {
     }
 }
 
+std::optional<ccoip_shared_state_sync_strategy_t> ccoip::CCoIPMasterState::getSharedStateSyncStrategy(
+    const ccoip_uuid_t peer_uuid) {
+    const auto it = shared_state_sync_strategies.find(peer_uuid);
+    if (it == shared_state_sync_strategies.end()) {
+        return std::nullopt;
+    }
+    return it->second;
+}
+
 bool ccoip::CCoIPMasterState::voteOptimizeTopology(const ccoip_uuid_t &peer_uuid) {
     const auto info_opt = getClientInfo(peer_uuid);
     if (!info_opt) {
@@ -337,7 +347,8 @@ bool ccoip::CCoIPMasterState::voteTopologyOptimizationComplete(const ccoip_uuid_
     return true;
 }
 
-bool ccoip::CCoIPMasterState::voteSyncSharedState(const ccoip_uuid_t &peer_uuid) {
+bool ccoip::CCoIPMasterState::voteSyncSharedState(const ccoip_uuid_t &peer_uuid,
+                                                  ccoip_shared_state_sync_strategy_t strategy) {
     const auto info_opt = getClientInfo(peer_uuid);
     if (!info_opt) {
         LOG(WARN) << "Cannot vote to sync shared state for unregistered client " << uuid_to_string(peer_uuid);
@@ -358,14 +369,38 @@ bool ccoip::CCoIPMasterState::voteSyncSharedState(const ccoip_uuid_t &peer_uuid)
                 << " cannot vote to sync shared state in state " << info.connection_state;
         return false;
     }
-
     const uint32_t peer_group = info.peer_group;
+
+    if (strategy == ccoip_enforce_popular) {
+        // if enforce popular is used as the shared state sync strategy, check if the all peers in the same peer group use enforce popular
+        for (const auto &[peer_uuid, peer_info]: client_info) {
+            if (peer_info.connection_phase != PEER_ACCEPTED) {
+                continue;
+            }
+            if (peer_info.peer_group != peer_group) {
+                continue;
+            }
+            if (peer_info.connection_state != VOTE_SYNC_SHARED_STATE) {
+                continue;
+            }
+            if (shared_state_sync_strategies[peer_uuid] != ccoip_enforce_popular) {
+                LOG(WARN) << "Client " << ccoip_sockaddr_to_str(peer_info.socket_address)
+                        << " is not using the same shared state sync strategy as the current client";
+                return false;
+            }
+        }
+    }
 
     // set the client state to vote to sync shared state
     info.connection_state = VOTE_SYNC_SHARED_STATE;
     if (auto [_, inserted] = votes_sync_shared_state[peer_group].insert(info.client_uuid); !inserted) {
         LOG(BUG) << "Client " << ccoip_sockaddr_to_str(info.socket_address)
                 << " found in votes_sync_shared_state set, but was in IDLE state before voting. This is a bug";
+        return false;
+    }
+    if (auto [_, inserted] = shared_state_sync_strategies.emplace(info.client_uuid, strategy); !inserted) {
+        LOG(BUG) << "Client " << ccoip_sockaddr_to_str(info.socket_address)
+                << " found in votes_sync_shared_state_strategy set, but was in IDLE state before voting. This is a bug";
         return false;
     }
     return true;
@@ -617,6 +652,16 @@ bool ccoip::CCoIPMasterState::endSharedStateSyncPhase(const uint32_t peer_group)
     shared_state_statuses[peer_group].clear();
     shared_state_dirty_keys[peer_group].clear();
     votes_sync_shared_state_complete[peer_group].clear();
+
+    for (auto &[_, info]: client_info) {
+        if (info.connection_phase != PEER_ACCEPTED) {
+            continue;
+        }
+        if (info.peer_group != peer_group) {
+            continue;
+        }
+        shared_state_sync_strategies.erase(info.client_uuid);
+    }
     return true;
 }
 
@@ -1042,7 +1087,13 @@ void ccoip::CCoIPMasterState::voteSharedStateMask(const ccoip_uuid_t &peer_uuid,
         return;
     }
     const uint32_t peer_group = info_it->second.peer_group;
-    shared_state_mask_candidates[peer_group].emplace_back(peer_uuid, entries);
+
+    const ccoip_shared_state_sync_strategy_t strategy = shared_state_sync_strategies[peer_uuid];
+
+    if (strategy != ccoip_rx_only) {
+        // sync strategy rx only does not participate in shared state mask voting; its contents can never be chosen
+        shared_state_mask_candidates[peer_group].emplace_back(peer_uuid, entries);
+    }
 }
 
 class SharedStateHashEntryList {
@@ -1108,6 +1159,10 @@ bool ccoip::CCoIPMasterState::electSharedStateMask(const uint32_t peer_group) {
             max_votes = stats.num_votes;
             winning_candidate = candidate;
         }
+    }
+    if (max_votes == 0) {
+        LOG(WARN) << "No winning candidate found for peer group " << peer_group << "! This means no peer has voted its shared state to be up for hash content popularity election.";
+        return false;
     }
 
     shared_state_mask[peer_group] = winning_candidate.entries;
@@ -1186,8 +1241,7 @@ bool ccoip::CCoIPMasterState::checkMaskSharedStateMismatches(const uint32_t peer
 
 void ccoip::CCoIPMasterState::storePeerBandwidth(const ccoip_uuid_t from, const ccoip_uuid_t to,
                                                  const double send_bandwidth_mpbs) {
-    uint32_t from_peer_group;
-    {
+    uint32_t from_peer_group; {
         const auto from_info_opt = getClientInfo(from);
         if (!from_info_opt) {
             LOG(WARN) << "Client " << uuid_to_string(from) << " not found";
@@ -1197,8 +1251,7 @@ void ccoip::CCoIPMasterState::storePeerBandwidth(const ccoip_uuid_t from, const 
         from_peer_group = from_info.peer_group;
     }
 
-    uint32_t to_peer_group;
-    {
+    uint32_t to_peer_group; {
         const auto to_info_opt = getClientInfo(to);
         if (!to_info_opt) {
             LOG(WARN) << "Client " << uuid_to_string(to) << " not found";
@@ -1223,9 +1276,7 @@ void ccoip::CCoIPMasterState::storePeerBandwidth(const ccoip_uuid_t from, const 
 }
 
 std::optional<double> ccoip::CCoIPMasterState::getPeerBandwidthMbps(const ccoip_uuid_t from, const ccoip_uuid_t to) {
-
-    uint32_t from_peer_group;
-    {
+    uint32_t from_peer_group; {
         const auto from_info_opt = getClientInfo(from);
         if (!from_info_opt) {
             LOG(WARN) << "Client " << uuid_to_string(from) << " not found";
@@ -1235,8 +1286,7 @@ std::optional<double> ccoip::CCoIPMasterState::getPeerBandwidthMbps(const ccoip_
         from_peer_group = from_info.peer_group;
     }
 
-    uint32_t to_peer_group;
-    {
+    uint32_t to_peer_group; {
         const auto to_info_opt = getClientInfo(to);
         if (!to_info_opt) {
             LOG(WARN) << "Client " << uuid_to_string(to) << " not found";
@@ -1257,8 +1307,7 @@ std::optional<double> ccoip::CCoIPMasterState::getPeerBandwidthMbps(const ccoip_
 }
 
 std::vector<ccoip::bandwidth_entry> ccoip::CCoIPMasterState::getMissingBandwidthEntries(const ccoip_uuid_t peer) {
-    uint32_t peer_group;
-    {
+    uint32_t peer_group; {
         const auto from_info_opt = getClientInfo(peer);
         if (!from_info_opt) {
             LOG(WARN) << "Client " << uuid_to_string(peer) << " not found";
@@ -1285,9 +1334,9 @@ std::vector<ccoip::bandwidth_entry> ccoip::CCoIPMasterState::getMissingBandwidth
     return missing_entries;
 }
 
-void ccoip::CCoIPMasterState::markBandwidthEntryUnreachable(const uint32_t peer_group, const bandwidth_entry &bandwidth_entry) {
-    uint32_t from_peer_group;
-    {
+void ccoip::CCoIPMasterState::markBandwidthEntryUnreachable(const uint32_t peer_group,
+                                                            const bandwidth_entry &bandwidth_entry) {
+    uint32_t from_peer_group; {
         const auto from_info_opt = getClientInfo(bandwidth_entry.from_peer_uuid);
         if (!from_info_opt) {
             LOG(WARN) << "Client " << uuid_to_string(bandwidth_entry.from_peer_uuid) << " not found";
@@ -1297,8 +1346,7 @@ void ccoip::CCoIPMasterState::markBandwidthEntryUnreachable(const uint32_t peer_
         from_peer_group = from_info.peer_group;
     }
 
-    uint32_t to_peer_group;
-    {
+    uint32_t to_peer_group; {
         const auto to_info_opt = getClientInfo(bandwidth_entry.to_peer_uuid);
         if (!to_info_opt) {
             LOG(WARN) << "Client " << uuid_to_string(bandwidth_entry.to_peer_uuid) << " not found";
@@ -1309,7 +1357,8 @@ void ccoip::CCoIPMasterState::markBandwidthEntryUnreachable(const uint32_t peer_
     }
 
     if (from_peer_group != to_peer_group) {
-        LOG(WARN) << "Cannot mark bandwidth entries unreachable for clients in different peer groups: " << uuid_to_string(bandwidth_entry.from_peer_uuid) << " -> "
+        LOG(WARN) << "Cannot mark bandwidth entries unreachable for clients in different peer groups: " <<
+                uuid_to_string(bandwidth_entry.from_peer_uuid) << " -> "
                 << uuid_to_string(bandwidth_entry.to_peer_uuid);
         return;
     }

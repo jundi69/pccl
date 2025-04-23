@@ -32,7 +32,7 @@ typedef enum pcclResult_t {
     pcclNoSharedStateAvailable = 9,
     pcclPendingAsyncOps = 10,
     pcclUpdateTopologyFailed = 11,
-    pcclTopologyOptimizationFailed = 12,
+    pcclTopologyOptimizationFailed = 12
 } pcclResult_t;
 
 typedef enum pcclDataType_t {
@@ -73,8 +73,33 @@ typedef enum pcclAttribute_t {
 
     /// Number of peers in the largest peer group
     PCCL_ATTRIBUTE_LARGEST_PEER_GROUP_WORLD_SIZE = 4,
-
 } pcclAttribute_t;
+
+typedef enum pcclSharedStateSyncStrategy_t {
+    /// The user has indicated that they expect to transmit and receive shared state as necessary
+    /// such that the popular shared state is obtained by all peers.
+    /// If one peer specifies this strategy for a particular shared state synchronization call,
+    /// all other peers must also specify this strategy.
+    PCCL_SHARED_STATE_SYNC_STRATEGY_ENFORCE_POPULAR = 0,
+
+    /// The user has indicated that they expect to receive shared state only during this shared state sync.
+    /// Never must the shared state synchronization result in bytes being transmitted from this peer.
+    /// When this strategy is used, the peer's shared state contents are not considered for hash popularity.
+    /// The shared state chosen can never be the shared state provided by this peer.
+    PCCL_SHARED_STATE_SYNC_STRATEGY_RECEIVE_ONLY = 1,
+
+    /// The user has indicated that they expect to send shared state only during this shared state sync.
+    /// Never must the shared state synchronization result in bytes being received by this peer - meaning its shared
+    /// state contents may not be overwritten by a different shared state content candidate.
+    /// When this strategy is used, the peer's shared state contents must be the popular shared state.
+    /// If multiple peers specify this strategy and the shared state contents are not identical for the set of peers
+    /// declaring send-only, this peer will be kicked by the master.
+    /// The shared state chosen must be the shared state provided by this peer or from a peer with identical contents.
+    /// If this method call succeeds, all peers are guaranteed to have the same shared state as this peer had before
+    /// the call and still has after the shared state sync call.
+    PCCL_SHARED_STATE_SYNC_STRATEGY_SEND_ONLY = 2,
+
+} pcclSharedStateSyncStrategy_t;
 
 typedef struct pcclCommCreateParams_t {
     /**
@@ -364,6 +389,7 @@ PCCL_EXPORT pcclResult_t pcclAwaitAsyncReduce(const pcclAsyncReduceOp_t *reduce_
  * This function will fail if the world size is less than 2.
  * @param communicator The communicator to synchronize the shared state on.
  * @param shared_state The shared state referencing user-owned data to be synchronized.
+ * @param strategy The strategy to use for the synchronization. See @ref pcclSharedStateSyncStrategy_t.
  * @param sync_info_out shared state synchronization info.
  * @return @code pcclSuccess@endcode if the shared state was synchronized successfully.
  * @return @code pcclInvalidArgument@endcode if the communicator or shared_state is null.
@@ -371,6 +397,7 @@ PCCL_EXPORT pcclResult_t pcclAwaitAsyncReduce(const pcclAsyncReduceOp_t *reduce_
  */
 PCCL_EXPORT pcclResult_t pcclSynchronizeSharedState(const pcclComm_t *communicator,
                                                     pcclSharedState_t *shared_state,
+                                                    pcclSharedStateSyncStrategy_t strategy,
                                                     pcclSharedStateSyncInfo_t *PCCL_NULLABLE sync_info_out);
 
 /**

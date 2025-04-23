@@ -107,6 +107,12 @@ class Attribute(Enum):
     NUM_DISTINCT_PEER_GROUPS = C.PCCL_ATTRIBUTE_NUM_DISTINCT_PEER_GROUPS
     LARGEST_PEER_GROUP_WORLD_SIZE = C.PCCL_ATTRIBUTE_LARGEST_PEER_GROUP_WORLD_SIZE
 
+class SharedStateSyncStrategy(Enum):
+    """PCCL shared state sync strategies."""
+    ENFORCE_POPULAR = C.PCCL_SHARED_STATE_SYNC_STRATEGY_ENFORCE_POPULAR
+    RECEIVE_ONLY = C.PCCL_SHARED_STATE_SYNC_STRATEGY_RECEIVE_ONLY
+    SEND_ONLY = C.PCCL_SHARED_STATE_SYNC_STRATEGY_SEND_ONLY
+
 class DataType(Enum):
     """PCCL primitive data types."""
     UINT8 = C.pcclUint8
@@ -502,14 +508,16 @@ class Communicator:
         """
         PCCLError.check(C.pcclOptimizeTopology(self._comm[0]), "pcclOptimizeTopology")
 
-    def sync_shared_state(self, shared_state: SharedState) -> SharedStateSyncInfo:
+    def sync_shared_state(self, shared_state: SharedState, strategy: SharedStateSyncStrategy = SharedStateSyncStrategy.ENFORCE_POPULAR) -> SharedStateSyncInfo:
         """
         Synchronizes the shared state between all peers that are currently accepted.
         If the shared state revision of this peer is outdated, the shared state will be updated.
         The function will not unblock until it is confirmed all peers have the same shared state revision.
+        :param shared_state: The shared state to synchronize.
+        :param strategy: The strategy to use for synchronization. ENFORCE_POPULAR by default.
         """
         sync_info: ffi.CData = ffi.new('pcclSharedStateSyncInfo_t*')
-        PCCLError.check(C.pcclSynchronizeSharedState(self._comm[0], shared_state._state, sync_info),
+        PCCLError.check(C.pcclSynchronizeSharedState(self._comm[0], shared_state._state, strategy, sync_info),
                         "pcclSynchronizeSharedState")
         return SharedStateSyncInfo(sync_info.tx_bytes, sync_info.rx_bytes)
 

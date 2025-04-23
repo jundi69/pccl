@@ -97,6 +97,7 @@ ccoip::packetId_t ccoip::C2MPacketSyncSharedState::packet_id = C2M_PACKET_SYNC_S
 
 void ccoip::C2MPacketSyncSharedState::serialize(PacketWriteBuffer &buffer) const {
     buffer.write<uint64_t>(shared_state_revision);
+    buffer.write<uint8_t>(static_cast<uint8_t>(shared_state_sync_strategy));
     buffer.write<uint64_t>(shared_state_hashes.size());
     for (const auto &entry: shared_state_hashes) {
         buffer.writeString(entry.key);
@@ -110,6 +111,7 @@ void ccoip::C2MPacketSyncSharedState::serialize(PacketWriteBuffer &buffer) const
 
 bool ccoip::C2MPacketSyncSharedState::deserialize(PacketReadBuffer &buffer) {
     shared_state_revision = buffer.read<uint64_t>();
+    shared_state_sync_strategy = static_cast<ccoip_shared_state_sync_strategy_t>(buffer.read<uint8_t>());
     const auto n_entries = buffer.read<uint64_t>();
     for (size_t i = 0; i < n_entries; i++) {
         SharedStateHashEntry entry{};

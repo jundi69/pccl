@@ -288,6 +288,9 @@ namespace ccoip {
         /// Removed from on client leave/disconnect.
         std::unordered_map<uint32_t, std::unordered_set<ccoip_uuid_t>> votes_sync_shared_state{};
 
+        /// map of the shared state strategies used by each peer that has voted to synchronize shared state.
+        std::unordered_map<ccoip_uuid_t, ccoip_shared_state_sync_strategy_t> shared_state_sync_strategies{};
+
         /// set of all uuids that have voted to complete shared state distribution for each peer group.
         /// Peer group bin is cleared once the shared state distribution phase ends.
         /// Removed from on client leave/disconnect.
@@ -430,7 +433,7 @@ namespace ccoip {
 
         /// Called when a client votes to synchronize shared state.
         /// All clients must vote to synchronize shared state before shared state distribution can begin.
-        [[nodiscard]] bool voteSyncSharedState(const ccoip_uuid_t &peer_uuid);
+        [[nodiscard]] bool voteSyncSharedState(const ccoip_uuid_t &peer_uuid, ccoip_shared_state_sync_strategy_t strategy);
 
         /// Called when a client votes to complete the shared state distribution phase.
         /// This indicates that it has completed receiving the subset of shared state that was outdated.
@@ -744,6 +747,9 @@ namespace ccoip {
         /// Resets the vote query pending peers state for all clients.
         /// This is invoked after the query pending vote has been completed.
         void resetVoteQueryPendingPeers();
+
+        /// Returns the shared state sync strategy declared by a particular peer if it has voted to synchronize shared state.
+        std::optional<ccoip_shared_state_sync_strategy_t> getSharedStateSyncStrategy(ccoip_uuid_t peer_uuid);
 
     private:
         void onPeerAccepted(const ClientInfo &info);

@@ -598,8 +598,7 @@ bool ccoip::CCoIPMasterHandler::checkSyncSharedStateConsensus(const uint32_t pee
     if (server_state.syncSharedStateConsensus(peer_group)) {
         // elect mask from candidates
         if (!server_state.electSharedStateMask(peer_group)) [[unlikely]] {
-            LOG(BUG) << "Failed to elect shared state mask; This may indicate no mask candidates were provided, "
-                    "despite the fact that shared state sync consensus was reached. This is a bug!";
+            // no peer has put its content up for shared state hash popularity election
             return false;
         }
 
@@ -641,6 +640,31 @@ bool ccoip::CCoIPMasterHandler::checkSyncSharedStateConsensus(const uint32_t pee
         if (!server_state.transitionToSharedStateSyncPhase(peer_group)) [[unlikely]] {
             LOG(BUG) << "Failed to transition to shared state distribution phase; This is a bug!";
             return false;
+        }
+
+        // check if peers that have declared sync strategy tx only are have been assigned to request shared state.
+        // in this case, we need to kick them. This means that some peers declaring to not want to receive shared state
+        // do not have the same shared state. TX-only is only meaningful if the peers declaring it have the same shared state.
+        for (auto &[peer_uuid, peer_address]: server_state.getClientEntrySet()) {
+            const auto peer_info_opt = server_state.getClientInfo(peer_uuid);
+            if (!peer_info_opt) [[unlikely]] {
+                LOG(BUG) << "Client " << ccoip_sockaddr_to_str(peer_address) << " not found";
+                continue;
+            }
+            const auto &peer_info = peer_info_opt->get();
+            if (peer_info.peer_group != peer_group || peer_info.connection_phase != PEER_ACCEPTED) {
+                continue;
+            }
+            if (peer_info.connection_state == REQUEST_SHARED_STATE && server_state.getSharedStateSyncStrategy(peer_uuid)
+                == ccoip_tx_only) {
+                LOG(WARN) << "Kicking client " << ccoip_sockaddr_to_str(peer_address)
+                        << " because it declared shared state sync strategy 'tx only' but has been assigned to request shared state because of hash unpopularity!";
+                if (!kickClient(peer_address)) [[unlikely]] {
+                    LOG(ERR) << "Failed to kick client " << ccoip_sockaddr_to_str(peer_address);
+                    return false;
+                }
+                return true; // this is not a failure case; we have kicked a client and should recover
+            }
         }
 
         // send confirmation packets to all clients
@@ -1058,7 +1082,7 @@ void ccoip::CCoIPMasterHandler::handleSyncSharedState(const ccoip_socket_address
     }
 
     // vote for sync shared state
-    if (!server_state.voteSyncSharedState(client_uuid)) [[unlikely]] {
+    if (!server_state.voteSyncSharedState(client_uuid, packet.shared_state_sync_strategy)) [[unlikely]] {
         LOG(WARN) << "Failed to vote to sync shared state from " << ccoip_sockaddr_to_str(client_address);
         if (!kickClient(client_address)) [[unlikely]] {
             LOG(ERR) << "Failed to kick client " << ccoip_sockaddr_to_str(client_address);
@@ -1074,8 +1098,29 @@ void ccoip::CCoIPMasterHandler::handleSyncSharedState(const ccoip_socket_address
         return;
     }
     if (const auto &info = info_opt->get(); !checkSyncSharedStateConsensus(info.peer_group)) {
-        LOG(BUG) << "checkSyncSharedStateConsensus() failed for " << ccoip_sockaddr_to_str(client_address)
-                << " when handling shared state sync packet. This should never happen.";
+        // in this case, we have to kick all peers of the peer group.
+        // this can happen e.g. if no peer has put its shared state content up for hash content popularity election.
+        // in this case, we have no shared state to distribute and simply cannot continue.
+        LOG(WARN) << "checkSyncSharedStateConsensus() failed for " << ccoip_sockaddr_to_str(client_address)
+                << " when handling shared state sync packet. Cannot continue with shared state synchronization; Kicking all peers in peer group "
+                << info.peer_group;
+
+        for (const auto &[peer_uuid, peer_address]: server_state.getClientEntrySet()) {
+            const auto peer_info_opt = server_state.getClientInfo(peer_uuid);
+            if (!peer_info_opt) [[unlikely]] {
+                LOG(BUG) << "Client " << ccoip_sockaddr_to_str(peer_address) << " not found";
+                continue;
+            }
+            const auto &peer_info = peer_info_opt->get();
+            if (peer_info.peer_group != info.peer_group || peer_info.connection_phase != PEER_ACCEPTED) {
+                continue;
+            }
+            LOG(WARN) << "Kicking client " << ccoip_sockaddr_to_str(peer_address)
+                    << " due to shared state sync failure";
+            if (!kickClient(peer_address)) [[unlikely]] {
+                LOG(ERR) << "Failed to kick client " << ccoip_sockaddr_to_str(peer_address);
+            }
+        }
     }
 }
 
