@@ -34,7 +34,7 @@ static bool configure_socket_fd(const int socket_fd) {
     tv.tv_sec = 10;
     tv.tv_usec = 0;
 
-    if (setsockopt(socket_fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv)) < 0) {
+    if (setsockoptvp(socket_fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv)) < 0) {
         LOG(ERR) << "Failed to set SO_SNDTIMEO option on server socket";
         closesocket(socket_fd);
         return false;
