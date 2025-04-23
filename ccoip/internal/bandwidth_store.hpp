@@ -100,6 +100,6 @@ namespace ccoip {
         /**
          * Prints the current bandwidth store as debug log
          */
-        void printBandwidthStore();
+        void printBandwidthStore() const;
     };
 } // namespace ccoip

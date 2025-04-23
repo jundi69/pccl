@@ -480,16 +480,6 @@ void ccoip::CCoIPMasterHandler::performTopologyOptimization(const uint32_t peer_
 bool ccoip::CCoIPMasterHandler::checkTopologyOptimizationCompletionConsensus() {
     // check if at least one client is waiting for topology optimization to complete
     if (server_state.topologyOptimizationCompleteConsensus()) {
-        /*
-         * check if all bandwidth benchmark requests have been completed
-        const bool success = server_state.isBandwidthStoreFullyPopulated();
-
-        if (!success) {
-            LOG(WARN) << "Not all bandwidth benchmarks have been completed! Topology optimization failed. Retrying...";
-            LOG(DEBUG) << "Number of registered peers in bandwidth store: "
-                       << server_state.getNumBandwidthStoreRegisteredPeers();
-        }*/
-
         // We don't actually assert that the bandwidth store is fully populated.
         // not all peers may be able to talk to any other peer. The ATSP solver will navigate around those challenges
         // and find the optimal tour taking into account the routing limitations.
@@ -498,11 +488,23 @@ bool ccoip::CCoIPMasterHandler::checkTopologyOptimizationCompletionConsensus() {
         // Mark the edges that are still missing as unreachable so we don't try them again.
         // if we don't do this, we would constantly be running a benchmark that will time out, only stalling
         // the run with every invocation of optimize topology.
-        if (!server_state.isBandwidthStoreFullyPopulated()) {
-            for (const auto &peer_uuid: server_state.getCurrentlyAcceptedPeers()) {
-                const auto missing_entries = server_state.getMissingBandwidthEntries(peer_uuid);
-                for (const auto &missing_entry: missing_entries) {
-                    server_state.markBandwidthEntryUnreachable(missing_entry);
+        // Each peer group has its own bandwidth store, so we need to check each peer group separately.
+        for (const uint32_t peer_group: server_state.getExistingPeerGroups()) {
+            if (!server_state.isBandwidthStoreFullyPopulated(peer_group)) {
+                for (const auto &peer_uuid: server_state.getCurrentlyAcceptedPeers()) {
+                    const auto info_opt = server_state.getClientInfo(peer_uuid);
+                    if (!info_opt) [[unlikely]] {
+                        LOG(BUG) << "Client " << uuid_to_string(peer_uuid) << " not found";
+                        continue;
+                    }
+                    const auto &info = info_opt->get();
+                    if (info.peer_group != peer_group) {
+                        continue;
+                    }
+                    const auto missing_entries = server_state.getMissingBandwidthEntries(peer_uuid);
+                    for (const auto &missing_entry: missing_entries) {
+                        server_state.markBandwidthEntryUnreachable(peer_group, missing_entry);
+                    }
                 }
             }
         }
@@ -1356,7 +1358,8 @@ void ccoip::CCoIPMasterHandler::sendP2PConnectionInformation(const bool changed,
     const auto peer_address = peer_info.socket_address;
 
     if (changed) {
-        const auto peers = server_state.getPeersForClient(peer_address, peer_info, include_registered); // get the peers for the client
+        const auto peers = server_state.getPeersForClient(peer_address, peer_info, include_registered);
+        // get the peers for the client
         new_peers.all_peers.reserve(peers.size());
         for (const auto &client_info: peers) {
             // construct a new peers packet

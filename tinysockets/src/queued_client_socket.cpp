@@ -24,6 +24,22 @@ static bool configure_socket_fd(const int socket_fd) {
 #ifdef TCP_QUICKACK
     setsockoptvp(socket_fd, IPPROTO_TCP, TCP_QUICKACK, &opt, sizeof(opt));
 #endif
+
+    // set a send timeout of 10 seconds.
+    // For some platforms, this is also a connect time out.
+    // There is no cross-platform way to set a timeout for a blocking socket connect() call.
+    // So we don't bother. Fuck BSD sockets.
+#ifdef SO_SNDTIMEO
+    timeval tv{};
+    tv.tv_sec = 10;
+    tv.tv_usec = 0;
+
+    if (setsockopt(socket_fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv)) < 0) {
+        LOG(ERR) << "Failed to set SO_SNDTIMEO option on server socket";
+        closesocket(socket_fd);
+        return false;
+    }
+#endif
     return true;
 }
 
@@ -40,11 +56,14 @@ namespace tinysockets {
     };
 } // namespace tinysockets
 
-tinysockets::QueuedSocket::QueuedSocket(const ccoip_socket_address_t &address) :
-    socket_fd(0), connect_sockaddr(address), internal_state(new QueuedSocketInternalState), running(false) {}
+tinysockets::QueuedSocket::QueuedSocket(const ccoip_socket_address_t &address) : socket_fd(0),
+    connect_sockaddr(address), internal_state(new QueuedSocketInternalState), running(false) {
+}
 
-tinysockets::QueuedSocket::QueuedSocket(const int socket_fd) :
-    socket_fd(socket_fd), connect_sockaddr(), internal_state(new QueuedSocketInternalState), running(true) {}
+tinysockets::QueuedSocket::QueuedSocket(const int socket_fd) : socket_fd(socket_fd), connect_sockaddr(),
+                                                               internal_state(new QueuedSocketInternalState),
+                                                               running(true) {
+}
 
 tinysockets::QueuedSocket::~QueuedSocket() {
     if (running) {
@@ -241,7 +260,7 @@ bool tinysockets::QueuedSocket::closeConnection() {
 
 std::optional<size_t> tinysockets::QueuedSocket::receivePacketLength() const {
     uint64_t length;
-    auto* data = reinterpret_cast<uint8_t*>(&length);
+    auto *data = reinterpret_cast<uint8_t *>(&length);
     size_t n_received = 0;
     do {
         const ssize_t i = recvvp(socket_fd, data + n_received, sizeof(length) - n_received, 0);
@@ -261,7 +280,7 @@ bool tinysockets::QueuedSocket::receivePacketData(std::span<std::uint8_t> &dst) 
     size_t n_received = 0;
     do {
         const ssize_t i = recvvp(socket_fd, dst.data() + n_received, dst.size_bytes() - n_received, 0);
-         if (i == 0 || i == -1) {
+        if (i == 0 || i == -1) {
             return false;
         }
         n_received += i;
@@ -269,7 +288,8 @@ bool tinysockets::QueuedSocket::receivePacketData(std::span<std::uint8_t> &dst) 
     return true;
 }
 
-bool tinysockets::QueuedSocket::sendLtvPacket(const ccoip::packetId_t packet_id, const PacketWriteBuffer &buffer) const {
+bool tinysockets::QueuedSocket::sendLtvPacket(const ccoip::packetId_t packet_id,
+                                              const PacketWriteBuffer &buffer) const {
     PacketWriteBuffer tlv_buffer{};
     tlv_buffer.reserve(buffer.size() + sizeof(packet_id) + sizeof(uint64_t));
     tlv_buffer.write<uint64_t>(buffer.size() + sizeof(ccoip::packetId_t));
@@ -347,8 +367,8 @@ tinysockets::QueuedSocket::pollNextPacketBuffer(const ccoip::packetId_t packet_i
 
 std::optional<std::pair<std::unique_ptr<uint8_t[]>, std::span<uint8_t>>>
 tinysockets::QueuedSocket::pollNextMatchingPacketBuffer(
-        const ccoip::packetId_t packet_id, const std::function<bool(const std::span<uint8_t> &)> &predicate,
-        const bool no_wait) const {
+    const ccoip::packetId_t packet_id, const std::function<bool(const std::span<uint8_t> &)> &predicate,
+    const bool no_wait) const {
     if (!running) {
         return std::nullopt;
     }

@@ -33,7 +33,7 @@ int main() {
     PCCL_CHECK(pcclInit());
 
     pcclComm_t *communicator{};
-    constexpr pcclCommCreateParams_t params{.master_address = {.inet = {.protocol = inetIPv4, .ipv4 = {64, 247, 196, 75}},
+    constexpr pcclCommCreateParams_t params{.master_address = {.inet = {.protocol = inetIPv4, .ipv4 = {127, 0, 0, 1}},
                                                                .port = CCOIP_PROTOCOL_PORT_MASTER},
                                             .peer_group = 0};
     PCCL_CHECK(pcclCreateCommunicator(&params, &communicator));

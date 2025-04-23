@@ -93,7 +93,7 @@ bool ccoip::BandwidthStore::unregisterPeer(const ccoip_uuid_t peer) {
 }
 
 
-void ccoip::BandwidthStore::printBandwidthStore() {
+void ccoip::BandwidthStore::printBandwidthStore() const {
     std::vector<ccoip_uuid_t> peers{};
     peers.reserve(registered_peers.size());
 

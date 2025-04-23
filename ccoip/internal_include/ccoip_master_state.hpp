@@ -373,8 +373,11 @@ namespace ccoip {
         /// Populated on failed p2p connection establishment and when bandwidth benchmarking fails.
         std::unordered_map<ccoip_uuid_t, std::unordered_set<ccoip_uuid_t>> unreachability_map{};
 
-        /// Bandwidth store for all clients
-        BandwidthStore bandwidth_store{};
+        /// Bandwidth stores for each peer group.
+        /// Each peer group has a local bandwidth store because topology optimization only makes sense within the scope
+        /// of large-scale data transfers happening (shared state synchronization, collective ops), which are defined
+        /// to operate only within a particular peer group.
+        std::unordered_map<uint32_t, BandwidthStore> bandwidth_stores{};
 
         // TODO: THIS IS SUBJECT TO CHANGE:
 
@@ -646,15 +649,15 @@ namespace ccoip {
         [[nodiscard]] std::vector<bandwidth_entry> getMissingBandwidthEntries(ccoip_uuid_t peer);
 
         /// Returns true if the bandwidth store is fully populated for all peers.
-        [[nodiscard]] bool isBandwidthStoreFullyPopulated() const;
+        [[nodiscard]] bool isBandwidthStoreFullyPopulated(uint32_t peer_group);
 
         /// Returns the number of peers registered in the bandwidth store
-        [[nodiscard]] size_t getNumBandwidthStoreRegisteredPeers() const;
+        [[nodiscard]] size_t getNumBandwidthStoreRegisteredPeers(uint32_t peer_group);
 
         /// Declares the following cost edge unreachable.
         /// Unreachable bandwidth entries will not be included in the @code getMissingBandwidthEntries@endcode, despite
         /// having no entry in the bandwidth store.
-        void markBandwidthEntryUnreachable(const bandwidth_entry &bandwidth_entry);
+        void markBandwidthEntryUnreachable(uint32_t peer_group, const bandwidth_entry &bandwidth_entry);
 
         /// Finds the client UUID from the client address; returns std::nullopt if not found
         [[nodiscard]] std::optional<ccoip_uuid_t> findClientUUID(const ccoip_socket_address_t &client_address);
