@@ -1,9 +1,6 @@
-# PCCL (Prime Collective Communications Library)
-
 # Introduction
-
-
 ## What is PCCL?
+
 The Prime Collective Communications Library (PCCL) is a fault-tolerant collective-communications framework designed to run over standard TCP/IP networks—including wide-area and internet-scale environments. It facilitates distributed training of larger models by letting multiple peers dynamically join or leave a training run at any point, with minimal risk of bringing the entire process to a halt.
 
 Unlike classic HPC-focused libraries such as *MPI* or vendor-specific solutions like *NCCL*, PCCL does not require all processes to start together in a tightly coupled, homogeneous cluster. Instead, it employs a *central master* node—a lightweight orchestrator—that tracks which peers are currently part of the run and coordinates the collective operations (e.g. All-Reduce, model state synchronization). This architecture allows:
@@ -80,5 +77,5 @@ PCCL is under active development. While core features like ring-based All-Reduce
 
 ### Intended Use Cases
 The library is primarily aimed at training scenarios where nodes may run over commodity Ethernet or WAN connections, or in dynamic settings where peers are expected to join and non-gracefully leave.
-PCCL does not directly compete with traditional MPI libraries with respect to saturating high-speed interconnects. 
+PCCL does not directly compete with traditional MPI libraries with respect to saturating high-speed interconnects.
 PCCL requires Ethernet or TCP/IP connectivity, and is not designed for low-latency, high-bandwidth fabrics like InfiniBand or Cray Aries.
