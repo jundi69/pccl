@@ -517,7 +517,7 @@ class Communicator:
         :param strategy: The strategy to use for synchronization. ENFORCE_POPULAR by default.
         """
         sync_info: ffi.CData = ffi.new('pcclSharedStateSyncInfo_t*')
-        PCCLError.check(C.pcclSynchronizeSharedState(self._comm[0], shared_state._state, strategy, sync_info),
+        PCCLError.check(C.pcclSynchronizeSharedState(self._comm[0], shared_state._state, strategy.value, sync_info),
                         "pcclSynchronizeSharedState")
         return SharedStateSyncInfo(sync_info.tx_bytes, sync_info.rx_bytes)
 
