@@ -11,6 +11,7 @@ from contextlib import nullcontext
 import numpy as np
 import torch
 import torch.optim as optim
+from torch.backends.opt_einsum import strategy
 from torch.nn.parallel import DistributedDataParallel
 from torch.distributed import init_process_group, destroy_process_group
 
@@ -26,7 +27,7 @@ from pccl import (
     QuantizationAlgorithm,
     ReduceOp,
     ReduceOperandDescriptor,
-    PCCLError, ReduceOpDescriptor, ReduceDescriptor
+    PCCLError, ReduceOpDescriptor, ReduceDescriptor, SharedStateSyncStrategy
 )
 from typing_extensions import Optional
 
@@ -385,10 +386,10 @@ def main():
 
     all_reduce_thread: Optional[threading.Thread] = None
 
-    def run_shared_state_sync(late_joiner: bool = False):
+    def run_shared_state_sync(late_joiner: bool = False, strategy: SharedStateSyncStrategy = SharedStateSyncStrategy.ENFORCE_POPULAR):
         nonlocal iter_num, num_syncs
         with profiler.session("pccl::sync_shared_state"):
-            sync_info = communicator.sync_shared_state(shared_state)
+            sync_info = communicator.sync_shared_state(shared_state, strategy)
             shared_state.revision += 1
             print(f"sync_info tx_bytes: {sync_info.tx_bytes}, rx_bytes: {sync_info.rx_bytes}")
             num_syncs += 1
@@ -448,7 +449,7 @@ def main():
         # 3) Sync shared state => ensures we have the same aggregator (outer) parameters
         if topology_updated:
             print("Topology updated; Perform ordinary shared state synchronization")
-            run_shared_state_sync()
+            run_shared_state_sync(late_joiner=False, strategy=SharedStateSyncStrategy.ENFORCE_POPULAR)
 
         # Set learning rate for both inner and outer optimizers
         lr = get_lr(iter_num.item(), config)
@@ -565,7 +566,7 @@ def main():
                     # is applied that they were not part of.
                     print(
                         "Topology updated mid run; re-running shared state synchronization to properly insert new peer...")
-                    run_shared_state_sync()
+                    run_shared_state_sync(late_joiner=False, strategy=SharedStateSyncStrategy.SEND_ONLY)
             else:
                 if topology_updated and iter_num > 0:
                     # If the topology was updated and iter_num is > 0 and can_outer_step is False,
@@ -576,7 +577,7 @@ def main():
                     # This is necessary for the pipeline insertion algorithm to function
                     print(
                         "Joining peer; re-running shared state synchronization to obtain result of previous outer step")
-                    run_shared_state_sync(late_joiner=True)
+                    run_shared_state_sync(late_joiner=True, strategy=SharedStateSyncStrategy.RECEIVE_ONLY)
 
                 # This is the boostrap for the 1-step behind asynchronous training step.
                 # Reset the inner state here to be equal to the unmodified outer state.
