@@ -635,6 +635,7 @@ bool ccoip::CCoIPMasterHandler::checkSyncSharedStateConsensus(const uint32_t pee
                 }
                 // this is not a failure case; we have kicked a client, and we should recover
                 // we simply proceed with sending confirmation packets.
+                return true;
             }
         }
 
