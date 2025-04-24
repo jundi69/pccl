@@ -38,6 +38,10 @@ namespace ccoip {
         /// Tasks for topology optimization
         std::unordered_map<uint32_t, pi::threadpool::TaskFuture<pi::threadpool::void_t>> topology_optimization_tasks;
 
+        /// Stores the previous p2p connection information distributed to the clients.
+        /// This is needed for determining whether this information has changed. The changed flag is
+        /// set depending on this to avoid re-distributing the information unnecessarily.
+        std::unordered_map<ccoip_uuid_t, std::vector<ClientInfo>> previous_p2p_connection_info{};
     public:
         volatile bool running = false;
         volatile bool interrupted = false;
@@ -55,7 +59,7 @@ namespace ccoip {
         ~CCoIPMasterHandler();
 
     private:
-        void sendP2PConnectionInformation(bool changed, const ClientInfo &client_info, bool include_registered);
+        void sendP2PConnectionInformation(const ClientInfo &client_info, bool include_registered);
 
         void sendP2PConnectionInformation(bool include_registered);
 

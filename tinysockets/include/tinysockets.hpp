@@ -510,10 +510,10 @@ namespace tinysockets {
             return receiveNextPacket<T>(tag, id, no_wait);
         }
 
-        /// Discards all received data that was not yet consumed by @code receiveBytes@endcode for the specified tag.
+        /// Discards all received data that was not yet consumed by @code receiveBytes@endcode for the specified tag until the stream counter reaches the current target.
         /// WARNING: This function is not thread-safe and should only be called if the user knows that there is no
         /// separate thread consuming data for the specified tag.
-        void discardReceivedData_Unsafe(uint64_t tag) const;
+        void discardReceivedDataUntilEOS_Unsafe() const;
 
         void join();
 
@@ -522,6 +522,14 @@ namespace tinysockets {
         [[nodiscard]] const ccoip_socket_address_t &getConnectSockAddr() const;
 
         ~MultiplexedIOSocket();
+
+        /// Sends an "end of stream" (more accurately "restart of stream") packet.
+        [[nodiscard]] bool sendEOS() const;
+
+        /// Bumps the target stream counter. All frames with stream counters less than the current stream counter
+        /// will be discarded. By bumping the target stream counter, all frames until the next received
+        /// EOS packet will be discarded.
+        void bumpTargetStreamCounter() const;
 
     private:
         // Packet decoding / encoding functions

@@ -633,7 +633,8 @@ bool ccoip::CCoIPMasterHandler::checkSyncSharedStateConsensus(const uint32_t pee
                     LOG(ERR) << "Failed to kick client " << ccoip_sockaddr_to_str(peer_address);
                     return false;
                 }
-                return true; // this is not a failure case; we have kicked a client and should recover
+                // this is not a failure case; we have kicked a client, and we should recover
+                // we simply proceed with sending confirmation packets.
             }
         }
 
@@ -663,7 +664,8 @@ bool ccoip::CCoIPMasterHandler::checkSyncSharedStateConsensus(const uint32_t pee
                     LOG(ERR) << "Failed to kick client " << ccoip_sockaddr_to_str(peer_address);
                     return false;
                 }
-                return true; // this is not a failure case; we have kicked a client and should recover
+                // this is not a failure case; we have kicked a client, and we should recover
+                // we simply proceed with sending confirmation packets.
             }
         }
 
@@ -1391,10 +1393,9 @@ ccoip::CCoIPMasterHandler::~CCoIPMasterHandler() {
     topology_optimization_threadpool.shutdown();
 }
 
-void ccoip::CCoIPMasterHandler::sendP2PConnectionInformation(const bool changed, const ClientInfo &peer_info,
+void ccoip::CCoIPMasterHandler::sendP2PConnectionInformation(const ClientInfo &peer_info,
                                                              const bool include_registered) {
     M2CPacketP2PConnectionInfo new_peers{};
-    new_peers.unchanged = !changed;
     new_peers.global_world_size = server_state.getGlobalWorldSize();
     new_peers.local_world_size = server_state.getLocalWorldSize(peer_info.peer_group, include_registered);
     new_peers.num_distinct_peer_groups = server_state.getNumDistinctPeerGroups(include_registered);
@@ -1402,8 +1403,27 @@ void ccoip::CCoIPMasterHandler::sendP2PConnectionInformation(const bool changed,
 
     const auto peer_address = peer_info.socket_address;
 
+    bool changed = false;
+    const auto peers = server_state.getPeersForClient(peer_address, peer_info, include_registered);
+    const auto &prev_peers = previous_p2p_connection_info[peer_info.client_uuid];
+
+    if (prev_peers.size() != peers.size()) {
+        changed = true;
+    }
+
+    for (const auto &peer: peers) {
+        // check if the peer is in the previous list
+        const auto it = std::ranges::find_if(prev_peers,
+                                             [&peer](const auto &p) { return p.client_uuid == peer.client_uuid; });
+        if (it == prev_peers.end()) {
+            changed = true;
+            break;
+        }
+    }
+
+    previous_p2p_connection_info[peer_info.client_uuid] = peers;
+
     if (changed) {
-        const auto peers = server_state.getPeersForClient(peer_address, peer_info, include_registered);
         // get the peers for the client
         new_peers.all_peers.reserve(peers.size());
         for (const auto &client_info: peers) {
@@ -1418,16 +1438,17 @@ void ccoip::CCoIPMasterHandler::sendP2PConnectionInformation(const bool changed,
                 });
         }
     }
+    new_peers.unchanged = !changed;
 
-    LOG(DEBUG) << "Sending p2p connection information to peer " << ccoip_sockaddr_to_str(peer_address);
+    LOG(DEBUG) << "Sending p2p connection information to peer " << ccoip_sockaddr_to_str(peer_address) <<
+            " with changed state: " << changed;
     if (!server_socket.sendPacket(peer_address, new_peers)) {
         LOG(ERR) << "Failed to send M2CPacketNewPeers to " << ccoip_sockaddr_to_str(peer_address);
     }
 }
 
 void ccoip::CCoIPMasterHandler::sendP2PConnectionInformation(const bool include_registered) {
-    const bool changed = server_state.hasPeerListChanged(CALLSITE_P2P_CONNECTION_INFORMATION) ||
-                         server_state.hasTopologyChanged(CALLSITE_P2P_CONNECTION_INFORMATION);
+    LOG(DEBUG) << "Sending p2p connection information to all clients...";
 
     // send establish new peers packets to all clients
     for (auto &[peer_uuid, peer_address]: server_state.getClientEntrySet()) {
@@ -1442,6 +1463,6 @@ void ccoip::CCoIPMasterHandler::sendP2PConnectionInformation(const bool include_
         }
 
         // for all connected clients
-        sendP2PConnectionInformation(changed, peer_info, include_registered);
+        sendP2PConnectionInformation(peer_info, include_registered);
     }
 }

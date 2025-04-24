@@ -83,7 +83,7 @@ int main() {
         }
 
         pcclSharedStateSyncInfo_t sync_info{};
-        PCCL_CHECK(pcclSynchronizeSharedState(communicator, &shared_state, PCCL_SHARED_STATE_SYNC_STRATEGY_SEND_ONLY, &sync_info));
+        PCCL_CHECK(pcclSynchronizeSharedState(communicator, &shared_state, PCCL_SHARED_STATE_SYNC_STRATEGY_ENFORCE_POPULAR, &sync_info));
         if (i > 2) {
             assert(sync_info.rx_bytes == 0);
         }

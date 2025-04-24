@@ -98,7 +98,6 @@ typedef enum pcclSharedStateSyncStrategy_t {
     /// If this method call succeeds, all peers are guaranteed to have the same shared state as this peer had before
     /// the call and still has after the shared state sync call.
     PCCL_SHARED_STATE_SYNC_STRATEGY_SEND_ONLY = 2,
-
 } pcclSharedStateSyncStrategy_t;
 
 typedef struct pcclCommCreateParams_t {

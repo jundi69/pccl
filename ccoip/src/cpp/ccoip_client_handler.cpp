@@ -831,6 +831,8 @@ ccoip::CCoIPClientHandler::EstablishP2PConnectionResult ccoip::CCoIPClientHandle
                 }
             }
         }
+    } else {
+        LOG(DEBUG) << "New peers list has not changed";
     }
 
     // send packet to this peer has established its p2p connections
@@ -1111,7 +1113,6 @@ bool ccoip::CCoIPClientHandler::allReduceAsync(const void *sendbuff, void *recvb
         return false;
     }
 
-
     // Set connection revision active at the time of launching the collective comms operation.
     // If the connection revision has changed since then,
     // we know that p2p connections were re-established in the meantime.
@@ -1189,10 +1190,6 @@ bool ccoip::CCoIPClientHandler::allReduceAsync(const void *sendbuff, void *recvb
                 return std::pair{success, abort_packet_received};
             };
             auto [success, abort_packet_received] = reduce_fun();
-            if (!success) {
-                LOG(WARN) << "An IO error occurred during all reduce with tag " << tag
-                          << "; Aborting collective communications operation...";
-            }
             if (abort_packet_received) {
                 LOG(WARN) << "Received abort packet during all reduce with tag " << tag
                           << ". Considering all reduce aborted.";
@@ -1238,6 +1235,32 @@ bool ccoip::CCoIPClientHandler::allReduceAsync(const void *sendbuff, void *recvb
                 }()) {
                 success = false;
             }
+
+            if (!success) {
+                LOG(WARN) << "An IO error occurred during all reduce with tag " << tag
+                          << "; Aborting collective communications operation...";
+
+                for (auto &[peer_uuid, socket] : p2p_connections_rx) {
+                    // Bump the target stream counter.
+                    // all data that was sent by peers and not consumed in the all reduce up until the abort
+                    // will be marked for discard and will not be filtered out when calling read functions
+                    // on the multiplexed socket when the next all reduce commences.
+                    socket->bumpTargetStreamCounter();
+                }
+                for (auto &[peer_uuid, socket]: p2p_connections_tx) {
+                    // send designated EOS packets to all peers to mark the end of the stream (and the beginning of the next one implicitly)
+                    if (!socket->sendEOS()) [[unlikely]] {
+                        // this can happen e.g. if the p2p connection dies exactly the moment we send the EOS packet
+                        // in which case we don't care about marking separation in data anyway because the connection is dead.
+                        LOG(WARN) << "Failed to send EOS packet to peer " << uuid_to_string(peer_uuid)
+                                  << " for tag " << tag;
+                    }
+                }
+                for (auto &[peer_uuid, socket] : p2p_connections_rx) {
+                    socket->discardReceivedDataUntilEOS_Unsafe();
+                }
+            }
+
             promise.set_value(success);
             return success;
         })) [[unlikely]] {
@@ -1259,31 +1282,6 @@ bool ccoip::CCoIPClientHandler::joinAsyncReduce(const uint64_t tag) {
         return false;
     }
     if (*failure_opt) {
-        // Discard all receive data in multiplexed p2p sockets for the tag of the failed reduce operation.
-        // Otherwise, it can be that old data will be mistaken to be
-        // good data in the next all reduce, which will inadvertently
-        // throw off byte counters where one peer could have "received all the data"
-        // while another peer is not yet done sending it because there was old data
-        // that caused this discrepancy.
-        // We also know that post joining the reduce operation, all peers have indicated completion of the
-        // collection operation, and we thus know that we will not receive more p2p data and in turn
-        // that discarding all data at this point safely discards all data still associated with the old aborted
-        // collective communication operation.
-        {
-            std::shared_lock lock(p2p_connections_rx_mutex);
-            for (auto &[peer_uuid, socket]: p2p_connections_rx) {
-                // NOTE: discardReceivedData is not thread-safe and must only ever be called if we know
-                // that there is no other thread consuming data. Since we have just joined the all reduce operation,
-                // which was executing operations on said socket, we know that no other thread is consuming data from
-                // the receive-queue.
-                // We might still *receive* data on the RX-Thread - meaning producing - on the single producer - the TX
-                // thread there is - but we know that nothing except this thread is *consuming* data from the
-                // receive-queue.
-                socket->discardReceivedData_Unsafe(tag);
-            }
-        }
-        LOG(DEBUG) << "Discarded un-consumed data for failed collective comms operation with tag " << tag;
-
         // In that next invocation, we need to have the new topology ready
         // as necessitated that a peer just dropped, causing the abort.
         // We thus re-establish p2p connections according to the new topology as determined by the master,

@@ -23,7 +23,7 @@ PCCL will generally enforce that public facing apis are called on the main threa
 
 #### There are some exceptions to this rule:
 PCCL allows the user to launch and await multiple async collective operations from threads other than the main thread, as long as the main thread
-does not call other user facing function on the same communicator in the meantime.
+does not call other user facing functions on the same communicator in the meantime.
 The async work ongoing on the other thread must be awaited before the main thread can call user facing api functions on the same communicator again.
 The main thread may however call the `pcclAreNewPeersPending` function while collective communications operations are being scheduled and awaited by a different thread.
 If `pcclAreNewPeersPending` returns true, the main thread should call `pcclUpdateTopology` to accept the new peers into the run.

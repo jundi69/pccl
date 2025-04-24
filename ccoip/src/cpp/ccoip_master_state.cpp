@@ -156,6 +156,7 @@ bool ccoip::CCoIPMasterState::unregisterClient(const ccoip_socket_address_t &cli
             }
         }
 
+
         // remove from all voting sets
         votes_accept_new_peers.erase(peer_uuid);
         votes_establish_p2p_connections.erase(peer_uuid);

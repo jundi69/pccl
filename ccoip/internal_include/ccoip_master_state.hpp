@@ -203,14 +203,12 @@ namespace ccoip {
     /// In the instant of the last incoming vote for the has pending peers vote, the state of whether
     /// there are peers pending is determined by the master and returned to the client.
     enum VoteQueryHasPendingPeers {
-
         /// The initial state.
         /// No vote to obtain the pending peers state has been initiated by this peer.
         NO_VOTE_INITIATED_QUERY_PENDING_PEERS,
 
         /// The state to indicate that the client has voted to query if there are pending peers.
         VOTE_QUERY_PENDING_PEERS
-
     };
 
     struct CCoIPClientVariablePorts {
@@ -238,7 +236,6 @@ namespace ccoip {
     };
 
 #define CALLSITE_TOPOLOGY_OPTIMIZATION_COMPLETE 1
-#define CALLSITE_P2P_CONNECTION_INFORMATION 2
 
     class CCoIPMasterState {
     public:
@@ -299,14 +296,16 @@ namespace ccoip {
         /// Flag per "callsite" to indicate if the peer list has changed;
         /// Each call-site defines separate scope for checking whether the peer list has changed since the last
         /// invocation from said call site. See @code hasPeerListChanged@endcode
-        std::unordered_map<uint32_t, bool> peer_list_changed{{CALLSITE_TOPOLOGY_OPTIMIZATION_COMPLETE, false},
-                                                             {CALLSITE_P2P_CONNECTION_INFORMATION, false}};
+        std::unordered_map<uint32_t, bool> peer_list_changed{
+            {CALLSITE_TOPOLOGY_OPTIMIZATION_COMPLETE, false},
+        };
 
         /// Flag per "callsite" to indicate if the topology has changed;
         /// Each call-site defines separate scope for checking whether the peer list has changed since the last
         /// invocation from said call site. See @code hasTopologyChanged@endcode
-        std::unordered_map<uint32_t, bool> topology_changed{{CALLSITE_TOPOLOGY_OPTIMIZATION_COMPLETE, false},
-                                                            {CALLSITE_P2P_CONNECTION_INFORMATION, false}};
+        std::unordered_map<uint32_t, bool> topology_changed{
+            {CALLSITE_TOPOLOGY_OPTIMIZATION_COMPLETE, false},
+        };
 
         /// Defines the "mask" of shared state entries for each peer group.
         /// The mask is defined by the identity of the set of shared state key strings and their corresponding hashes.
@@ -324,13 +323,13 @@ namespace ccoip {
         /// Peer group bin is cleared after the shared state distribution phase ends.
         /// Removed from on client leave/disconnect.
         std::unordered_map<uint32_t, std::vector<std::pair<ccoip_uuid_t, std::vector<SharedStateHashEntry>>>>
-                shared_state_mask_candidates{};
+        shared_state_mask_candidates{};
 
         /// Defines the list of all shared state entries for each peer for each peer group.
         /// This includes candidates not up for election. Peers may declare that their shared state is "incorrect"
         /// and voluntarily withdraw from making their mask a candidate in the hash popularity election.
         std::unordered_map<uint32_t, std::vector<std::pair<ccoip_uuid_t, std::vector<SharedStateHashEntry>>>>
-                shared_state_entries{};
+        shared_state_entries{};
 
         /// Cache of the shared state hashes for all entries in the shared state mask for each peer group.
         /// by their key string.
@@ -363,14 +362,14 @@ namespace ccoip {
         /// sharedStateMatches@endcode. Grouped by peer group. Peer group bin is cleared when the shared state
         /// distribution phase ends.
         std::unordered_map<uint32_t, std::unordered_map<ccoip_uuid_t, SharedStateMismatchStatus>>
-                shared_state_statuses{};
+        shared_state_statuses{};
 
         /// Maps the client UUID to the set of shared state keys that have dirty content, meaning
         /// that the hash of the shared state entry does not match the hash in the shared state mask.
         /// Grouped by peer group.
         /// Peer group bin is cleared when the shared state distribution phase ends.
         std::unordered_map<uint32_t, std::unordered_map<ccoip_uuid_t, std::vector<std::string>>>
-                shared_state_dirty_keys{};
+        shared_state_dirty_keys{};
 
         /// Boolean state for each collective communications operation tag in every peer group that indicates if the
         /// operation has been aborted or not. true = aborted false = not aborted Cleared when the collective
@@ -439,7 +438,8 @@ namespace ccoip {
 
         /// Called when a client votes to synchronize shared state.
         /// All clients must vote to synchronize shared state before shared state distribution can begin.
-        [[nodiscard]] bool voteSyncSharedState(const ccoip_uuid_t &peer_uuid, ccoip_shared_state_sync_strategy_t strategy);
+        [[nodiscard]] bool voteSyncSharedState(const ccoip_uuid_t &peer_uuid,
+                                               ccoip_shared_state_sync_strategy_t strategy);
 
         /// Called when a client votes to complete the shared state distribution phase.
         /// This indicates that it has completed receiving the subset of shared state that was outdated.
@@ -695,7 +695,7 @@ namespace ccoip {
         /// The shared state mask needs to be populated by @code sharedStateMatches@endcode before calling this
         /// function.
         [[nodiscard]] std::optional<ccoip_hash_type_t> getSharedStateEntryHashType(uint32_t peer_group,
-                                                                                   const std::string &key);
+            const std::string &key);
 
         /// Returns the set of shared state keys
         [[nodiscard]] std::vector<std::string> getSharedStateKeys(uint32_t peer_group);
