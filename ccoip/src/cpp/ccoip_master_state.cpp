@@ -647,6 +647,7 @@ bool ccoip::CCoIPMasterState::endSharedStateSyncPhase(const uint32_t peer_group)
     }
     shared_state_mask[peer_group].clear();
     shared_state_mask_candidates[peer_group].clear();
+    shared_state_entries[peer_group].clear();
     shared_state_hashes[peer_group].clear();
     shared_state_hash_types[peer_group].clear();
     shared_state_statuses[peer_group].clear();
@@ -1094,6 +1095,9 @@ void ccoip::CCoIPMasterState::voteSharedStateMask(const ccoip_uuid_t &peer_uuid,
         // sync strategy rx only does not participate in shared state mask voting; its contents can never be chosen
         shared_state_mask_candidates[peer_group].emplace_back(peer_uuid, entries);
     }
+
+    // still store in the list of all entries which may or may not be up for election
+    shared_state_entries[peer_group].emplace_back(peer_uuid, entries);
 }
 
 class SharedStateHashEntryList {
@@ -1178,7 +1182,7 @@ bool ccoip::CCoIPMasterState::checkMaskSharedStateMismatches(const uint32_t peer
     const auto &mask_entries = shared_state_mask[peer_group];
 
     // check for shared state mask mismatch
-    for (const auto &[uuid, entries]: shared_state_mask_candidates[peer_group]) {
+    for (const auto &[uuid, entries]: shared_state_entries[peer_group]) {
         if (entries.size() != mask_entries.size()) {
             LOG(WARN) << "Shared state mask mismatch for client " << uuid_to_string(uuid) << " in peer group "
                     << peer_group;

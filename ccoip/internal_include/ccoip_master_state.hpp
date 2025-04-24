@@ -326,6 +326,12 @@ namespace ccoip {
         std::unordered_map<uint32_t, std::vector<std::pair<ccoip_uuid_t, std::vector<SharedStateHashEntry>>>>
                 shared_state_mask_candidates{};
 
+        /// Defines the list of all shared state entries for each peer for each peer group.
+        /// This includes candidates not up for election. Peers may declare that their shared state is "incorrect"
+        /// and voluntarily withdraw from making their mask a candidate in the hash popularity election.
+        std::unordered_map<uint32_t, std::vector<std::pair<ccoip_uuid_t, std::vector<SharedStateHashEntry>>>>
+                shared_state_entries{};
+
         /// Cache of the shared state hashes for all entries in the shared state mask for each peer group.
         /// by their key string.
         /// Peer group bin is cleared when the shared state distribution phase ends.
