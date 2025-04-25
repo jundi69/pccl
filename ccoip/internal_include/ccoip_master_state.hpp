@@ -5,6 +5,7 @@
 #include <ccoip_packets.hpp>
 #include <ccoip_types.hpp>
 #include <mutex>
+#include <atomic>
 #include <optional>
 #include <shared_mutex>
 #include <unordered_map>
