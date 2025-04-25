@@ -373,10 +373,12 @@ ccoip::packetId_t ccoip::M2CPacketCollectiveCommsCommence::packet_id = M2C_PACKE
 
 void ccoip::M2CPacketCollectiveCommsCommence::serialize(PacketWriteBuffer &buffer) const {
     buffer.write<uint64_t>(tag);
+    buffer.write<uint64_t>(seq_nr);
 }
 
 bool ccoip::M2CPacketCollectiveCommsCommence::deserialize(PacketReadBuffer &buffer) {
     tag = buffer.read<uint64_t>();
+    seq_nr = buffer.read<uint64_t>();
     return true;
 }
 

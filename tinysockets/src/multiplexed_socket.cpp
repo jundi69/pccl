@@ -9,7 +9,6 @@
 #include <shared_mutex>
 #include <threadpark.h>
 #include "tinysockets.hpp"
-#include <unordered_set>
 
 #ifndef _MSC_VER
 #define RESTRICT __restrict__
@@ -63,10 +62,10 @@ static bool configure_socket_fd(const int socket_fd) {
 
 struct ReceiveQueueEntry {
     uint64_t tag{};
+    uint64_t stream_ctr{};
     uint8_t *data;
     size_t data_size{};
     std::span<std::byte> data_span{};
-    uint64_t stream_ctr{};
 };
 
 struct SendQueueEntry {
@@ -74,6 +73,7 @@ struct SendQueueEntry {
     const std::byte *data{};
     size_t size_bytes{};
     bool is_cloned{};
+    uint64_t stream_ctr{};
     tpark_handle_t *done_handle{};
 };
 
@@ -128,10 +128,6 @@ namespace tinysockets {
 
         PooledAllocator tx_allocator{};
         PooledAllocator rx_allocator{};
-
-        uint64_t current_stream_ctr{};
-        uint64_t target_stream_counter{};
-        uint64_t last_received_stream_ctr{};
 
         tpark_handle_t *tx_park_handle = nullptr;
 
@@ -252,8 +248,8 @@ bool tinysockets::MultiplexedIOSocket::run() {
     if (flags & MODE_RX) {
         recv_thread = std::thread([this] {
             while (running.load(std::memory_order_acquire)) {
-                constexpr size_t PREAMBLE_SIZE = sizeof(uint64_t) * 2;
-                uint64_t preamble[2] = {};
+                constexpr size_t PREAMBLE_SIZE = sizeof(uint64_t) * 3;
+                uint64_t preamble[3] = {};
                 size_t n_received = 0;
 
                 // Keep reading until we either receive all 16 bytes,
@@ -281,9 +277,11 @@ bool tinysockets::MultiplexedIOSocket::run() {
 
                 uint64_t length = preamble[0];
                 uint64_t tag = preamble[1];
+                uint64_t stream_ctr = preamble[2];
 
                 length = network_order_utils::network_to_host(length);
                 tag = network_order_utils::network_to_host(tag);
+                stream_ctr = network_order_utils::network_to_host(stream_ctr);
 
                 LOG(TRACE) << "MultiplexedIOSocket: Received packet with length " << length << " and tag " << tag;
 
@@ -296,7 +294,7 @@ bool tinysockets::MultiplexedIOSocket::run() {
                     break;
                 }
 
-                length -= sizeof(uint64_t); // subtract the tag size
+                length -= 2 * sizeof(uint64_t); // subtract the tag & stream counter size
 
                 std::span<uint8_t> data{};
                 uint8_t *data_ptr{};
@@ -324,11 +322,6 @@ bool tinysockets::MultiplexedIOSocket::run() {
                             std::make_unique<::rigtorp::SPSCQueue<ReceiveQueueEntry>>(TXRX_QUEUE_DEPTH);
                 }
 
-                // check if frame is EOS
-                if (length == 0) {
-                    internal_state->current_stream_ctr++;
-                }
-
                 // add entry to SPMC queue of tag
                 {
                     const auto raw_ptr = reinterpret_cast<std::byte *>(data_ptr);
@@ -336,6 +329,9 @@ bool tinysockets::MultiplexedIOSocket::run() {
                     const auto &queue = internal_state->receive_queues.at(tag);
                     queue->push(ReceiveQueueEntry{
                         .tag = tag,
+
+                        // we include a stream ctr with each entry
+                        .stream_ctr = stream_ctr,
 
                         // we just pass this for the sake of ownership
                         .data = data_ptr,
@@ -347,9 +343,6 @@ bool tinysockets::MultiplexedIOSocket::run() {
 
                         // don't include the tag in the data span
                         .data_span = std::span(raw_ptr, data.size_bytes()),
-
-                        // we include a stream ctr with each entry
-                        .stream_ctr = internal_state->current_stream_ctr
                     });
                 }
             }
@@ -396,11 +389,12 @@ bool tinysockets::MultiplexedIOSocket::run() {
                     break;
                 }
 
-                const uint64_t preamble[2] = {
+                const uint64_t preamble[3] = {
                     network_order_utils::host_to_network(
-                        entry->size_bytes + sizeof(uint64_t) // size including the subsequent tag
+                        entry->size_bytes + sizeof(uint64_t) * 2 // size including the subsequent tag & stream counter
                     ),
-                    network_order_utils::host_to_network(entry->tag)
+                    network_order_utils::host_to_network(entry->tag), // tag
+                    network_order_utils::host_to_network(entry->stream_ctr) // stream counter
                 }; {
                     const ssize_t i = sendvp(socket_fd, preamble, sizeof(preamble), MSG_NOSIGNAL);
                     if (i == 0) {
@@ -533,7 +527,7 @@ bool tinysockets::MultiplexedIOSocket::receivePacketData(std::span<std::uint8_t>
 }
 
 
-bool tinysockets::MultiplexedIOSocket::sendBytes(const uint64_t tag, const std::span<const std::byte> &data,
+bool tinysockets::MultiplexedIOSocket::sendBytes(const uint64_t tag, const uint64_t stream_ctr, const std::span<const std::byte> &data,
                                                  const bool clone_memory, tpark_handle_t **pDoneHandleOut) const {
     if (!(flags & MODE_TX)) {
         LOG(ERR) << "MultiplexedIOSocket::sendBytes() called on a socket without TX mode";
@@ -554,6 +548,7 @@ bool tinysockets::MultiplexedIOSocket::sendBytes(const uint64_t tag, const std::
         entry->data = data.data();
     }
     entry->is_cloned = clone_memory;
+    entry->stream_ctr = stream_ctr;
 
     if (pDoneHandleOut != nullptr) {
         entry->done_handle = tparkCreateHandle();
@@ -576,37 +571,8 @@ bool tinysockets::MultiplexedIOSocket::sendBytes(const uint64_t tag, const std::
     return true;
 }
 
-bool tinysockets::MultiplexedIOSocket::sendEOS() const {
-    if (!(flags & MODE_TX)) {
-        LOG(ERR) << "MultiplexedIOSocket::sendBytes() called on a socket without TX mode";
-        return false;
-    }
-    if (!running.load(std::memory_order_acquire)) {
-        LOG(ERR) << "MultiplexedIOSocket::sendBytes() called on a socket that is not running";
-        return false;
-    }
-    auto *entry = new SendQueueEntry();
-    entry->tag = 0;
-    entry->size_bytes = 0;
-    entry->data = nullptr;
-    entry->is_cloned = false;
-    entry->done_handle = nullptr;
-
-    if (!internal_state->send_queue.enqueue(entry, true)) {
-        delete entry;
-        LOG(ERR) << "MultiplexedIOSocket::sendEOS() failed to enqueue data; MPSC queue is full";
-        return false;
-    }
-    tparkWake(internal_state->tx_park_handle);
-    // entry is deleted by the send thread
-    return true;
-}
-
-void tinysockets::MultiplexedIOSocket::bumpTargetStreamCounter() const {
-    internal_state->target_stream_counter = internal_state->last_received_stream_ctr + 1;
-}
-
 std::optional<ssize_t> tinysockets::MultiplexedIOSocket::receiveBytesInplace(const uint64_t tag,
+                                                                             const uint64_t target_stream_ctr,
                                                                              const std::span<std::byte> &data) const {
     while (true) {
         if (!running.load(std::memory_order_acquire) || socket_fd == 0) {
@@ -629,27 +595,11 @@ std::optional<ssize_t> tinysockets::MultiplexedIOSocket::receiveBytesInplace(con
             internal_state->rx_allocator.release(entry.data, entry.data_size);
             continue;
         }
-        // check if frame is EOS
-        if (entry.data == nullptr) {
-            internal_state->last_received_stream_ctr = entry.stream_ctr - 1;
 
-            // in which case we error
-            return std::nullopt;
-        }
-
-        // drop frames that are not destined for the target stream
-        if (entry.stream_ctr < internal_state->target_stream_counter) {
+        if (entry.stream_ctr != target_stream_ctr) {
             internal_state->rx_allocator.release(entry.data, entry.data_size);
             continue;
         }
-
-        if (entry.stream_ctr > internal_state->target_stream_counter) {
-            LOG(BUG) << "Received packet with stream counter greater than target stream counter; "
-                    << "This is a bug. Expected " << internal_state->target_stream_counter
-                    << " but got " << entry.stream_ctr;
-            return std::nullopt;
-        }
-
 
         // ensure buffer is large enough
         if (data.size_bytes() < entry.data_span.size_bytes()) {
@@ -663,15 +613,12 @@ std::optional<ssize_t> tinysockets::MultiplexedIOSocket::receiveBytesInplace(con
 
         LOG(TRACE) << "receiveBytesInplace() received " << entry.data_size << " bytes of data with tag " << entry.tag;
 
-        internal_state->last_received_stream_ctr = entry.stream_ctr;
-
         return static_cast<ssize_t>(entry.data_span.size_bytes());
     }
 }
 
-std::optional<std::unique_ptr<std::byte[]>> tinysockets::MultiplexedIOSocket::receiveBytes(const uint64_t tag,
-    std::span<std::byte> &data,
-    const bool no_wait) const {
+std::optional<std::unique_ptr<std::byte[]>> tinysockets::MultiplexedIOSocket::receiveBytes(
+    const uint64_t tag, const uint64_t target_stream_ctr, std::span<std::byte> &data, const bool no_wait) const {
     if (!(flags & MODE_RX)) {
         LOG(ERR) << "MultiplexedIOSocket::receiveBytes() called on a socket without RX mode";
         return std::nullopt;
@@ -701,24 +648,9 @@ std::optional<std::unique_ptr<std::byte[]>> tinysockets::MultiplexedIOSocket::re
             continue;
         }
 
-        // check if frame is EOS
-        if (entry.data == nullptr) {
-            internal_state->last_received_stream_ctr = entry.stream_ctr - 1;
-            // in which case we error
-            return std::nullopt;
-        }
-
-        // drop frames that are not destined for the target stream
-        if (entry.stream_ctr < internal_state->target_stream_counter) {
+        if (entry.stream_ctr != target_stream_ctr) {
             internal_state->rx_allocator.release(entry.data, entry.data_size);
             continue;
-        }
-
-        if (entry.stream_ctr > internal_state->target_stream_counter) {
-            LOG(BUG) << "Received packet with stream counter greater than target stream counter; "
-                    << "This is a bug. Expected " << internal_state->target_stream_counter
-                    << " but got " << entry.stream_ctr;
-            return std::nullopt;
         }
 
         auto data_ptr = std::unique_ptr<std::byte[]>(new std::byte[entry.data_span.size_bytes()]);
@@ -729,41 +661,10 @@ std::optional<std::unique_ptr<std::byte[]>> tinysockets::MultiplexedIOSocket::re
 
         LOG(TRACE) << "receiveBytes() received " << entry.data_size << " bytes of data with tag " << entry.tag;
 
-        internal_state->last_received_stream_ctr = entry.stream_ctr;
-
         return std::move(data_ptr);
     }
 }
 
-void tinysockets::MultiplexedIOSocket::discardReceivedDataUntilEOS_Unsafe() const {
-    {
-        std::unique_lock lock{internal_state->receive_queues_mutex}; {
-            const auto drainTag = [this](const uint64_t tag) {
-                const auto it = internal_state->receive_queues.find(tag);
-                if (it == internal_state->receive_queues.end()) {
-                    return;
-                }
-                const auto &queue = it->second;
-                const ReceiveQueueEntry *entry{};
-                while ((entry = queue->front()) != nullptr) {
-                    if (entry->data == nullptr) {
-                        internal_state->last_received_stream_ctr = entry->stream_ctr - 1;
-                        queue->pop();
-                        continue;
-                    }
-                    if (entry->stream_ctr >= internal_state->target_stream_counter) {
-                        break;
-                    }
-                    internal_state->rx_allocator.release(entry->data, entry->data_size);
-                    queue->pop();
-                }
-            };
-            for (auto &[tag, _]: internal_state->receive_queues) {
-                drainTag(tag);
-            }
-        }
-    }
-}
 
 bool tinysockets::MultiplexedIOSocket::interrupt() {
     LOG(DEBUG) << "MultiplexedIOSocket::interrupt() called";

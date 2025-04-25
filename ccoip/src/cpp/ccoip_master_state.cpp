@@ -282,6 +282,10 @@ std::optional<ccoip_shared_state_sync_strategy_t> ccoip::CCoIPMasterState::getSh
     return it->second;
 }
 
+uint64_t ccoip::CCoIPMasterState::getNextCollectiveOpSeqNr() {
+    return collective_comms_sequence_number_atomic.fetch_add(1, std::memory_order_relaxed);
+}
+
 bool ccoip::CCoIPMasterState::voteOptimizeTopology(const ccoip_uuid_t &peer_uuid) {
     const auto info_opt = getClientInfo(peer_uuid);
     if (!info_opt) {

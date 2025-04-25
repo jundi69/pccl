@@ -47,7 +47,7 @@ int main() {
 
     constexpr size_t num_weights = 12;
 
-    constexpr size_t n_elements = 1024 * 1024 * 256;
+    constexpr size_t n_elements = 1024 * 1024 * 8;
 
     for (size_t i = 0; i < num_weights; i++) {
         auto weights = new float[n_elements];
@@ -84,7 +84,7 @@ int main() {
                 .sendbuf = all_gradients[j],
                 .recvbuf = all_weights[j],
                 .descriptor = pcclReduceDescriptor_t {
-                    .count = num_weights,
+                    .count = n_elements,
                     .tag = j,
                     .src_descriptor = pcclReduceOperandDescriptor_t {
                         .datatype = pcclFloat,
@@ -96,11 +96,16 @@ int main() {
         }
 
         pcclReduceInfo_t reduce_info{};
-        pcclAllReduceMultipleWithRetry(descriptors.data(), num_weights, communicator, &reduce_info, 8);
+        bool success = pcclAllReduceMultipleWithRetry(descriptors.data(), num_weights, communicator, &reduce_info, 8) == pcclSuccess;
 
+        if (success) {
+            std::cout << "All reduces finished sucessfully" << std::endl;
+            std::cout << "Tx bytes: " << reduce_info.tx_bytes << "; Rx bytes: " << reduce_info.rx_bytes << std::endl;
+        } else {
+            std::cerr << "All reduces failed" << std::endl;
+        }
         pcclGetAttribute(communicator, PCCL_ATTRIBUTE_GLOBAL_WORLD_SIZE, &world_size);
 
-        std::cout << "All reduces finished" << std::endl;
     }
 
     PCCL_CHECK(pcclDestroyCommunicator(communicator));

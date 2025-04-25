@@ -485,35 +485,31 @@ namespace tinysockets {
         [[nodiscard]] bool interrupt();
 
         // NOTE: User is responsible for destroying *pDoneHandleOut if pDoneHandleOut is populated
-        [[nodiscard]] bool sendBytes(uint64_t tag, const std::span<const std::byte> &data, bool clone_memory = true, tpark_handle_t **pDoneHandleOut = nullptr) const;
+        [[nodiscard]] bool sendBytes(uint64_t tag, uint64_t stream_ctr, const std::span<const std::byte> &data,
+                                     bool clone_memory = true, tpark_handle_t **pDoneHandleOut = nullptr) const;
 
-        [[nodiscard]] std::optional<ssize_t> receiveBytesInplace(uint64_t tag, const std::span<std::byte> &data) const;
+        [[nodiscard]] std::optional<ssize_t> receiveBytesInplace(uint64_t tag, uint64_t target_stream_ctr,
+                                                                 const std::span<std::byte> &data) const;
 
         [[nodiscard]] std::optional<std::unique_ptr<std::byte[]>> receiveBytes(
-            uint64_t tag, std::span<std::byte> &data, bool no_wait) const;
+            uint64_t tag, uint64_t target_stream_ctr, std::span<std::byte> &data, bool no_wait) const;
 
         /// Sends a packet to the client associated with the given socket address
         /// Returns false if the server is not running or the client connection does not exist
         template<typename T> requires std::is_base_of_v<ccoip::Packet, T>
-        [[nodiscard]] bool sendPacket(const uint64_t tag,
-                                      const T &packet) {
+        [[nodiscard]] bool sendPacket(const uint64_t tag, const uint64_t stream_ctr, const T &packet) {
             const ccoip::packetId_t id = T::packet_id;
             PacketWriteBuffer buffer{};
             packet.serialize(buffer);
-            return sendLtvPacket<T>(tag, id, buffer);
+            return sendLtvPacket<T>(tag, stream_ctr, id, buffer);
         }
 
         /// Receives a packet of the specified type
         template<typename T> requires std::is_base_of_v<ccoip::Packet, T>
-        [[nodiscard]] std::optional<T> receivePacket(const uint64_t tag, const bool no_wait) {
+        [[nodiscard]] std::optional<T> receivePacket(const uint64_t tag, const uint64_t target_stream_ctr, const bool no_wait) {
             const ccoip::packetId_t id = T::packet_id;
-            return receiveNextPacket<T>(tag, id, no_wait);
+            return receiveNextPacket<T>(tag, target_stream_ctr, id, no_wait);
         }
-
-        /// Discards all received data that was not yet consumed by @code receiveBytes@endcode for the specified tag until the stream counter reaches the current target.
-        /// WARNING: This function is not thread-safe and should only be called if the user knows that there is no
-        /// separate thread consuming data for the specified tag.
-        void discardReceivedDataUntilEOS_Unsafe() const;
 
         void join();
 
@@ -523,14 +519,6 @@ namespace tinysockets {
 
         ~MultiplexedIOSocket();
 
-        /// Sends an "end of stream" (more accurately "restart of stream") packet.
-        [[nodiscard]] bool sendEOS() const;
-
-        /// Bumps the target stream counter. All frames with stream counters less than the current stream counter
-        /// will be discarded. By bumping the target stream counter, all frames until the next received
-        /// EOS packet will be discarded.
-        void bumpTargetStreamCounter() const;
-
     private:
         // Packet decoding / encoding functions
         [[nodiscard]] std::optional<size_t> receivePacketLength() const;
@@ -538,10 +526,10 @@ namespace tinysockets {
         [[nodiscard]] bool receivePacketData(std::span<std::uint8_t> &dst) const;
 
         template<typename T> requires std::is_base_of_v<ccoip::Packet, T>
-        [[nodiscard]] std::optional<T> receiveNextPacket(const uint64_t tag, const ccoip::packetId_t packet_id,
+        [[nodiscard]] std::optional<T> receiveNextPacket(const uint64_t tag, const uint64_t target_stream_ctr, const ccoip::packetId_t packet_id,
                                                          const bool no_wait) {
             std::span<std::byte> data_span{};
-            auto data_uptr_opt = receiveBytes(tag, data_span, no_wait);
+            auto data_uptr_opt = receiveBytes(tag, target_stream_ctr, data_span, no_wait);
             if (!data_uptr_opt) {
                 return std::nullopt;
             }
@@ -560,12 +548,12 @@ namespace tinysockets {
         }
 
         template<typename T> requires std::is_base_of_v<ccoip::Packet, T>
-        [[nodiscard]] bool sendLtvPacket(const uint64_t tag, const ccoip::packetId_t packet_id,
+        [[nodiscard]] bool sendLtvPacket(const uint64_t tag, const uint64_t stream_ctr, const ccoip::packetId_t packet_id,
                                          const PacketWriteBuffer &buffer) const {
             PacketWriteBuffer complete_packet{};
             complete_packet.write(packet_id);
             complete_packet.writeContents(buffer.data(), buffer.size());
-            return sendBytes(tag,
+            return sendBytes(tag, stream_ctr,
                              std::span(reinterpret_cast<const std::byte *>(complete_packet.data()),
                                        complete_packet.size()));
         }

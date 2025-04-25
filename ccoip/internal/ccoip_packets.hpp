@@ -345,6 +345,7 @@ namespace ccoip {
         static packetId_t packet_id;
 
         uint64_t tag;
+        uint64_t seq_nr;
 
         void serialize(PacketWriteBuffer &buffer) const override;
 

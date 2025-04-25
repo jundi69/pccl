@@ -10,7 +10,7 @@ namespace ccoip::reduce {
     [[nodiscard]] std::pair<bool, bool> pipelineRingReduce(
         CCoIPClientState &client_state,
         tinysockets::QueuedSocket &master_socket,
-        uint64_t tag, std::span<const std::byte> src_buf, const std::span<std::byte> &dst_buf,
+        uint64_t tag, uint64_t seq_nr, std::span<const std::byte> src_buf, const std::span<std::byte> &dst_buf,
         ccoip_data_type_t data_type, ccoip_data_type_t quantized_type,
         ccoip_reduce_op_t op, ccoip_quantization_algorithm_t quantization_algorithm, size_t rank,
         size_t world_size,

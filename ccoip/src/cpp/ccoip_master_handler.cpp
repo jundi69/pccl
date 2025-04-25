@@ -824,6 +824,8 @@ bool ccoip::CCoIPMasterHandler::checkCollectiveCommsInitiateConsensus(const uint
             return false;
         }
 
+        const uint64_t seq_nr = server_state.getNextCollectiveOpSeqNr();
+
         // send confirmation packets to all clients
         for (auto &[peer_uuid, peer_address]: server_state.getClientEntrySet()) {
             const auto peer_info_opt = server_state.getClientInfo(peer_uuid);
@@ -852,6 +854,7 @@ bool ccoip::CCoIPMasterHandler::checkCollectiveCommsInitiateConsensus(const uint
             // send confirmation packet
             M2CPacketCollectiveCommsCommence confirm_packet{};
             confirm_packet.tag = tag;
+            confirm_packet.seq_nr = seq_nr;
             if (!server_socket.sendPacket<M2CPacketCollectiveCommsCommence>(peer_address, confirm_packet)) {
                 LOG(ERR) << "Failed to send M2CPacketCollectiveCommsCommence to "
                         << ccoip_sockaddr_to_str(peer_address);

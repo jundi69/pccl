@@ -1138,6 +1138,7 @@ bool ccoip::CCoIPClientHandler::allReduceAsync(const void *sendbuff, void *recvb
 
             const auto reduce_fun = [&] {
                 // vote commence collective comms operation and await consensus
+                uint64_t seq_nr;
                 {
                     C2MPacketCollectiveCommsInitiate initiate_packet{};
                     initiate_packet.tag = tag;
@@ -1159,6 +1160,7 @@ bool ccoip::CCoIPClientHandler::allReduceAsync(const void *sendbuff, void *recvb
                     if (!response) {
                         return std::pair{false, false};
                     }
+                    seq_nr = response->seq_nr;
                     LOG(DEBUG) << "Received M2CPacketCollectiveCommsCommence for tag " << tag
                                << "; Collective communications consensus reached";
                 }
@@ -1184,7 +1186,7 @@ bool ccoip::CCoIPClientHandler::allReduceAsync(const void *sendbuff, void *recvb
 
                 // perform pipeline ring reduce
                 auto [success, abort_packet_received] = reduce::pipelineRingReduce(
-                        client_state, master_socket, tag, send_span, recv_span, datatype, quantized_data_type, op,
+                        client_state, master_socket, tag, seq_nr, send_span, recv_span, datatype, quantized_data_type, op,
                         quantization_algorithm, position, ring_order.size(), ring_order, p2p_connections_tx,
                         p2p_connections_rx);
                 return std::pair{success, abort_packet_received};
@@ -1239,26 +1241,6 @@ bool ccoip::CCoIPClientHandler::allReduceAsync(const void *sendbuff, void *recvb
             if (!success) {
                 LOG(WARN) << "An IO error occurred during all reduce with tag " << tag
                           << "; Aborting collective communications operation...";
-
-                for (auto &[peer_uuid, socket] : p2p_connections_rx) {
-                    // Bump the target stream counter.
-                    // all data that was sent by peers and not consumed in the all reduce up until the abort
-                    // will be marked for discard and will not be filtered out when calling read functions
-                    // on the multiplexed socket when the next all reduce commences.
-                    socket->bumpTargetStreamCounter();
-                }
-                for (auto &[peer_uuid, socket]: p2p_connections_tx) {
-                    // send designated EOS packets to all peers to mark the end of the stream (and the beginning of the next one implicitly)
-                    if (!socket->sendEOS()) [[unlikely]] {
-                        // this can happen e.g. if the p2p connection dies exactly the moment we send the EOS packet
-                        // in which case we don't care about marking separation in data anyway because the connection is dead.
-                        LOG(WARN) << "Failed to send EOS packet to peer " << uuid_to_string(peer_uuid)
-                                  << " for tag " << tag;
-                    }
-                }
-                for (auto &[peer_uuid, socket] : p2p_connections_rx) {
-                    socket->discardReceivedDataUntilEOS_Unsafe();
-                }
             }
 
             promise.set_value(success);

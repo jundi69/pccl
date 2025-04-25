@@ -371,6 +371,9 @@ namespace ccoip {
         std::unordered_map<uint32_t, std::unordered_map<ccoip_uuid_t, std::vector<std::string>>>
         shared_state_dirty_keys{};
 
+        /// Atomic counter for the collective communications sequence number
+        std::atomic<uint64_t> collective_comms_sequence_number_atomic{0};
+
         /// Boolean state for each collective communications operation tag in every peer group that indicates if the
         /// operation has been aborted or not. true = aborted false = not aborted Cleared when the collective
         /// communications operation ends.
@@ -756,6 +759,9 @@ namespace ccoip {
 
         /// Returns the shared state sync strategy declared by a particular peer if it has voted to synchronize shared state.
         std::optional<ccoip_shared_state_sync_strategy_t> getSharedStateSyncStrategy(ccoip_uuid_t peer_uuid);
+
+        /// Returns the next collective communications operation sequence number.
+        uint64_t getNextCollectiveOpSeqNr();
 
     private:
         void onPeerAccepted(const ClientInfo &info);
