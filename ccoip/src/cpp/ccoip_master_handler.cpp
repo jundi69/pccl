@@ -52,7 +52,7 @@ bool ccoip::CCoIPMasterHandler::join() {
     return true;
 }
 
-bool ccoip::CCoIPMasterHandler::kickClient(const ccoip_socket_address_t &client_address) const {
+bool ccoip::CCoIPMasterHandler::kickClient(const ccoip_socket_address_t &client_address) {
     THREAD_GUARD(server_thread_id);
     LOG(DEBUG) << "Kicking client " << ccoip_sockaddr_to_str(client_address);
     if (!server_socket.closeClientConnection(client_address)) [[unlikely]] {
@@ -633,8 +633,7 @@ bool ccoip::CCoIPMasterHandler::checkSyncSharedStateConsensus(const uint32_t pee
                     LOG(ERR) << "Failed to kick client " << ccoip_sockaddr_to_str(peer_address);
                     return false;
                 }
-                // this is not a failure case; we have kicked a client, and we should recover
-                // we simply proceed with sending confirmation packets.
+                // this is not a failure case; we have kicked a client, and we should recover upon disconnect of the kicked client
                 return true;
             }
         }
@@ -647,6 +646,8 @@ bool ccoip::CCoIPMasterHandler::checkSyncSharedStateConsensus(const uint32_t pee
         // check if peers that have declared sync strategy tx only are have been assigned to request shared state.
         // in this case, we need to kick them. This means that some peers declaring to not want to receive shared state
         // do not have the same shared state. TX-only is only meaningful if the peers declaring it have the same shared state.
+        bool anyEnforcePopular = false;
+        bool anyNotEnforcePopular = false;
         for (auto &[peer_uuid, peer_address]: server_state.getClientEntrySet()) {
             const auto peer_info_opt = server_state.getClientInfo(peer_uuid);
             if (!peer_info_opt) [[unlikely]] {
@@ -658,7 +659,7 @@ bool ccoip::CCoIPMasterHandler::checkSyncSharedStateConsensus(const uint32_t pee
                 continue;
             }
             if (peer_info.connection_state == REQUEST_SHARED_STATE && server_state.getSharedStateSyncStrategy(peer_uuid)
-                == ccoip_tx_only) {
+                == ccoipSyncStrategyTxOnly) {
                 LOG(WARN) << "Kicking client " << ccoip_sockaddr_to_str(peer_address)
                         << " because it declared shared state sync strategy 'tx only' but has been assigned to request shared state because of hash unpopularity!";
                 if (!kickClient(peer_address)) [[unlikely]] {
@@ -667,6 +668,43 @@ bool ccoip::CCoIPMasterHandler::checkSyncSharedStateConsensus(const uint32_t pee
                 }
                 // this is not a failure case; we have kicked a client, and we should recover
                 // we simply proceed with sending confirmation packets.
+                // We cannot return here, because we have already executed the state change into
+                // the shared state sync phase, so we cannot re-enter if we simply handle the kick disconnect.
+            }
+
+            // track whether any peer has declared shared state sync strategy enforce popular
+            {
+                anyNotEnforcePopular = anyNotEnforcePopular || server_state.getSharedStateSyncStrategy(peer_uuid) != ccoipSyncStrategyEnforcePopular;
+                anyEnforcePopular = anyEnforcePopular || server_state.getSharedStateSyncStrategy(peer_uuid) == ccoipSyncStrategyEnforcePopular;
+            }
+        }
+
+        // if any peer declares shared state sync strategy enforce popular, all peers must declare strategy enforce popular.
+        // if any peer declares a different strategy, the peer needs to be kicked.
+        if (anyEnforcePopular && anyNotEnforcePopular) {
+            // kick all clients that do not declare enforce popular
+            for (auto &[peer_uuid, peer_address]: server_state.getClientEntrySet()) {
+                const auto peer_info_opt = server_state.getClientInfo(peer_uuid);
+                if (!peer_info_opt) [[unlikely]] {
+                    LOG(BUG) << "Client " << ccoip_sockaddr_to_str(peer_address) << " not found";
+                    continue;
+                }
+                const auto &peer_info = peer_info_opt->get();
+                if (peer_info.peer_group != peer_group || peer_info.connection_phase != PEER_ACCEPTED) {
+                    continue;
+                }
+                if (server_state.getSharedStateSyncStrategy(peer_uuid) != ccoipSyncStrategyEnforcePopular) {
+                    LOG(WARN) << "Kicking client " << ccoip_sockaddr_to_str(peer_address)
+                            << " because it declared shared state sync strategy 'enforce popular' but has been assigned to request shared state because of hash unpopularity!";
+                    if (!kickClient(peer_address)) [[unlikely]] {
+                        LOG(ERR) << "Failed to kick client " << ccoip_sockaddr_to_str(peer_address);
+                        return false;
+                    }
+                    // this is not a failure case; we have kicked a client, and we should recover
+                    // we simply proceed with sending confirmation packets.
+                    // We cannot return here, because we have already executed the state change into
+                    // the shared state sync phase, so we cannot re-enter if we simply handle the kick disconnect.
+                }
             }
         }
 
@@ -733,26 +771,6 @@ bool ccoip::CCoIPMasterHandler::checkSyncSharedStateConsensus(const uint32_t pee
 }
 
 bool ccoip::CCoIPMasterHandler::checkSyncSharedStateCompleteConsensus(const uint32_t peer_group) {
-    bool any_waiting = false;
-    // check if at least one client is waiting for shared state sync completion
-    for (const auto &[peer_uuid, peer_address]: server_state.getClientEntrySet()) {
-        const auto peer_info_opt = server_state.getClientInfo(peer_uuid);
-        if (!peer_info_opt) [[unlikely]] {
-            LOG(BUG) << "Client " << ccoip_sockaddr_to_str(peer_address) << " not found";
-            continue;
-        }
-        const auto &peer_info = peer_info_opt->get();
-        if (peer_info.peer_group != peer_group || peer_info.connection_phase != PEER_ACCEPTED) {
-            continue;
-        }
-        if (peer_info.connection_state == VOTE_COMPLETE_SHARED_STATE_SYNC) {
-            any_waiting = true;
-            break;
-        }
-    }
-    if (!any_waiting) {
-        return false;
-    }
     // check if all clients have voted to distribute shared state complete
     if (server_state.syncSharedStateCompleteConsensus(peer_group)) {
         if (!server_state.endSharedStateSyncPhase(peer_group)) [[unlikely]] {
@@ -1056,6 +1074,14 @@ void ccoip::CCoIPMasterHandler::handleSyncSharedState(const ccoip_socket_address
         client_uuid = client_uuid_opt.value();
     }
 
+    const auto info_opt = server_state.getClientInfo(client_uuid);
+    if (!info_opt) {
+        LOG(WARN) << "Client " << ccoip_sockaddr_to_str(client_address) << " not found";
+        return;
+    }
+
+    const auto &info = info_opt->get();
+
     // check if shared state request follows the right "mask" as in:
     // 1. requests same keys, dtype, etc. as the other clients; mismatch will result in a kick
     // 2. hash of the shared state is the same as the hash of the shared state of the other clients; mismatch will
@@ -1095,12 +1121,7 @@ void ccoip::CCoIPMasterHandler::handleSyncSharedState(const ccoip_socket_address
 
     server_state.voteSharedStateMask(client_uuid, packet.shared_state_hashes);
 
-    const auto info_opt = server_state.getClientInfo(client_uuid);
-    if (!info_opt) {
-        LOG(WARN) << "Client " << ccoip_sockaddr_to_str(client_address) << " not found";
-        return;
-    }
-    if (const auto &info = info_opt->get(); !checkSyncSharedStateConsensus(info.peer_group)) {
+    if (!checkSyncSharedStateConsensus(info.peer_group)) {
         // in this case, we have to kick all peers of the peer group.
         // this can happen e.g. if no peer has put its shared state content up for hash content popularity election.
         // in this case, we have no shared state to distribute and simply cannot continue.
@@ -1269,12 +1290,6 @@ void ccoip::CCoIPMasterHandler::onClientDisconnect(const ccoip_socket_address_t 
     THREAD_GUARD(server_thread_id);
 
     LOG(DEBUG) << "Client " << ccoip_sockaddr_to_str(client_address) << " disconnected";
-    if (!server_state.isClientRegistered(client_address)) {
-        // client disconnected before ever requesting to register
-        LOG(DEBUG) << "Client " << ccoip_sockaddr_to_str(client_address)
-                << " disconnected before registering. Strange, but not impossible";
-        return;
-    }
 
     const auto client_uuid_opt = server_state.findClientUUID(client_address);
     if (!client_uuid_opt) {

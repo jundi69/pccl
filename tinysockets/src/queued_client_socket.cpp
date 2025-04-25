@@ -91,7 +91,7 @@ bool tinysockets::QueuedSocket::run() {
             const auto length_opt = receivePacketLength();
             if (!length_opt) {
                 if (running) {
-                    LOG(ERR) << "Connection was closed; exiting receive loop...";
+                    LOG(ERR) << "[QueuedSocket] Connection was closed; exiting receive loop...";
                     if (!interrupt()) [[unlikely]] {
                         LOG(ERR) << "Failed to interrupt QueuedSocket";
                     }
@@ -107,7 +107,7 @@ bool tinysockets::QueuedSocket::run() {
             }
             const size_t length = *length_opt;
             if (length == 0) {
-                LOG(ERR) << "Received packet with length 0; closing connection";
+                LOG(ERR) << "[QueuedSocket] Received packet with length 0; closing connection";
                 if (!interrupt()) [[unlikely]] {
                     LOG(ERR) << "Failed to interrupt QueuedSocket";
                 }
@@ -117,7 +117,7 @@ bool tinysockets::QueuedSocket::run() {
             std::span data{data_ptr.get(), length};
             if (!receivePacketData(data)) {
                 if (running) {
-                    LOG(ERR) << "Failed to receive packet data for packet with length " << length;
+                    LOG(ERR) << "[QueuedSocket] Failed to receive packet data for packet with length " << length;
                     if (!interrupt()) [[unlikely]] {
                         LOG(ERR) << "Failed to interrupt QueuedSocket";
                     }
@@ -258,7 +258,7 @@ bool tinysockets::QueuedSocket::closeConnection() {
     return true;
 }
 
-std::optional<size_t> tinysockets::QueuedSocket::receivePacketLength() const {
+std::optional<size_t> tinysockets::QueuedSocket::receivePacketLength() {
     uint64_t length;
     auto *data = reinterpret_cast<uint8_t *>(&length);
     size_t n_received = 0;
@@ -266,8 +266,9 @@ std::optional<size_t> tinysockets::QueuedSocket::receivePacketLength() const {
         const ssize_t i = recvvp(socket_fd, data + n_received, sizeof(length) - n_received, 0);
         if (i == -1 || i == 0 || !running) {
             const std::string error_message = std::strerror(errno);
-            if (running) {
-                LOG(ERR) << "[QueuedSocket] Failed to receive packet length with error: " << error_message;
+            LOG(ERR) << "[QueuedSocket] Connection was closed during packet length receive; exiting receive loop...";
+            if (!interrupt()) [[unlikely]] {
+                LOG(ERR) << "Failed to interrupt QueuedSocket";
             }
             return std::nullopt;
         }

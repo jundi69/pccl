@@ -522,13 +522,13 @@ pcclResult_t pcclSynchronizeSharedState(const pcclComm_t *communicator, pcclShar
     ccoip_shared_state_sync_strategy_t sync_strategy;
     switch (strategy) {
         case PCCL_SHARED_STATE_SYNC_STRATEGY_ENFORCE_POPULAR:
-            sync_strategy = ccoip_enforce_popular;
+            sync_strategy = ccoipSyncStrategyEnforcePopular;
             break;
         case PCCL_SHARED_STATE_SYNC_STRATEGY_SEND_ONLY:
-            sync_strategy = ccoip_tx_only;
+            sync_strategy = ccoipSyncStrategyTxOnly;
             break;
         case PCCL_SHARED_STATE_SYNC_STRATEGY_RECEIVE_ONLY:
-            sync_strategy = ccoip_rx_only;
+            sync_strategy = ccoipSyncStrategyRxOnly;
             break;
         default:
             return pcclInvalidArgument;

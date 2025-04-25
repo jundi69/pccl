@@ -372,26 +372,6 @@ bool ccoip::CCoIPMasterState::voteSyncSharedState(const ccoip_uuid_t &peer_uuid,
     }
     const uint32_t peer_group = info.peer_group;
 
-    if (strategy == ccoip_enforce_popular) {
-        // if enforce popular is used as the shared state sync strategy, check if the all peers in the same peer group use enforce popular
-        for (const auto &[peer_uuid, peer_info]: client_info) {
-            if (peer_info.connection_phase != PEER_ACCEPTED) {
-                continue;
-            }
-            if (peer_info.peer_group != peer_group) {
-                continue;
-            }
-            if (peer_info.connection_state != VOTE_SYNC_SHARED_STATE) {
-                continue;
-            }
-            if (shared_state_sync_strategies[peer_uuid] != ccoip_enforce_popular) {
-                LOG(WARN) << "Client " << ccoip_sockaddr_to_str(peer_info.socket_address)
-                        << " is not using the same shared state sync strategy as the current client";
-                return false;
-            }
-        }
-    }
-
     // set the client state to vote to sync shared state
     info.connection_state = VOTE_SYNC_SHARED_STATE;
     if (auto [_, inserted] = votes_sync_shared_state[peer_group].insert(info.client_uuid); !inserted) {
@@ -1092,7 +1072,7 @@ void ccoip::CCoIPMasterState::voteSharedStateMask(const ccoip_uuid_t &peer_uuid,
 
     const ccoip_shared_state_sync_strategy_t strategy = shared_state_sync_strategies[peer_uuid];
 
-    if (strategy != ccoip_rx_only) {
+    if (strategy != ccoipSyncStrategyRxOnly) {
         // sync strategy rx only does not participate in shared state mask voting; its contents can never be chosen
         shared_state_mask_candidates[peer_group].emplace_back(peer_uuid, entries);
     }
@@ -1166,7 +1146,8 @@ bool ccoip::CCoIPMasterState::electSharedStateMask(const uint32_t peer_group) {
         }
     }
     if (max_votes == 0) {
-        LOG(WARN) << "No winning candidate found for peer group " << peer_group << "! This means no peer has voted its shared state to be up for hash content popularity election.";
+        LOG(WARN) << "No winning candidate found for peer group " << peer_group <<
+                "! This means no peer has voted its shared state to be up for hash content popularity election.";
         return false;
     }
 

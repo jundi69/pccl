@@ -264,7 +264,7 @@ namespace tinysockets {
         std::mutex send_mutex;
         std::thread receive_thread;
         QueuedSocketInternalState *internal_state;
-        volatile bool running;
+        std::atomic_bool running;
 
     public:
         explicit QueuedSocket(const ccoip_socket_address_t &address);
@@ -322,7 +322,7 @@ namespace tinysockets {
         // Packet decoding / encoding functions
         [[nodiscard]] bool sendLtvPacket(ccoip::packetId_t packet_id, const PacketWriteBuffer &buffer) const;
 
-        [[nodiscard]] std::optional<size_t> receivePacketLength() const;
+        [[nodiscard]] std::optional<size_t> receivePacketLength();
 
         [[nodiscard]] bool receivePacketData(std::span<std::uint8_t> &dst) const;
 

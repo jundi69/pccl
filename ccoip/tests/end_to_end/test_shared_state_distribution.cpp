@@ -1558,6 +1558,8 @@ TEST(SharedStateDistribution, TestOneIncrementRuleViolationSimple) {
             if (step == 0) {
                 // First step should succeed because revision is 0
                 EXPECT_TRUE(success);
+            } else {
+                EXPECT_FALSE(success);
             }
         }
     });
@@ -1674,6 +1676,8 @@ TEST(SharedStateDistribution, TestOneIncrementRuleViolationInitialization) {
 // Client 1 and 2 establish popularity, leading to the mask of client 1 and client 2 to be elected,
 // but client 3 attempts to sync shared state with mismatched keys that differ from those of client 1 and 2.
 // Client 3 should be kicked.
+// Subsequent calls to syncSharedState by the remaining clients 1 and 2 should succeed.
+// Subsequent calls to syncSharedState by client 3 should also fail.
 TEST(SharedStateDistribution, TestSharedStateMaskMismatchKick) {
     GUARD_PORT(CCOIP_PROTOCOL_PORT_MASTER);
 
@@ -1728,6 +1732,9 @@ TEST(SharedStateDistribution, TestSharedStateMaskMismatchKick) {
 
         ccoip_shared_state_sync_info_t info{};
         EXPECT_TRUE(client1.syncSharedState(shared_state, info));
+
+        shared_state.revision = 1;
+        EXPECT_TRUE(client1.syncSharedState(shared_state, info));
     });
 
     // Client 2 synchronizes same shared state as client 1 with matching content as keys
@@ -1745,6 +1752,9 @@ TEST(SharedStateDistribution, TestSharedStateMaskMismatchKick) {
         shared_state.revision = 0;
 
         ccoip_shared_state_sync_info_t info{};
+        EXPECT_TRUE(client2.syncSharedState(shared_state, info));
+
+        shared_state.revision = 1;
         EXPECT_TRUE(client2.syncSharedState(shared_state, info));
     });
 
@@ -2386,6 +2396,819 @@ TEST(SharedStateDistribution, TestChangingPeerGroupMembershipBetweenSynchronizat
     EXPECT_TRUE(master.interrupt());
     EXPECT_TRUE(master.join());
 };
+
+// Tests the behavior when two clients with different shared state content attempt to synchronize shared
+// state while both using send only as a sync strategy.
+// this is explicitly not allowed and one of the two peers should be kicked.
+TEST(SharedStateDistribution, TestDifferentSharedStatetContentBothSendOnlyStrategyKick) {
+    GUARD_PORT(CCOIP_PROTOCOL_PORT_MASTER);
+
+    ccoip::CCoIPMaster master({
+        .inet = {.protocol = inetIPv4, .ipv4 = {.data = {0, 0, 0, 0}}},
+        .port = CCOIP_PROTOCOL_PORT_MASTER
+    });
+    EXPECT_TRUE(master.launch());
+
+    // client 1
+    ccoip::CCoIPClient client1({
+                                   .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                   .port = CCOIP_PROTOCOL_PORT_MASTER,
+                               }, 0);
+    // client 2
+    ccoip::CCoIPClient client2({
+                                   .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                   .port = CCOIP_PROTOCOL_PORT_MASTER
+                               }, 0);
+
+    establishConnections({&client1, &client2});
+
+    constexpr size_t value_size = 1024;
+    const std::unique_ptr<uint8_t[]> value1(new uint8_t[value_size]);
+    std::fill_n(value1.get(), value_size, 42);
+
+    std::atomic_bool any_kicked{false};
+
+    std::thread client1_sync_thread([&client1, &value1, value_size, &any_kicked] {
+        client1.setMainThread(std::this_thread::get_id());
+        ccoip_shared_state_t shared_state{};
+        shared_state.entries.push_back(ccoip_shared_state_entry_t{
+            .key = "key1",
+            .data_type = ccoip::ccoipUint8,
+            .device_type = ccoip::ccoipDeviceCpu,
+            .data_ptr = value1.get(),
+            .data_size = value_size,
+            .allow_content_inequality = false
+        });
+        shared_state.revision = 0;
+        shared_state.sync_strategy = ccoipSyncStrategyTxOnly;
+
+        ccoip_shared_state_sync_info_t info{};
+        const bool success = client1.syncSharedState(shared_state, info);
+        if (!success) {
+            any_kicked.store(true, std::memory_order_seq_cst);
+        }
+    });
+
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+
+    const std::unique_ptr<uint8_t[]> value2(new uint8_t[value_size]);
+    std::fill_n(value2.get(), value_size, 0x0);
+    std::thread client2_sync_thread([&client2, &value2, value_size, &any_kicked] {
+        client2.setMainThread(std::this_thread::get_id());
+        // client 2 requests shared state
+        ccoip_shared_state_t shared_state{};
+        shared_state.entries.push_back(ccoip_shared_state_entry_t{
+            .key = "key1",
+            .data_type = ccoip::ccoipUint8,
+            .device_type = ccoip::ccoipDeviceCpu,
+            .data_ptr = value2.get(),
+            .data_size = value_size,
+            .allow_content_inequality = false
+        });
+        shared_state.revision = 0;
+        shared_state.sync_strategy = ccoipSyncStrategyTxOnly;
+
+        ccoip_shared_state_sync_info_t info{};
+        const bool success = client2.syncSharedState(shared_state, info);
+        if (!success) {
+            any_kicked.store(true, std::memory_order_seq_cst);
+        }
+    });
+
+    // wait for shared state sync to complete
+    client1_sync_thread.join();
+    client2_sync_thread.join();
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    // quick and dirty hack to avoid cross-thread visibility issues with any_kicked
+
+    EXPECT_TRUE(any_kicked.load(std::memory_order_seq_cst));
+
+    // clean shutdown
+    EXPECT_TRUE(client2.interrupt());
+    EXPECT_TRUE(client1.interrupt());
+
+    EXPECT_TRUE(client1.join());
+    EXPECT_TRUE(client2.join());
+
+    EXPECT_TRUE(master.interrupt());
+    EXPECT_TRUE(master.join());
+}
+
+// Tests the behavior when two clients both declare receive only as a sync strategy.
+// In this variant both peers have different content, which should not matter as to the decision.
+// In this case, no hash popularity election winner can be determined as no client has put its content up for election.
+// In this case, both clients should be kicked.
+TEST(SharedStateDistribution, TestBothReceiveOnlyStrategyKickDifferentContent) {
+    GUARD_PORT(CCOIP_PROTOCOL_PORT_MASTER);
+
+    ccoip::CCoIPMaster master({
+        .inet = {.protocol = inetIPv4, .ipv4 = {.data = {0, 0, 0, 0}}},
+        .port = CCOIP_PROTOCOL_PORT_MASTER
+    });
+    EXPECT_TRUE(master.launch());
+
+    // client 1
+    ccoip::CCoIPClient client1({
+                                   .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                   .port = CCOIP_PROTOCOL_PORT_MASTER,
+                               }, 0);
+    // client 2
+    ccoip::CCoIPClient client2({
+                                   .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                   .port = CCOIP_PROTOCOL_PORT_MASTER
+                               }, 0);
+
+    establishConnections({&client1, &client2});
+
+    constexpr size_t value_size = 1024;
+    const std::unique_ptr<uint8_t[]> value1(new uint8_t[value_size]);
+    std::fill_n(value1.get(), value_size, 42);
+
+    std::thread client1_sync_thread([&client1, &value1, value_size] {
+        client1.setMainThread(std::this_thread::get_id());
+        ccoip_shared_state_t shared_state{};
+        shared_state.entries.push_back(ccoip_shared_state_entry_t{
+            .key = "key1",
+            .data_type = ccoip::ccoipUint8,
+            .device_type = ccoip::ccoipDeviceCpu,
+            .data_ptr = value1.get(),
+            .data_size = value_size,
+            .allow_content_inequality = false
+        });
+        shared_state.revision = 0;
+        shared_state.sync_strategy = ccoipSyncStrategyRxOnly;
+
+        ccoip_shared_state_sync_info_t info{};
+        EXPECT_FALSE(client1.syncSharedState(shared_state, info));
+    });
+
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+
+    const std::unique_ptr<uint8_t[]> value2(new uint8_t[value_size]);
+    std::fill_n(value2.get(), value_size, 0x0);
+    std::thread client2_sync_thread([&client2, &value2, value_size] {
+        client2.setMainThread(std::this_thread::get_id());
+        // client 2 requests shared state
+        ccoip_shared_state_t shared_state{};
+        shared_state.entries.push_back(ccoip_shared_state_entry_t{
+            .key = "key1",
+            .data_type = ccoip::ccoipUint8,
+            .device_type = ccoip::ccoipDeviceCpu,
+            .data_ptr = value2.get(),
+            .data_size = value_size,
+            .allow_content_inequality = false
+        });
+        shared_state.revision = 0;
+        shared_state.sync_strategy = ccoipSyncStrategyRxOnly;
+
+        ccoip_shared_state_sync_info_t info{};
+        EXPECT_FALSE(client2.syncSharedState(shared_state, info));
+    });
+
+    // wait for shared state sync to complete
+    client1_sync_thread.join();
+    client2_sync_thread.join();
+
+    // clean shutdown
+    EXPECT_TRUE(client2.interrupt());
+    EXPECT_TRUE(client1.interrupt());
+
+    EXPECT_TRUE(client1.join());
+    EXPECT_TRUE(client2.join());
+
+    EXPECT_TRUE(master.interrupt());
+    EXPECT_TRUE(master.join());
+}
+
+
+// Tests the behavior when two clients both declare receive only as a sync strategy.
+// In this variant both peers have the same content, which should not matter as to the decision.
+// In this case, no hash popularity election winner can be determined as no client has put its content up for election.
+// In this case, both clients should be kicked.
+TEST(SharedStateDistribution, TestBothReceiveOnlyStrategyKickSameContent) {
+    GUARD_PORT(CCOIP_PROTOCOL_PORT_MASTER);
+
+    ccoip::CCoIPMaster master({
+        .inet = {.protocol = inetIPv4, .ipv4 = {.data = {0, 0, 0, 0}}},
+        .port = CCOIP_PROTOCOL_PORT_MASTER
+    });
+    EXPECT_TRUE(master.launch());
+
+    // client 1
+    ccoip::CCoIPClient client1({
+                                   .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                   .port = CCOIP_PROTOCOL_PORT_MASTER,
+                               }, 0);
+    // client 2
+    ccoip::CCoIPClient client2({
+                                   .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                   .port = CCOIP_PROTOCOL_PORT_MASTER
+                               }, 0);
+
+    establishConnections({&client1, &client2});
+
+    constexpr size_t value_size = 1024;
+    const std::unique_ptr<uint8_t[]> value1(new uint8_t[value_size]);
+    std::fill_n(value1.get(), value_size, 42);
+
+    std::thread client1_sync_thread([&client1, &value1, value_size] {
+        client1.setMainThread(std::this_thread::get_id());
+        ccoip_shared_state_t shared_state{};
+        shared_state.entries.push_back(ccoip_shared_state_entry_t{
+            .key = "key1",
+            .data_type = ccoip::ccoipUint8,
+            .device_type = ccoip::ccoipDeviceCpu,
+            .data_ptr = value1.get(),
+            .data_size = value_size,
+            .allow_content_inequality = false
+        });
+        shared_state.revision = 0;
+        shared_state.sync_strategy = ccoipSyncStrategyRxOnly;
+
+        ccoip_shared_state_sync_info_t info{};
+        EXPECT_FALSE(client1.syncSharedState(shared_state, info));
+    });
+
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+
+    const std::unique_ptr<uint8_t[]> value2(new uint8_t[value_size]);
+    std::fill_n(value2.get(), value_size, 42);
+    std::thread client2_sync_thread([&client2, &value2, value_size] {
+        client2.setMainThread(std::this_thread::get_id());
+        // client 2 requests shared state
+        ccoip_shared_state_t shared_state{};
+        shared_state.entries.push_back(ccoip_shared_state_entry_t{
+            .key = "key1",
+            .data_type = ccoip::ccoipUint8,
+            .device_type = ccoip::ccoipDeviceCpu,
+            .data_ptr = value2.get(),
+            .data_size = value_size,
+            .allow_content_inequality = false
+        });
+        shared_state.revision = 0;
+        shared_state.sync_strategy = ccoipSyncStrategyRxOnly;
+
+        ccoip_shared_state_sync_info_t info{};
+        EXPECT_FALSE(client2.syncSharedState(shared_state, info));
+    });
+
+    // wait for shared state sync to complete
+    client1_sync_thread.join();
+    client2_sync_thread.join();
+
+    // clean shutdown
+    EXPECT_TRUE(client2.interrupt());
+    EXPECT_TRUE(client1.interrupt());
+
+    EXPECT_TRUE(client1.join());
+    EXPECT_TRUE(client2.join());
+
+    EXPECT_TRUE(master.interrupt());
+    EXPECT_TRUE(master.join());
+}
+
+// This test tests that if one peer uses the "enforce popular" sync strategy,
+// that all other peers must also use the "enforce popular" strategy.
+// In this test two clients are created, one with "enforce popular" and one with "receive only".
+// This is technically not a too problematic situation, but we still dis-allow it for reasons of caution
+// and reducing unnecessary complexity.
+// We expect the peer that did not declare "enforce popular" to be kicked.
+TEST(SharedStateDistribution, TestEnforcePopluarSyncStrategyNoMixingWithReceiveOnly) {
+    GUARD_PORT(CCOIP_PROTOCOL_PORT_MASTER);
+
+    ccoip::CCoIPMaster master({
+        .inet = {.protocol = inetIPv4, .ipv4 = {.data = {0, 0, 0, 0}}},
+        .port = CCOIP_PROTOCOL_PORT_MASTER
+    });
+    EXPECT_TRUE(master.launch());
+
+    // client 1
+    ccoip::CCoIPClient client1({
+                                   .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                   .port = CCOIP_PROTOCOL_PORT_MASTER,
+                               }, 0);
+    // client 2
+    ccoip::CCoIPClient client2({
+                                   .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                   .port = CCOIP_PROTOCOL_PORT_MASTER
+                               }, 0);
+
+    establishConnections({&client1, &client2});
+
+    constexpr size_t value_size = 1024;
+    const std::unique_ptr<uint8_t[]> value1(new uint8_t[value_size]);
+    std::fill_n(value1.get(), value_size, 42);
+
+    std::thread client1_sync_thread([&client1, &value1, value_size] {
+        client1.setMainThread(std::this_thread::get_id());
+        ccoip_shared_state_t shared_state{};
+        shared_state.entries.push_back(ccoip_shared_state_entry_t{
+            .key = "key1",
+            .data_type = ccoip::ccoipUint8,
+            .device_type = ccoip::ccoipDeviceCpu,
+            .data_ptr = value1.get(),
+            .data_size = value_size,
+            .allow_content_inequality = false
+        });
+        shared_state.revision = 0;
+        shared_state.sync_strategy = ccoipSyncStrategyEnforcePopular;
+
+        ccoip_shared_state_sync_info_t info{};
+        EXPECT_TRUE(client1.syncSharedState(shared_state, info));
+    });
+
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+
+    const std::unique_ptr<uint8_t[]> value2(new uint8_t[value_size]);
+    std::fill_n(value2.get(), value_size, 42);
+    std::thread client2_sync_thread([&client2, &value2, value_size] {
+        client2.setMainThread(std::this_thread::get_id());
+        // client 2 requests shared state
+        ccoip_shared_state_t shared_state{};
+        shared_state.entries.push_back(ccoip_shared_state_entry_t{
+            .key = "key1",
+            .data_type = ccoip::ccoipUint8,
+            .device_type = ccoip::ccoipDeviceCpu,
+            .data_ptr = value2.get(),
+            .data_size = value_size,
+            .allow_content_inequality = false
+        });
+        shared_state.revision = 0;
+        shared_state.sync_strategy = ccoipSyncStrategyRxOnly;
+
+        ccoip_shared_state_sync_info_t info{};
+        EXPECT_FALSE(client2.syncSharedState(shared_state, info));
+    });
+
+    // wait for shared state sync to complete
+    client1_sync_thread.join();
+    client2_sync_thread.join();
+
+    // clean shutdown
+    EXPECT_TRUE(client2.interrupt());
+    EXPECT_TRUE(client1.interrupt());
+
+    EXPECT_TRUE(client1.join());
+    EXPECT_TRUE(client2.join());
+
+    EXPECT_TRUE(master.interrupt());
+    EXPECT_TRUE(master.join());
+}
+
+
+// This test tests that if one peer uses the "enforce popular" sync strategy,
+// that all other peers must also use the "enforce popular" strategy.
+// In this test two clients are created, one with "enforce popular" and one with "send only".
+// This is technically not a too problematic situation, but we still dis-allow it for reasons of caution
+// and reducing unnecessary complexity.
+// We expect the peer that did not declare "enforce popular" to be kicked.
+TEST(SharedStateDistribution, TestEnforcePopluarSyncStrategyNoMixingWithSendOnly) {
+    GUARD_PORT(CCOIP_PROTOCOL_PORT_MASTER);
+
+    ccoip::CCoIPMaster master({
+        .inet = {.protocol = inetIPv4, .ipv4 = {.data = {0, 0, 0, 0}}},
+        .port = CCOIP_PROTOCOL_PORT_MASTER
+    });
+    EXPECT_TRUE(master.launch());
+
+    // client 1
+    ccoip::CCoIPClient client1({
+                                   .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                   .port = CCOIP_PROTOCOL_PORT_MASTER,
+                               }, 0);
+    // client 2
+    ccoip::CCoIPClient client2({
+                                   .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                   .port = CCOIP_PROTOCOL_PORT_MASTER
+                               }, 0);
+
+    establishConnections({&client1, &client2});
+
+    constexpr size_t value_size = 1024;
+    const std::unique_ptr<uint8_t[]> value1(new uint8_t[value_size]);
+    std::fill_n(value1.get(), value_size, 42);
+
+    std::thread client1_sync_thread([&client1, &value1, value_size] {
+        client1.setMainThread(std::this_thread::get_id());
+        ccoip_shared_state_t shared_state{};
+        shared_state.entries.push_back(ccoip_shared_state_entry_t{
+            .key = "key1",
+            .data_type = ccoip::ccoipUint8,
+            .device_type = ccoip::ccoipDeviceCpu,
+            .data_ptr = value1.get(),
+            .data_size = value_size,
+            .allow_content_inequality = false
+        });
+        shared_state.revision = 0;
+        shared_state.sync_strategy = ccoipSyncStrategyEnforcePopular;
+
+        ccoip_shared_state_sync_info_t info{};
+        EXPECT_TRUE(client1.syncSharedState(shared_state, info));
+    });
+
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+
+    const std::unique_ptr<uint8_t[]> value2(new uint8_t[value_size]);
+    std::fill_n(value2.get(), value_size, 42);
+    std::thread client2_sync_thread([&client2, &value2, value_size] {
+        client2.setMainThread(std::this_thread::get_id());
+        // client 2 requests shared state
+        ccoip_shared_state_t shared_state{};
+        shared_state.entries.push_back(ccoip_shared_state_entry_t{
+            .key = "key1",
+            .data_type = ccoip::ccoipUint8,
+            .device_type = ccoip::ccoipDeviceCpu,
+            .data_ptr = value2.get(),
+            .data_size = value_size,
+            .allow_content_inequality = false
+        });
+        shared_state.revision = 0;
+        shared_state.sync_strategy = ccoipSyncStrategyTxOnly;
+
+        ccoip_shared_state_sync_info_t info{};
+        EXPECT_FALSE(client2.syncSharedState(shared_state, info));
+    });
+
+    // wait for shared state sync to complete
+    client1_sync_thread.join();
+    client2_sync_thread.join();
+
+    // clean shutdown
+    EXPECT_TRUE(client2.interrupt());
+    EXPECT_TRUE(client1.interrupt());
+
+    EXPECT_TRUE(client1.join());
+    EXPECT_TRUE(client2.join());
+
+    EXPECT_TRUE(master.interrupt());
+    EXPECT_TRUE(master.join());
+}
+
+TEST(SharedStateDistribution, TestEnforcePopularSyncStrategyNoMixingWithSendOnlyWorldSize3) {
+    GUARD_PORT(CCOIP_PROTOCOL_PORT_MASTER);
+
+    ccoip::CCoIPMaster master({
+        .inet = {.protocol = inetIPv4, .ipv4 = {.data = {0, 0, 0, 0}}},
+        .port = CCOIP_PROTOCOL_PORT_MASTER
+    });
+    EXPECT_TRUE(master.launch());
+
+    // client 1
+    ccoip::CCoIPClient client1({
+                                   .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                   .port = CCOIP_PROTOCOL_PORT_MASTER,
+                               }, 0);
+    // client 2
+    ccoip::CCoIPClient client2({
+                                   .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                   .port = CCOIP_PROTOCOL_PORT_MASTER
+                               }, 0);
+    // client 3
+    ccoip::CCoIPClient client3({
+                                   .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                   .port = CCOIP_PROTOCOL_PORT_MASTER
+                               }, 0);
+
+    establishConnections({&client1, &client2, &client3});
+
+    constexpr size_t value_size = 1024;
+    const std::unique_ptr<uint8_t[]> value1(new uint8_t[value_size]);
+    std::fill_n(value1.get(), value_size, 42);
+
+    std::thread client1_sync_thread([&client1, &value1, value_size] {
+        client1.setMainThread(std::this_thread::get_id());
+        ccoip_shared_state_t shared_state{};
+        shared_state.entries.push_back(ccoip_shared_state_entry_t{
+            .key = "key1",
+            .data_type = ccoip::ccoipUint8,
+            .device_type = ccoip::ccoipDeviceCpu,
+            .data_ptr = value1.get(),
+            .data_size = value_size,
+            .allow_content_inequality = false
+        });
+        shared_state.revision = 0;
+        shared_state.sync_strategy = ccoipSyncStrategyEnforcePopular;
+
+        ccoip_shared_state_sync_info_t info{};
+        EXPECT_TRUE(client1.syncSharedState(shared_state, info));
+    });
+
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+
+    const std::unique_ptr<uint8_t[]> value2(new uint8_t[value_size]);
+    std::fill_n(value2.get(), value_size, 42);
+    std::thread client2_sync_thread([&client2, &value2, value_size] {
+        client2.setMainThread(std::this_thread::get_id());
+        // client 2 requests shared state
+        ccoip_shared_state_t shared_state{};
+        shared_state.entries.push_back(ccoip_shared_state_entry_t{
+            .key = "key1",
+            .data_type = ccoip::ccoipUint8,
+            .device_type = ccoip::ccoipDeviceCpu,
+            .data_ptr = value2.get(),
+            .data_size = value_size,
+            .allow_content_inequality = false
+        });
+        shared_state.revision = 0;
+        shared_state.sync_strategy = ccoipSyncStrategyTxOnly;
+
+        ccoip_shared_state_sync_info_t info{};
+        EXPECT_FALSE(client2.syncSharedState(shared_state, info));
+    });
+
+    const std::unique_ptr<uint8_t[]> value3(new uint8_t[value_size]);
+    std::fill_n(value3.get(), value_size, 42);
+    std::thread client3_sync_thread([&client3, &value3, value_size] {
+        client3.setMainThread(std::this_thread::get_id());
+        // client 2 requests shared state
+        ccoip_shared_state_t shared_state{};
+        shared_state.entries.push_back(ccoip_shared_state_entry_t{
+            .key = "key1",
+            .data_type = ccoip::ccoipUint8,
+            .device_type = ccoip::ccoipDeviceCpu,
+            .data_ptr = value3.get(),
+            .data_size = value_size,
+            .allow_content_inequality = false
+        });
+        shared_state.revision = 0;
+        shared_state.sync_strategy = ccoipSyncStrategyTxOnly;
+
+        ccoip_shared_state_sync_info_t info{};
+        EXPECT_FALSE(client3.syncSharedState(shared_state, info));
+    });
+
+    // wait for shared state sync to complete
+    client1_sync_thread.join();
+    client2_sync_thread.join();
+    client3_sync_thread.join();
+
+    // clean shutdown
+    EXPECT_TRUE(client3.interrupt());
+    EXPECT_TRUE(client2.interrupt());
+    EXPECT_TRUE(client1.interrupt());
+
+    EXPECT_TRUE(client1.join());
+    EXPECT_TRUE(client2.join());
+    EXPECT_TRUE(client3.join());
+
+    EXPECT_TRUE(master.interrupt());
+    EXPECT_TRUE(master.join());
+}
+
+
+TEST(SharedStateDistribution, TestEnforcePopularSyncStrategyNoMixingWithSendOnlyAndReceiveOnlyWorldSize3) {
+    GUARD_PORT(CCOIP_PROTOCOL_PORT_MASTER);
+
+    ccoip::CCoIPMaster master({
+        .inet = {.protocol = inetIPv4, .ipv4 = {.data = {0, 0, 0, 0}}},
+        .port = CCOIP_PROTOCOL_PORT_MASTER
+    });
+    EXPECT_TRUE(master.launch());
+
+    // client 1
+    ccoip::CCoIPClient client1({
+                                   .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                   .port = CCOIP_PROTOCOL_PORT_MASTER,
+                               }, 0);
+    // client 2
+    ccoip::CCoIPClient client2({
+                                   .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                   .port = CCOIP_PROTOCOL_PORT_MASTER
+                               }, 0);
+    // client 3
+    ccoip::CCoIPClient client3({
+                                   .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                   .port = CCOIP_PROTOCOL_PORT_MASTER
+                               }, 0);
+
+    establishConnections({&client1, &client2, &client3});
+
+    constexpr size_t value_size = 1024;
+    const std::unique_ptr<uint8_t[]> value1(new uint8_t[value_size]);
+    std::fill_n(value1.get(), value_size, 42);
+
+    std::thread client1_sync_thread([&client1, &value1, value_size] {
+        client1.setMainThread(std::this_thread::get_id());
+        ccoip_shared_state_t shared_state{};
+        shared_state.entries.push_back(ccoip_shared_state_entry_t{
+            .key = "key1",
+            .data_type = ccoip::ccoipUint8,
+            .device_type = ccoip::ccoipDeviceCpu,
+            .data_ptr = value1.get(),
+            .data_size = value_size,
+            .allow_content_inequality = false
+        });
+        shared_state.revision = 0;
+        shared_state.sync_strategy = ccoipSyncStrategyEnforcePopular;
+
+        ccoip_shared_state_sync_info_t info{};
+        EXPECT_TRUE(client1.syncSharedState(shared_state, info));
+    });
+
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+
+    const std::unique_ptr<uint8_t[]> value2(new uint8_t[value_size]);
+    std::fill_n(value2.get(), value_size, 42);
+    std::thread client2_sync_thread([&client2, &value2, value_size] {
+        client2.setMainThread(std::this_thread::get_id());
+        // client 2 requests shared state
+        ccoip_shared_state_t shared_state{};
+        shared_state.entries.push_back(ccoip_shared_state_entry_t{
+            .key = "key1",
+            .data_type = ccoip::ccoipUint8,
+            .device_type = ccoip::ccoipDeviceCpu,
+            .data_ptr = value2.get(),
+            .data_size = value_size,
+            .allow_content_inequality = false
+        });
+        shared_state.revision = 0;
+        shared_state.sync_strategy = ccoipSyncStrategyTxOnly;
+
+        ccoip_shared_state_sync_info_t info{};
+        EXPECT_FALSE(client2.syncSharedState(shared_state, info));
+    });
+
+    const std::unique_ptr<uint8_t[]> value3(new uint8_t[value_size]);
+    std::fill_n(value3.get(), value_size, 42);
+    std::thread client3_sync_thread([&client3, &value3, value_size] {
+        client3.setMainThread(std::this_thread::get_id());
+        // client 2 requests shared state
+        ccoip_shared_state_t shared_state{};
+        shared_state.entries.push_back(ccoip_shared_state_entry_t{
+            .key = "key1",
+            .data_type = ccoip::ccoipUint8,
+            .device_type = ccoip::ccoipDeviceCpu,
+            .data_ptr = value3.get(),
+            .data_size = value_size,
+            .allow_content_inequality = false
+        });
+        shared_state.revision = 0;
+        shared_state.sync_strategy = ccoipSyncStrategyRxOnly;
+
+        ccoip_shared_state_sync_info_t info{};
+        EXPECT_FALSE(client3.syncSharedState(shared_state, info));
+    });
+
+    // wait for shared state sync to complete
+    client1_sync_thread.join();
+    client2_sync_thread.join();
+    client3_sync_thread.join();
+
+    // clean shutdown
+    EXPECT_TRUE(client3.interrupt());
+    EXPECT_TRUE(client2.interrupt());
+    EXPECT_TRUE(client1.interrupt());
+
+    EXPECT_TRUE(client1.join());
+    EXPECT_TRUE(client2.join());
+    EXPECT_TRUE(client3.join());
+
+    EXPECT_TRUE(master.interrupt());
+    EXPECT_TRUE(master.join());
+}
+
+// This peer tests the behavior when 4 peers are in 2 different peer groups of size 2 each,
+// where one group has uses send-only on identical content (which is allowed) and the other group mixes send-only with enforce popular.
+TEST(SharedStateDistribution, TestCrossPeerGroupLocalMixingLocalKickWorldSize4PeerGroups2) {
+    GUARD_PORT(CCOIP_PROTOCOL_PORT_MASTER);
+
+    ccoip::CCoIPMaster master({
+        .inet = {.protocol = inetIPv4, .ipv4 = {.data = {0, 0, 0, 0}}},
+        .port = CCOIP_PROTOCOL_PORT_MASTER
+    });
+    EXPECT_TRUE(master.launch());
+
+    // client 1
+    ccoip::CCoIPClient client1({
+                                   .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                   .port = CCOIP_PROTOCOL_PORT_MASTER,
+                               }, 0);
+    // client 2
+    ccoip::CCoIPClient client2({
+                                   .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                   .port = CCOIP_PROTOCOL_PORT_MASTER
+                               }, 0);
+    // client 3
+    ccoip::CCoIPClient client3({
+                                   .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                   .port = CCOIP_PROTOCOL_PORT_MASTER
+                               }, 1);
+    // client 4
+    ccoip::CCoIPClient client4({
+                                   .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
+                                   .port = CCOIP_PROTOCOL_PORT_MASTER
+                               }, 1);
+
+    establishConnections({&client1, &client2, &client3, &client4});
+
+    constexpr size_t value_size = 1024;
+    const std::unique_ptr<uint8_t[]> value1(new uint8_t[value_size]);
+    std::fill_n(value1.get(), value_size, 42);
+
+    std::thread client1_sync_thread([&client1, &value1, value_size] {
+        client1.setMainThread(std::this_thread::get_id());
+        ccoip_shared_state_t shared_state{};
+        shared_state.entries.push_back(ccoip_shared_state_entry_t{
+            .key = "key1",
+            .data_type = ccoip::ccoipUint8,
+            .device_type = ccoip::ccoipDeviceCpu,
+            .data_ptr = value1.get(),
+            .data_size = value_size,
+            .allow_content_inequality = false
+        });
+        shared_state.revision = 0;
+        shared_state.sync_strategy = ccoipSyncStrategyEnforcePopular;
+
+        ccoip_shared_state_sync_info_t info{};
+        EXPECT_TRUE(client1.syncSharedState(shared_state, info));
+    });
+
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+
+    const std::unique_ptr<uint8_t[]> value2(new uint8_t[value_size]);
+    std::fill_n(value2.get(), value_size, 42);
+    std::thread client2_sync_thread([&client2, &value2, value_size] {
+        client2.setMainThread(std::this_thread::get_id());
+        // client 2 requests shared state
+        ccoip_shared_state_t shared_state{};
+        shared_state.entries.push_back(ccoip_shared_state_entry_t{
+            .key = "key1",
+            .data_type = ccoip::ccoipUint8,
+            .device_type = ccoip::ccoipDeviceCpu,
+            .data_ptr = value2.get(),
+            .data_size = value_size,
+            .allow_content_inequality = false
+        });
+        shared_state.revision = 0;
+        shared_state.sync_strategy = ccoipSyncStrategyTxOnly;
+
+        ccoip_shared_state_sync_info_t info{};
+        EXPECT_FALSE(client2.syncSharedState(shared_state, info));
+    });
+
+    const std::unique_ptr<uint8_t[]> value3(new uint8_t[value_size]);
+    std::fill_n(value3.get(), value_size, 42);
+    std::thread client3_sync_thread([&client3, &value3, value_size] {
+        client3.setMainThread(std::this_thread::get_id());
+        // client 2 requests shared state
+        ccoip_shared_state_t shared_state{};
+        shared_state.entries.push_back(ccoip_shared_state_entry_t{
+            .key = "key1",
+            .data_type = ccoip::ccoipUint8,
+            .device_type = ccoip::ccoipDeviceCpu,
+            .data_ptr = value3.get(),
+            .data_size = value_size,
+            .allow_content_inequality = false
+        });
+        shared_state.revision = 0;
+        shared_state.sync_strategy = ccoipSyncStrategyTxOnly;
+
+        ccoip_shared_state_sync_info_t info{};
+        EXPECT_TRUE(client3.syncSharedState(shared_state, info));
+    });
+
+    const std::unique_ptr<uint8_t[]> value4(new uint8_t[value_size]);
+    std::fill_n(value4.get(), value_size, 42);
+    std::thread client4_sync_thread([&client4, &value4, value_size] {
+        client4.setMainThread(std::this_thread::get_id());
+        // client 2 requests shared state
+        ccoip_shared_state_t shared_state{};
+        shared_state.entries.push_back(ccoip_shared_state_entry_t{
+            .key = "key1",
+            .data_type = ccoip::ccoipUint8,
+            .device_type = ccoip::ccoipDeviceCpu,
+            .data_ptr = value4.get(),
+            .data_size = value_size,
+            .allow_content_inequality = false
+        });
+        shared_state.revision = 0;
+        shared_state.sync_strategy = ccoipSyncStrategyTxOnly;
+
+        ccoip_shared_state_sync_info_t info{};
+        EXPECT_TRUE(client4.syncSharedState(shared_state, info));
+    });
+
+    // wait for shared state sync to complete
+    client1_sync_thread.join();
+    client2_sync_thread.join();
+    client3_sync_thread.join();
+    client4_sync_thread.join();
+
+    // clean shutdown
+    EXPECT_TRUE(client4.interrupt());
+    EXPECT_TRUE(client3.interrupt());
+    EXPECT_TRUE(client2.interrupt());
+    EXPECT_TRUE(client1.interrupt());
+
+    EXPECT_TRUE(client1.join());
+    EXPECT_TRUE(client2.join());
+    EXPECT_TRUE(client3.join());
+    EXPECT_TRUE(client4.join());
+
+    EXPECT_TRUE(master.interrupt());
+    EXPECT_TRUE(master.join());
+}
 
 int main(int argc, char **argv) {
     testing::InitGoogleTest(&argc, argv);

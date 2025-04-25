@@ -28,9 +28,9 @@ struct ccoip_shared_state_entry_t {
 };
 
 enum ccoip_shared_state_sync_strategy_t {
-    ccoip_enforce_popular,
-    ccoip_rx_only,
-    ccoip_tx_only
+    ccoipSyncStrategyEnforcePopular,
+    ccoipSyncStrategyRxOnly,
+    ccoipSyncStrategyTxOnly
 };
 
 struct ccoip_shared_state_t {

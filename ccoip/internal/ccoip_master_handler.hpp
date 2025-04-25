@@ -54,7 +54,7 @@ namespace ccoip {
 
         [[nodiscard]] bool join();
 
-        [[nodiscard]] bool kickClient(const ccoip_socket_address_t &client_address) const;
+        [[nodiscard]] bool kickClient(const ccoip_socket_address_t &client_address);
 
         ~CCoIPMasterHandler();
 
