@@ -236,7 +236,7 @@ namespace tinysockets {
                 if (!closeConnection()) [[unlikely]] {
                     LOG(ERR) << "[BlockingIOSocket] Failed to close connection after excessive packet length";
                 }
-                return;
+                return std::nullopt;
             }
             const std::unique_ptr<std::byte[]> data_ptr{new std::byte[length]};
             std::span data{data_ptr.get(), length};
