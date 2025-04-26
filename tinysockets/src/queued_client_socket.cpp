@@ -113,6 +113,13 @@ bool tinysockets::QueuedSocket::run() {
                 }
                 return;
             }
+            if (length > (1024 * 1024)) {
+                LOG(ERR) << "[QueuedSocket] Received ltv packet length " << length << " exceeds maximum size";
+                if (!interrupt()) [[unlikely]] {
+                    LOG(ERR) << "[QueuedSocket] Failed to interrupt QueuedSocket";
+                }
+                return;
+            }
             auto data_ptr = std::make_unique<uint8_t[]>(length);
             std::span data{data_ptr.get(), length};
             if (!receivePacketData(data)) {

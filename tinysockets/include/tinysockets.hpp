@@ -231,6 +231,13 @@ namespace tinysockets {
                 return std::nullopt;
             }
             const size_t length = *length_opt;
+            if (length > (1024 * 1024)) {
+                LOG(ERR) << "[BlockingIOSocket] Received excessive packet length " << length << "; closing connection";
+                if (!closeConnection()) [[unlikely]] {
+                    LOG(ERR) << "[BlockingIOSocket] Failed to close connection after excessive packet length";
+                }
+                return;
+            }
             const std::unique_ptr<std::byte[]> data_ptr{new std::byte[length]};
             std::span data{data_ptr.get(), length};
             if (receiveRawData(data, data.size_bytes()) != data.size_bytes()) {
@@ -240,12 +247,12 @@ namespace tinysockets {
             }
             PacketReadBuffer buffer{reinterpret_cast<uint8_t *>(data.data()), data.size()};
             if (const auto actual_packet_id = buffer.read<ccoip::packetId_t>(); actual_packet_id != packet_id) {
-                LOG(ERR) << "Expected packet ID " << packet_id << " but received " << actual_packet_id;
+                LOG(ERR) << "[BlockingIOSocket] Expected packet ID " << packet_id << " but received " << actual_packet_id;
                 return std::nullopt;
             }
             T packet{};
             if (!packet.deserialize(buffer)) {
-                LOG(ERR) << "Failed to deserialize packet with ID " << packet_id;
+                LOG(ERR) << "[BlockingIOSocket] Failed to deserialize packet with ID " << packet_id;
                 return std::nullopt;
             }
             return packet;
