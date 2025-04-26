@@ -231,7 +231,7 @@ namespace tinysockets {
                 return std::nullopt;
             }
             const size_t length = *length_opt;
-            if (length > (1024 * 1024)) {
+            if (length > (64 * 1024 * 1024)) { // 64 MiB max
                 LOG(ERR) << "[BlockingIOSocket] Received excessive packet length " << length << "; closing connection";
                 if (!closeConnection()) [[unlikely]] {
                     LOG(ERR) << "[BlockingIOSocket] Failed to close connection after excessive packet length";

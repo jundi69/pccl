@@ -113,7 +113,7 @@ bool tinysockets::QueuedSocket::run() {
                 }
                 return;
             }
-            if (length > (1024 * 1024)) {
+            if (length > (64 * 1024 * 1024)) { // 64 MiB max
                 LOG(ERR) << "[QueuedSocket] Received ltv packet length " << length << " exceeds maximum size";
                 if (!interrupt()) [[unlikely]] {
                     LOG(ERR) << "[QueuedSocket] Failed to interrupt QueuedSocket";
