@@ -8,6 +8,11 @@
 
 #include "ccoip_utils.hpp"
 
+#if defined(__linux__) || defined(__APPLE__)
+#include <csignal>
+#endif
+
+
 void uv_err_check(const int status) {
     if (status < 0) {
         fprintf(stderr, "UV Error: %s\n", uv_strerror(status));
@@ -90,6 +95,11 @@ bool tinysockets::ServerSocket::listen() {
     } else [[unlikely]] {
         return false;
     }
+
+    // ignore all SIGPIPE signals because uv cannot be configured to not throw them
+#if defined(__linux__) || defined(__APPLE__)
+    signal(SIGPIPE, SIG_IGN);
+#endif
 
     server_socket_state->loop = std::make_unique<uv_loop_t>();
     UV_ERR_CHECK(uv_loop_init(server_socket_state->loop.get()));
