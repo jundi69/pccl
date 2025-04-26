@@ -188,11 +188,15 @@ uint16_t tinysockets::BlockingIOServerSocket::getListenPort() const {
     return listen_address.port;
 }
 
+
 void tinysockets::BlockingIOServerSocket::onNewConnection(const int client_socket, sockaddr_in sockaddr_in) const {
-    auto client_socket_wrapper = std::make_unique<BlockingIOSocket>(client_socket);
+    ccoip_socket_address_t client_addr{};
+    convert_from_sockaddr(reinterpret_cast<const sockaddr *>(&sockaddr_in), &client_addr);
+    LOG(INFO) << "New connection from " << ccoip_sockaddr_to_str(client_addr) << " on socket listening on port "
+              << listen_address.port;
+
     if (join_callback) {
-        ccoip_socket_address_t client_addr{};
-        convert_from_sockaddr(reinterpret_cast<const sockaddr *>(&sockaddr_in), &client_addr);
+        auto client_socket_wrapper = std::make_unique<BlockingIOSocket>(client_socket);
         join_callback(client_addr, client_socket_wrapper);
     }
 }
