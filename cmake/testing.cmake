@@ -4,17 +4,16 @@ if (DEFINED $ENV{IS_CI})
     message(STATUS "Running in CI, enabling sanitizers in tests")
 endif ()
 
-# BEGIN NUCLEAR SANITIZER SETUP
+# ─── BEGIN SANITIZER + STATIC-RUNTIME SETUP ───────────────────────────────────
 
-# 1) Instrumentation flags for compile‐time
+# 1) Which sanitizers to turn on everywhere
 set(SAN_FLAGS
         -fsanitize=address
         -fsanitize=leak
         -fsanitize=undefined
 )
 
-# 2) Ask the compiler where its static archives live
-#    (OUTPUT_STRIP_TRAILING_WHITESPACE removes the trailing newline)
+# 2) Ask the compiler where its .a files live
 execute_process(
         COMMAND ${CMAKE_C_COMPILER}   -print-file-name=libasan.a
         OUTPUT_VARIABLE ASAN_A
@@ -36,36 +35,36 @@ execute_process(
         OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 
-# 3) Sanity-check that they actually exist
-foreach(_lib IN LISTS ASAN_A LSAN_A UBSAN_A STDCXX_A)
-    if(NOT EXISTS "${${_lib}}")
-        message(FATAL_ERROR "Static sanitizer/C++ archive not found: ${_lib} => \"${${_lib}}\"")
-    endif()
-endforeach()
-
-# 4) Globally instrument every target
-add_compile_options(${SAN_FLAGS})
-
-# 5) Build up the linker flags that:
-#    a) enable the same instrumentation (so the link emits ASan sections)
-#    b) --whole-archive pulls in every object from those .a files
-#    c) --no-whole-archive ends that region
-set(ALL_SHARED_LINK_FLAGS
-        ${SAN_FLAGS}
-        -Wl,--whole-archive
+# 3) Make sure those files actually exist
+set(STATIC_ARCHIVES
         ${ASAN_A}
         ${LSAN_A}
         ${UBSAN_A}
         ${STDCXX_A}
+)
+foreach(_archive IN ITEMS ${STATIC_ARCHIVES})
+    if(NOT EXISTS "${_archive}")
+        message(FATAL_ERROR "Static archive not found: ${_archive}")
+    endif()
+endforeach()
+
+# 4) Turn on sanitizers at compile time for every target
+add_compile_options(${SAN_FLAGS})
+
+# 5) Build the flags that will force-archive all objects from those .a’s
+set(ALL_SHARED_LINK_FLAGS
+        ${SAN_FLAGS}
+        -Wl,--whole-archive
+        ${STATIC_ARCHIVES}
         -Wl,--no-whole-archive
 )
 
-# 6) Apply to every kind of link (EXEs, SHARED libs, MODULE libs)
+# 6) Apply those flags to every kind of link
 set(CMAKE_EXE_LINKER_FLAGS    "${CMAKE_EXE_LINKER_FLAGS}    ${ALL_SHARED_LINK_FLAGS}")
 set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${ALL_SHARED_LINK_FLAGS}")
 set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} ${ALL_SHARED_LINK_FLAGS}")
 
-# END NUCLEAR SANITIZER SETUP
+# ───── END SANITIZER + STATIC-RUNTIME SETUP ───────────────────────────────────
 
 function(add_sanitized_gtest target_name test_file)
     add_executable(${target_name} ${test_file})
