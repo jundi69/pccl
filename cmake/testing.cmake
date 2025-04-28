@@ -4,76 +4,39 @@ if (DEFINED $ENV{IS_CI})
     message(STATUS "Running in CI, enabling sanitizers in tests")
 endif ()
 
-# ─── BEGIN SANITIZER + STATIC-RUNTIME SETUP ─────────────────────────────────
+# ─── STATIC-LINK ASAN/LSAN/UBSAN + libstdc++ ──────────────────────────────────
 
-# 1) Which sanitizers to turn on at compile time (C & C++ only)
-set(SAN_FLAGS
+# 1) Where the compiler’s static sanitizer & C++ archives live:
+set(ASAN_A    /usr/lib/gcc/x86_64-linux-gnu/11/libasan.a)
+set(LSAN_A   /usr/lib/gcc/x86_64-linux-gnu/11/liblsan.a)
+set(UBSAN_A  /usr/lib/gcc/x86_64-linux-gnu/11/libubsan.a)
+set(STDCXX_A /usr/lib/gcc/x86_64-linux-gnu/11/libstdc++.a)
+
+# 2) Turn on Address/Leak/UB sanitizers at compile time for all C & C++ code:
+add_compile_options(
+        $<$<COMPILE_LANGUAGE:CXX>:-fsanitize=address -fsanitize=leak -fsanitize=undefined>
+        $<$<COMPILE_LANGUAGE:C>:-fsanitize=address -fsanitize=leak -fsanitize=undefined>
+)
+
+# 3) Build the link flags that both enable sanitizers and force-archive the static libs:
+set(SAN_LINK_FLAGS
         -fsanitize=address
         -fsanitize=leak
         -fsanitize=undefined
-)
-
-# 2) Ask the compiler where its static archives live
-execute_process(
-        COMMAND ${CMAKE_C_COMPILER}   -print-file-name libasan.a
-        OUTPUT_VARIABLE ASAN_A
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-)
-execute_process(
-        COMMAND ${CMAKE_C_COMPILER}   -print-file-name liblsan.a
-        OUTPUT_VARIABLE LSAN_A
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-)
-execute_process(
-        COMMAND ${CMAKE_C_COMPILER}   -print-file-name libubsan.a
-        OUTPUT_VARIABLE UBSAN_A
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-)
-execute_process(
-        COMMAND ${CMAKE_CXX_COMPILER} -print-file-name libstdc++.a
-        OUTPUT_VARIABLE STDCXX_A
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-)
-
-# 3) Make sure those files actually exist
-foreach(_archive IN LISTS ASAN_A LSAN_A UBSAN_A STDCXX_A)
-    if(NOT EXISTS "${_archive}")
-        message(FATAL_ERROR "Static archive not found: ${_archive}")
-    endif()
-endforeach()
-
-# 4) Apply -fsanitize=… to every C and C++ compile
-add_compile_options(
-        $<$<COMPILE_LANGUAGE:CXX>:${SAN_FLAGS}>
-        $<$<COMPILE_LANGUAGE:C>:  ${SAN_FLAGS}>
-)
-
-# 5) Build the link flags that:
-#    - carry over the same instrumentation
-#    - wrap the four .a archives in --whole-archive so no symbol gets left as a .so dep
-set(STATIC_ARCHIVES
+        -Wl,--whole-archive
         ${ASAN_A}
         ${LSAN_A}
         ${UBSAN_A}
         ${STDCXX_A}
+        -Wl,--no-whole-archive
 )
 
-add_link_options(
-        # instrumentation during link:
-        $<$<LINK_LANGUAGE:CXX>:${SAN_FLAGS}>
-        $<$<LINK_LANGUAGE:C>:  ${SAN_FLAGS}>
+# 4) Apply those flags to every final link (executables, shared libs, MODULE libs):
+set(CMAKE_EXE_LINKER_FLAGS    "${CMAKE_EXE_LINKER_FLAGS}    ${SAN_LINK_FLAGS}")
+set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${SAN_LINK_FLAGS}")
+set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} ${SAN_LINK_FLAGS}")
 
-        # now force the archives in:
-        $<$<LINK_LANGUAGE:CXX>:-Wl,--whole-archive>
-        ${STATIC_ARCHIVES}
-        $<$<LINK_LANGUAGE:CXX>:-Wl,--no-whole-archive>
-
-        $<$<LINK_LANGUAGE:C>:-Wl,--whole-archive>
-        ${STATIC_ARCHIVES}
-        $<$<LINK_LANGUAGE:C>:-Wl,--no-whole-archive>
-)
-
-# ───── END SANITIZER + STATIC-RUNTIME SETUP ─────────────────────────────────
+# ───── END STATIC-LINK ASAN SETUP ─────────────────────────────────────────────
 
 function(add_sanitized_gtest target_name test_file)
     add_executable(${target_name} ${test_file})
