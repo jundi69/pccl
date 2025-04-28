@@ -4,66 +4,76 @@ if (DEFINED $ENV{IS_CI})
     message(STATUS "Running in CI, enabling sanitizers in tests")
 endif ()
 
-# ─── BEGIN NUCLEAR SANITIZER SETUP ────────────────────────────────────────────
+# ─── BEGIN SANITIZER + STATIC-RUNTIME SETUP ─────────────────────────────────
 
-# 1) What sanitizers we want everywhere (C & C++ only)
+# 1) Which sanitizers to turn on at compile time (C & C++ only)
 set(SAN_FLAGS
         -fsanitize=address
         -fsanitize=leak
         -fsanitize=undefined
 )
 
-# 2) Discover the static .a archives from the compiler itself
-foreach(_lib IN ITEMS libasan.a liblsan.a libubsan.a libstdc++.a)
-    # pick C vs C++ based on name:
-    if(_lib STREQUAL libstdc++.a)
-        set(CMD "${CMAKE_CXX_COMPILER} -print-file-name=${_lib}")
-    else()
-        set(CMD "${CMAKE_C_COMPILER} -print-file-name=${_lib}")
-    endif()
-    execute_process(
-            COMMAND ${CMD}
-            OUTPUT_VARIABLE "${_lib}_PATH"
-            OUTPUT_STRIP_TRAILING_WHITESPACE
-    )
-    # sanity-check it’s real
-    if(NOT EXISTS "${${_lib}_PATH}")
-        message(FATAL_ERROR "Static archive not found: ${_lib}_PATH=\"${${_lib}_PATH}\"")
+# 2) Ask the compiler where its static archives live
+execute_process(
+        COMMAND ${CMAKE_C_COMPILER}   -print-file-name libasan.a
+        OUTPUT_VARIABLE ASAN_A
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+execute_process(
+        COMMAND ${CMAKE_C_COMPILER}   -print-file-name liblsan.a
+        OUTPUT_VARIABLE LSAN_A
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+execute_process(
+        COMMAND ${CMAKE_C_COMPILER}   -print-file-name libubsan.a
+        OUTPUT_VARIABLE UBSAN_A
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+execute_process(
+        COMMAND ${CMAKE_CXX_COMPILER} -print-file-name libstdc++.a
+        OUTPUT_VARIABLE STDCXX_A
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
+# 3) Make sure those files actually exist
+foreach(_archive IN LISTS ASAN_A LSAN_A UBSAN_A STDCXX_A)
+    if(NOT EXISTS "${_archive}")
+        message(FATAL_ERROR "Static archive not found: ${_archive}")
     endif()
 endforeach()
 
-# 3) Collect them
-set(STATIC_SANITIZER_ARCHIVES
-        ${libasan.a_PATH}
-        ${liblsan.a_PATH}
-        ${libubsan.a_PATH}
-        ${libstdc++.a_PATH}
-)
-
-# 4) Turn on -fsanitize=… for *compile* but only in C/C++ (never for CUDA)
+# 4) Apply -fsanitize=… to every C and C++ compile
 add_compile_options(
         $<$<COMPILE_LANGUAGE:CXX>:${SAN_FLAGS}>
         $<$<COMPILE_LANGUAGE:C>:  ${SAN_FLAGS}>
 )
 
-# 5) Globally inject the same flags into the *link* line for C/C++ targets,
-#    and wrap the four .a archives in --whole-archive so nothing is left as a .so dep.
+# 5) Build the link flags that:
+#    - carry over the same instrumentation
+#    - wrap the four .a archives in --whole-archive so no symbol gets left as a .so dep
+set(STATIC_ARCHIVES
+        ${ASAN_A}
+        ${LSAN_A}
+        ${UBSAN_A}
+        ${STDCXX_A}
+)
+
 add_link_options(
-        # instrumentation:
+        # instrumentation during link:
         $<$<LINK_LANGUAGE:CXX>:${SAN_FLAGS}>
         $<$<LINK_LANGUAGE:C>:  ${SAN_FLAGS}>
 
-        # now force in all objects from the static runtimes:
+        # now force the archives in:
         $<$<LINK_LANGUAGE:CXX>:-Wl,--whole-archive>
-        $<$<LINK_LANGUAGE:CXX>:${STATIC_SANITIZER_ARCHIVES}>
+        ${STATIC_ARCHIVES}
         $<$<LINK_LANGUAGE:CXX>:-Wl,--no-whole-archive>
 
         $<$<LINK_LANGUAGE:C>:-Wl,--whole-archive>
-        $<$<LINK_LANGUAGE:C>:${STATIC_SANITIZER_ARCHIVES}>
+        ${STATIC_ARCHIVES}
         $<$<LINK_LANGUAGE:C>:-Wl,--no-whole-archive>
 )
 
-# ───── END NUCLEAR SANITIZER SETUP ─────────────────────────────────────────────
+# ───── END SANITIZER + STATIC-RUNTIME SETUP ─────────────────────────────────
 
 function(add_sanitized_gtest target_name test_file)
     add_executable(${target_name} ${test_file})
