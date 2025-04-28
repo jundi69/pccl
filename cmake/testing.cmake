@@ -4,37 +4,43 @@ if (DEFINED $ENV{IS_CI})
     message(STATUS "Running in CI, enabling sanitizers in tests")
 endif ()
 
-# ─── STATIC-LINK ASAN/LSAN/UBSAN + libstdc++ ──────────────────────────────────
+# ─── STATIC-LINK ASAN/LSAN/UBSAN + libstdc++ SETUP ────────────────────────────
 
-# 1) Where the compiler’s static sanitizer & C++ archives live:
-set(ASAN_A    /usr/lib/gcc/x86_64-linux-gnu/11/libasan.a)
-set(LSAN_A   /usr/lib/gcc/x86_64-linux-gnu/11/liblsan.a)
-set(UBSAN_A  /usr/lib/gcc/x86_64-linux-gnu/11/libubsan.a)
-set(STDCXX_A /usr/lib/gcc/x86_64-linux-gnu/11/libstdc++.a)
+if (CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    # 1) Hard-coded static‐archive paths you just found:
+    set(ASAN_A    "/usr/lib/gcc/x86_64-linux-gnu/11/libasan.a")
+    set(LSAN_A   "/usr/lib/gcc/x86_64-linux-gnu/11/liblsan.a")
+    set(UBSAN_A  "/usr/lib/gcc/x86_64-linux-gnu/11/libubsan.a")
+    set(STDCXX_A "/usr/lib/gcc/x86_64-linux-gnu/11/libstdc++.a")
 
-# 2) Turn on Address/Leak/UB sanitizers at compile time for all C & C++ code:
-add_compile_options(
-        $<$<COMPILE_LANGUAGE:CXX>:-fsanitize=address -fsanitize=leak -fsanitize=undefined>
-        $<$<COMPILE_LANGUAGE:C>:-fsanitize=address -fsanitize=leak -fsanitize=undefined>
-)
+    # 2) Sanity-check they actually exist
+    foreach(_ARCH ${ASAN_A} ${LSAN_A} ${UBSAN_A} ${STDCXX_A})
+        if (NOT EXISTS "${_ARCH}")
+            message(FATAL_ERROR "Static archive not found: ${_ARCH}")
+        endif()
+    endforeach()
 
-# 3) Build the link flags that both enable sanitizers and force-archive the static libs:
-set(SAN_LINK_FLAGS
-        -fsanitize=address
-        -fsanitize=leak
-        -fsanitize=undefined
-        -Wl,--whole-archive
-        ${ASAN_A}
-        ${LSAN_A}
-        ${UBSAN_A}
-        ${STDCXX_A}
-        -Wl,--no-whole-archive
-)
+    # 3) Compose your sanitizer flags
+    set(SAN_COMPILE_FLAGS "-fsanitize=address -fsanitize=leak -fsanitize=undefined")
 
-# 4) Apply those flags to every final link (executables, shared libs, MODULE libs):
-set(CMAKE_EXE_LINKER_FLAGS    "${CMAKE_EXE_LINKER_FLAGS}    ${SAN_LINK_FLAGS}")
-set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${SAN_LINK_FLAGS}")
-set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} ${SAN_LINK_FLAGS}")
+    # 4) Apply to C & C++ compiles *only* (CUDA is untouched)
+    set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS}   ${SAN_COMPILE_FLAGS}")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${SAN_COMPILE_FLAGS}")
+
+    # 5) Compose link-time flags:
+    #    - same sanitizer flags
+    #    - then --whole-archive around your .a files
+    #    - then --no-whole-archive
+    set(SAN_LINK_FLAGS
+            "-fsanitize=address -fsanitize=leak -fsanitize=undefined"
+            "-Wl,--whole-archive ${ASAN_A} ${LSAN_A} ${UBSAN_A} ${STDCXX_A} -Wl,--no-whole-archive"
+    )
+
+    # 6) Inject into *every* link step (EXEs, shared libs, MODULE libs)
+    set(CMAKE_EXE_LINKER_FLAGS    "${CMAKE_EXE_LINKER_FLAGS}    ${SAN_LINK_FLAGS}")
+    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${SAN_LINK_FLAGS}")
+    set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} ${SAN_LINK_FLAGS}")
+endif()
 
 # ───── END STATIC-LINK ASAN SETUP ─────────────────────────────────────────────
 
