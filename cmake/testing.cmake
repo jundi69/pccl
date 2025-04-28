@@ -7,36 +7,51 @@ endif ()
 # ─── STATIC-LINK ASAN/LSAN/UBSAN + libstdc++ SETUP ────────────────────────────
 
 if (CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
-    # 1) Hard-coded static‐archive paths you just found:
+    # 1) Hard-coded static archive paths:
     set(ASAN_A    "/usr/lib/gcc/x86_64-linux-gnu/11/libasan.a")
     set(LSAN_A   "/usr/lib/gcc/x86_64-linux-gnu/11/liblsan.a")
     set(UBSAN_A  "/usr/lib/gcc/x86_64-linux-gnu/11/libubsan.a")
     set(STDCXX_A "/usr/lib/gcc/x86_64-linux-gnu/11/libstdc++.a")
 
-    # 2) Sanity-check they actually exist
+    # 2) Verify they exist:
     foreach(_ARCH ${ASAN_A} ${LSAN_A} ${UBSAN_A} ${STDCXX_A})
         if (NOT EXISTS "${_ARCH}")
-            message(FATAL_ERROR "Static archive not found: ${_ARCH}")
+            message(FATAL_ERROR "Missing static archive: ${_ARCH}")
         endif()
     endforeach()
 
-    # 3) Compose your sanitizer flags
-    set(SAN_COMPILE_FLAGS "-fsanitize=address -fsanitize=leak -fsanitize=undefined")
-
-    # 4) Apply to C & C++ compiles *only* (CUDA is untouched)
-    set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS}   ${SAN_COMPILE_FLAGS}")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${SAN_COMPILE_FLAGS}")
-
-    # 5) Compose link-time flags:
-    #    - same sanitizer flags
-    #    - then --whole-archive around your .a files
-    #    - then --no-whole-archive
-    set(SAN_LINK_FLAGS
-            "-fsanitize=address -fsanitize=leak -fsanitize=undefined"
-            "-Wl,--whole-archive ${ASAN_A} ${LSAN_A} ${UBSAN_A} ${STDCXX_A} -Wl,--no-whole-archive"
+    # 3) Your sanitizer flags as a list:
+    set(SAN_FLAGS_LIST
+            -fsanitize=address
+            -fsanitize=leak
+            -fsanitize=undefined
     )
 
-    # 6) Inject into *every* link step (EXEs, shared libs, MODULE libs)
+    # 4) Apply sanitizers *only* to C/C++ compile steps (CUDA untouched):
+    add_compile_options(
+            $<$<COMPILE_LANGUAGE:CXX>:${SAN_FLAGS_LIST}>
+            $<$<COMPILE_LANGUAGE:C>:  ${SAN_FLAGS_LIST}>
+    )
+
+    # 5) Join that list into a single string:
+    list(JOIN SAN_FLAGS_LIST " " SAN_FLAGS_STR)
+
+    # 6) Build the whole-archive block:
+    set(STATIC_ARCHIVES
+            ${ASAN_A}
+            ${LSAN_A}
+            ${UBSAN_A}
+            ${STDCXX_A}
+    )
+    list(JOIN STATIC_ARCHIVES " " STATIC_ARCHIVES_STR)
+    set(WHOLE_ARCHIVE_FLAGS
+            "-Wl,--whole-archive ${STATIC_ARCHIVES_STR} -Wl,--no-whole-archive"
+    )
+
+    # 7) Combine sanitize+whole-archive into one string:
+    set(SAN_LINK_FLAGS "${SAN_FLAGS_STR} ${WHOLE_ARCHIVE_FLAGS}")
+
+    # 8) Inject into every link type:
     set(CMAKE_EXE_LINKER_FLAGS    "${CMAKE_EXE_LINKER_FLAGS}    ${SAN_LINK_FLAGS}")
     set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${SAN_LINK_FLAGS}")
     set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} ${SAN_LINK_FLAGS}")
