@@ -4,6 +4,8 @@ if (DEFINED $ENV{IS_CI})
     message(STATUS "Running in CI, enabling sanitizers in tests")
 endif ()
 
+link_libraries(fence) # DEBUG ONLY
+
 function(add_sanitized_gtest target_name test_file)
     add_executable(${target_name} ${test_file})
     target_link_libraries(${target_name} PRIVATE gtest_main)
