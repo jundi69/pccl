@@ -4,7 +4,7 @@ if (DEFINED $ENV{IS_CI})
     message(STATUS "Running in CI, enabling sanitizers in tests")
 endif ()
 
-link_libraries(fence) # DEBUG ONLY
+link_libraries(efence) # DEBUG ONLY
 
 function(add_sanitized_gtest target_name test_file)
     add_executable(${target_name} ${test_file})
