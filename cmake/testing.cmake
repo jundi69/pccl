@@ -4,31 +4,52 @@ if (DEFINED $ENV{IS_CI})
     message(STATUS "Running in CI, enabling sanitizers in tests")
 endif ()
 
-# BEGIN NUCLEAR BULLSHIT
+# BEGIN NUCLEAR SANITIZER SETUP
 
-# 1) Instrumentation flags for the compile stage
+# 1) Instrumentation flags for compile‐time
 set(SAN_FLAGS
         -fsanitize=address
         -fsanitize=leak
         -fsanitize=undefined
 )
 
-# 2) Locate the static archives (adjust paths if your distro is different)
-find_library(ASAN_A asan   PATHS /usr/lib/gcc/* NO_DEFAULT_PATH)
-find_library(LSAN_A lsan   PATHS /usr/lib/gcc/* NO_DEFAULT_PATH)
-find_library(UBSAN_A ubsan PATHS /usr/lib/gcc/* NO_DEFAULT_PATH)
-find_library(STDCXX_A stdc++ PATHS /usr/lib/gcc/* NO_DEFAULT_PATH)
+# 2) Ask the compiler where its static archives live
+#    (OUTPUT_STRIP_TRAILING_WHITESPACE removes the trailing newline)
+execute_process(
+        COMMAND ${CMAKE_C_COMPILER}   -print-file-name=libasan.a
+        OUTPUT_VARIABLE ASAN_A
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+execute_process(
+        COMMAND ${CMAKE_C_COMPILER}   -print-file-name=liblsan.a
+        OUTPUT_VARIABLE LSAN_A
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+execute_process(
+        COMMAND ${CMAKE_C_COMPILER}   -print-file-name=libubsan.a
+        OUTPUT_VARIABLE UBSAN_A
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+execute_process(
+        COMMAND ${CMAKE_CXX_COMPILER} -print-file-name=libstdc++.a
+        OUTPUT_VARIABLE STDCXX_A
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+)
 
-if(NOT ASAN_A OR NOT LSAN_A OR NOT UBSAN_A OR NOT STDCXX_A)
-    message(FATAL_ERROR "Couldn’t find one of: libasan.a, liblsan.a, libubsan.a, libstdc++.a")
-endif()
+# 3) Sanity-check that they actually exist
+foreach(_lib IN LISTS ASAN_A LSAN_A UBSAN_A STDCXX_A)
+    if(NOT EXISTS "${${_lib}}")
+        message(FATAL_ERROR "Static sanitizer/C++ archive not found: ${_lib} => \"${${_lib}}\"")
+    endif()
+endforeach()
 
-# 3) Apply the compiler flags everywhere
+# 4) Globally instrument every target
 add_compile_options(${SAN_FLAGS})
 
-# 4) Push the same flags + force‐archive into *all* shared & module links
-#    --whole-archive/--no-whole-archive makes sure every single object in those .a’s
-#    is sucked into *your* .so
+# 5) Build up the linker flags that:
+#    a) enable the same instrumentation (so the link emits ASan sections)
+#    b) --whole-archive pulls in every object from those .a files
+#    c) --no-whole-archive ends that region
 set(ALL_SHARED_LINK_FLAGS
         ${SAN_FLAGS}
         -Wl,--whole-archive
@@ -38,20 +59,13 @@ set(ALL_SHARED_LINK_FLAGS
         ${STDCXX_A}
         -Wl,--no-whole-archive
 )
-# for executables (if you care):
-set(CMAKE_EXE_LINKER_FLAGS
-        "${CMAKE_EXE_LINKER_FLAGS} ${ALL_SHARED_LINK_FLAGS}"
-)
-# for shared libraries:
-set(CMAKE_SHARED_LINKER_FLAGS
-        "${CMAKE_SHARED_LINKER_FLAGS} ${ALL_SHARED_LINK_FLAGS}"
-)
-# for MODULE libraries (e.g. Python extensions):
-set(CMAKE_MODULE_LINKER_FLAGS
-        "${CMAKE_MODULE_LINKER_FLAGS} ${ALL_SHARED_LINK_FLAGS}"
-)
 
-# END OF NUCLEAR BULLSHIT
+# 6) Apply to every kind of link (EXEs, SHARED libs, MODULE libs)
+set(CMAKE_EXE_LINKER_FLAGS    "${CMAKE_EXE_LINKER_FLAGS}    ${ALL_SHARED_LINK_FLAGS}")
+set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${ALL_SHARED_LINK_FLAGS}")
+set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} ${ALL_SHARED_LINK_FLAGS}")
+
+# END NUCLEAR SANITIZER SETUP
 
 function(add_sanitized_gtest target_name test_file)
     add_executable(${target_name} ${test_file})
