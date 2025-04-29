@@ -68,6 +68,44 @@ namespace {
     }
 
     /**
+     * \brief Utility to create a subspan of a span, with bounds checking.
+     */
+    std::span<const std::byte> guarded_subspan(const std::span<const std::byte> &span, const size_t offset,
+                                               const size_t count) {
+        if (offset > span.size()) {
+            throw std::out_of_range("Subspan out of range");
+        }
+        if (offset + count > span.size()) {
+            throw std::out_of_range("Subspan out of range");
+        }
+        return span.subspan(offset, count);
+    }
+
+    /**
+     * \brief Utility to create a subspan of a span, with bounds checking.
+     */
+    std::span<std::byte> guarded_subspan(const std::span<std::byte> &span, const size_t offset,
+                                         const size_t count) {
+        if (offset > span.size()) {
+            throw std::out_of_range("Subspan out of range");
+        }
+        if (offset + count > span.size()) {
+            throw std::out_of_range("Subspan out of range");
+        }
+        return span.subspan(offset, count);
+    }
+
+    /**
+     * \brief Utility to create a subspan of a span, with bounds checking.
+     */
+    std::span<std::byte> guarded_subspan(const std::span<std::byte> &span, const size_t offset) {
+        if (offset > span.size()) {
+            throw std::out_of_range("Subspan out of range");
+        }
+        return span.subspan(offset);
+    }
+
+    /**
      * \brief Perform the "reduce-scatter" stage of the ring in one step (send one chunk / receive one chunk / reduce).
      *
      * - Sends the \p tx_span (possibly quantized) to the next rank.
@@ -165,7 +203,7 @@ namespace {
             // 3a) Send if ready
             if (bytes_sent < total_tx_size) {
                 const size_t chunk_size = std::min(GetPCCLMultiplexChunkSize(), total_tx_size - bytes_sent);
-                const auto send_sub = tx_span.subspan(bytes_sent, chunk_size);
+                const auto send_sub = guarded_subspan(tx_span, bytes_sent, chunk_size);
                 tpark_handle_t *done_handle = nullptr;
                 if (tx_socket->sendBytes(tag, seq_nr, send_sub, false, &done_handle)) {
                     no_event = false;
@@ -181,7 +219,7 @@ namespace {
 
             // 3b) Receive if ready
             if (bytes_recvd < total_rx_size) {
-                const auto recv_sub = recv_buffer_span.subspan(bytes_recvd);
+                const auto recv_sub = guarded_subspan(recv_buffer_span, bytes_recvd);
                 if (auto n_read = rx_socket->receiveBytesInplace(tag, seq_nr, recv_sub)) {
                     if (n_read > 0) {
                         no_event = false;
@@ -198,11 +236,11 @@ namespace {
                         // If new_floor > old_floor, we have at least one fully-received element to reduce
                         if (new_floor > old_floor) {
                             const size_t chunk_bytes = new_floor - old_floor;
-                            auto reduce_src_span = recv_buffer_span.subspan(old_floor, chunk_bytes);
+                            auto reduce_src_span = guarded_subspan(recv_buffer_span, old_floor, chunk_bytes);
 
                             // Map that to data_type-sized output range in rx_span
                             const size_t data_type_el_sz = ccoip_data_type_size(data_type);
-                            auto reduce_dst_span = rx_span.subspan((old_floor / quant_el_sz) * data_type_el_sz,
+                            auto reduce_dst_span = guarded_subspan(rx_span, (old_floor / quant_el_sz) * data_type_el_sz,
                                                                    (chunk_bytes / quant_el_sz) * data_type_el_sz);
 
                             // Accumulate newly arrived data into rx_span
@@ -325,7 +363,7 @@ namespace {
             // Send
             if (bytes_sent < total_tx_size) {
                 const size_t chunk_size = std::min(GetPCCLMultiplexChunkSize(), total_tx_size - bytes_sent);
-                const auto send_sub = tx_span.subspan(bytes_sent, chunk_size);
+                const auto send_sub = guarded_subspan(tx_span, bytes_sent, chunk_size);
                 tpark_handle_t *done_handle{};
                 if (tx_socket->sendBytes(tag, seq_nr, send_sub, false, &done_handle)) {
                     no_event = false;
@@ -341,7 +379,7 @@ namespace {
 
             // Receive
             if (bytes_recvd < total_rx_size) {
-                const auto recv_sub = recv_buffer_span.subspan(bytes_recvd);
+                const auto recv_sub = guarded_subspan(recv_buffer_span, bytes_recvd);
                 if (auto n_read = rx_socket->receiveBytesInplace(tag, seq_nr, recv_sub)) {
                     if (*n_read > 0) {
                         no_event = false;
@@ -355,10 +393,10 @@ namespace {
                         if (const size_t new_floor = (bytes_recvd / quant_el_sz) * quant_el_sz; new_floor > old_floor) {
                             const size_t chunk_bytes = new_floor - old_floor;
                             // De-quantize + copy into rx_span
-                            auto copy_src_span = recv_buffer_span.subspan(old_floor, chunk_bytes);
+                            auto copy_src_span = guarded_subspan(recv_buffer_span, old_floor, chunk_bytes);
 
                             const size_t data_type_el_sz = ccoip_data_type_size(data_type);
-                            auto copy_dst_span = rx_span.subspan((old_floor / quant_el_sz) * data_type_el_sz,
+                            auto copy_dst_span = guarded_subspan(rx_span, (old_floor / quant_el_sz) * data_type_el_sz,
                                                                  (chunk_bytes / quant_el_sz) * data_type_el_sz);
 
                             // We do not accumulate for allgather, just "copy" via performReduction w/ ccoipOpSet
@@ -405,10 +443,19 @@ namespace {
                     return ptr;
                 }
             }
-            return malloc(size);
+            void *ptr = malloc(size);
+            if (ptr == nullptr) {
+                LOG(FATAL) << "[reduce::PooledAllocator] Failed to allocate memory!";
+                throw std::bad_alloc();
+            }
+            return ptr;
         }
 
         void release(const void *ptr, size_t size) {
+            if (ptr == nullptr) {
+                LOG(BUG) << "[reduce::PooledAllocator] Attempting to release nullptr";
+                return;
+            }
             // we trust the user to set size correctly; there is only one intended call-site anyways
             std::unique_lock lock(mutex);
             if (pool.size() >= POOLED_ALLOCATOR_MAX_ENTRIES) {
@@ -499,6 +546,10 @@ std::pair<bool, bool> ccoip::reduce::pipelineRingReduce(
 
     // Copy local data into dst_buf so we can reduce in place
     if (!src_and_dest_identical_ptr) {
+        if (dst_buf.size_bytes() != src_buf.size_bytes()) {
+            LOG(BUG) << "Destination buffer size does not match source buffer size!";
+            return {false, false};
+        }
         std::memcpy(dst_buf.data(), src_buf.data(), src_buf.size_bytes());
     } else {
         // if src and dest are identical, they definitely overlap
@@ -547,9 +598,9 @@ std::pair<bool, bool> ccoip::reduce::pipelineRingReduce(
 
             // Subspans for sending & receiving
             std::span<const std::byte> tx_unquantized =
-                    dst_buf.subspan(tx_start_el * data_type_el_size, tx_size_el * data_type_el_size);
+                    guarded_subspan(dst_buf, tx_start_el * data_type_el_size, tx_size_el * data_type_el_size);
             std::span<std::byte> rx_span =
-                    dst_buf.subspan(rx_start_el * data_type_el_size, rx_size_el * data_type_el_size);
+                    guarded_subspan(dst_buf, rx_start_el * data_type_el_size, rx_size_el * data_type_el_size);
 
             // Possibly quantize
             void *quantized_data = nullptr;
@@ -567,7 +618,7 @@ std::pair<bool, bool> ccoip::reduce::pipelineRingReduce(
             }
 
             // We'll receive into the front of recv_buffer_span up to rx_size_el * quant_type_el_size
-            std::span<std::byte> recv_sub = recv_buffer_span.subspan(0, rx_size_el * quant_type_el_size);
+            std::span<std::byte> recv_sub = guarded_subspan(recv_buffer_span, 0, rx_size_el * quant_type_el_size);
 
             // Perform ring exchange & reduce
             auto [success, abort_packet_received] =
@@ -623,7 +674,7 @@ std::pair<bool, bool> ccoip::reduce::pipelineRingReduce(
             const size_t tx_size_el = (tx_end_el > tx_start_el ? tx_end_el - tx_start_el : 0);
 
             std::span<std::byte> orig_tx_span =
-                    dst_buf.subspan(tx_start_el * data_type_el_size, tx_size_el * data_type_el_size);
+                    guarded_subspan(dst_buf, tx_start_el * data_type_el_size, tx_size_el * data_type_el_size);
 
             std::span<const std::byte> tx_span = orig_tx_span;
 
@@ -634,7 +685,7 @@ std::pair<bool, bool> ccoip::reduce::pipelineRingReduce(
             const size_t rx_size_el = (rx_end_el > rx_start_el ? rx_end_el - rx_start_el : 0);
 
             std::span<std::byte> rx_span =
-                    dst_buf.subspan(rx_start_el * data_type_el_size, rx_size_el * data_type_el_size);
+                    guarded_subspan(dst_buf, rx_start_el * data_type_el_size, rx_size_el * data_type_el_size);
 
             // Possibly quantize
             std::optional<DeQuantizationMetaData> meta_data;
@@ -677,7 +728,7 @@ std::pair<bool, bool> ccoip::reduce::pipelineRingReduce(
             // We will receive into the owned data ptr memory
             // owned_data_span has enough memory to fit the largest chunk size,
             // however we sub-span to the actual size of the chunk we are receiving.
-            std::span<std::byte> recv_sub = owned_data_span.subspan(0, rx_size_el * quant_type_el_size);
+            std::span<std::byte> recv_sub = guarded_subspan(owned_data_span, 0, rx_size_el * quant_type_el_size);
 
             // Ring exchange (no reduce-op)
             auto [success, abort_packet_received] =

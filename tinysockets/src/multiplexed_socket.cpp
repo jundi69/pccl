@@ -98,10 +98,19 @@ namespace tinysockets {
                     return ptr;
                 }
             }
-            return malloc(size);
+            void *ptr = malloc(size);
+            if (ptr == nullptr) {
+                LOG(FATAL) << "[MultiplexedIOSocket::PooledAllocator] Failed to allocate memory!";
+                throw std::bad_alloc();
+            }
+            return ptr;
         }
 
         void release(const void *ptr, size_t size) {
+            if (ptr == nullptr) {
+                LOG(BUG) << "[MultiplexedIOSocket::PooledAllocator] Attempting to release nullptr";
+                return;
+            }
             // we trust the user to set size correctly; there is only one intended call-site anyways
             std::unique_lock lock(mutex);
             if (pool.size() >= POOLED_ALLOCATOR_MAX_ENTRIES) {
@@ -284,6 +293,15 @@ bool tinysockets::MultiplexedIOSocket::run() {
                 stream_ctr = network_order_utils::network_to_host(stream_ctr);
 
                 LOG(TRACE) << "MultiplexedIOSocket: Received packet with length " << length << " and tag " << tag;
+
+                // length must at least contain tag & stream counter
+                if (length < 2 * sizeof(uint64_t)) {
+                    LOG(ERR) << "Received packet with length " << length << " is too small; closing connection";
+                    if (!interrupt()) [[unlikely]] {
+                        LOG(ERR) << "Failed to interrupt MultiplexedIOSocket";
+                    }
+                    break;
+                }
 
                 // safeguard against large packets
                 if (length > (1024 * 1024 * 1024)) {
@@ -527,7 +545,8 @@ bool tinysockets::MultiplexedIOSocket::receivePacketData(std::span<std::uint8_t>
 }
 
 
-bool tinysockets::MultiplexedIOSocket::sendBytes(const uint64_t tag, const uint64_t stream_ctr, const std::span<const std::byte> &data,
+bool tinysockets::MultiplexedIOSocket::sendBytes(const uint64_t tag, const uint64_t stream_ctr,
+                                                 const std::span<const std::byte> &data,
                                                  const bool clone_memory, tpark_handle_t **pDoneHandleOut) const {
     if (!(flags & MODE_TX)) {
         LOG(ERR) << "MultiplexedIOSocket::sendBytes() called on a socket without TX mode";
