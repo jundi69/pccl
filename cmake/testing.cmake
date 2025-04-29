@@ -4,7 +4,7 @@ if (DEFINED $ENV{IS_CI})
     message(STATUS "Running in CI, enabling sanitizers in tests")
 endif ()
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fno-sanitize-address-use-after-scope -fno-omit-frame-pointer -static-libasan -g -O1")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fno-sanitize-address-use-after-return -fno-omit-frame-pointer -static-libasan -g -O1")
 
 function(add_sanitized_gtest target_name test_file)
     add_executable(${target_name} ${test_file})
