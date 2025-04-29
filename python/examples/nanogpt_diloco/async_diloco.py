@@ -11,7 +11,6 @@ from contextlib import nullcontext
 import numpy as np
 import torch
 import torch.optim as optim
-from torch.backends.opt_einsum import strategy
 from torch.nn.parallel import DistributedDataParallel
 from torch.distributed import init_process_group, destroy_process_group
 

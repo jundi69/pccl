@@ -477,13 +477,12 @@ namespace {
 #define MAX_FREE_LIST_SIZE 8
 
     struct allocator_free_list {
-        void *ptrs[MAX_FREE_LIST_SIZE];
-        size_t sizes[MAX_FREE_LIST_SIZE];
+        void *ptrs[MAX_FREE_LIST_SIZE] = {};
+        size_t sizes[MAX_FREE_LIST_SIZE] = {};
         PooledAllocator &allocator;
 
         void add(void *ptr, const size_t size) {
-            for (size_t i = 0; i < MAX_FREE_LIST_SIZE; i++) {
-                // NOLINT(*-loop-convert)
+            for (size_t i = 0; i < MAX_FREE_LIST_SIZE; i++) { // NOLINT(*-loop-convert)
                 if (ptrs[i] == nullptr) {
                     ptrs[i] = ptr;
                     sizes[i] = size;
@@ -493,8 +492,7 @@ namespace {
         }
 
         void remove(const void *ptr) {
-            for (size_t i = 0; i < MAX_FREE_LIST_SIZE; i++) {
-                // NOLINT(*-loop-convert)
+            for (size_t i = 0; i < MAX_FREE_LIST_SIZE; i++) { // NOLINT(*-loop-convert)
                 if (ptrs[i] == ptr) {
                     ptrs[i] = nullptr;
                     break;

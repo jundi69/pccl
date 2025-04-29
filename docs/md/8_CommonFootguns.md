@@ -13,7 +13,7 @@ will be effectively locked out of the run, resulting in a deadlock as soon as a 
 hits a blocking all-gather operation, e.g. during a model forward.
 
 To avoid this, we recommend checking if the global world size is less than the largest peer group world size times the
-mpi world size.
+MPI world size.
 
 E.g. if you have 8 FSDP ranks "traditional MPI ranks", then each of those ranks will hold a different shard of the model
 weights.
@@ -93,10 +93,18 @@ memory space
 into one contiguously addressable memory region to then reference in the PCCL shared state. Alternatively, the master
 process could gather and scatter the state from its worker processes, however, at the cost of avoidable memcopies.
 
+### Reduced fault tolerance when FSDP is used
+
+When using FSDP, the fault tolerance of PCCL is significantly reduced. If a peer drops out and is not restarted,
+the remaining peers will block forever during the next all-gather operation.
+This can cause the run to stall until the NCCL collective operation timeout is exceeded.
+PCCL has no way of determining that the rest of the peers are effectively
+dead along until those other processes die because of said timeout.
+
 
 ## Connecting via 127.0.0.1
 When connecting via `127.0.0.1`, the master node will also see the peer's IP as `127.0.0.1` and will be logged as such.
 When other peers that do not connect to the master via loopback attempt to connect, they would obtain return information
-referencing `127.0.0.1` - attempting to connect to p2p connect to themselves.
+referencing `127.0.0.1` - attempting to p2p connect to themselves.
 For this reason, the master disallows connections of non-loopback peers when at least one peer has connected via loopback.
 It is recommended to always connect via the public IP of the master node to avoid this issue.
