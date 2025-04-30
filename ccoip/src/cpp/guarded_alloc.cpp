@@ -33,12 +33,18 @@ namespace ccoip::alloc::internal {
 
         // mmap entire region, start with no permissions
         void *base = mmap(nullptr, total_bytes,
-                          PROT_NONE,
+                          PROT_WRITE,
                           MAP_PRIVATE | MAP_ANONYMOUS,
                           -1, 0);
         if (base == MAP_FAILED) {
             return nullptr;
         }
+
+        // Initialize header in the header page
+        auto hdr = reinterpret_cast<Header *>((char *) base + P);
+        hdr->base = base;
+        hdr->total_bytes = total_bytes;
+        hdr->magic = GUARD_MAGIC;
 
         // Layout:
         // [0] guard page (PROT_NONE)
@@ -53,12 +59,6 @@ namespace ccoip::alloc::internal {
 
         // Compute user pointer at start of payload region
         void *user_ptr = (char *) base + 2 * P;
-
-        // Initialize header in the header page
-        auto hdr = reinterpret_cast<Header *>((char *) base + P);
-        hdr->base = base;
-        hdr->total_bytes = total_bytes;
-        hdr->magic = GUARD_MAGIC;
 
         return user_ptr;
     }
