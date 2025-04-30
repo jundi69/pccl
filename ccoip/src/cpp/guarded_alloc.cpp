@@ -1,62 +1,81 @@
-#include "alloc.hpp"
+#pragma once
 
-#include <unistd.h>     // sysconf
-#include <sys/mman.h>   // mmap, mprotect, munmap
-#include <cstdint>      // uintptr_t
-#include <cerrno>
+#include <unistd.h>
+#include <sys/mman.h>
+#include <cstdint>
+#include <cstddef>
+#include <cassert>
 
-namespace ccoip {
-    namespace alloc {
-        namespace internal {
-            struct Header {
-                void *base;
-                std::size_t total;
-            };
 
-            void *guarded_malloc(const std::size_t size) {
-                if (size == 0)
-                    return nullptr;
+namespace ccoip::alloc::internal {
+    // Canary value to detect header corruption
+    static constexpr uint64_t GUARD_MAGIC = 0xDEADC0DECAFEBABEULL;
 
-                const auto page = static_cast<std::size_t>(sysconf(_SC_PAGESIZE));
-                std::size_t n = (size + page - 1) / page;
-                std::size_t offset = n * page - size;
+    struct Header {
+        void *base; // start of the mmap region
+        size_t total_bytes; // total bytes allocated via mmap
+        uint64_t magic; // sanity check
+    };
 
-                if (offset < sizeof(Header)) {
-                    n += 1;
-                    offset += page;
-                }
+    inline void *guarded_malloc(size_t size) {
+        if (size == 0) return nullptr;
 
-                const std::size_t total_bytes = (n + 2) * page;
+        // Page size
+        const long P = sysconf(_SC_PAGESIZE);
+        assert(P > 0);
 
-                void *base = mmap(nullptr,
-                                  total_bytes,
-                                  PROT_READ | PROT_WRITE,
-                                  MAP_PRIVATE | MAP_ANONYMOUS,
-                                  -1, 0);
-                if (base == MAP_FAILED) {
-                    return nullptr;
-                }
+        // Number of payload pages (round up)
+        size_t pages = (size + P - 1) / P;
 
-                mprotect(base, page, PROT_NONE);
-                mprotect(static_cast<char *>(base) + (1 + n) * page, page, PROT_NONE);
+        // Total pages = guard + header + payload + guard
+        size_t total_pages = pages + 3;
+        size_t total_bytes = total_pages * P;
 
-                void *ptr = static_cast<char *>(base) + page + offset;
+        // mmap entire region, start with no permissions
+        void *base = mmap(nullptr, total_bytes,
+                          PROT_NONE,
+                          MAP_PRIVATE | MAP_ANONYMOUS,
+                          -1, 0);
+        if (base == MAP_FAILED) {
+            return nullptr;
+        }
 
-                auto *hdr = reinterpret_cast<Header *>(
-                    static_cast<char *>(ptr) - sizeof(Header));
-                hdr->base = base;
-                hdr->total = total_bytes;
+        // Layout:
+        // [0] guard page (PROT_NONE)
+        // [1] header page (PROT_READ only)
+        // [2..2+pages-1] payload pages (PROT_READ|WRITE)
+        // [2+pages] guard page (PROT_NONE)
 
-                return ptr;
-            }
+        // Header page: read-only
+        mprotect((char *) base + P, P, PROT_READ);
+        // Payload pages: R/W
+        mprotect((char *) base + 2 * P, pages * P, PROT_READ | PROT_WRITE);
 
-            void guarded_free(void *ptr) {
-                if (!ptr) return;
-                // pull back our header
-                const auto *hdr = reinterpret_cast<Header *>(
-                    static_cast<char *>(ptr) - sizeof(Header));
-                munmap(hdr->base, hdr->total);
-            }
-        } // namespace internal
-    } // namespace alloc
-} // namespace ccoip
+        // Compute user pointer at start of payload region
+        void *user_ptr = (char *) base + 2 * P;
+
+        // Initialize header in the header page
+        auto hdr = reinterpret_cast<Header *>((char *) base + P);
+        hdr->base = base;
+        hdr->total_bytes = total_bytes;
+        hdr->magic = GUARD_MAGIC;
+
+        return user_ptr;
+    }
+
+    inline void guarded_free(void *ptr) {
+        if (!ptr) return;
+
+        // Page size to find header
+        const long P = sysconf(_SC_PAGESIZE);
+        assert(P > 0);
+
+        // Header is one page before the payload region
+        auto hdr = reinterpret_cast<Header *>((char *) ptr - P);
+        // Check magic
+        assert(hdr->magic == GUARD_MAGIC && "Heap corruption detected: header overwritten");
+
+        // Unmap the entire region
+        munmap(hdr->base, hdr->total_bytes);
+    }
+} // namespace ccoip::alloc::internal
