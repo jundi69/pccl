@@ -4,7 +4,7 @@
 
 #include <new>
 
-#define CCOIP_GUARD_ALLOCATIONS
+// #define CCOIP_GUARD_ALLOCATIONS
 
 namespace ccoip::alloc {
     void *malloc(const size_t size) {
