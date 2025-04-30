@@ -5,6 +5,7 @@
 #include <new>
 
 #define CCOIP_GUARD_ALLOCATIONS
+#define CCOIP_HOOK_NEW_OPERATOR
 
 namespace ccoip::alloc {
     void *malloc(const size_t size) {
@@ -24,24 +25,88 @@ namespace ccoip::alloc {
     }
 }
 
-void* operator new(std::size_t __sz) {
-    void* p = ccoip::alloc::malloc(__sz);
+#ifdef CCOIP_HOOK_NEW_OPERATOR
+// Ordinary (throwing) allocation
+void* operator new(std::size_t sz) {
+    void* p = ccoip::alloc::malloc(sz);
+    if (!p) throw std::bad_alloc();
+    return p;
+}
+void* operator new[](std::size_t sz) {
+    void* p = ccoip::alloc::malloc(sz);
     if (!p) throw std::bad_alloc();
     return p;
 }
 
-void* operator new[](std::size_t __sz) {
-    void* p = ccoip::alloc::malloc(__sz);
+
+// Ordinary deallocation
+void operator delete(void* p) noexcept {
+    ccoip::alloc::free(p);
+}
+void operator delete[](void* p) noexcept {
+    ccoip::alloc::free(p);
+}
+
+// Sized deallocate
+void operator delete(void* p, std::size_t) noexcept {
+    ccoip::alloc::free(p);
+}
+void operator delete[](void* p, std::size_t) noexcept {
+    ccoip::alloc::free(p);
+}
+
+// Alignment‐aware (throwing) allocation
+void* operator new(std::size_t sz, std::align_val_t al) {
+    void* p = ccoip::alloc::malloc(sz);
+    if (!p) throw std::bad_alloc();
+    return p;
+}
+void* operator new[](std::size_t sz, std::align_val_t al) {
+    void* p = ccoip::alloc::malloc(sz);
     if (!p) throw std::bad_alloc();
     return p;
 }
 
-void operator delete(void* __p) noexcept {
-    ccoip::alloc::free(__p);
+// Alignment‐aware deallocation
+void operator delete(void* p, std::align_val_t al) noexcept {
+    ccoip::alloc::free(p);
 }
-void operator delete[](void* __p) noexcept {
-    ccoip::alloc::free(__p);
+void operator delete[](void* p, std::align_val_t al) noexcept {
+    ccoip::alloc::free(p);
+}
+// sized + aligned deallocate
+void operator delete(void* p, std::size_t, std::align_val_t al) noexcept {
+    ccoip::alloc::free(p);
+}
+void operator delete[](void* p, std::size_t, std::align_val_t al) noexcept {
+    ccoip::alloc::free(p);
 }
 
-void operator delete(void* __p, std::size_t) noexcept { operator delete(__p); }
-void operator delete[](void* __p, std::size_t) noexcept { operator delete[](__p); }
+// nothrow‐new variants:
+void* operator new(std::size_t sz, const std::nothrow_t&) noexcept {
+    return ccoip::alloc::malloc(sz);
+}
+void* operator new[](std::size_t sz, const std::nothrow_t&) noexcept {
+    return ccoip::alloc::malloc(sz);
+}
+void operator delete(void* p, const std::nothrow_t&) noexcept {
+    ccoip::alloc::free(p);
+}
+void operator delete[](void* p, const std::nothrow_t&) noexcept {
+    ccoip::alloc::free(p);
+}
+
+// aligned + nothrow
+void* operator new(std::size_t sz, std::align_val_t al, const std::nothrow_t&) noexcept {
+    return ccoip::alloc::malloc(sz);
+}
+void* operator new[](std::size_t sz, std::align_val_t al, const std::nothrow_t&) noexcept {
+    return ccoip::alloc::malloc(sz);
+}
+void operator delete(void* p, std::align_val_t, const std::nothrow_t&) noexcept {
+    ccoip::alloc::free(p);
+}
+void operator delete[](void* p, std::align_val_t, const std::nothrow_t&) noexcept {
+    ccoip::alloc::free(p);
+}
+#endif
