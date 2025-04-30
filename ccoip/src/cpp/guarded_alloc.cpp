@@ -8,77 +8,65 @@
 
 
 namespace ccoip::alloc::internal {
-    // Canary value to detect header corruption
-    static constexpr uint64_t GUARD_MAGIC = 0xDEADC0DECAFEBABEULL;
-
     struct Header {
         void *base; // start of the mmap region
         size_t total_bytes; // total bytes allocated via mmap
-        uint64_t magic; // sanity check
     };
 
     void *guarded_malloc(size_t size) {
         if (size == 0) return nullptr;
 
-        // Page size
-        const long P = sysconf(_SC_PAGESIZE);
-        assert(P > 0);
+        // 1) figure out pages
+        long pagesize = sysconf(_SC_PAGESIZE);
+        assert(pagesize > 0);
+        size_t payload_pages = (size + pagesize - 1) / pagesize;
 
-        // Number of payload pages (round up)
-        size_t pages = (size + P - 1) / P;
+        // 2) map header page + payload pages in one shot
+        size_t total_pages = 1 + payload_pages;
+        size_t total_bytes = total_pages * pagesize;
+        void *base = mmap(nullptr,
+                          total_bytes,
+                          PROT_READ | PROT_WRITE, // RW while we init
+                          MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        assert(base != MAP_FAILED);
 
-        // Total pages = guard + header + payload + guard
-        size_t total_pages = pages + 3;
-        size_t total_bytes = total_pages * P;
+        auto *p = static_cast<char *>(base);
+        char *header_page = p;
+        char *payload = p + pagesize;
 
-        // mmap entire region, start with no permissions
-        void *base = mmap(nullptr, total_bytes,
-                          PROT_NONE,
-                          MAP_PRIVATE | MAP_ANONYMOUS,
-                          -1, 0);
-        if (base == MAP_FAILED) {
-            return nullptr;
-        }
+        // 3) write our Header into the first page
+        auto h = reinterpret_cast<Header *>(header_page);
+        h->base = base;
+        h->total_bytes = total_bytes;
 
-        // Header page: read+write for initialization
-        mprotect((char *) base + P, P, PROT_READ|PROT_WRITE);
+        // 4) now protect the header page completely
+        mprotect(header_page, pagesize, PROT_NONE);
 
-        // Initialize header in the header page
-        auto hdr = reinterpret_cast<Header *>((char *) base + P);
-        hdr->base = base;
-        hdr->total_bytes = total_bytes;
-        hdr->magic = GUARD_MAGIC;
+        // 5) leave the payload pages RW
+        mprotect(payload, payload_pages * pagesize,
+                 PROT_READ | PROT_WRITE);
 
-        // Layout:
-        // [0] guard page (PROT_NONE)
-        // [1] header page (PROT_READ only)
-        // [2..2+pages-1] payload pages (PROT_READ|WRITE)
-        // [2+pages] guard page (PROT_NONE)
-
-        // Header page: read-only
-        mprotect((char *) base + P, P, PROT_READ);
-        // Payload pages: R/W
-        mprotect((char *) base + 2 * P, pages * P, PROT_READ | PROT_WRITE);
-
-        // Compute user pointer at start of payload region
-        void *user_ptr = (char *) base + 2 * P;
-
-        return user_ptr;
+        // 6) hand out the user pointer
+        return payload;
     }
 
     void guarded_free(void *ptr) {
         if (!ptr) return;
 
-        // Page size to find header
-        const long P = sysconf(_SC_PAGESIZE);
-        assert(P > 0);
+        long pagesize = sysconf(_SC_PAGESIZE);
+        assert(pagesize > 0);
 
-        // Header is one page before the payload region
-        auto hdr = reinterpret_cast<Header *>((char *) ptr - P);
-        // Check magic
-        assert(hdr->magic == GUARD_MAGIC && "Heap corruption detected: header overwritten");
+        auto *payload = static_cast<char *>(ptr);
+        char *header_page = payload - pagesize;
 
-        // Unmap the entire region
-        munmap(hdr->base, hdr->total_bytes);
+        // make header RW again so we can read our metadata
+        mprotect(header_page, pagesize, PROT_READ | PROT_WRITE);
+
+        auto h = reinterpret_cast<Header *>(header_page);
+        void *base = h->base;
+        size_t total_bytes = h->total_bytes;
+
+        // unmap everything
+        munmap(base, total_bytes);
     }
 } // namespace ccoip::alloc::internal
