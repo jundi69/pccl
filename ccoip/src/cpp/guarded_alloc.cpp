@@ -13,7 +13,7 @@ namespace ccoip {
                 std::size_t total;
             };
 
-            void *guarded_malloc(std::size_t size) {
+            void *guarded_malloc(const std::size_t size) {
                 if (size == 0)
                     return nullptr;
 
@@ -53,7 +53,7 @@ namespace ccoip {
             void guarded_free(void *ptr) {
                 if (!ptr) return;
                 // pull back our header
-                auto *hdr = reinterpret_cast<Header *>(
+                const auto *hdr = reinterpret_cast<Header *>(
                     static_cast<char *>(ptr) - sizeof(Header));
                 munmap(hdr->base, hdr->total);
             }

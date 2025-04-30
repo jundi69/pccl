@@ -119,7 +119,7 @@ namespace tinysockets {
 
         ~PooledAllocator() {
             for (auto &[ptr, size]: pool) {
-                free(ptr);
+                delete[] static_cast<std::byte *>(ptr);
             }
             pool.clear();
         }
