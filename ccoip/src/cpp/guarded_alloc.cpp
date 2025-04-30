@@ -17,7 +17,7 @@ namespace ccoip::alloc::internal {
         uint64_t magic; // sanity check
     };
 
-    inline void *guarded_malloc(size_t size) {
+    void *guarded_malloc(size_t size) {
         if (size == 0) return nullptr;
 
         // Page size
@@ -63,7 +63,7 @@ namespace ccoip::alloc::internal {
         return user_ptr;
     }
 
-    inline void guarded_free(void *ptr) {
+    void guarded_free(void *ptr) {
         if (!ptr) return;
 
         // Page size to find header
