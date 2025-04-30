@@ -4,9 +4,6 @@ if (DEFINED $ENV{IS_CI})
     message(STATUS "Running in CI, enabling sanitizers in tests")
 endif ()
 
-add_link_options(-fsanitize=address -fsanitize=leak -fsanitize=undefined)
-add_compile_options(-fsanitize=address -fsanitize=leak -fsanitize=undefined)
-
 function(add_sanitized_gtest target_name test_file)
     add_executable(${target_name} ${test_file})
     target_link_libraries(${target_name} PRIVATE gtest_main)
