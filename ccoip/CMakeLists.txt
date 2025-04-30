@@ -1,6 +1,7 @@
 add_library(ccoip_internal STATIC
         src/cpp/ccoip_master.cpp src/cpp/ccoip_client_handler.cpp src/cpp/ccoip_master_handler.cpp
         src/cpp/bandwidth_store.cpp src/cpp/benchmark_runner.cpp src/cpp/topolgy_optimizer.cpp
+        src/cpp/alloc.cpp src/cpp/guarded_alloc.cpp
         src/cpp/ccoip_packets.cpp src/cpp/ccoip_packet_buffer.cpp src/cpp/ccoip_client.cpp src/cpp/uuid_utils.cpp
         src/cpp/ccoip_master_state.cpp src/cpp/ccoip_client_state.cpp src/cpp/reduce_kernels.cpp src/cpp/reduce.cpp src/cpp/quantize.cpp
         src/cpp/quantize_kernels.cpp src/cpp/simplehash/simplehash_cuda.cpp)

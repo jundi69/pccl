@@ -98,11 +98,7 @@ namespace tinysockets {
                     return ptr;
                 }
             }
-            void *ptr = malloc(size);
-            if (ptr == nullptr) {
-                LOG(FATAL) << "[MultiplexedIOSocket::PooledAllocator] Failed to allocate memory!";
-                throw std::bad_alloc();
-            }
+            void *ptr = new std::byte[size];
             return ptr;
         }
 
@@ -115,7 +111,7 @@ namespace tinysockets {
             std::unique_lock lock(mutex);
             if (pool.size() >= POOLED_ALLOCATOR_MAX_ENTRIES) {
                 const auto begin = pool.begin();
-                free(begin->first);
+                delete[] static_cast<std::byte *>(begin->first);
                 pool.erase(begin);
             }
             pool.emplace_back(const_cast<void *>(ptr), size);

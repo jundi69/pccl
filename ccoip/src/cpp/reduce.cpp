@@ -12,7 +12,6 @@
 #include <tinysockets.hpp>
 #include <win_sock_bridge.h>
 
-
 /// Chunk size passed to the send() function of the MultiplexedIOSocket.
 /// This determines the maximum size of a single local tagged chunk as managed by the multiplexer.
 /// The higher the chunk size, the less overhead is incurred by the multiplexer, but it is also less fine-granular.
@@ -210,7 +209,9 @@ namespace {
                     bytes_sent += send_sub.size_bytes();
                     client_state.trackCollectiveComsTxBytes(tag, send_sub.size_bytes());
                 } else {
-                    tparkDestroyHandle(done_handle);
+                    if (done_handle != nullptr) {
+                        tparkDestroyHandle(done_handle);
+                    }
                     return {false, false};
                 }
                 tparkWait(done_handle, true);
@@ -370,7 +371,9 @@ namespace {
                     bytes_sent += send_sub.size_bytes();
                     client_state.trackCollectiveComsTxBytes(tag, send_sub.size_bytes());
                 } else {
-                    tparkDestroyHandle(done_handle);
+                    if (done_handle != nullptr) {
+                        tparkDestroyHandle(done_handle);
+                    }
                     return {false, false};
                 }
                 tparkWait(done_handle, true);
@@ -443,11 +446,7 @@ namespace {
                     return ptr;
                 }
             }
-            void *ptr = malloc(size);
-            if (ptr == nullptr) {
-                LOG(FATAL) << "[reduce::PooledAllocator] Failed to allocate memory!";
-                throw std::bad_alloc();
-            }
+            auto *ptr = new std::byte[size];
             return ptr;
         }
 
@@ -468,7 +467,7 @@ namespace {
 
         ~PooledAllocator() {
             for (auto &[ptr, size]: pool) {
-                free(ptr);
+                delete[] static_cast<std::byte *>(ptr);
             }
             pool.clear();
         }
@@ -482,7 +481,8 @@ namespace {
         PooledAllocator &allocator;
 
         void add(void *ptr, const size_t size) {
-            for (size_t i = 0; i < MAX_FREE_LIST_SIZE; i++) { // NOLINT(*-loop-convert)
+            for (size_t i = 0; i < MAX_FREE_LIST_SIZE; i++) {
+                // NOLINT(*-loop-convert)
                 if (ptrs[i] == nullptr) {
                     ptrs[i] = ptr;
                     sizes[i] = size;
@@ -492,7 +492,8 @@ namespace {
         }
 
         void remove(const void *ptr) {
-            for (size_t i = 0; i < MAX_FREE_LIST_SIZE; i++) { // NOLINT(*-loop-convert)
+            for (size_t i = 0; i < MAX_FREE_LIST_SIZE; i++) {
+                // NOLINT(*-loop-convert)
                 if (ptrs[i] == ptr) {
                     ptrs[i] = nullptr;
                     break;
@@ -574,6 +575,7 @@ std::pair<bool, bool> ccoip::reduce::pipelineRingReduce(
     }
     const size_t max_chunk_size_bytes_q = max_chunk_el * quant_type_el_size; {
         auto *recv_buffer = pooled_allocator.allocate(max_chunk_size_bytes_q);
+
         free_list.add(recv_buffer, max_chunk_size_bytes_q);
 
         std::span recv_buffer_span{static_cast<std::byte *>(recv_buffer), max_chunk_size_bytes_q};
