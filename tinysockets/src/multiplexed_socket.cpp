@@ -508,8 +508,8 @@ bool tinysockets::MultiplexedIOSocket::run() {
             // drain the send queue and wake all waiting threads for safe shutdown
             {
                 const SendQueueEntry *entry = nullptr;
-                while ((entry = internal_state->send_queue.dequeue(false)) != nullptr) {
-                    if (entry->done_handle) {
+                while ((entry = internal_state->send_queue.dequeue(true)) != nullptr) {
+                    if (entry->done_handle != nullptr) {
                         tparkWake(entry->done_handle);
                     }
                     if (entry->is_cloned) {
