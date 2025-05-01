@@ -1,11 +1,14 @@
 #pragma once
 
-#include <unistd.h>
-#include <sys/mman.h>
 #include <cstdint>
 #include <cstddef>
 #include <cassert>
 #include <cstdlib>
+
+#ifndef WIN32
+#include <unistd.h>
+#include <sys/mman.h>
+#endif
 
 namespace ccoip::alloc::internal {
     static constexpr uint64_t GUARD_MAGIC = 0xDEADC0DECAFEBABEULL;
@@ -18,7 +21,7 @@ namespace ccoip::alloc::internal {
 
     void *guarded_malloc(size_t size) {
         if (size == 0) return nullptr;
-
+#ifndef WIN32
         long P = sysconf(_SC_PAGESIZE);
         assert(P > 0);
 
@@ -46,13 +49,16 @@ namespace ccoip::alloc::internal {
         hdr->base = base;
         hdr->total_bytes = total_bytes;
         hdr->magic = GUARD_MAGIC;
-
         return user_ptr;
+#else
+        std::cerr << "Guarded malloc is not supported on Windows." << std::endl;
+        std::abort();
+#endif
     }
 
     bool is_guarded_ptr(void *ptr) noexcept {
         if (!ptr) return false;
-
+#ifndef WIN32
         long P = sysconf(_SC_PAGESIZE);
         if (P <= 0) return false;
 
@@ -66,10 +72,15 @@ namespace ccoip::alloc::internal {
         char *rw_start = base + P;
         char *rw_end = base + hdr->total_bytes - P;
         return ptr >= rw_start && ptr < rw_end;
+#else
+        std::cerr << "Guarded malloc is not supported on Windows." << std::endl;
+        std::abort();
+#endif
     }
 
     void guarded_free(void *ptr) {
         if (!ptr) return;
+#ifndef WIN32
         if (!is_guarded_ptr(ptr)) {
             free(ptr);
             return;
@@ -77,5 +88,9 @@ namespace ccoip::alloc::internal {
         auto hdr = reinterpret_cast<Header *>(
             static_cast<char *>(ptr) - sizeof(Header));
         munmap(hdr->base, hdr->total_bytes);
+#else
+        std::cerr << "Guarded free is not supported on Windows." << std::endl;
+        std::abort();
+#endif
     }
 } // namespace ccoip::alloc::internal
