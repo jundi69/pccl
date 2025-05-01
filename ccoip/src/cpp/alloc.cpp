@@ -7,8 +7,8 @@
 #include <dlfcn.h>
 #include <new>
 
-//#define CCOIP_GUARD_ALLOCATIONS
-//#define CCOIP_HOOK_NEW_OPERATOR
+#define CCOIP_GUARD_ALLOCATIONS
+#define CCOIP_HOOK_NEW_OPERATOR
 
 namespace ccoip::alloc {
     void *malloc(const size_t size) {
@@ -28,6 +28,7 @@ namespace ccoip::alloc {
     }
 }
 
+#ifdef CCOIP_HOOK_NEW_OPERATOR
 
 namespace op_delete_loader {
     using PFN_delete_pv = void(*)(void *) noexcept;
@@ -96,7 +97,6 @@ namespace op_delete_loader {
     }
 } // namespace op_delete_loader
 
-#ifdef CCOIP_HOOK_NEW_OPERATOR
 
 // Ordinary (throwing) allocation
 void *operator new(std::size_t sz) {
