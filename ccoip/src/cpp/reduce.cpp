@@ -461,7 +461,7 @@ namespace {
             std::unique_lock lock(mutex);
             if (pool.size() >= POOLED_ALLOCATOR_MAX_ENTRIES) {
                 const auto begin = pool.begin();
-                free(begin->first);
+                delete[] static_cast<std::byte *>(begin->first);
                 pool.erase(begin);
             }
             pool.emplace_back(const_cast<void *>(ptr), size);
