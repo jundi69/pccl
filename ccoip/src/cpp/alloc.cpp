@@ -4,11 +4,16 @@
 
 #include <cassert>
 #include <cstdio>
-#include <dlfcn.h>
 #include <new>
 
+#ifndef WIN32
+#include <dlfcn.h>
+
+// guarded malloc & free hooking only supported on linux
 //#define CCOIP_GUARD_ALLOCATIONS
 //#define CCOIP_HOOK_NEW_OPERATOR
+
+#endif
 
 namespace ccoip::alloc {
     void *malloc(const size_t size) {
