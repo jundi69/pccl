@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cassert>
 #include <cstdlib>
+#include <iostream>
 
 #ifndef WIN32
 #include <unistd.h>
