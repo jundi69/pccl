@@ -439,9 +439,11 @@ bool tinysockets::MultiplexedIOSocket::run() {
                             LOG(ERR) << "Failed to interrupt MultiplexedIOSocket";
                         }
                         if (entry->done_handle != nullptr) {
+                            // must only be woken once, else heap corruption because the user will free it!
                             tparkWake(entry->done_handle);
                         }
                         break;
+                        // this breaks out of the send loop entirely, so the wake above is the only one that will happen
                     }
                     if (i != sizeof(preamble)) {
                         LOG(ERR) << "Failed to send packet preamble for packet with tag " << entry->tag
@@ -450,9 +452,11 @@ bool tinysockets::MultiplexedIOSocket::run() {
                             LOG(ERR) << "Failed to interrupt MultiplexedIOSocket";
                         }
                         if (entry->done_handle != nullptr) {
+                        // must only be woken once, else heap corruption because the user will free it!
                             tparkWake(entry->done_handle);
                         }
                         break;
+                        // this breaks out of the send loop entirely, so the wake above is the only one that will happen
                     }
                 }
 
@@ -470,10 +474,6 @@ bool tinysockets::MultiplexedIOSocket::run() {
                                     << "; exiting send loop...";
                             if (!interrupt()) {
                                 LOG(ERR) << "Failed to interrupt MultiplexedIOSocket";
-                            }
-                            // wake on error
-                            if (entry->done_handle != nullptr) {
-                                tparkWake(entry->done_handle);
                             }
                             break;
                         }
@@ -508,7 +508,7 @@ bool tinysockets::MultiplexedIOSocket::run() {
                 }
 
                 if (entry->done_handle != nullptr) {
-                    tparkWake(entry->done_handle);
+                    tparkWake(entry->done_handle); // must only ever be woken once!
                 }
 
                 delete entry;
@@ -520,6 +520,7 @@ bool tinysockets::MultiplexedIOSocket::run() {
                 const SendQueueEntry *entry = nullptr;
                 while ((entry = internal_state->send_queue.dequeue(true)) != nullptr) {
                     if (entry->done_handle != nullptr) {
+                        // must only be woken once, else heap corruption because the user will free it!
                         tparkWake(entry->done_handle);
                     }
                     if (entry->is_cloned) {
