@@ -443,11 +443,23 @@ bool tinysockets::MultiplexedIOSocket::run() {
                         }
                         break;
                     }
+                    if (i != sizeof(preamble)) {
+                        LOG(ERR) << "Failed to send packet preamble for packet with tag " << entry->tag
+                                << " with error: " << std::strerror(errno);
+                        if (!interrupt()) {
+                            LOG(ERR) << "Failed to interrupt MultiplexedIOSocket";
+                        }
+                        if (entry->done_handle != nullptr) {
+                            tparkWake(entry->done_handle);
+                        }
+                        break;
+                    }
                 }
 
                 LOG(TRACE) << "MultiplexedIOSocket: Sent packet with length " << entry->size_bytes << " and tag "
                         << entry->tag;
 
+                bool data_successfully_sent = false;
                 if (entry->data != nullptr) {
                     size_t n_sent = 0;
                     do {
@@ -489,6 +501,7 @@ bool tinysockets::MultiplexedIOSocket::run() {
                         }
                         n_sent += n_bytes;
                     } while (n_sent < entry->size_bytes);
+                    data_successfully_sent = true;
                 } else {
                     // this is the EOS packet (zero-length, no data)
                     if (entry->size_bytes != 0) {
@@ -498,8 +511,10 @@ bool tinysockets::MultiplexedIOSocket::run() {
                 if (entry->is_cloned) {
                     internal_state->tx_allocator.release(entry->data, entry->size_bytes);
                 }
-                if (entry->done_handle != nullptr) {
-                    tparkWake(entry->done_handle);
+                if (data_successfully_sent) {
+                    if (entry->done_handle != nullptr) {
+                        tparkWake(entry->done_handle);
+                    }
                 }
                 delete entry;
             }
