@@ -10,5 +10,6 @@ namespace ccoip::alloc {
     namespace internal {
         void *guarded_malloc(size_t size);
         void guarded_free(void *ptr);
+        bool is_guarded_ptr(void *ptr) noexcept;
     }
 }
