@@ -30,7 +30,6 @@ namespace ccoip::alloc {
 
 
 namespace op_delete_loader {
-    // --- function‐pointer types for each delete overload ---
     using PFN_delete_pv = void(*)(void *) noexcept;
     using PFN_delete_pv_sz = void(*)(void *, std::size_t) noexcept;
     using PFN_delete_pv_align = void(*)(void *, std::align_val_t) noexcept;
@@ -38,7 +37,6 @@ namespace op_delete_loader {
     using PFN_delete_pv_nothrow = void(*)(void *, const std::nothrow_t &) noexcept;
     using PFN_delete_pv_align_nothrow = void(*)(void *, std::align_val_t, const std::nothrow_t &) noexcept;
 
-    // --- externs you’ll call from your operator delete hooks ---
     extern PFN_delete_pv real_delete;
     extern PFN_delete_pv real_delete_array;
     extern PFN_delete_pv_sz real_delete_sz;
@@ -52,7 +50,6 @@ namespace op_delete_loader {
     extern PFN_delete_pv_align_nothrow real_delete_align_nothrow;
     extern PFN_delete_pv_align_nothrow real_delete_array_align_nothrow;
 
-    // define them all
     PFN_delete_pv real_delete = nullptr;
     PFN_delete_pv real_delete_array = nullptr;
     PFN_delete_pv_sz real_delete_sz = nullptr;
@@ -100,6 +97,7 @@ namespace op_delete_loader {
 } // namespace op_delete_loader
 
 #ifdef CCOIP_HOOK_NEW_OPERATOR
+
 // Ordinary (throwing) allocation
 void *operator new(std::size_t sz) {
     void *p = ccoip::alloc::malloc(sz);

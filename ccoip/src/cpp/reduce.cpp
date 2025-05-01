@@ -210,6 +210,7 @@ namespace {
                     client_state.trackCollectiveComsTxBytes(tag, send_sub.size_bytes());
                 } else {
                     if (done_handle != nullptr) {
+                        tparkWait(done_handle, true);
                         tparkDestroyHandle(done_handle);
                     }
                     return {false, false};
@@ -372,6 +373,7 @@ namespace {
                     client_state.trackCollectiveComsTxBytes(tag, send_sub.size_bytes());
                 } else {
                     if (done_handle != nullptr) {
+                        tparkWait(done_handle, true);
                         tparkDestroyHandle(done_handle);
                     }
                     return {false, false};
