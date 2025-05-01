@@ -2,13 +2,13 @@
 // which can optionally be configured to memprotect outside of the allocated region.
 #include "alloc.hpp"
 
-#include <assert.h>
+#include <cassert>
 #include <cstdio>
 #include <dlfcn.h>
 #include <new>
 
-//#define CCOIP_GUARD_ALLOCATIONS
-//#define CCOIP_HOOK_NEW_OPERATOR
+#define CCOIP_GUARD_ALLOCATIONS
+#define CCOIP_HOOK_NEW_OPERATOR
 
 namespace ccoip::alloc {
     void *malloc(const size_t size) {
