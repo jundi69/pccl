@@ -367,7 +367,7 @@ pcclResult_t pcclAllReduceMultipleWithRetry(const pcclReduceOpDescriptor_t *desc
 
         pcclAsyncReduceOp_t handle{};
         PCCL_ERR_PROPAGATE(pcclAllReduceAsync(
-            op_descriptor.recvbuf,
+            op_descriptor.sendbuf,
             op_descriptor.recvbuf,
             &op_descriptor.descriptor,
             communicator,
@@ -403,7 +403,7 @@ pcclResult_t pcclAllReduceMultipleWithRetry(const pcclReduceOpDescriptor_t *desc
                         << "Launching async reduce operation for index " << i;
                 pcclAsyncReduceOp_t handle{};
                 PCCL_ERR_PROPAGATE(pcclAllReduceAsync(
-                    op_descriptor.recvbuf,
+                    op_descriptor.sendbuf,
                     op_descriptor.recvbuf,
                     &op_descriptor.descriptor,
                     communicator,

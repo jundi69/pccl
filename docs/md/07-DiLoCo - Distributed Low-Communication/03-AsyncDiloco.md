@@ -1,12 +1,14 @@
-# Streaming DiLoCo
+# Async DiLoCo
 
-Streaming DiLoCo is a more advanced version of DiLoCo which hides the communication time associated with the pseudo gradient reduction by
+Async DiLoCo is a more advanced version of DiLoCo which hides the communication time associated with the pseudo gradient reduction by
 overlapping it with local training steps of the next step.
 This technically applies slightly dirty parameter updates.
 Given that each step is effectively an N=2 pipeline, we need to take special care of newcomers to properly insert the into the pipeline.
 Specifically, given that the all reduce that completes at any given outer step `t` has commenced before the newcomer has joined, we need to ensure that the newcomer
 gets to "eavesdrop" on the result, which only the pre-existing workers will see by performing a second shared state synchronization.
 
+
+## Simplified pseudo code
 ```python
 # 1) Build your local model as usual:
 local_model = GPT(config)

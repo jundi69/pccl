@@ -60,7 +60,7 @@ local_iter_num = 0
 
 while True:
     local_iter_num += 1
-    
+
     if local_iter_num > 1:
         logger.info("Checking are_peers_pending...")
         while True:
@@ -80,7 +80,7 @@ while True:
     global_world_size = communicator.get_attribute(Attribute.GLOBAL_WORLD_SIZE)  # obtain global world-size after join
     largest_peer_group_size = communicator.get_attribute(Attribute.LARGEST_PEER_GROUP_WORLD_SIZE)
     mpi_ranks_pending = global_world_size < (mpi_config.mpi_world_size * largest_peer_group_size)
-    
+
     if mpi_ranks_pending:
         time.sleep(1)
         continue # wait for more peers
@@ -108,3 +108,30 @@ When other peers that do not connect to the master via loopback attempt to conne
 referencing `127.0.0.1` - attempting to p2p connect to themselves.
 For this reason, the master disallows connections of non-loopback peers when at least one peer has connected via loopback.
 It is recommended to always connect via the public IP of the master node to avoid this issue.
+
+## Deterministic Advancement of Shared State
+PCCL expects application developers to deterministically advance the shared state from collective communication results such that the shared state content
+of all peers is bitwise identical.
+If the user intends to break this contract, they must set the `allow_content_inequality` flag to `true` in the shared state
+or alternatively tolerate periodic retransmissions of the shared state.
+PCCL will support distance-aware hashing of the shared state in future versions such that retransmissions
+are more infrequent instead of for all intents and purposes occurring every single step when `allow_content_inequality` remains `false`.
+When using the `allow_content_inequality` flag, the user is solely responsible for ensuring that peer drift does not occur practically
+and that all shared state tensors are "logically identical" such that obtaining any version on join is tolerable.
+We recommend spending the extra effort to polish the application logic to ensure that shared state advancement is deterministic
+and to rule out peer drift categorically.
+
+This can be accomplished with most modern optimizers - which are merely elementwise operations, where no GPU-indeterminism can appear.
+Regardless of whether the shared state is placed on the GPU or CPU, it is easy to accidentally lose this property through:
+
+- Not referencing all optimizer state including momentum buffers in the shared state
+- Creating new tensor instances instead of using in-place operations (like `.copy_()`) (which may even segfault when using CPU, or worse on GPU)
+
+It is also crucial that any approximations used in the optimizer are not only deterministic but are implemented identically on all peers.
+E.g. Adam kernels will contain the  `__expf` function which is deterministic, but not necessarily implemented in the same way on all GPU architectures.
+This can lead to issues where when peers utilize different GPU architectures, the shared state will diverge and unnecessary retransmissions will be encountered.
+
+Additionally, PCCL does allow the shared state to be placed on different device types (CPU/GPU) on different peers.
+The behavior of `__expf` is not going to be replicated exactly by the CPU implementation of `expf` and vice versa, which will lead to divergence.
+We recommend that when the user intends to allow for peers with different GPU & CPU architectures to join that they implement their own easily replicable approximations for the shared state advancement.
+If this is not desired, it is perfectly fine to exploit the same-architecture & device-type assumption for determinism.

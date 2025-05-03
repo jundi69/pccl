@@ -33,9 +33,13 @@ int main() {
     PCCL_CHECK(pcclInit());
 
     pcclComm_t *communicator{};
-    constexpr pcclCommCreateParams_t params{.master_address = {.inet = {.protocol = inetIPv4, .ipv4 = {127, 0, 0, 1}},
-                                                               .port = CCOIP_PROTOCOL_PORT_MASTER},
-                                            .peer_group = 0};
+    constexpr pcclCommCreateParams_t params{
+        .master_address = {
+            .inet = {.protocol = inetIPv4, .ipv4 = {127, 0, 0, 1}},
+            .port = CCOIP_PROTOCOL_PORT_MASTER
+        },
+        .peer_group = 0
+    };
     PCCL_CHECK(pcclCreateCommunicator(&params, &communicator));
     PCCL_CHECK(pcclConnect(communicator));
 
@@ -64,16 +68,16 @@ int main() {
     pcclSharedState_t shared_state{.revision = 0, .count = 1, .infos = infos};
 
     size_t i = 0;
-
+    size_t num_syncs = 0;
     while (true) {
         i++;
         if (i > 1) {
             PCCL_CHECK(pcclUpdateTopology(communicator));
             PCCL_CHECK(pcclGetAttribute(communicator, PCCL_ATTRIBUTE_GLOBAL_WORLD_SIZE, &world_size));
         }
-        
+
         if (world_size > 1) {
-            // PCCL_CHECK(pcclOptimizeTopology(communicator));
+            PCCL_CHECK(pcclOptimizeTopology(communicator));
             PCCL_CHECK(pcclGetAttribute(communicator, PCCL_ATTRIBUTE_GLOBAL_WORLD_SIZE, &world_size));
         }
 
@@ -83,8 +87,17 @@ int main() {
         }
 
         pcclSharedStateSyncInfo_t sync_info{};
-        PCCL_CHECK(pcclSynchronizeSharedState(communicator, &shared_state, PCCL_SHARED_STATE_SYNC_STRATEGY_ENFORCE_POPULAR, &sync_info));
-        if (i > 2) {
+        PCCL_CHECK(
+            pcclSynchronizeSharedState(
+                communicator, &shared_state,
+                PCCL_SHARED_STATE_SYNC_STRATEGY_ENFORCE_POPULAR,
+                &sync_info
+            )
+        );
+        num_syncs++;
+        if (num_syncs > 1) {
+            // Assert we never receive data. Only send.
+            // Failure of this assert would indicate peer drift.
             assert(sync_info.rx_bytes == 0);
         }
 
@@ -95,12 +108,11 @@ int main() {
 
         do {
             constexpr pcclReduceDescriptor_t desc{
-                    .count = n_elements,
-                    .op = pcclSum,
-                    .tag = 0,
-                    .src_descriptor = {.datatype = pcclFloat, .distribution_hint = PCCL_DISTRIBUTION_HINT_NONE},
-                    // .quantization_options = {.quantized_datatype = pcclUint8, .algorithm = pcclQuantMinMax},
-                    .quantization_options = {.quantized_datatype = pcclFloat, .algorithm = pcclQuantNone},
+                .count = n_elements,
+                .op = pcclSum,
+                .tag = 0,
+                .src_descriptor = {.datatype = pcclFloat, .distribution_hint = PCCL_DISTRIBUTION_HINT_NONE},
+                .quantization_options = {.quantized_datatype = pcclUint8, .algorithm = pcclQuantMinMax},
             };
             pcclAllReduceAsync(gradients, weights, &desc, communicator, &async_op);
             result = pcclAwaitAsyncReduce(&async_op, &reduce_info);
@@ -110,7 +122,8 @@ int main() {
 
         auto end = std::chrono::high_resolution_clock::now();
         auto time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-        std::cout << "All reduce finished: Rx-Bytes:" << reduce_info.rx_bytes << "; Tx-Bytes:" << reduce_info.tx_bytes << "; Revision: " << shared_state.revision << std::endl;
+        std::cout << "All reduce finished: Rx-Bytes:" << reduce_info.rx_bytes << "; Tx-Bytes:" << reduce_info.tx_bytes
+                << "; Revision: " << shared_state.revision << std::endl;
         const double mb_per_second = static_cast<double>(reduce_info.rx_bytes + reduce_info.tx_bytes) / 1e6 /
                                      (static_cast<double>(time_ms) / 1e3);
         std::cout << "Bandwidth: " << mb_per_second << " MB/s" << std::endl;

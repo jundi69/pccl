@@ -56,7 +56,7 @@ while true; do
     # Use osascript with a here-document for better readability and easier escaping
     osascript <<EOF
     tell application "Terminal"
-        do script "cd '$dir'; /Users/mike/CLionProjects/pccl/.venv/bin/python '$dir'/mnist_peer.py &
+        do script "cd '$dir'; /Users/mike/CLionProjects/pccl/venv/bin/python '$dir'/mnist_peer.py &
 PYTHON_PID=\$!
 sleep $KILL_DELAY && (kill \$PYTHON_PID || true) && kill -9 \$\$"
         set position of window 1 to {$random_x, $random_y}
