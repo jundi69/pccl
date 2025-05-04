@@ -7,6 +7,7 @@
 #include <cstring>
 #include <ccoip_types.hpp>
 #include <network_order_utils.hpp>
+#include <pccl_log.hpp>
 
 namespace ccoip::internal::quantize {
 
@@ -16,6 +17,7 @@ namespace ccoip::internal::quantize {
     };
     /// Contains meta-data needed for de-quantization.
     struct DeQuantizationMetaData {
+
         /// Type of metadata
         /// Determines whether min_value & max_value or zero_point & scale are used.
         DeQuantizationMetaType meta_type;
@@ -96,6 +98,9 @@ namespace ccoip::internal::quantize {
                 scale = network_order_utils::host_to_network(scale);
             }
 
+            meta_data.scale_type = ccoip_data_type_from_type<S>();
+            meta_data.zero_point_type = ccoip_data_type_from_type<Z>();
+
             // floats and doubles are always in host byte order
 
             meta_data.zero_point.resize(zero_point_type_size);
@@ -105,6 +110,74 @@ namespace ccoip::internal::quantize {
             std::memcpy(meta_data.scale.data(), &scale, scale_type_size);
 
             return meta_data;
+        }
+
+        template <typename T> requires std::is_floating_point_v<T>
+        [[nodiscard]] T scaleAs() const {
+            switch (scale_type) {
+                case ccoipFloat: {
+                    assert(scale.size() == sizeof(float));
+                    return static_cast<T>(*reinterpret_cast<const float *>(scale.data()));
+                }
+                case ccoipDouble: {
+                    assert(scale.size() == sizeof(double));
+                    return static_cast<T>(*reinterpret_cast<const double *>(scale.data()));
+                }
+                default: LOG(BUG) << "Unsupported scale type: " << scale_type; std::abort();
+            }
+        }
+
+        template <typename T> requires std::is_integral_v<T>
+        [[nodiscard]] T zeroPointAs() const {
+            T value = 0;
+            switch (zero_point_type) {
+                case ccoipInt8: {
+                    assert(zero_point.size() == sizeof(std::int8_t));
+                    value = static_cast<T>(*reinterpret_cast<const std::int8_t *>(zero_point.data()));
+                    break;
+                }
+                case ccoipUint8: {
+                    assert(zero_point.size() == sizeof(std::uint8_t));
+                    value = static_cast<T>(*reinterpret_cast<const std::uint8_t *>(zero_point.data()));
+                    break;
+                }
+                case ccoipInt16: {
+                    assert(zero_point.size() == sizeof(std::int16_t));
+                    value = static_cast<T>(*reinterpret_cast<const std::int16_t *>(zero_point.data()));
+                    break;
+                }
+                case ccoipUint16: {
+                    assert(zero_point.size() == sizeof(std::uint16_t));
+                    value = static_cast<T>(*reinterpret_cast<const std::uint16_t *>(zero_point.data()));
+                    break;
+                }
+                case ccoipInt32: {
+                    assert(zero_point.size() == sizeof(std::int32_t));
+                    value = static_cast<T>(*reinterpret_cast<const std::int32_t *>(zero_point.data()));
+                    break;
+                }
+                case ccoipUint32: {
+                    assert(zero_point.size() == sizeof(std::uint32_t));
+                    value = static_cast<T>(*reinterpret_cast<const std::uint32_t *>(zero_point.data()));
+                    break;
+                }
+                case ccoipInt64: {
+                    assert(zero_point.size() == sizeof(std::int64_t));
+                    value = static_cast<T>(*reinterpret_cast<const std::int64_t *>(zero_point.data()));
+                    break;
+                }
+                case ccoipUint64: {
+                    assert(zero_point.size() == sizeof(std::uint64_t));
+                    value = static_cast<T>(*reinterpret_cast<const std::uint64_t *>(zero_point.data()));
+                    break;
+                }
+                default: LOG(BUG) << "Unsupported zero point type: " << zero_point_type;std::abort();
+            }
+            if constexpr (std::is_integral_v<T>) {
+                // if is integer, convert from network byte order
+                value = tinysockets::network_order_utils::network_to_host(value);
+            }
+            return value;
         }
     };
 

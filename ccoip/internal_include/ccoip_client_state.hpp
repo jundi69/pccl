@@ -98,7 +98,7 @@ namespace ccoip {
         pi::threadpool::ThreadPool collective_coms_threadpool{GetMaxConcurrentCollectiveOps(), 64};
 
         /// Maps tags of running collective operation tasks to their respective futures
-        std::unordered_map<uint64_t, pi::threadpool::TaskFuture<pi::threadpool::void_t>> running_collective_ops{};
+        std::unordered_map<uint64_t, pi::threadpool::TaskFuture<void>> running_collective_ops{};
 
         /// Maps tags of running collective operation tasks to their respective failure states;
         /// These failure states are used to signal the completion of the collective operation task
