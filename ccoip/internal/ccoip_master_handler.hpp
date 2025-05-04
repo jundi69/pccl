@@ -36,7 +36,7 @@ namespace ccoip {
         pi::threadpool::ThreadPool topology_optimization_threadpool;
 
         /// Tasks for topology optimization
-        std::unordered_map<uint32_t, pi::threadpool::TaskFuture<pi::threadpool::void_t>> topology_optimization_tasks;
+        std::unordered_map<uint32_t, pi::threadpool::TaskFuture<void>> topology_optimization_tasks;
 
         /// Stores the previous p2p connection information distributed to the clients.
         /// This is needed for determining whether this information has changed. The changed flag is
