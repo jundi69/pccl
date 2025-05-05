@@ -44,8 +44,10 @@ typedef enum pcclDataType_t {
     pcclInt32 = 5,
     pcclUint64 = 6,
     pcclInt64 = 7,
-    pcclFloat = 8,
-    pcclDouble = 9
+    pcclFloat16 = 8,
+    pcclBFloat16 = 9,
+    pcclFloat = 10,
+    pcclDouble = 11
 } pcclDataType_t;
 
 typedef enum pcclDeviceType_t {

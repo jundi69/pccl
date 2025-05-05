@@ -122,6 +122,8 @@ class DataType(Enum):
     INT32 = C.pcclInt32
     UINT64 = C.pcclUint64
     INT64 = C.pcclInt64
+    FLOAT16 = C.pcclFloat16
+    BFLOAT16 = C.pcclBFloat16
     FLOAT = C.pcclFloat
     DOUBLE = C.pcclDouble
 
@@ -135,6 +137,8 @@ class DataType(Enum):
             DataType.INT32: torch.int32,
             DataType.UINT64: torch.uint64,
             DataType.INT64: torch.int64,
+            DataType.FLOAT16: torch.float16,
+            DataType.BFLOAT16: torch.bfloat16,
             DataType.FLOAT: torch.float32,
             DataType.DOUBLE: torch.float64,
         }
@@ -151,6 +155,8 @@ class DataType(Enum):
             DataType.INT32: np.dtypes.Int32DType,
             DataType.UINT64: np.dtypes.UInt64DType,
             DataType.INT64: np.dtypes.Int64DType,
+            DataType.FLOAT16: np.dtypes.Float16DType,
+            DataType.BFLOAT16: np.dtypes.BFloat16DType,
             DataType.FLOAT: np.dtypes.Float32DType,
             DataType.DOUBLE: np.dtypes.Float64DType,
         }
@@ -170,6 +176,8 @@ class DataType(Enum):
             torch.int32: cls.INT32,
             torch.uint64: cls.UINT64,
             torch.int64: cls.INT64,
+            torch.float16: cls.FLOAT16,
+            torch.bfloat16: cls.BFLOAT16,
             torch.float32: cls.FLOAT,
             torch.float64: cls.DOUBLE,
         }
@@ -186,6 +194,8 @@ class DataType(Enum):
             np.dtypes.Int32DType: DataType.INT32,
             np.dtypes.UInt64DType: DataType.UINT64,
             np.dtypes.Int64DType: DataType.INT64,
+            np.dtypes.Float16DType: DataType.FLOAT16,
+            np.dtypes.BFloat16DType: DataType.BFLOAT16,
             np.dtypes.Float32DType: DataType.FLOAT,
             np.dtypes.Float64DType: DataType.DOUBLE,
         }

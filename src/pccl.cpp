@@ -129,6 +129,10 @@ static std::optional<ccoip::ccoip_data_type_t> getCCoIPDataType(const pcclDataTy
             return ccoip::ccoipInt32;
         case pcclInt64:
             return ccoip::ccoipInt64;
+        case pcclFloat16:
+            return ccoip::ccoipFloat16;
+        case pcclBFloat16:
+            return ccoip::ccoipBFloat16;
         case pcclFloat:
             return ccoip::ccoipFloat;
         case pcclDouble:

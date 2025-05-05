@@ -14,8 +14,10 @@ namespace ccoip {
         ccoipInt32 = 5,
         ccoipUint64 = 6,
         ccoipInt64 = 7,
-        ccoipFloat = 8,
-        ccoipDouble = 9,
+        ccoipFloat16 = 8,
+        ccoipBFloat16 = 9,
+        ccoipFloat = 10,
+        ccoipDouble = 11,
     };
 
     enum ccoip_device_type_t {
@@ -49,6 +51,8 @@ namespace ccoip {
                 return 1;
             case ccoipUint16:
             case ccoipInt16:
+            case ccoipFloat16:
+            case ccoipBFloat16:
                 return 2;
             case ccoipUint32:
             case ccoipInt32:
