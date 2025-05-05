@@ -181,7 +181,11 @@ class DataType(Enum):
             torch.float32: cls.FLOAT,
             torch.float64: cls.DOUBLE,
         }
-        return dtype_map.get(dtype, None)
+        pccl_dtype = dtype_map.get(dtype, None)
+        if pccl_dtype is None:
+            raise ValueError(f'Unsupported dtype: {dtype}')
+        return pccl_dtype
+
 
     @classmethod
     def from_numpy_dtype(cls, dtype: 'np.dtype'):
@@ -195,7 +199,6 @@ class DataType(Enum):
             np.dtypes.UInt64DType: DataType.UINT64,
             np.dtypes.Int64DType: DataType.INT64,
             np.dtypes.Float16DType: DataType.FLOAT16,
-            np.dtypes.BFloat16DType: DataType.BFLOAT16,
             np.dtypes.Float32DType: DataType.FLOAT,
             np.dtypes.Float64DType: DataType.DOUBLE,
         }
