@@ -545,18 +545,34 @@ std::pair<bool, bool> ccoip::reduce::pipelineRingReduce(
 
     const bool src_and_dest_identical_ptr = (src_buf.data() == dst_buf.data());
 
+    // Backup buffer to be used to restore the src_buf if the all reduce is aborted.
+    std::span<const std::byte> backup_buf = src_buf;
+
     // Copy local data into dst_buf so we can reduce in place
     if (!src_and_dest_identical_ptr) {
         if (dst_buf.size_bytes() != src_buf.size_bytes()) {
             LOG(BUG) << "Destination buffer size does not match source buffer size!";
             return {false, false};
         }
+        // add src buf as the initial contribution of the reduction
         std::memcpy(dst_buf.data(), src_buf.data(), src_buf.size_bytes());
     } else {
-        // if src and dest are identical, they definitely overlap
-        // which means that we just created a copy of src buf and made it the src buf, leaving the original ptr in
-        // dst_buf, which contains the same data as src_buf.
+        // if src and dst are identical, we need to create a backup of the source buffer because it will be modified.
+        void *backup = pooled_allocator.allocate(src_buf.size_bytes());
+        free_list.add(backup, src_buf.size_bytes());
+        std::memcpy(backup, src_buf.data(), src_buf.size_bytes());
+        backup_buf = std::span<const std::byte>(static_cast<std::byte *>(backup), src_buf.size_bytes());
     }
+
+    const auto restore_src_buf = [src_and_dest_identical_ptr, src_buf, backup_buf] {
+        if (src_and_dest_identical_ptr) {
+            // this is needed so that we *actually* don't have const data changing from the perspective of the user
+            // in the case where the all reduce aborts.
+            // So this const cast ironically saves the perception of const-ness from the user.
+            auto *src_buf_ptr = const_cast<std::byte *>(src_buf.data());
+            std::memcpy(src_buf_ptr, backup_buf.data(), backup_buf.size_bytes());
+        }
+    };
 
     // Number of (unquantized) elements total
     const size_t data_type_el_size = ccoip_data_type_size(data_type);
@@ -577,7 +593,6 @@ std::pair<bool, bool> ccoip::reduce::pipelineRingReduce(
     }
     const size_t max_chunk_size_bytes_q = max_chunk_el * quant_type_el_size; {
         auto *recv_buffer = pooled_allocator.allocate(max_chunk_size_bytes_q);
-
         free_list.add(recv_buffer, max_chunk_size_bytes_q);
 
         std::span recv_buffer_span{static_cast<std::byte *>(recv_buffer), max_chunk_size_bytes_q};
@@ -635,6 +650,7 @@ std::pair<bool, bool> ccoip::reduce::pipelineRingReduce(
                 quantized_data = nullptr;
             }
             if (!success || abort_packet_received) {
+                restore_src_buf();
                 return {success, abort_packet_received};
             }
             assert(quantized_data == nullptr);
@@ -739,6 +755,7 @@ std::pair<bool, bool> ccoip::reduce::pipelineRingReduce(
                                       prev_meta_data, // out
                                       peer_tx_sockets, peer_rx_sockets);
             if (!success || abort_packet_received) {
+                restore_src_buf();
                 return {success, abort_packet_received};
             }
 

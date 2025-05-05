@@ -128,10 +128,8 @@ Regardless of whether the shared state is placed on the GPU or CPU, it is easy t
 - Creating new tensor instances instead of using in-place operations (like `.copy_()`) (which may even segfault when using CPU, or worse on GPU)
 
 It is also crucial that any approximations used in the optimizer are not only deterministic but are implemented identically on all peers.
-E.g. Adam kernels will contain the  `__expf` function which is deterministic, but not necessarily implemented in the same way on all GPU architectures.
-This can lead to issues where when peers utilize different GPU architectures, the shared state will diverge and unnecessary retransmissions will be encountered.
+This can lead to issues where when peers utilize different architectures, the shared state will diverge and unnecessary retransmissions will be encountered.
 
-Additionally, PCCL does allow the shared state to be placed on different device types (CPU/GPU) on different peers.
-The behavior of `__expf` is not going to be replicated exactly by the CPU implementation of `expf` and vice versa, which will lead to divergence.
+PCCL does allow the shared state to be placed on different device types (CPU/GPU) on different peers.
+E.g. the behavior of `__nv_expf` is not going to be replicated exactly by the CPU implementation of `expf` and vice versa, which will lead to divergence.
 We recommend that when the user intends to allow for peers with different GPU & CPU architectures to join that they implement their own easily replicable approximations for the shared state advancement.
-If this is not desired, it is perfectly fine to exploit the same-architecture & device-type assumption for determinism.

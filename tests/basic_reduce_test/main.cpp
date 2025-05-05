@@ -47,17 +47,17 @@ int main() {
     pcclGetAttribute(communicator, PCCL_ATTRIBUTE_GLOBAL_WORLD_SIZE, &world_size);
 
     constexpr size_t n_elements = 1024 * 1024 * 8;
-    const auto weights = new float[n_elements];
-    fill_uniform(weights, n_elements);
 
     const auto gradients = new float[n_elements];
-    fill_uniform(gradients, n_elements);
+    for (size_t i = 0; i < n_elements; ++i) {
+        gradients[i] = 1.0f;
+    }
 
     // Create shared state
     pcclTensorInfo_t infos[1] = {
         {
-            .name = "weights",
-            .data = weights,
+            .name = "gradients",
+            .data = gradients,
             .count = n_elements,
             .datatype = pcclFloat,
             .device_type = pcclDeviceCpu,
@@ -77,7 +77,7 @@ int main() {
         }
 
         if (world_size > 1) {
-            PCCL_CHECK(pcclOptimizeTopology(communicator));
+            //PCCL_CHECK(pcclOptimizeTopology(communicator));
             PCCL_CHECK(pcclGetAttribute(communicator, PCCL_ATTRIBUTE_GLOBAL_WORLD_SIZE, &world_size));
         }
 
@@ -114,11 +114,19 @@ int main() {
                 .src_descriptor = {.datatype = pcclFloat, .distribution_hint = PCCL_DISTRIBUTION_HINT_NONE},
                 .quantization_options = {.quantized_datatype = pcclUint8, .algorithm = pcclQuantMinMax},
             };
-            pcclAllReduceAsync(gradients, weights, &desc, communicator, &async_op);
+            pcclAllReduceAsync(gradients, gradients, &desc, communicator, &async_op);
             result = pcclAwaitAsyncReduce(&async_op, &reduce_info);
             pcclGetAttribute(communicator, PCCL_ATTRIBUTE_GLOBAL_WORLD_SIZE, &world_size);
             LOG(INFO) << "pcclAllReduce status " << result;
+
+            // assert all elements equal to reduce world size
+            if (result == pcclSuccess) {
+                for (size_t j = 0; j < n_elements; ++j) {
+                    assert(gradients[j] == static_cast<float>(reduce_info.local_world_size));
+                }
+            }
         } while (result != pcclSuccess && world_size > 1);
+
 
         auto end = std::chrono::high_resolution_clock::now();
         auto time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
@@ -130,10 +138,15 @@ int main() {
 
         // print first 10 elements of the result
         for (size_t j = 0; j < 10; ++j) {
-            std::cout << weights[j] << " ";
+            std::cout << gradients[j] << " ";
         }
         std::cout << std::endl;
         shared_state.revision++;
+
+        for (size_t j = 0; j < n_elements; ++j) {
+            gradients[j] = 1.0f;
+        }
+        std::this_thread::sleep_for(std::chrono::seconds(1));
     }
 
     PCCL_CHECK(pcclDestroyCommunicator(communicator));
