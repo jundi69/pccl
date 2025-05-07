@@ -78,7 +78,39 @@ void ccoip::internal::quantize::performQuantizationAndDequantization(const std::
             return;
         }
         case ccoipQuantizationZeroPointScale: {
-            // TODO
+            std::pair<float, std::int64_t> quant_params{};
+            switch (data_type) {
+                case ccoipFloat:
+                    quant_params = get_quant_ctx().compute_quant_config_from_data(
+                        std::span{
+                            reinterpret_cast<const float *>(src_span.data()), src_span.size_bytes() / sizeof(float)
+                        },
+                        get_piquant_dtype(quantized_type)
+                    );
+                    break;
+                case ccoipDouble:
+                    quant_params = get_quant_ctx().compute_quant_config_from_data(
+                        std::span{
+                            reinterpret_cast<const double *>(src_span.data()), src_span.size_bytes() / sizeof(double)
+                        },
+                        get_piquant_dtype(quantized_type)
+                    );
+                    break;
+                default: {
+                    LOG(BUG) << "Unsupported data type for quantization: " << data_type;
+                }
+            }
+            auto [scale, zp] = quant_params;
+            get_quant_ctx().quantize_dequantize_fused(
+                src_span,
+                get_piquant_dtype(data_type),
+                dst_span,
+                get_piquant_dtype(quantized_type),
+                scale,
+                zp,
+                piquant::round_mode::nearest,
+                piquant::reduce_op::set
+            );
             return;
         }
         default: {

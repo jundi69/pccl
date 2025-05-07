@@ -367,23 +367,44 @@ void performReduction(const std::span<std::byte> &dst,
                       const ccoip::internal::quantize::DeQuantizationMetaData &meta_data) {
     switch (op) {
         case ccoip::ccoipOpSet:
-            doReduceDataType<Set>(dst, src, dst_type, src_type, quantization_algorithm, meta_data);
+            if (quantization_algorithm == ccoip::ccoipQuantizationZeroPointScale) {
+                if (src_type != dst_type) {
+                    const auto scale = meta_data.scaleAs<float>();
+                    const auto zp = meta_data.zeroPointAs<std::int64_t>();
+                    ccoip::internal::get_quant_ctx().dequantize(
+                        src,
+                        ccoip::internal::get_piquant_dtype(src_type),
+                        dst,
+                        ccoip::internal::get_piquant_dtype(dst_type),
+                        scale,
+                        zp,
+                        piquant::reduce_op::set);
+                } else {
+                    doReduceDataType<Set>(dst, src, dst_type, src_type, ccoip::ccoipQuantizationNone, meta_data);
+                }
+            } else {
+                doReduceDataType<Set>(dst, src, dst_type, src_type, quantization_algorithm, meta_data);
+            }
             break;
-        // both sum & avg have the same reduction operation (that being sum),
-        // however avg has a finalization step that is applied when all stages are complete.
+        // both sum and avg have the same reduction operation (that being sum),
+        // however, avg has a finalization step that is applied when all stages are complete.
         case ccoip::ccoipOpSum:
         case ccoip::ccoipOpAvg:
-            if (quantization_algorithm == ccoip::ccoipQuantizationZeroPointScale && src_type != dst_type) {
-                const auto scale = meta_data.scaleAs<float>();
-                const auto zp = meta_data.zeroPointAs<std::int64_t>();
-                ccoip::internal::get_quant_ctx().dequantize(
-                    src,
-                    ccoip::internal::get_piquant_dtype(src_type),
-                    dst,
-                    ccoip::internal::get_piquant_dtype(dst_type),
-                    scale,
-                    zp,
-                    piquant::reduce_op::add);
+            if (quantization_algorithm == ccoip::ccoipQuantizationZeroPointScale) {
+                if (src_type != dst_type) {
+                    const auto scale = meta_data.scaleAs<float>();
+                    const auto zp = meta_data.zeroPointAs<std::int64_t>();
+                    ccoip::internal::get_quant_ctx().dequantize(
+                        src,
+                        ccoip::internal::get_piquant_dtype(src_type),
+                        dst,
+                        ccoip::internal::get_piquant_dtype(dst_type),
+                        scale,
+                        zp,
+                        piquant::reduce_op::add);
+                } else {
+                    doReduceDataType<Sum>(dst, src, dst_type, src_type, ccoip::ccoipQuantizationNone, meta_data);
+                }
             } else {
                 doReduceDataType<Sum>(dst, src, dst_type, src_type, quantization_algorithm, meta_data);
             }

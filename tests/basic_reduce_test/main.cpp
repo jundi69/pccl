@@ -34,11 +34,11 @@ int main() {
 
     pcclComm_t *communicator{};
     constexpr pcclCommCreateParams_t params{
-        .master_address = {
-            .inet = {.protocol = inetIPv4, .ipv4 = {127, 0, 0, 1}},
-            .port = CCOIP_PROTOCOL_PORT_MASTER
-        },
-        .peer_group = 0
+            .master_address = {
+                    .inet = {.protocol = inetIPv4, .ipv4 = {127, 0, 0, 1}},
+                    .port = CCOIP_PROTOCOL_PORT_MASTER
+            },
+            .peer_group = 0
     };
     PCCL_CHECK(pcclCreateCommunicator(&params, &communicator));
     PCCL_CHECK(pcclConnect(communicator));
@@ -47,22 +47,21 @@ int main() {
     pcclGetAttribute(communicator, PCCL_ATTRIBUTE_GLOBAL_WORLD_SIZE, &world_size);
 
     constexpr size_t n_elements = 1024 * 1024 * 8;
-    const auto weights = new float[n_elements];
-    fill_uniform(weights, n_elements);
+    const auto weights = new float[n_elements]{};
 
     const auto gradients = new float[n_elements];
     fill_uniform(gradients, n_elements);
 
-    // Create shared state
+    // Create a shared state
     pcclTensorInfo_t infos[1] = {
-        {
-            .name = "weights",
-            .data = weights,
-            .count = n_elements,
-            .datatype = pcclFloat,
-            .device_type = pcclDeviceCpu,
-            .allow_content_inequality = false
-        }
+            {
+                    .name = "weights",
+                    .data = weights,
+                    .count = n_elements,
+                    .datatype = pcclFloat,
+                    .device_type = pcclDeviceCpu,
+                    .allow_content_inequality = false
+            }
     };
 
     pcclSharedState_t shared_state{.revision = 0, .count = 1, .infos = infos};
@@ -88,12 +87,12 @@ int main() {
 
         pcclSharedStateSyncInfo_t sync_info{};
         PCCL_CHECK(
-            pcclSynchronizeSharedState(
-                communicator, &shared_state,
-                PCCL_SHARED_STATE_SYNC_STRATEGY_ENFORCE_POPULAR,
-                &sync_info
-            )
-        );
+                pcclSynchronizeSharedState(
+                    communicator, &shared_state,
+                    PCCL_SHARED_STATE_SYNC_STRATEGY_ENFORCE_POPULAR,
+                    &sync_info
+                )
+                );
         num_syncs++;
         if (num_syncs > 1) {
             // Assert we never receive data. Only send.
@@ -108,13 +107,13 @@ int main() {
 
         do {
             constexpr pcclReduceDescriptor_t desc{
-                .count = n_elements,
-                .op = pcclSum,
-                .tag = 0,
-                .src_descriptor = {.datatype = pcclFloat, .distribution_hint = PCCL_DISTRIBUTION_HINT_NONE},
-                .quantization_options = {.quantized_datatype = pcclUint8, .algorithm = pcclQuantZeroPointScale},
+                    .count = n_elements,
+                    .op = pcclSum,
+                    .tag = 0,
+                    .src_descriptor = {.datatype = pcclFloat, .distribution_hint = PCCL_DISTRIBUTION_HINT_NONE},
+                    .quantization_options = {.quantized_datatype = pcclUint16, .algorithm = pcclQuantZeroPointScale},
             };
-            pcclAllReduceAsync(gradients, weights, &desc, communicator, &async_op);
+            pcclAllReduceAsync(gradients, gradients, &desc, communicator, &async_op);
             result = pcclAwaitAsyncReduce(&async_op, &reduce_info);
             pcclGetAttribute(communicator, PCCL_ATTRIBUTE_GLOBAL_WORLD_SIZE, &world_size);
             LOG(INFO) << "pcclAllReduce status " << result;
@@ -127,6 +126,11 @@ int main() {
         const double mb_per_second = static_cast<double>(reduce_info.rx_bytes + reduce_info.tx_bytes) / 1e6 /
                                      (static_cast<double>(time_ms) / 1e3);
         std::cout << "Bandwidth: " << mb_per_second << " MB/s" << std::endl;
+
+        for (size_t j = 0; j < n_elements; ++j) {
+            weights[j] *= 0.1f;
+            weights[j] += gradients[j];
+        }
 
         // print first 10 elements of the result
         for (size_t j = 0; j < 10; ++j) {
