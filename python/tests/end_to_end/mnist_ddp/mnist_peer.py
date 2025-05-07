@@ -45,7 +45,6 @@ learning_rate = 0.001
 IS_CI = os.getenv('IS_CI', '0') == '1'
 max_steps = int(os.getenv("MAX_STEPS", "20000"))
 
-
 # MNIST dataset (images and labels)
 train_dataset = datasets.MNIST(root='./data', train=True, transform=transforms.ToTensor(), download=True)
 test_dataset = datasets.MNIST(root='./data', train=False, transform=transforms.ToTensor(), download=True)
