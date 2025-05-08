@@ -33,7 +33,6 @@ namespace ccoip::internal {
             case ccoipDouble:
                 return piquant::dtype::f64;
             default:
-                [[fallthrough]];
         }
         throw std::logic_error{"Unsupported data type"};
     }
