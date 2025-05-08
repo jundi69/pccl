@@ -258,9 +258,6 @@ def main():
                     for outer_param, inner_param in zip(outer_params_values, model.parameters()):
                         outer_param.copy_(inner_param.data)
 
-            # print crc32 hashes of outer optimizer state
-            print_outer_crc32s(outer_optimizer, it)
-
             log_info(f"(RANK={RANK}, it={it}) Performing inner steps...")
             for j in range(NUM_INNER_STEPS):
                 try:
@@ -298,9 +295,6 @@ def main():
 
             outer_optimizer.step()
             outer_optimizer.zero_grad(set_to_none=False)
-
-            # print crc32 hashes of outer optimizer state
-            print_outer_crc32s(outer_optimizer, it)
 
             # copy outer state into inner state
             with torch.no_grad():

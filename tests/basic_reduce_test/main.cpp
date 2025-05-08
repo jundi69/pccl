@@ -34,11 +34,11 @@ int main() {
 
     pcclComm_t *communicator{};
     constexpr pcclCommCreateParams_t params{
-        .master_address = {
-            .inet = {.protocol = inetIPv4, .ipv4 = {127, 0, 0, 1}},
-            .port = CCOIP_PROTOCOL_PORT_MASTER
-        },
-        .peer_group = 0
+            .master_address = {
+                    .inet = {.protocol = inetIPv4, .ipv4 = {127, 0, 0, 1}},
+                    .port = CCOIP_PROTOCOL_PORT_MASTER
+            },
+            .peer_group = 0
     };
     PCCL_CHECK(pcclCreateCommunicator(&params, &communicator));
     PCCL_CHECK(pcclConnect(communicator));
@@ -47,22 +47,21 @@ int main() {
     pcclGetAttribute(communicator, PCCL_ATTRIBUTE_GLOBAL_WORLD_SIZE, &world_size);
 
     constexpr size_t n_elements = 1024 * 1024 * 8;
+    const auto weights = new float[n_elements]{};
 
     const auto gradients = new float[n_elements];
-    for (size_t i = 0; i < n_elements; ++i) {
-        gradients[i] = 1.0f;
-    }
+    fill_uniform(gradients, n_elements);
 
-    // Create shared state
+    // Create a shared state
     pcclTensorInfo_t infos[1] = {
-        {
-            .name = "gradients",
-            .data = gradients,
-            .count = n_elements,
-            .datatype = pcclFloat,
-            .device_type = pcclDeviceCpu,
-            .allow_content_inequality = false
-        }
+            {
+                    .name = "weights",
+                    .data = weights,
+                    .count = n_elements,
+                    .datatype = pcclFloat,
+                    .device_type = pcclDeviceCpu,
+                    .allow_content_inequality = false
+            }
     };
 
     pcclSharedState_t shared_state{.revision = 0, .count = 1, .infos = infos};
@@ -77,7 +76,7 @@ int main() {
         }
 
         if (world_size > 1) {
-            //PCCL_CHECK(pcclOptimizeTopology(communicator));
+            // PCCL_CHECK(pcclOptimizeTopology(communicator));
             PCCL_CHECK(pcclGetAttribute(communicator, PCCL_ATTRIBUTE_GLOBAL_WORLD_SIZE, &world_size));
         }
 
@@ -88,12 +87,12 @@ int main() {
 
         pcclSharedStateSyncInfo_t sync_info{};
         PCCL_CHECK(
-            pcclSynchronizeSharedState(
-                communicator, &shared_state,
-                PCCL_SHARED_STATE_SYNC_STRATEGY_ENFORCE_POPULAR,
-                &sync_info
-            )
-        );
+                pcclSynchronizeSharedState(
+                    communicator, &shared_state,
+                    PCCL_SHARED_STATE_SYNC_STRATEGY_ENFORCE_POPULAR,
+                    &sync_info
+                )
+                );
         num_syncs++;
         if (num_syncs > 1) {
             // Assert we never receive data. Only send.
@@ -108,25 +107,17 @@ int main() {
 
         do {
             constexpr pcclReduceDescriptor_t desc{
-                .count = n_elements,
-                .op = pcclSum,
-                .tag = 0,
-                .src_descriptor = {.datatype = pcclFloat, .distribution_hint = PCCL_DISTRIBUTION_HINT_NONE},
-                .quantization_options = {.quantized_datatype = pcclUint8, .algorithm = pcclQuantMinMax},
+                    .count = n_elements,
+                    .op = pcclSum,
+                    .tag = 0,
+                    .src_descriptor = {.datatype = pcclFloat, .distribution_hint = PCCL_DISTRIBUTION_HINT_NONE},
+                    .quantization_options = {.quantized_datatype = pcclUint16, .algorithm = pcclQuantZeroPointScale},
             };
             pcclAllReduceAsync(gradients, gradients, &desc, communicator, &async_op);
             result = pcclAwaitAsyncReduce(&async_op, &reduce_info);
             pcclGetAttribute(communicator, PCCL_ATTRIBUTE_GLOBAL_WORLD_SIZE, &world_size);
             LOG(INFO) << "pcclAllReduce status " << result;
-
-            // assert all elements equal to reduce world size
-            if (result == pcclSuccess) {
-                for (size_t j = 0; j < n_elements; ++j) {
-                    assert(gradients[j] == static_cast<float>(reduce_info.local_world_size));
-                }
-            }
         } while (result != pcclSuccess && world_size > 1);
-
 
         auto end = std::chrono::high_resolution_clock::now();
         auto time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
@@ -136,17 +127,17 @@ int main() {
                                      (static_cast<double>(time_ms) / 1e3);
         std::cout << "Bandwidth: " << mb_per_second << " MB/s" << std::endl;
 
+        for (size_t j = 0; j < n_elements; ++j) {
+            weights[j] *= 0.1f;
+            weights[j] += gradients[j];
+        }
+
         // print first 10 elements of the result
         for (size_t j = 0; j < 10; ++j) {
-            std::cout << gradients[j] << " ";
+            std::cout << weights[j] << " ";
         }
         std::cout << std::endl;
         shared_state.revision++;
-
-        for (size_t j = 0; j < n_elements; ++j) {
-            gradients[j] = 1.0f;
-        }
-        std::this_thread::sleep_for(std::chrono::seconds(1));
     }
 
     PCCL_CHECK(pcclDestroyCommunicator(communicator));
