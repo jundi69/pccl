@@ -311,16 +311,7 @@ pip install numpy torch
 
 ## Examples
 
-The library includes several examples:
-
-- Basic reduction operations
-- DDP MNIST training example using Pytorch
-- Network peer acceptance tests
-
-For detailed examples, see:
-
-- C++: `tests/basic_reduce_test/`
-- Python: `python/tests/end_to_end/`
+Examples on how to use the library can be found in the `python/examples/` folder.
 
 ## License
 
