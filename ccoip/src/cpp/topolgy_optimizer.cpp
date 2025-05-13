@@ -132,7 +132,7 @@ bool ccoip::TopologyOptimizer::ImproveTopologyMoonshot(const BandwidthStore &ban
     };
     constexpr TspSolverOptionsDescriptor solver_options{
             .attempt_exact = true,
-            .exact_upper_bound = 16,
+            .exact_upper_bound = 20,
             .seed = 42,
             .num_iterations = 128,
             .tabu_tenure = 4,
