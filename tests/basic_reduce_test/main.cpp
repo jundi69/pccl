@@ -19,9 +19,10 @@ void panic(const int exit_code) { exit(exit_code); }
         }                                                                                                              \
     }
 
+std::mt19937 gen(42);
+
 void fill_uniform(float *data, const size_t count) {
-    std::mt19937 gen(42);
-    std::uniform_real_distribution dis(0.0f, 1.0f);
+    std::uniform_real_distribution dis(-1.0f, 1.0f);
     for (size_t i = 0; i < count; ++i) {
         data[i] = dis(gen);
     }
@@ -50,19 +51,14 @@ int main() {
     const auto weights = new float[n_elements]{};
 
     const auto gradients = new float[n_elements];
-    fill_uniform(gradients, n_elements);
 
     // Create a shared state
-    pcclTensorInfo_t infos[1] = {
-            {
-                    .name = "weights",
-                    .data = weights,
-                    .count = n_elements,
-                    .datatype = pcclFloat,
-                    .device_type = pcclDeviceCpu,
-                    .allow_content_inequality = false
-            }
-    };
+    pcclTensorInfo_t infos[1] = {{.name = "weights",
+                                  .data = weights,
+                                  .count = n_elements,
+                                  .datatype = pcclFloat,
+                                  .device_type = pcclDeviceCpu,
+                                  .allow_content_inequality = false}};
 
     pcclSharedState_t shared_state{.revision = 0, .count = 1, .infos = infos};
 
@@ -85,14 +81,11 @@ int main() {
             continue;
         }
 
+        fill_uniform(gradients, n_elements);
+
         pcclSharedStateSyncInfo_t sync_info{};
-        PCCL_CHECK(
-                pcclSynchronizeSharedState(
-                    communicator, &shared_state,
-                    PCCL_SHARED_STATE_SYNC_STRATEGY_ENFORCE_POPULAR,
-                    &sync_info
-                )
-                );
+        PCCL_CHECK(pcclSynchronizeSharedState(communicator, &shared_state,
+                                              PCCL_SHARED_STATE_SYNC_STRATEGY_ENFORCE_POPULAR, &sync_info));
         num_syncs++;
         if (num_syncs > 1) {
             // Assert we never receive data. Only send.
@@ -122,13 +115,12 @@ int main() {
         auto end = std::chrono::high_resolution_clock::now();
         auto time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
         std::cout << "All reduce finished: Rx-Bytes:" << reduce_info.rx_bytes << "; Tx-Bytes:" << reduce_info.tx_bytes
-                << "; Revision: " << shared_state.revision << std::endl;
+                  << "; Revision: " << shared_state.revision << std::endl;
         const double mb_per_second = static_cast<double>(reduce_info.rx_bytes + reduce_info.tx_bytes) / 1e6 /
                                      (static_cast<double>(time_ms) / 1e3);
         std::cout << "Bandwidth: " << mb_per_second << " MB/s" << std::endl;
 
         for (size_t j = 0; j < n_elements; ++j) {
-            weights[j] *= 0.1f;
             weights[j] += gradients[j];
         }
 
