@@ -65,9 +65,10 @@ namespace ccoip {
         /// Atomic integer for the number of currently running benchmark threads.
         std::atomic<uint64_t> num_running_benchmark_threads{};
 
-        /// Atomic containing the uuid of the peer that is currently being benchmarked.
+        /// The uuid of the peer that is currently being benchmarked.
         /// Only additional connections from the peer that is being benchmarked are accepted.
-        std::atomic<ccoip_uuid_t> benchmark_peer{};
+        /// @note: protected by current_benchmark_threads_mutex
+        ccoip_uuid_t benchmark_peer{};
 
     public:
         explicit CCoIPClientHandler(const ccoip_socket_address_t &address, uint32_t peer_group, uint32_t p2p_connection_pool_size);
