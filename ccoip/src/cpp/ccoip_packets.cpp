@@ -413,10 +413,12 @@ ccoip::packetId_t ccoip::P2PPacketHello::packet_id = P2P_PACKET_HELLO_ID;
 
 void ccoip::P2PPacketHello::serialize(PacketWriteBuffer &buffer) const {
     buffer.writeFixedArray(peer_uuid.data);
+    buffer.write<uint32_t>(connection_nr);
 }
 
 bool ccoip::P2PPacketHello::deserialize(PacketReadBuffer &buffer) {
     peer_uuid.data = buffer.readFixedArray<uint8_t, CCOIP_UUID_N_BYTES>();
+    connection_nr = buffer.read<uint32_t>();
     return true;
 }
 
@@ -502,8 +504,8 @@ bool ccoip::P2PPacketDequantizationMeta::deserialize(PacketReadBuffer &buffer) {
             break;
         }
         default: {
-            LOG(WARN) << "Cannot deserialize unsupported de-quantization meta type: " << static_cast<uint8_t>(
-                meta_type);
+            LOG(WARN) << "Cannot deserialize unsupported de-quantization meta type: "
+                      << static_cast<uint8_t>(meta_type);
             return false;
         }
     }
@@ -560,11 +562,18 @@ bool ccoip::S2CPacketSharedStateResponse::deserialize(PacketReadBuffer &buffer) 
     for (size_t i = 0; i < n_entries; i++) {
         const std::string key = buffer.readString();
         const auto size_bytes = buffer.read<uint64_t>();
-        entries.push_back(SharedStateEntry{
-            .key = key,
-            .size_bytes = size_bytes
-        });
+        entries.push_back(SharedStateEntry{.key = key, .size_bytes = size_bytes});
     }
+    return true;
+}
+
+// C2BPacketHello
+ccoip::packetId_t ccoip::C2BPacketHello::packet_id = C2B_PACKET_HELLO_ID;
+
+void ccoip::C2BPacketHello::serialize(PacketWriteBuffer &buffer) const { buffer.writeFixedArray(peer_uuid.data); }
+
+bool ccoip::C2BPacketHello::deserialize(PacketReadBuffer &buffer) {
+    peer_uuid.data = buffer.readFixedArray<uint8_t, CCOIP_UUID_N_BYTES>();
     return true;
 }
 

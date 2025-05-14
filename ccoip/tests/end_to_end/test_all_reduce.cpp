@@ -102,7 +102,7 @@ void reduceTest(const ccoip::ccoip_reduce_op_t reduce_op,
         clients.emplace_back(std::make_unique<ccoip::CCoIPClient>(ccoip_socket_address_t{
                 .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                 .port = CCOIP_PROTOCOL_PORT_MASTER
-        }, 0));
+        }, 0, 1));
     }
 
     // Establish connections (collect raw pointers for the helper function)
@@ -339,12 +339,12 @@ TYPED_TEST(QuantizeTypedAllReduceTest, TestSumQuantizedWorldSize2) {
     ccoip::CCoIPClient client1({
         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
         .port = CCOIP_PROTOCOL_PORT_MASTER,
-    }, 0);
+    }, 0, 1);
     // client 2
     ccoip::CCoIPClient client2({
         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
         .port = CCOIP_PROTOCOL_PORT_MASTER
-    }, 0);
+    }, 0, 1);
 
     establishConnections({&client1, &client2});
 
@@ -459,12 +459,12 @@ TEST(AllReduceTest, TestNoAcceptNewPeersDuringConcurrentReduce) {
     ccoip::CCoIPClient client1({
         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
         .port = CCOIP_PROTOCOL_PORT_MASTER,
-    }, 0);
+    }, 0, 1);
     // client 2
     ccoip::CCoIPClient client2({
         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
         .port = CCOIP_PROTOCOL_PORT_MASTER
-    }, 0);
+    }, 0, 1);
 
     establishConnections({&client1, &client2});
 
@@ -537,12 +537,12 @@ TEST(AllReduceTest, TestNoSharedStateSyncDuringConcurrentReduce) {
     ccoip::CCoIPClient client1({
         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
         .port = CCOIP_PROTOCOL_PORT_MASTER,
-    }, 0);
+    }, 0, 1);
     // client 2
     ccoip::CCoIPClient client2({
         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
         .port = CCOIP_PROTOCOL_PORT_MASTER
-    }, 0);
+    }, 0, 1);
 
     establishConnections({&client1, &client2});
 
@@ -676,11 +676,11 @@ TEST(AllReduceTest, TestMultipleConcurrentAllReduces) {
     ccoip::CCoIPClient client1({
         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
         .port = CCOIP_PROTOCOL_PORT_MASTER,
-    }, 0);
+    }, 0, 1);
     ccoip::CCoIPClient client2({
         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
         .port = CCOIP_PROTOCOL_PORT_MASTER,
-    }, 0);
+    }, 0, 1);
 
     establishConnections({&client1, &client2});
 
@@ -796,11 +796,11 @@ TEST(AllReduceTest, TestMultipleConcurrentAllReducesSameTagFail) {
     ccoip::CCoIPClient client1({
         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
         .port = CCOIP_PROTOCOL_PORT_MASTER,
-    }, 0);
+    }, 0, 1);
     ccoip::CCoIPClient client2({
         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
         .port = CCOIP_PROTOCOL_PORT_MASTER,
-    }, 0);
+    }, 0, 1);
 
     establishConnections({&client1, &client2});
 

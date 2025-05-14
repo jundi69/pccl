@@ -2,8 +2,8 @@
 
 #include <ccoip_client.hpp>
 #include <ccoip_client_state.hpp>
-#include <ccoip_shared_state.hpp>
 #include <ccoip_packets.hpp>
+#include <ccoip_shared_state.hpp>
 
 #include <tinysockets.hpp>
 
@@ -28,10 +28,14 @@ namespace ccoip {
         std::thread::id shared_state_server_thread_id;
 
         /// Open p2p connections; Tx connections (we have established this connection to the peer)
-        std::unordered_map<ccoip_uuid_t, std::shared_ptr<tinysockets::MultiplexedIOSocket> > p2p_connections_tx;
+        /// Maps the destination UUID to the list of connections of the connection pool.
+        /// Any of the connections can be used to send data to the peer.
+        std::unordered_map<ccoip_uuid_t, std::vector<std::shared_ptr<tinysockets::MultiplexedIOSocket>>> p2p_connections_tx;
 
         /// Open p2p connections; Rx connections (peer has established this connection to us)
-        std::unordered_map<ccoip_uuid_t, std::shared_ptr<tinysockets::MultiplexedIOSocket> > p2p_connections_rx;
+        /// Maps the source UUID to the list of connections of the connection pool.
+        /// Any of the connections can be used to receive data from the peer.
+        std::unordered_map<ccoip_uuid_t, std::vector<std::shared_ptr<tinysockets::MultiplexedIOSocket>>> p2p_connections_rx;
         std::shared_mutex p2p_connections_rx_mutex;
 
         /// Peer group of the client
@@ -40,24 +44,33 @@ namespace ccoip {
         /// The id of the designated main thread
         std::thread::id main_thread_id;
 
+        /// Number of p2p connections to create for each peer
+        uint32_t p2p_connection_pool_size;
+
         bool interrupted = false;
 
         bool accepted = false;
 
         /// Connection revision number;
         /// Sequentially incremented each time p2p connections are re-established
-        uint64_t connection_revision;
+        uint64_t connection_revision{};
 
-        /// Thread that runs the currently ongoing bandwidth benchmark (if any).
-        /// It runs the receiving side of the benchmark.
-        /// Only one benchmark can run at a time.
-        std::optional<std::thread> benchmark_thread_opt = std::nullopt;
+        /// Threads for currently ongoing bandwidth benchmarks (if any).
+        /// These threads run the receiving side of a particular benchmark connection respectively.
+        /// Only one peer can be benchmarked at a time;
+        /// however, it may open multiple connections for benchmarking total throughput across multiple connections.
+        std::vector<std::thread> current_benchmark_threads{};
+        std::mutex current_benchmark_threads_mutex{};
 
-        /// Atomic bool to be set when the benchmark is complete by the benchmark thread
-        std::atomic_bool benchmark_complete_state{};
+        /// Atomic integer for the number of currently running benchmark threads.
+        std::atomic<uint64_t> num_running_benchmark_threads{};
+
+        /// Atomic containing the uuid of the peer that is currently being benchmarked.
+        /// Only additional connections from the peer that is being benchmarked are accepted.
+        std::atomic<ccoip_uuid_t> benchmark_peer{};
 
     public:
-        explicit CCoIPClientHandler(const ccoip_socket_address_t &address, uint32_t peer_group);
+        explicit CCoIPClientHandler(const ccoip_socket_address_t &address, uint32_t peer_group, uint32_t p2p_connection_pool_size);
 
         [[nodiscard]] bool connect();
 
@@ -79,10 +92,8 @@ namespace ccoip {
         ~CCoIPClientHandler();
 
         [[nodiscard]] bool allReduceAsync(const void *sendbuff, void *recvbuff, size_t count,
-                                          ccoip_data_type_t datatype,
-                                          ccoip_data_type_t quantized_data_type,
-                                          ccoip_quantization_algorithm_t quantization_algorithm,
-                                          ccoip_reduce_op_t op,
+                                          ccoip_data_type_t datatype, ccoip_data_type_t quantized_data_type,
+                                          ccoip_quantization_algorithm_t quantization_algorithm, ccoip_reduce_op_t op,
                                           uint64_t tag);
 
         [[nodiscard]] bool joinAsyncReduce(uint64_t tag);
@@ -102,14 +113,10 @@ namespace ccoip {
         void setMainThread(const std::thread::id main_thread_id);
 
     private:
-        enum EstablishP2PConnectionResult {
-            SUCCESS = 0,
-            FAILED = 1,
-            RETRY_NEEDED = 2
-        };
+        enum EstablishP2PConnectionResult { SUCCESS = 0, FAILED = 1, RETRY_NEEDED = 2 };
         [[nodiscard]] EstablishP2PConnectionResult establishP2PConnections();
 
-        [[nodiscard]] bool establishP2PConnection(const PeerInfo &peer);
+        [[nodiscard]] bool establishP2PConnections(const PeerInfo &peer);
 
         [[nodiscard]] bool closeP2PConnection(const ccoip_uuid_t &uuid, tinysockets::MultiplexedIOSocket &socket);
 
@@ -120,4 +127,4 @@ namespace ccoip {
         // shared state server socket callbacks
         void onSharedStateClientRead(const ccoip_socket_address_t &client_address, const std::span<std::uint8_t> &data);
     };
-}
+} // namespace ccoip

@@ -15,6 +15,6 @@ namespace ccoip::reduce {
         ccoip_reduce_op_t op, ccoip_quantization_algorithm_t quantization_algorithm, size_t rank,
         size_t world_size,
         const std::vector<ccoip_uuid_t> &ring_order,
-        const std::unordered_map<ccoip_uuid_t, std::shared_ptr<tinysockets::MultiplexedIOSocket>>& peer_tx_sockets,
-        const std::unordered_map<ccoip_uuid_t, std::shared_ptr<tinysockets::MultiplexedIOSocket>>& peer_rx_sockets);
+        const std::unordered_map<ccoip_uuid_t, std::vector<std::shared_ptr<tinysockets::MultiplexedIOSocket>>>& peer_tx_sockets,
+        const std::unordered_map<ccoip_uuid_t, std::vector<std::shared_ptr<tinysockets::MultiplexedIOSocket>>>& peer_rx_sockets);
 }; // namespace ccoip::reduce

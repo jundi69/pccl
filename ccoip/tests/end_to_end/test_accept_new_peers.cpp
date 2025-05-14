@@ -19,14 +19,14 @@ TEST(AcceptNewPeers, TestBasic) {
     ccoip::CCoIPClient client1({
                                          .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                          .port = CCOIP_PROTOCOL_PORT_MASTER
-                                     }, 0);
+                                     }, 0, 1);
     ASSERT_TRUE(client1.connect());
 
     // client 2
     ccoip::CCoIPClient client2({
                                          .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                          .port = CCOIP_PROTOCOL_PORT_MASTER
-                                     }, 0);
+                                     }, 0, 1);
 
     std::thread client1_thread([&client1] {
         client1.setMainThread(std::this_thread::get_id());

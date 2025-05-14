@@ -66,7 +66,7 @@ namespace ccoip {
 #define S2C_PACKET_SHARED_STATE_RESPONSE_ID 1
 
     // C2B packets:
-    // <no packets defined yet>
+#define C2B_PACKET_HELLO_ID 1
 
     // B2C packets:
 #define B2C_PACKET_BENCHMARK_SERVER_IS_BUSY 1
@@ -383,6 +383,9 @@ namespace ccoip {
         static packetId_t packet_id;
         ccoip_uuid_t peer_uuid;
 
+        /// Sequential number in range [0; connection_pool_size[
+        uint32_t connection_nr;
+
         void serialize(PacketWriteBuffer &buffer) const override;
 
         [[nodiscard]] bool deserialize(PacketReadBuffer &buffer) override;
@@ -454,6 +457,17 @@ namespace ccoip {
         SharedStateResponseStatus status;
         uint64_t revision;
         std::vector<SharedStateEntry> entries;
+
+        void serialize(PacketWriteBuffer &buffer) const override;
+
+        [[nodiscard]] bool deserialize(PacketReadBuffer &buffer) override;
+    };
+
+    // C2BPacketHello
+    class C2BPacketHello final : public Packet {
+    public:
+        static packetId_t packet_id;
+        ccoip_uuid_t peer_uuid;
 
         void serialize(PacketWriteBuffer &buffer) const override;
 

@@ -115,6 +115,15 @@ typedef struct pcclCommCreateParams_t {
      * The peer group is a 32-bit unsigned integer whose identity determines the peer group the client is part of.
      */
     uint32_t peer_group;
+
+    /**
+     * The number of p2p connections to create for each peer.
+     * This is relevant when using multiple concurrent all reduces.
+     * When sharing the same socket, the all reduces will be serialized.
+     * Increasing the number of p2p connections will drastically increase performance.
+     * When set to 0, the pool size will default to 1.
+     */
+    uint32_t p2p_connection_pool_size;
 } pcclCommCreateParams_t;
 
 typedef struct pcclComm_t pcclComm_t;

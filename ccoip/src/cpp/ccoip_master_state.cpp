@@ -1566,6 +1566,7 @@ bool ccoip::CCoIPMasterState::performTopologyOptimization(
             if (!TopologyOptimizer::ImproveTopologyMoonshot(bandwidth_stores[peer_group], topology, topology_is_optimal,
                                                             topology_has_improved)) {
                 LOG(WARN) << "Failed to optimize topology";
+                bandwidth_stores[peer_group].printBandwidthStore();
                 return false;
             }
             new_topology = topology;
@@ -1577,7 +1578,8 @@ bool ccoip::CCoIPMasterState::performTopologyOptimization(
         if (!topology_is_optimal[peer_group]) {
             bool topology_is_optimal = false;
             if (!TopologyOptimizer::OptimizeTopology(bandwidth_stores[peer_group], topology, topology_is_optimal)) {
-                LOG(WARN) << "Failed to optimize topology";
+                LOG(WARN) << "Failed to optimize topology!";
+                bandwidth_stores[peer_group].printBandwidthStore();
                 return false;
             }
             new_topology = topology;

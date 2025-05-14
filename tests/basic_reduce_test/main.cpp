@@ -33,24 +33,31 @@ void fill_uniform(float *data, const size_t count) {
 int main() {
     PCCL_CHECK(pcclInit());
 
+    constexpr uint32_t connection_pool_size = 32;
+
     pcclComm_t *communicator{};
-    constexpr pcclCommCreateParams_t params{
-            .master_address = {
-                    .inet = {.protocol = inetIPv4, .ipv4 = {127, 0, 0, 1}},
-                    .port = CCOIP_PROTOCOL_PORT_MASTER
-            },
-            .peer_group = 0
-    };
+    const pcclCommCreateParams_t params{.master_address = {.inet = {.protocol = inetIPv4, .ipv4 = {127, 0, 0, 1}},
+                                                               .port = CCOIP_PROTOCOL_PORT_MASTER},
+                                            .peer_group = 0,
+                                            .p2p_connection_pool_size = connection_pool_size};
     PCCL_CHECK(pcclCreateCommunicator(&params, &communicator));
     PCCL_CHECK(pcclConnect(communicator));
+
+    const size_t num_reduce_ops = 128;
+    const size_t max_in_flight = 128;
+    const size_t mib = 8;
 
     int world_size{};
     pcclGetAttribute(communicator, PCCL_ATTRIBUTE_GLOBAL_WORLD_SIZE, &world_size);
 
-    constexpr size_t n_elements = 1024 * 1024 * 256;
+    const size_t n_elements = 1024 * 1024 * mib;
     const auto weights = new float[n_elements]{};
 
-    const auto gradients = new float[n_elements];
+    std::vector<float *> gradients{};
+    gradients.reserve(num_reduce_ops);
+    for (size_t i = 0; i < num_reduce_ops; ++i) {
+        gradients.push_back(new float[n_elements]{});
+    }
 
     // Create a shared state
     pcclTensorInfo_t infos[1] = {{.name = "weights",
@@ -81,7 +88,9 @@ int main() {
             continue;
         }
 
-        fill_uniform(gradients, n_elements);
+        for (auto &gradient: gradients) {
+            fill_uniform(gradient, n_elements);
+        }
 
         pcclSharedStateSyncInfo_t sync_info{};
         PCCL_CHECK(pcclSynchronizeSharedState(communicator, &shared_state,
@@ -93,24 +102,24 @@ int main() {
             assert(sync_info.rx_bytes == 0);
         }
 
-        pcclAsyncReduceOp_t async_op{};
-        pcclReduceInfo_t reduce_info{};
         auto start = std::chrono::high_resolution_clock::now();
-        pcclResult_t result;
 
-        do {
-            constexpr pcclReduceDescriptor_t desc{
+        std::vector<pcclReduceOpDescriptor_t> descriptors(num_reduce_ops);
+        for (size_t j = 0; j < num_reduce_ops; ++j) {
+            const pcclReduceDescriptor_t desc{
                     .count = n_elements,
                     .op = pcclSum,
-                    .tag = 0,
+                    .tag = j,
                     .src_descriptor = {.datatype = pcclFloat, .distribution_hint = PCCL_DISTRIBUTION_HINT_NONE},
-                    .quantization_options = {.quantized_datatype = pcclUint16, .algorithm = pcclQuantZeroPointScale},
+                    .quantization_options = {.quantized_datatype = pcclFloat, .algorithm = pcclQuantNone},
             };
-            pcclAllReduceAsync(gradients, gradients, &desc, communicator, &async_op);
-            result = pcclAwaitAsyncReduce(&async_op, &reduce_info);
-            pcclGetAttribute(communicator, PCCL_ATTRIBUTE_GLOBAL_WORLD_SIZE, &world_size);
-            LOG(INFO) << "pcclAllReduce status " << result;
-        } while (result != pcclSuccess && world_size > 1);
+            descriptors[j] =
+                    pcclReduceOpDescriptor_t{.sendbuf = gradients[j], .recvbuf = gradients[j], .descriptor = desc};
+        }
+
+        pcclReduceInfo_t reduce_info{};
+        PCCL_CHECK(pcclAllReduceMultipleWithRetry(descriptors.data(), descriptors.size(), communicator, &reduce_info,
+                                           max_in_flight));
 
         auto end = std::chrono::high_resolution_clock::now();
         auto time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
@@ -119,9 +128,15 @@ int main() {
         const double mb_per_second = static_cast<double>(reduce_info.rx_bytes + reduce_info.tx_bytes) / 1e6 /
                                      (static_cast<double>(time_ms) / 1e3);
         std::cout << "Bandwidth: " << mb_per_second << " MB/s" << std::endl;
+        std::cout << "Time: " << time_ms << " ms" << std::endl;
 
-        for (size_t j = 0; j < n_elements; ++j) {
-            weights[j] += gradients[j];
+        for (int j = 0; j < num_reduce_ops; ++j) {
+            for (int k = 0; k < n_elements; ++k) {
+                weights[k] += gradients[j][k];
+            }
+        }
+        for (size_t j = 0; j < num_reduce_ops; ++j) {
+            weights[j] /= static_cast<float>(num_reduce_ops);
         }
 
         // print first 10 elements of the result

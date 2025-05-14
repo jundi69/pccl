@@ -126,9 +126,8 @@ namespace {
 
         const std::optional<ccoip::internal::quantize::DeQuantizationMetaData> &meta_data_self,
 
-        const std::unordered_map<ccoip_uuid_t, std::shared_ptr<tinysockets::MultiplexedIOSocket>> &peer_tx_sockets,
-        const std::unordered_map<ccoip_uuid_t, std::shared_ptr<tinysockets::MultiplexedIOSocket>>
-        &peer_rx_sockets) {
+        const std::unordered_map<ccoip_uuid_t, std::vector<std::shared_ptr<tinysockets::MultiplexedIOSocket>>> &peer_tx_sockets,
+        const std::unordered_map<ccoip_uuid_t, std::vector<std::shared_ptr<tinysockets::MultiplexedIOSocket>>> &peer_rx_sockets) {
         using namespace tinysockets;
         using namespace ccoip::internal::reduce;
         using namespace ccoip::internal::quantize;
@@ -144,8 +143,12 @@ namespace {
         const ccoip_uuid_t rx_peer = ring_order.at(rx_peer_idx);
         const ccoip_uuid_t tx_peer = ring_order.at(tx_peer_idx);
 
-        const auto &tx_socket = peer_tx_sockets.at(tx_peer);
-        const auto &rx_socket = peer_rx_sockets.at(rx_peer);
+        const auto &tx_sockets = peer_tx_sockets.at(tx_peer);
+        const auto &rx_sockets = peer_rx_sockets.at(rx_peer);
+
+        // choose tx/rx socket based on seq nr
+        const auto &tx_socket = tx_sockets.at(seq_nr % tx_sockets.size());
+        const auto &rx_socket = rx_sockets.at(seq_nr % rx_sockets.size());
 
         // 1) Send our local de-quant metadata to next peer
         if (quantized_type != data_type) {
@@ -159,7 +162,6 @@ namespace {
             constexpr size_t ltv_header = sizeof(uint64_t) + sizeof(ccoip::packetId_t);
 
             // TODO: FIX THAT trackCollectiveComsTxBytes is called so often. We can batch this because it does lock onto
-            // a mutex briefly.
             client_state.trackCollectiveComsTxBytes(tag, ltv_header + packet.serializedSize());
         }
 
@@ -296,9 +298,8 @@ namespace {
         const std::optional<ccoip::internal::quantize::DeQuantizationMetaData> &meta_data_self,
         ccoip::internal::quantize::DeQuantizationMetaData &received_meta_data_out,
 
-        const std::unordered_map<ccoip_uuid_t, std::shared_ptr<tinysockets::MultiplexedIOSocket>> &peer_tx_sockets,
-        const std::unordered_map<ccoip_uuid_t, std::shared_ptr<tinysockets::MultiplexedIOSocket>>
-        &peer_rx_sockets) {
+        const std::unordered_map<ccoip_uuid_t, std::vector<std::shared_ptr<tinysockets::MultiplexedIOSocket>>> &peer_tx_sockets,
+        const std::unordered_map<ccoip_uuid_t, std::vector<std::shared_ptr<tinysockets::MultiplexedIOSocket>>> &peer_rx_sockets) {
         using namespace tinysockets;
         using namespace ccoip::internal::quantize;
         using namespace ccoip::internal::reduce;
@@ -312,8 +313,12 @@ namespace {
         const ccoip_uuid_t rx_peer = ring_order.at(rx_peer_idx);
         const ccoip_uuid_t tx_peer = ring_order.at(tx_peer_idx);
 
-        const auto &tx_socket = peer_tx_sockets.at(tx_peer);
-        const auto &rx_socket = peer_rx_sockets.at(rx_peer);
+        const auto &tx_sockets = peer_tx_sockets.at(tx_peer);
+        const auto &rx_sockets = peer_rx_sockets.at(rx_peer);
+
+        // choose tx/rx socket based on seq nr
+        const auto &tx_socket = tx_sockets.at(seq_nr % tx_sockets.size());
+        const auto &rx_socket = rx_sockets.at(seq_nr % rx_sockets.size());
 
         // 1) Exchange metadata for consistency
         if (quantized_type != data_type) {
@@ -526,8 +531,8 @@ std::pair<bool, bool> ccoip::reduce::pipelineRingReduce(
     const ccoip_data_type_t quantized_type, const ccoip_reduce_op_t op,
     const ccoip_quantization_algorithm_t quantization_algorithm, const size_t rank, const size_t world_size,
     const std::vector<ccoip_uuid_t> &ring_order,
-    const std::unordered_map<ccoip_uuid_t, std::shared_ptr<tinysockets::MultiplexedIOSocket>> &peer_tx_sockets,
-    const std::unordered_map<ccoip_uuid_t, std::shared_ptr<tinysockets::MultiplexedIOSocket>> &peer_rx_sockets) {
+    const std::unordered_map<ccoip_uuid_t, std::vector<std::shared_ptr<tinysockets::MultiplexedIOSocket>>> &peer_tx_sockets,
+    const std::unordered_map<ccoip_uuid_t, std::vector<std::shared_ptr<tinysockets::MultiplexedIOSocket>>> &peer_rx_sockets) {
     using namespace ccoip::internal::quantize;
     using namespace ccoip::internal::reduce;
 

@@ -64,6 +64,7 @@ bool ccoip::TopologyOptimizer::OptimizeTopology(const BandwidthStore &bandwidth_
     TspSolutionDescriptor output_descriptor{};
     const TSPStatus status = tspAsymmetricSolve(&input_graph, &solver_options, &output_descriptor);
     if (status != TSP_STATUS_SUCCESS) {
+        bandwidth_store.printBandwidthStore();
         LOG(BUG) << "Failed to run ATSP solver for topology optimization! " << status << " This should never happen.";
         return false;
     }

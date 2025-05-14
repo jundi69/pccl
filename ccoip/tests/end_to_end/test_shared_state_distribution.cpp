@@ -55,12 +55,12 @@ TEST(SharedStateDistribution, TestBasic) {
     ccoip::CCoIPClient client1({
                                    .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                    .port = CCOIP_PROTOCOL_PORT_MASTER,
-                               }, 0);
+                               }, 0, 1);
     // client 2
     ccoip::CCoIPClient client2({
                                    .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                    .port = CCOIP_PROTOCOL_PORT_MASTER
-                               }, 0);
+                               }, 0, 1);
 
     establishConnections({&client1, &client2});
 
@@ -156,12 +156,12 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedState) {
     ccoip::CCoIPClient client1({
                                    .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                    .port = CCOIP_PROTOCOL_PORT_MASTER
-                               }, 0);
+                               }, 0, 1);
     // client 2
     ccoip::CCoIPClient client2({
                                    .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                    .port = CCOIP_PROTOCOL_PORT_MASTER
-                               }, 0);
+                               }, 0, 1);
 
     establishConnections({&client1, &client2});
 
@@ -248,12 +248,12 @@ TEST(SharedStateDistribution, TestPartialSyncPartiallyDirtyState) {
     ccoip::CCoIPClient client1({
                                    .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                    .port = CCOIP_PROTOCOL_PORT_MASTER
-                               }, 0);
+                               }, 0, 1);
     // client 2
     ccoip::CCoIPClient client2({
                                    .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                    .port = CCOIP_PROTOCOL_PORT_MASTER
-                               }, 0);
+                               }, 0, 1);
 
     establishConnections({&client1, &client2});
 
@@ -380,17 +380,17 @@ TEST(SharedStateDistribution, TestPopularHashPrevelance) {
     ccoip::CCoIPClient client1({
                                    .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                    .port = CCOIP_PROTOCOL_PORT_MASTER
-                               }, 0);
+                               }, 0, 1);
     // client 2
     ccoip::CCoIPClient client2({
                                    .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                    .port = CCOIP_PROTOCOL_PORT_MASTER
-                               }, 0);
+                               }, 0, 1);
     // client 3
     ccoip::CCoIPClient client3({
                                    .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                    .port = CCOIP_PROTOCOL_PORT_MASTER
-                               }, 0);
+                               }, 0, 1);
 
     establishConnections({&client1, &client2, &client3});
 
@@ -509,17 +509,17 @@ TEST(SharedStateDistribution, TestPopularHashPrevalenceWithMultipleKeys) {
     ccoip::CCoIPClient client1({
                                    .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                    .port = CCOIP_PROTOCOL_PORT_MASTER
-                               }, 0);
+                               }, 0, 1);
 
     ccoip::CCoIPClient client2({
                                    .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                    .port = CCOIP_PROTOCOL_PORT_MASTER
-                               }, 0);
+                               }, 0, 1);
 
     ccoip::CCoIPClient client3({
                                    .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                    .port = CCOIP_PROTOCOL_PORT_MASTER
-                               }, 0);
+                               }, 0, 1);
 
     // Establish connections between the master and the clients
     establishConnections({&client1, &client2, &client3});
@@ -667,23 +667,23 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedStateMultiplePeerGroups) 
     ccoip::CCoIPClient g1client1({
                                      .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                      .port = CCOIP_PROTOCOL_PORT_MASTER
-                                 }, 0);
+                                 }, 0, 1);
     // group 2, client 2
     ccoip::CCoIPClient g1client2({
                                      .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                      .port = CCOIP_PROTOCOL_PORT_MASTER
-                                 }, 0);
+                                 }, 0, 1);
 
     // group 2, client 1
     ccoip::CCoIPClient g2client1({
                                      .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                      .port = CCOIP_PROTOCOL_PORT_MASTER
-                                 }, 1);
+                                 }, 1, 1);
     // group 2, client 2
     ccoip::CCoIPClient g2client2({
                                      .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                      .port = CCOIP_PROTOCOL_PORT_MASTER
-                                 }, 1);
+                                 }, 1, 1);
     establishConnections({&g1client1, &g1client2, &g2client1, &g2client2});
 
     constexpr size_t value_size = 1024;
@@ -781,23 +781,23 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedStateMultiplePeerGroupsDi
     ccoip::CCoIPClient g1client1({
                                      .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                      .port = CCOIP_PROTOCOL_PORT_MASTER
-                                 }, 0);
+                                 }, 0, 1);
     // group 2, client 2
     ccoip::CCoIPClient g1client2({
                                      .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                      .port = CCOIP_PROTOCOL_PORT_MASTER
-                                 }, 0);
+                                 }, 0, 1);
 
     // group 2, client 1
     ccoip::CCoIPClient g2client1({
                                      .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                      .port = CCOIP_PROTOCOL_PORT_MASTER
-                                 }, 1);
+                                 }, 1, 1);
     // group 2, client 2
     ccoip::CCoIPClient g2client2({
                                      .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                      .port = CCOIP_PROTOCOL_PORT_MASTER
-                                 }, 1);
+                                 }, 1, 1);
     establishConnections({&g1client1, &g1client2, &g2client1, &g2client2});
 
     constexpr size_t value_size = 1024;
@@ -895,23 +895,23 @@ TEST(SharedStateDistribution, TestNoSyncIdenticalSharedStateMultiplePeerGroupsDi
     ccoip::CCoIPClient g1client1({
                                      .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                      .port = CCOIP_PROTOCOL_PORT_MASTER
-                                 }, 0);
+                                 }, 0, 1);
     // group 2, client 2
     ccoip::CCoIPClient g1client2({
                                      .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                      .port = CCOIP_PROTOCOL_PORT_MASTER
-                                 }, 0);
+                                 }, 0, 1);
 
     // group 2, client 1
     ccoip::CCoIPClient g2client1({
                                      .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                      .port = CCOIP_PROTOCOL_PORT_MASTER
-                                 }, 1);
+                                 }, 1, 1);
     // group 2, client 2
     ccoip::CCoIPClient g2client2({
                                      .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                      .port = CCOIP_PROTOCOL_PORT_MASTER
-                                 }, 1);
+                                 }, 1, 1);
     establishConnections({&g1client1, &g1client2, &g2client1, &g2client2});
 
     constexpr size_t value_size = 1024;
@@ -1064,12 +1064,12 @@ TEST(SharedStateDistribution, TestMultiStepAdvancement) {
     ccoip::CCoIPClient client1({
                                    .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                    .port = CCOIP_PROTOCOL_PORT_MASTER
-                               }, 0);
+                               }, 0, 1);
     // Client 2
     ccoip::CCoIPClient client2({
                                    .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                    .port = CCOIP_PROTOCOL_PORT_MASTER
-                               }, 0);
+                               }, 0, 1);
 
     establishConnections({&client1, &client2});
 
@@ -1157,18 +1157,18 @@ TEST(SharedStateDistribution, TestDragAlongClientNoAdvancedStateContents) {
     ccoip::CCoIPClient client1({
                                    .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                    .port = CCOIP_PROTOCOL_PORT_MASTER
-                               }, 0);
+                               }, 0, 1);
     // Client 2
     ccoip::CCoIPClient client2({
                                    .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                    .port = CCOIP_PROTOCOL_PORT_MASTER
-                               }, 0);
+                               }, 0, 1);
 
     // Client 3
     ccoip::CCoIPClient client3({
                                    .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                    .port = CCOIP_PROTOCOL_PORT_MASTER
-                               }, 0);
+                               }, 0, 1);
 
     establishConnections({&client1, &client2, &client3});
 
@@ -1328,18 +1328,18 @@ TEST(SharedStateDistribution, TestDragAlongClientWithAdvancedStateContents) {
     ccoip::CCoIPClient client1({
                                    .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                    .port = CCOIP_PROTOCOL_PORT_MASTER
-                               }, 0);
+                               }, 0, 1);
     // Client 2
     ccoip::CCoIPClient client2({
                                    .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                    .port = CCOIP_PROTOCOL_PORT_MASTER
-                               }, 0);
+                               }, 0, 1);
 
     // Client 3
     ccoip::CCoIPClient client3({
                                    .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                    .port = CCOIP_PROTOCOL_PORT_MASTER
-                               }, 0);
+                               }, 0, 1);
 
     establishConnections({&client1, &client2, &client3});
 
@@ -1486,12 +1486,12 @@ TEST(SharedStateDistribution, TestOneIncrementRuleViolationSimple) {
     ccoip::CCoIPClient client1({
                                    .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                    .port = CCOIP_PROTOCOL_PORT_MASTER
-                               }, 0);
+                               }, 0, 1);
     // Client 2
     ccoip::CCoIPClient client2({
                                    .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                    .port = CCOIP_PROTOCOL_PORT_MASTER
-                               }, 0);
+                               }, 0, 1);
 
     establishConnections({&client1, &client2});
 
@@ -1594,12 +1594,12 @@ TEST(SharedStateDistribution, TestOneIncrementRuleViolationInitialization) {
     ccoip::CCoIPClient client1({
                                    .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                    .port = CCOIP_PROTOCOL_PORT_MASTER
-                               }, 0);
+                               }, 0, 1);
     // Client 2
     ccoip::CCoIPClient client2({
                                    .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                    .port = CCOIP_PROTOCOL_PORT_MASTER
-                               }, 0);
+                               }, 0, 1);
 
     establishConnections({&client1, &client2});
 
@@ -1691,18 +1691,18 @@ TEST(SharedStateDistribution, TestSharedStateMaskMismatchKick) {
     ccoip::CCoIPClient client1({
                                    .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                    .port = CCOIP_PROTOCOL_PORT_MASTER
-                               }, 0);
+                               }, 0, 1);
     // Client 2
     ccoip::CCoIPClient client2({
                                    .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                    .port = CCOIP_PROTOCOL_PORT_MASTER
-                               }, 0);
+                               }, 0, 1);
 
     // Client 3
     ccoip::CCoIPClient client3({
                                    .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                    .port = CCOIP_PROTOCOL_PORT_MASTER
-                               }, 0);
+                               }, 0, 1);
 
     establishConnections({&client1, &client2, &client3});
 
@@ -1812,21 +1812,21 @@ TEST(SharedStateDistribution, TestConcurrentAdvancementWithinPeerGroups) {
     ccoip::CCoIPClient g1client1({
                                      .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                      .port = CCOIP_PROTOCOL_PORT_MASTER
-                                 }, 0);
+                                 }, 0, 1);
     ccoip::CCoIPClient g1client2({
                                      .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                      .port = CCOIP_PROTOCOL_PORT_MASTER
-                                 }, 0);
+                                 }, 0, 1);
 
     // Peer group 2 clients
     ccoip::CCoIPClient g2client1({
                                      .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                      .port = CCOIP_PROTOCOL_PORT_MASTER
-                                 }, 1);
+                                 }, 1, 1);
     ccoip::CCoIPClient g2client2({
                                      .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                      .port = CCOIP_PROTOCOL_PORT_MASTER
-                                 }, 1);
+                                 }, 1, 1);
 
     establishConnections({&g1client1, &g1client2, &g2client1, &g2client2});
 
@@ -1946,7 +1946,7 @@ TEST(SharedStateDistribution, TestConcurrentDragAlongAcrossPeerGroups) {
                                                                                     .ipv4 = {.data = {127, 0, 0, 1}}
                                                                                 },
                                                                                 .port = CCOIP_PROTOCOL_PORT_MASTER
-                                                                            }, group));
+                                                                            }, group, 1));
         }
         peer_groups.emplace_back(std::move(group_clients));
     }
@@ -2104,7 +2104,7 @@ TEST(SharedStateDistribution, TestConflictOverlappingKeysAcrossPeerGroups) {
                                                                                  .ipv4 = {.data = {127, 0, 0, 1}}
                                                                              },
                                                                              .port = CCOIP_PROTOCOL_PORT_MASTER
-                                                                         }, group));
+                                                                         }, group, 1));
         }
         peer_groups.emplace_back(std::move(group_clients));
     }
@@ -2239,7 +2239,7 @@ TEST(SharedStateDistribution, TestChangingPeerGroupMembershipBetweenSynchronizat
                                                                              .ipv4 = {.data = {127, 0, 0, 1}}
                                                                          },
                                                                          .port = CCOIP_PROTOCOL_PORT_MASTER
-                                                                     }, group));
+                                                                     }, group, 1));
     }
 
     // Establish initial connections
@@ -2296,7 +2296,7 @@ TEST(SharedStateDistribution, TestChangingPeerGroupMembershipBetweenSynchronizat
                     ccoip_socket_address_t{
                         .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                         .port = CCOIP_PROTOCOL_PORT_MASTER
-                    }, group);
+                    }, group, 1);
                 const std::unique_ptr<ccoip::CCoIPClient> &added_client = group_clients.emplace_back(
                     std::move(new_client));
                 std::thread added_client_thread([&added_client, &client3_joined] {
@@ -2413,12 +2413,12 @@ TEST(SharedStateDistribution, TestDifferentSharedStatetContentBothSendOnlyStrate
     ccoip::CCoIPClient client1({
                                    .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                    .port = CCOIP_PROTOCOL_PORT_MASTER,
-                               }, 0);
+                               }, 0, 1);
     // client 2
     ccoip::CCoIPClient client2({
                                    .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                    .port = CCOIP_PROTOCOL_PORT_MASTER
-                               }, 0);
+                               }, 0, 1);
 
     establishConnections({&client1, &client2});
 
@@ -2512,12 +2512,12 @@ TEST(SharedStateDistribution, TestBothReceiveOnlyStrategyKickDifferentContent) {
     ccoip::CCoIPClient client1({
                                    .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                    .port = CCOIP_PROTOCOL_PORT_MASTER,
-                               }, 0);
+                               }, 0, 1);
     // client 2
     ccoip::CCoIPClient client2({
                                    .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                    .port = CCOIP_PROTOCOL_PORT_MASTER
-                               }, 0);
+                               }, 0, 1);
 
     establishConnections({&client1, &client2});
 
@@ -2599,12 +2599,12 @@ TEST(SharedStateDistribution, TestBothReceiveOnlyStrategyKickSameContent) {
     ccoip::CCoIPClient client1({
                                    .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                    .port = CCOIP_PROTOCOL_PORT_MASTER,
-                               }, 0);
+                               }, 0, 1);
     // client 2
     ccoip::CCoIPClient client2({
                                    .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                    .port = CCOIP_PROTOCOL_PORT_MASTER
-                               }, 0);
+                               }, 0, 1);
 
     establishConnections({&client1, &client2});
 
@@ -2687,12 +2687,12 @@ TEST(SharedStateDistribution, TestEnforcePopluarSyncStrategyNoMixingWithReceiveO
     ccoip::CCoIPClient client1({
                                    .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                    .port = CCOIP_PROTOCOL_PORT_MASTER,
-                               }, 0);
+                               }, 0, 1);
     // client 2
     ccoip::CCoIPClient client2({
                                    .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                    .port = CCOIP_PROTOCOL_PORT_MASTER
-                               }, 0);
+                               }, 0, 1);
 
     establishConnections({&client1, &client2});
 
@@ -2776,12 +2776,12 @@ TEST(SharedStateDistribution, TestEnforcePopluarSyncStrategyNoMixingWithSendOnly
     ccoip::CCoIPClient client1({
                                    .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                    .port = CCOIP_PROTOCOL_PORT_MASTER,
-                               }, 0);
+                               }, 0, 1);
     // client 2
     ccoip::CCoIPClient client2({
                                    .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                    .port = CCOIP_PROTOCOL_PORT_MASTER
-                               }, 0);
+                               }, 0, 1);
 
     establishConnections({&client1, &client2});
 
@@ -2858,17 +2858,17 @@ TEST(SharedStateDistribution, TestEnforcePopularSyncStrategyNoMixingWithSendOnly
     ccoip::CCoIPClient client1({
                                    .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                    .port = CCOIP_PROTOCOL_PORT_MASTER,
-                               }, 0);
+                               }, 0, 1);
     // client 2
     ccoip::CCoIPClient client2({
                                    .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                    .port = CCOIP_PROTOCOL_PORT_MASTER
-                               }, 0);
+                               }, 0, 1);
     // client 3
     ccoip::CCoIPClient client3({
                                    .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                    .port = CCOIP_PROTOCOL_PORT_MASTER
-                               }, 0);
+                               }, 0, 1);
 
     establishConnections({&client1, &client2, &client3});
 
@@ -2970,17 +2970,17 @@ TEST(SharedStateDistribution, TestEnforcePopularSyncStrategyNoMixingWithSendOnly
     ccoip::CCoIPClient client1({
                                    .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                    .port = CCOIP_PROTOCOL_PORT_MASTER,
-                               }, 0);
+                               }, 0, 1);
     // client 2
     ccoip::CCoIPClient client2({
                                    .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                    .port = CCOIP_PROTOCOL_PORT_MASTER
-                               }, 0);
+                               }, 0, 1);
     // client 3
     ccoip::CCoIPClient client3({
                                    .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                    .port = CCOIP_PROTOCOL_PORT_MASTER
-                               }, 0);
+                               }, 0, 1);
 
     establishConnections({&client1, &client2, &client3});
 
@@ -3083,22 +3083,22 @@ TEST(SharedStateDistribution, TestCrossPeerGroupLocalMixingLocalKickWorldSize4Pe
     ccoip::CCoIPClient client1({
                                    .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                    .port = CCOIP_PROTOCOL_PORT_MASTER,
-                               }, 0);
+                               }, 0, 1);
     // client 2
     ccoip::CCoIPClient client2({
                                    .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                    .port = CCOIP_PROTOCOL_PORT_MASTER
-                               }, 0);
+                               }, 0, 1);
     // client 3
     ccoip::CCoIPClient client3({
                                    .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                    .port = CCOIP_PROTOCOL_PORT_MASTER
-                               }, 1);
+                               }, 1, 1);
     // client 4
     ccoip::CCoIPClient client4({
                                    .inet = {.protocol = inetIPv4, .ipv4 = {.data = {127, 0, 0, 1}}},
                                    .port = CCOIP_PROTOCOL_PORT_MASTER
-                               }, 1);
+                               }, 1, 1);
 
     establishConnections({&client1, &client2, &client3, &client4});
 

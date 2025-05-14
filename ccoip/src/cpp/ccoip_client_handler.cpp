@@ -19,7 +19,8 @@
 #include <cuda.h>
 #endif
 
-ccoip::CCoIPClientHandler::CCoIPClientHandler(const ccoip_socket_address_t &address, const uint32_t peer_group) :
+ccoip::CCoIPClientHandler::CCoIPClientHandler(const ccoip_socket_address_t &address, const uint32_t peer_group,
+                                              const uint32_t p2p_connection_pool_size) :
     master_socket(address),
     // Both p2p_socket and shared_state_socket listen to the first free port above the specified port number
     // as the constructor with inet_addr and above_port is called, which will bump on failure to bind.
@@ -28,8 +29,8 @@ ccoip::CCoIPClientHandler::CCoIPClientHandler(const ccoip_socket_address_t &addr
     // ports to be static; The only asserted static port is the master listening port.
     p2p_socket({address.inet.protocol, {}, {}}, CCOIP_PROTOCOL_PORT_P2P),
     shared_state_socket({address.inet.protocol, {}, {}}, CCOIP_PROTOCOL_PORT_SHARED_STATE),
-    benchmark_socket({address.inet.protocol, {}, {}}, CCOIP_PROTOCOL_PORT_BANDWIDTH_BENCHMARK), peer_group(peer_group) {
-}
+    benchmark_socket({address.inet.protocol, {}, {}}, CCOIP_PROTOCOL_PORT_BANDWIDTH_BENCHMARK), peer_group(peer_group),
+    p2p_connection_pool_size(p2p_connection_pool_size) {}
 
 bool ccoip::CCoIPClientHandler::connect() {
     setMainThread(std::this_thread::get_id());
@@ -44,7 +45,6 @@ bool ccoip::CCoIPClientHandler::connect() {
     {
         p2p_socket.setJoinCallback([this](const ccoip_socket_address_t &client_address,
                                           std::unique_ptr<tinysockets::BlockingIOSocket> &socket) {
-
             const auto hello_packet_opt = socket->receivePacket<P2PPacketHello>();
             if (!hello_packet_opt) {
                 LOG(ERR) << "Failed to receive P2PPacketHello from " << ccoip_sockaddr_to_str(client_address);
@@ -65,7 +65,15 @@ bool ccoip::CCoIPClientHandler::connect() {
             }
 
             p2p_connections_rx_mutex.lock();
-            const auto &rx_socket = p2p_connections_rx[hello_packet.peer_uuid] =
+
+            auto &connection_pool = p2p_connections_rx[hello_packet.peer_uuid];
+
+            // the other peer can have a different pool size than us, which is still supported as long as we can agree
+            // which connection to use e.g. derived from an agreed seq nr
+            connection_pool.resize(hello_packet.connection_nr + 1);
+
+
+            const auto &rx_socket = connection_pool[hello_packet.connection_nr] =
                     std::make_unique<tinysockets::MultiplexedIOSocket>(socket->getSocketFd(),
                                                                        tinysockets::ConnectionModeFlags::MODE_RX);
             p2p_connections_rx_mutex.unlock();
@@ -107,22 +115,38 @@ bool ccoip::CCoIPClientHandler::connect() {
         LOG(INFO) << "Shared state socket listening on port " << shared_state_socket.getListenPort() << "...";
     }
 
-    // start listening with bandwidth benchmark socket
+    // start listening with the bandwidth benchmark server socket
     {
         benchmark_socket.setJoinCallback([this](const ccoip_socket_address_t &client_address,
                                                 const std::unique_ptr<tinysockets::BlockingIOSocket> &socket) {
             int socket_fd = socket->getSocketFd();
 
+            const auto hello_packet_opt = socket->receivePacket<C2BPacketHello>();
+            if (!hello_packet_opt) {
+                LOG(ERR) << "Failed to receive C2BPacketHello from " << ccoip_sockaddr_to_str(client_address);
+                if (!socket->closeConnection()) {
+                    LOG(ERR) << "Failed to close connection to " << ccoip_sockaddr_to_str(client_address);
+                }
+                return;
+            }
+            const auto &hello_packet = hello_packet_opt.value();
+
             // if there is an ongoing benchmark
-            if (benchmark_thread_opt.has_value()) {
+            current_benchmark_threads_mutex.lock(); // lock
+            if (!current_benchmark_threads.empty()) {
                 // and said benchmark is complete
-                if (benchmark_complete_state) {
-                    // join the thread
-                    if (benchmark_thread_opt->joinable()) {
-                        benchmark_thread_opt->join();
+                if (num_running_benchmark_threads.load(std::memory_order_relaxed) == 0) {
+                    // join the threads
+                    for (auto &thread: current_benchmark_threads) {
+                        if (thread.joinable()) {
+                            thread.join();
+                        }
                     }
-                } else {
-                    // if the benchmark is not complete, tell the incoming client to go away
+                    current_benchmark_threads.clear();
+                } else if (hello_packet.peer_uuid != benchmark_peer) {
+                    // If the benchmark is not complete, tell the incoming client to go away if it is not the one we are
+                    // currently benchmarking.
+                    // The client that is currently being benchmarked should be able to establish multiple connections.
                     LOG(DEBUG) << "Rejecting incoming benchmark connection from "
                                << ccoip_sockaddr_to_str(client_address)
                                << " because a benchmark is already running. Telling it to retry later...";
@@ -136,6 +160,7 @@ bool ccoip::CCoIPClientHandler::connect() {
                         LOG(WARN) << "Failed to close connection to " << ccoip_sockaddr_to_str(client_address)
                                   << " after rejecting benchmark connection with busy signal";
                     }
+                    current_benchmark_threads_mutex.unlock(); // unlock
                     return;
                 }
             }
@@ -148,18 +173,18 @@ bool ccoip::CCoIPClientHandler::connect() {
                           << ccoip_sockaddr_to_str(client_address);
             }
 
-            benchmark_complete_state.store(false);
+            num_running_benchmark_threads.fetch_add(1, std::memory_order_relaxed);
             std::thread benchmark_thread([client_address, socket_fd, this] {
-                NetworkBenchmarkHandler handler{};
-                if (!handler.runBlocking(socket_fd)) {
-                    // we have an accept backlog of 1, so this is fine and intended.
+                if (NetworkBenchmarkHandler handler{}; !handler.runBlocking(socket_fd)) {
                     LOG(WARN) << "Failed to run network benchmark with " << ccoip_sockaddr_to_str(client_address);
                 }
                 LOG(INFO) << "Network benchmark finished with client " << ccoip_sockaddr_to_str(client_address);
-                benchmark_complete_state.store(true);
+                num_running_benchmark_threads.fetch_add(-1, std::memory_order_relaxed);
             });
 
-            benchmark_thread_opt = std::move(benchmark_thread);
+            benchmark_peer = hello_packet.peer_uuid;
+            current_benchmark_threads.emplace_back(std::move(benchmark_thread));
+            current_benchmark_threads_mutex.unlock(); // unlock
         });
         if (!benchmark_socket.listen()) {
             LOG(ERR) << "Failed to bind bandwidth benchmark socket " << benchmark_socket.getListenPort();
@@ -630,11 +655,14 @@ bool ccoip::CCoIPClientHandler::optimizeTopology() {
                         continue;
                     }
                 }
-                NetworkBenchmarkRunner runner(request.to_peer_benchmark_endpoint);
-                const NetworkBenchmarkRunner::BenchmarkResult result = runner.runBlocking();
+                NetworkBenchmarkRunner runner(client_state.getAssignedUUID(), request.to_peer_benchmark_endpoint);
 
-                if (result == NetworkBenchmarkRunner::BenchmarkResult::SUCCESS) {
+                if (const NetworkBenchmarkRunner::BenchmarkResult result = runner.runBlocking();
+                    result == NetworkBenchmarkRunner::BenchmarkResult::SUCCESS) {
                     const auto output_mbits_per_second = runner.getOutputBandwidthMbitsPerSecond();
+                    LOG(DEBUG) << "Measured bandwidth: " << output_mbits_per_second << " Mbit/s to peer "
+                               << ccoip_sockaddr_to_str(request.to_peer_benchmark_endpoint);
+
                     C2MPacketReportPeerBandwidth packet{};
                     packet.to_peer_uuid = request.to_peer_uuid;
                     packet.bandwidth_mbits_per_second = output_mbits_per_second;
@@ -687,18 +715,22 @@ bool ccoip::CCoIPClientHandler::interrupt() {
     {
         std::shared_lock lock(p2p_connections_rx_mutex);
         for (const auto &p2p_entry: p2p_connections_rx) {
-            if (!p2p_entry.second->interrupt()) [[unlikely]] {
-                return false;
+            for (const auto &socket: p2p_entry.second) {
+                if (!socket->interrupt()) [[unlikely]] {
+                    return false;
+                }
+                socket->join();
             }
-            p2p_entry.second->join();
         }
     }
 
     for (const auto &p2p_entry: p2p_connections_tx) {
-        if (!p2p_entry.second->interrupt()) [[unlikely]] {
-            return false;
+        for (const auto &socket: p2p_entry.second) {
+            if (!socket->interrupt()) [[unlikely]] {
+                return false;
+            }
+            socket->join();
         }
-        p2p_entry.second->join();
     }
     if (!p2p_socket.interrupt()) [[unlikely]] {
         return false;
@@ -728,23 +760,31 @@ bool ccoip::CCoIPClientHandler::join() {
     {
         std::shared_lock lock(p2p_connections_rx_mutex);
         for (const auto &p2p_entry: p2p_connections_rx) {
-            p2p_entry.second->join();
+            for (const auto &socket: p2p_entry.second) {
+                socket->join();
+            }
         }
     }
 
     for (const auto &p2p_entry: p2p_connections_tx) {
-        p2p_entry.second->join();
+        for (const auto &socket: p2p_entry.second) {
+            socket->join();
+        }
     }
 
     p2p_socket.join();
     shared_state_socket.join();
     benchmark_socket.join();
     master_socket.join();
-    if (benchmark_thread_opt.has_value()) {
-        if (benchmark_thread_opt->joinable()) {
-            benchmark_thread_opt->join();
+    current_benchmark_threads_mutex.lock();
+    if (!current_benchmark_threads.empty()) {
+        for (auto &thread: current_benchmark_threads) {
+            if (thread.joinable()) {
+                thread.join();
+            }
         }
     }
+    current_benchmark_threads_mutex.unlock();
     return true;
 }
 
@@ -784,12 +824,12 @@ ccoip::CCoIPClientHandler::EstablishP2PConnectionResult ccoip::CCoIPClientHandle
 
         // establish p2p connections
         for (auto &peer: connection_info_packet.all_peers) {
-            // check if connection already exists
+            // check if a connection pool already exists
             if (p2p_connections_tx.contains(peer.peer_uuid)) {
                 LOG(DEBUG) << "P2P connection with peer " << uuid_to_string(peer.peer_uuid) << " already exists";
                 continue;
             }
-            if (!establishP2PConnection(peer)) {
+            if (!establishP2PConnections(peer)) {
                 LOG(ERR) << "Failed to establish P2P connection with peer " << uuid_to_string(peer.peer_uuid);
                 all_peers_connected = false;
                 failed_peers.push_back(peer.peer_uuid);
@@ -804,8 +844,10 @@ ccoip::CCoIPClientHandler::EstablishP2PConnectionResult ccoip::CCoIPClientHandle
                     return peer.peer_uuid == peer_uuid;
                 }) == connection_info_packet.all_peers.end()) {
                 LOG(DEBUG) << "Closing p2p connection with peer " << uuid_to_string(it->first);
-                if (!closeP2PConnection(it->first, *it->second)) {
-                    LOG(WARN) << "Failed to close p2p tx connection with peer " << uuid_to_string(it->first);
+                for (const auto &socket: it->second) {
+                    if (!closeP2PConnection(it->first, *socket)) {
+                        LOG(WARN) << "Failed to close p2p tx connection with peer " << uuid_to_string(it->first);
+                    }
                 }
                 it = p2p_connections_tx.erase(it);
             } else {
@@ -821,9 +863,11 @@ ccoip::CCoIPClientHandler::EstablishP2PConnectionResult ccoip::CCoIPClientHandle
                 if (std::ranges::find_if(connection_info_packet.all_peers, [peer_uuid](const PeerInfo &peer) {
                         return peer.peer_uuid == peer_uuid;
                     }) == connection_info_packet.all_peers.end()) {
-                    LOG(DEBUG) << "Interrupting p2p rx connection with peer " << uuid_to_string(it->first);
-                    if (!it->second->interrupt()) [[unlikely]] {
-                        LOG(WARN) << "Failed to close p2p rx connection with peer " << uuid_to_string(it->first);
+                    LOG(DEBUG) << "Interrupting p2p rx connections with peer " << uuid_to_string(it->first);
+                    for (const auto &socket: it->second) {
+                        if (!socket->interrupt()) [[unlikely]] {
+                            LOG(WARN) << "Failed to close p2p rx connection with peer " << uuid_to_string(it->first);
+                        }
                     }
                     it = p2p_connections_rx.erase(it);
                 } else {
@@ -875,42 +919,52 @@ ccoip::CCoIPClientHandler::EstablishP2PConnectionResult ccoip::CCoIPClientHandle
     return SUCCESS;
 }
 
-bool ccoip::CCoIPClientHandler::establishP2PConnection(const PeerInfo &peer) {
-    // Note: intentionally no thread guard here, because this function may be called when an all reduce fails,
+bool ccoip::CCoIPClientHandler::establishP2PConnections(const PeerInfo &peer) {
+    // Note: intentionally no thread guard here, because this function may be called when an all-reduce fails,
     // which is an operation that is allowed to be scheduled by threads other
-    // than the communicator registered main thread.
-
-    LOG(DEBUG) << "Establishing P2P connection with peer " << uuid_to_string(peer.peer_uuid);
-    tinysockets::BlockingIOSocket socket(peer.p2p_listen_addr);
-    if (!socket.establishConnection()) {
-        LOG(ERR) << "Failed to establish P2P connection with peer " << uuid_to_string(peer.peer_uuid);
-        return false;
-    }
-    LOG(DEBUG) << "Established socket connection with peer " << uuid_to_string(peer.peer_uuid)
-               << "; Starting p2p handshake...";
-
-    P2PPacketHello hello_packet{};
-    hello_packet.peer_uuid = client_state.getAssignedUUID();
-    if (!socket.sendPacket<P2PPacketHello>(hello_packet)) {
-        LOG(ERR) << "Failed to send hello packet to peer " << uuid_to_string(peer.peer_uuid);
-    }
-    if (const auto response = socket.receivePacket<P2PPacketHelloAck>(); !response) {
-        LOG(ERR) << "Failed to receive hello ack from peer " << uuid_to_string(peer.peer_uuid);
-        return false;
-    }
-    LOG(DEBUG) << "P2P handshake with peer " << uuid_to_string(peer.peer_uuid) << " successful.";
-    auto [it, inserted] = p2p_connections_tx.emplace(
-            peer.peer_uuid,
-            std::make_unique<tinysockets::MultiplexedIOSocket>(socket.getSocketFd(), socket.getConnectSockAddr(),
-                                                               tinysockets::ConnectionModeFlags::MODE_TX));
+    // than the communicator-registered main thread.
+    auto [it, inserted] = p2p_connections_tx.emplace(peer.peer_uuid,
+                                                     std::vector<std::shared_ptr<tinysockets::MultiplexedIOSocket>>{});
     if (!inserted) {
         LOG(ERR) << "P2P connection with peer " << uuid_to_string(peer.peer_uuid) << " already exists";
         return false;
     }
-    if (!it->second->run()) {
-        LOG(FATAL) << "Failed to start MultiplexedIOSocket for P2P connection with " << uuid_to_string(peer.peer_uuid);
-        return false;
+
+    // create p2p connection pool
+    auto &sockets = it->second;
+    sockets.reserve(p2p_connection_pool_size);
+    for (uint32_t connection_nr = 0; connection_nr < p2p_connection_pool_size; ++connection_nr) {
+        LOG(DEBUG) << "Establishing P2P connection [" << (connection_nr + 1) << "/" << p2p_connection_pool_size
+                   << "] with peer " << uuid_to_string(peer.peer_uuid);
+        tinysockets::BlockingIOSocket socket(peer.p2p_listen_addr);
+        if (!socket.establishConnection()) {
+            LOG(ERR) << "Failed to establish P2P connection with peer " << uuid_to_string(peer.peer_uuid);
+            return false;
+        }
+        LOG(DEBUG) << "Established socket connection with peer " << uuid_to_string(peer.peer_uuid)
+                   << "; Starting p2p handshake...";
+
+        P2PPacketHello hello_packet{};
+        hello_packet.peer_uuid = client_state.getAssignedUUID();
+        hello_packet.connection_nr = connection_nr;
+        if (!socket.sendPacket<P2PPacketHello>(hello_packet)) {
+            LOG(ERR) << "Failed to send hello packet to peer " << uuid_to_string(peer.peer_uuid);
+        }
+        if (const auto response = socket.receivePacket<P2PPacketHelloAck>(); !response) {
+            LOG(ERR) << "Failed to receive hello ack from peer " << uuid_to_string(peer.peer_uuid);
+            return false;
+        }
+        LOG(DEBUG) << "P2P handshake with peer " << uuid_to_string(peer.peer_uuid) << " successful.";
+        const auto &tx_socket = sockets.emplace_back(std::make_unique<tinysockets::MultiplexedIOSocket>(
+                socket.getSocketFd(), socket.getConnectSockAddr(), tinysockets::ConnectionModeFlags::MODE_TX));
+
+        if (!tx_socket->run()) {
+            LOG(FATAL) << "Failed to start MultiplexedIOSocket for P2P connection with "
+                       << uuid_to_string(peer.peer_uuid);
+            return false;
+        }
     }
+
     if (!client_state.registerPeer(peer.p2p_listen_addr, peer.peer_uuid)) {
         LOG(ERR) << "Failed to register peer " << uuid_to_string(peer.peer_uuid);
         return false;
@@ -1186,8 +1240,8 @@ bool ccoip::CCoIPClientHandler::allReduceAsync(const void *sendbuff, void *recvb
 
                 // perform pipeline ring reduce
                 auto [success, abort_packet_received] = reduce::pipelineRingReduce(
-                        client_state, master_socket, tag, seq_nr, send_span, recv_span, datatype, quantized_data_type, op,
-                        quantization_algorithm, position, ring_order.size(), ring_order, p2p_connections_tx,
+                        client_state, master_socket, tag, seq_nr, send_span, recv_span, datatype, quantized_data_type,
+                        op, quantization_algorithm, position, ring_order.size(), ring_order, p2p_connections_tx,
                         p2p_connections_rx);
                 return std::pair{success, abort_packet_received};
             };
