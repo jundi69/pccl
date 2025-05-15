@@ -428,7 +428,7 @@ pcclResult_t pcclAllReduceMultipleWithRetry(const pcclReduceOpDescriptor_t *desc
             // check if all operations have been launched
             bool all_launched = true;
             for (size_t j = 0; j < count; ++j) {
-                if (reduce_handles[j] == std::nullopt) {
+                if (reduce_handles[j] == std::nullopt && !completed_ops.contains(j)) {
                     all_launched = false;
                     break;
                 }
@@ -436,6 +436,7 @@ pcclResult_t pcclAllReduceMultipleWithRetry(const pcclReduceOpDescriptor_t *desc
 
             if (in_flight < static_cast<uint32_t>(max_in_flight) && !all_launched) {
                 // we are not at the max in-flight limit yet and still have more operations to launch
+                all_done = false;
                 continue;
             }
 
