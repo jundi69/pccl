@@ -425,6 +425,10 @@ pcclResult_t pcclAllReduceMultipleWithRetry(const pcclReduceOpDescriptor_t *desc
 
             const auto &reduce_handle = reduce_handle_opt.value();
 
+            if (in_flight < max_in_flight) {
+                continue; // no need to wait for this handle
+            }
+
             LOG(DEBUG) << "pcclAllReduceMultipleWithRetry: "
                     << "Awaiting async reduce operation for index " << i << "...";
             pcclReduceInfo_t reduce_info{};
