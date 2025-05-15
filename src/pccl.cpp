@@ -373,6 +373,8 @@ pcclResult_t pcclAllReduceMultipleWithRetry(const pcclReduceOpDescriptor_t *desc
         const pcclReduceOpDescriptor_t &op_descriptor = descriptors[i];
 
         pcclAsyncReduceOp_t handle{};
+        LOG(DEBUG) << "pcclAllReduceMultipleWithRetry: "
+                << "Launching async reduce operation for index " << i;
         PCCL_ERR_PROPAGATE(pcclAllReduceAsync(
             op_descriptor.sendbuf,
             op_descriptor.recvbuf,
@@ -423,6 +425,8 @@ pcclResult_t pcclAllReduceMultipleWithRetry(const pcclReduceOpDescriptor_t *desc
 
             const auto &reduce_handle = reduce_handle_opt.value();
 
+            LOG(DEBUG) << "pcclAllReduceMultipleWithRetry: "
+                    << "Awaiting async reduce operation for index " << i << "...";
             pcclReduceInfo_t reduce_info{};
             const pcclResult_t reduce_status = pcclAwaitAsyncReduce(&reduce_handle, &reduce_info);
             PCCL_ERR_PROPAGATE(pcclGetAttribute(communicator, PCCL_ATTRIBUTE_PEER_GROUP_WORLD_SIZE, &local_world_size));
