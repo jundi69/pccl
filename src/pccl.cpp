@@ -425,10 +425,21 @@ pcclResult_t pcclAllReduceMultipleWithRetry(const pcclReduceOpDescriptor_t *desc
 
             const auto &reduce_handle = reduce_handle_opt.value();
 
-            if (in_flight < max_in_flight) {
-                continue; // no need to wait for this handle
+            // check if all operations have been launched
+            bool all_launched = true;
+            for (size_t j = 0; j < count; ++j) {
+                if (reduce_handles[j] == std::nullopt) {
+                    all_launched = false;
+                    break;
+                }
             }
 
+            if (in_flight < static_cast<uint32_t>(max_in_flight) && !all_launched) {
+                // we are not at the max in-flight limit yet and still have more operations to launch
+                continue;
+            }
+
+            // we are at the max in-flight limit, so we need to wait for one of the operations to finish
             LOG(DEBUG) << "pcclAllReduceMultipleWithRetry: "
                     << "Awaiting async reduce operation for index " << i << "...";
             pcclReduceInfo_t reduce_info{};
