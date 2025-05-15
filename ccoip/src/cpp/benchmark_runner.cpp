@@ -58,7 +58,7 @@ double ccoip::NetworkBenchmarkRunner::getOutputBandwidthMbitsPerSecond() {
         total_bandwidth_mbits_per_second += bandwidth;
     }
     output_bandwidth_mbps_mutex.unlock();
-    return total_bandwidth_mbits_per_second / num_benchmark_connections;
+    return total_bandwidth_mbits_per_second;
 }
 
 ccoip::NetworkBenchmarkRunner::BenchmarkResult
