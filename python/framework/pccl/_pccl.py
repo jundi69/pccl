@@ -233,6 +233,7 @@ class QuantizationAlgorithm(Enum):
     """PCCL quantization algorithms."""
     NONE = C.pcclQuantNone
     MIN_MAX = C.pcclQuantMinMax
+    ZERO_POINT_SCALE = C.pcclQuantZeroPointScale
 
 
 class ReduceOperandDescriptor:
@@ -456,13 +457,14 @@ def _create_ccoip_socket_address(address: Union[IPv4Address, IPv6Address], port:
 class Communicator:
     """PCCL communicator."""
 
-    def __init__(self, address: str, peer_group: int = 0):
+    def __init__(self, address: str, peer_group: int = 0, p2p_connection_pool_size: int = 0):
         assert ":" in address, f'Invalid address: {address}, expected format: ip:port'
         params: ffi.CData = ffi.new('pcclCommCreateParams_t*')
         ip, port = address.split(":")
         ip = ip_address(ip)
         params.master_address = _create_ccoip_socket_address(ip, int(port))[0]
         params.peer_group = ffi.cast('uint32_t', peer_group)
+        params.p2p_connection_pool_size = ffi.cast('uint32_t', p2p_connection_pool_size)
         self._comm = ffi.new('pcclComm_t**')
         PCCLError.check(C.pcclCreateCommunicator(params, self._comm), "pcclCreateCommunicator")
 
