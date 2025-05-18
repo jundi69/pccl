@@ -30,7 +30,8 @@ int main() {
     PCCL_CHECK(pcclConnect(comm));
     
     // declare shared state
-    pcclSharedState_t sstate{.revision = 0, .count = 1, .infos = &tinfo};
+    // ...
+    pcclSharedState_t sstate{.revision = 0, .count = 1, .infos = infos};
 
     // training loop
     while (true) {
