@@ -12,7 +12,7 @@ topology optimization.
 PCCL implements a novel TCP-based network protocol "Collective Communications over IP" (CCoIP).
 
 # Example
-The Following is a simplified example of an application using PCCL in C++ and Python.
+The Following is a simplified example of an application using PCCL in C++.
 Please refer to the documentation for more details and fault tolerance considerations.
 
 ```c++
