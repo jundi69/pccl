@@ -22,51 +22,28 @@ Please refer to the documentation for more details and fault tolerance considera
 int main() {
     PCCL_CHECK(pcclInit());
     pcclCommCreateParams_t params {
-        .master_address = {
-            .inet = {
-                .protocol = inetIPv4,
-                .ipv4 = { 127, 0, 0, 1 } // localhost
-            },
-            .port = 48148
-        },
-        .peer_group = 0,
-        .p2p_connection_pool_size = 16
+        .master_address = { .inet = {.protocol = inetIPv4, .ipv4 = { 127, 0, 0, 1 }}, .port = 48148 },
+        .peer_group = 0, .p2p_connection_pool_size = 16
     };
     pcclComm_t* comm{};
     PCCL_CHECK(pcclCreateCommunicator(&params, &comm));
     PCCL_CHECK(pcclConnect(comm));
     
     // declare shared state
-    pcclTensorInfo_t tinfo{
-        .name                     = "myWeights",
-        .data                     = dummyWeights,
-        .count                    = 8,
-        .datatype                 = pcclFloat,
-        .device_type              = pcclDeviceCpu,
-        .allow_content_inequality = false
-    };
-    pcclSharedState_t sstate{
-        .revision = 0,
-        .count    = 1,
-        .infos    = &tinfo
-    };
+    pcclSharedState_t sstate{.revision = 0, .count = 1, .infos = &tinfo};
 
     // training loop
     while (true) {
         if (local_iter > 0) {
             while (pcclUpdateTopology(comm) == pcclUpdateTopologyFailed) {
-                // wait and retry
-                std::this_thread::sleep_for(std::chrono::milliseconds(100));
             }
         }
         int world_size{};
         PCCL_CHECK(pcclGetAttribute(comm, PCCL_ATTRIBUTE_GLOBAL_WORLD_SIZE, &world_size));
-
-        // Synchronize shared state ( no-op if advanced correctly )
+        
         // ...
+        // Synchronize shared state ( no-op if advanced correctly )
         while (pcclSynchronizeSharedState(comm, &shared_state, &sync_info) == pcclSharedStateSyncFailed) {
-            // wait and retry
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
 
         // Do some work here, e.g. training step
@@ -80,6 +57,8 @@ int main() {
         while (world_size > 1 && pcclAllReduce(local_data, result_data, &desc, comm, &reduce_info) != pcclSuccess) {
             PCCL_CHECK(pcclGetAttribute(comm, PCCL_ATTRIBUTE_GLOBAL_WORLD_SIZE, &world_size)); // re-obtain world size
         }
+        
+        // ...
         
         // advance shared state revision
         sstate.revision++;
