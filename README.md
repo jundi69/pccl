@@ -22,7 +22,10 @@ Please refer to the documentation for more details and fault tolerance considera
 int main() {
     PCCL_CHECK(pcclInit());
     pcclCommCreateParams_t params {
-        .master_address = { .inet = {.protocol = inetIPv4, .ipv4 = { 127, 0, 0, 1 }}, .port = 48148 },
+        .master_address = { 
+            .inet = {.protocol = inetIPv4, .ipv4 = { 127, 0, 0, 1 }},
+            .port = 48148
+        },
         .peer_group = 0, .p2p_connection_pool_size = 16
     };
     pcclComm_t* comm{};
