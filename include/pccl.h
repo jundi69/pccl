@@ -287,7 +287,7 @@ PCCL_EXPORT pcclResult_t pcclUpdateTopology(pcclComm_t *communicator);
 
 /**
  * Returns whether the communicator has pending peers to accept.
- * This function can be used to determine if @ref pcclUpdateTopolgy needs to be called.
+ * This function can be used to determine if @ref pcclUpdateTopology needs to be called.
  * If this function returns true, it is recommended to call @ref pcclUpdateTopology to avoid keeping pending peers waiting.
  * If this function returns false, the call to @ref pcclUpdateTopology can be skipped without risk of delaying pending peers.
  * This is useful if async collective communications are ongoing that would otherwise have to be awaited before calling @ref pcclUpdateTopology.

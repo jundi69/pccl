@@ -105,6 +105,7 @@ Allocates and initializes a communicator object.
     - `parameters->master_address`: The `ccoip_socket_address_t` specifying the master’s IP and port.
     - `parameters->peer_group`: An integer identifying the group of peers that will do collectives among themselves (0
       is a common default if you only have one group).
+    - `parameters->p2p_connection_pool_size`: The size of the internal connection pool for p2p connections. Increasing this number can drastically improve performance for multiple concurrent all reduces.
 - Returns `pcclSuccess`, or `pcclNotInitialized` if `pcclInit` wasn’t called, or `pcclInvalidArgument` if any pointer is
   null.
 
@@ -143,7 +144,7 @@ pcclResult_t pcclAreNewPeersPending(const pcclComm_t *communicator, bool *new_pe
 ```
 
 Writes into `new_peers_pending_out` whether the communicator has pending peers to accept.
-This function can be used to determine if `pcclUpdateTopolgy` needs to be called.
+This function can be used to determine if `pcclUpdateTopology` needs to be called.
 If the pending peers state is true, it is recommended to call `pcclUpdateTopology` to avoid keeping pending peers waiting.
 If the pending peers state is false, the call to `pcclUpdateTopology` can be skipped without risk of delaying pending peers.
 This is useful if async collective communications are ongoing that would otherwise have to be awaited before calling `pcclUpdateTopology`.

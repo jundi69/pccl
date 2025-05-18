@@ -30,6 +30,19 @@ void fill_uniform(float *data, const size_t count) {
 
 #define MAX_STEPS 1000
 
+static int GetIntEnvVar(const std::string &var_name, const int default_value) {
+    const char *env_var = std::getenv(var_name.c_str());
+    if (env_var == nullptr) {
+        return default_value;
+    }
+    try {
+        return std::stoi(env_var);
+    } catch (const std::invalid_argument &) {
+        std::cerr << "Invalid value for environment variable " << var_name << ": " << env_var << std::endl;
+        return default_value;
+    }
+}
+
 int main() {
     PCCL_CHECK(pcclInit());
 
@@ -43,9 +56,9 @@ int main() {
     PCCL_CHECK(pcclCreateCommunicator(&params, &communicator));
     PCCL_CHECK(pcclConnect(communicator));
 
-    const size_t num_reduce_ops = 128;
-    const size_t max_in_flight = 128;
-    const size_t mib = 8;
+    const size_t num_reduce_ops = 32;
+    const size_t max_in_flight = 32;
+    const size_t mib = 16;
 
     int world_size{};
     pcclGetAttribute(communicator, PCCL_ATTRIBUTE_GLOBAL_WORLD_SIZE, &world_size);
@@ -79,7 +92,7 @@ int main() {
         }
 
         if (world_size > 1) {
-            PCCL_CHECK(pcclOptimizeTopology(communicator));
+            // PCCL_CHECK(pcclOptimizeTopology(communicator));
             PCCL_CHECK(pcclGetAttribute(communicator, PCCL_ATTRIBUTE_GLOBAL_WORLD_SIZE, &world_size));
         }
 
@@ -89,7 +102,7 @@ int main() {
         }
 
         for (auto &gradient: gradients) {
-            fill_uniform(gradient, n_elements);
+            // fill_uniform(gradient, n_elements);
         }
 
         pcclSharedStateSyncInfo_t sync_info{};
@@ -119,7 +132,7 @@ int main() {
 
         pcclReduceInfo_t reduce_info{};
         PCCL_CHECK(pcclAllReduceMultipleWithRetry(descriptors.data(), descriptors.size(), communicator, &reduce_info,
-                                           max_in_flight));
+                                                  max_in_flight));
 
         auto end = std::chrono::high_resolution_clock::now();
         auto time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();

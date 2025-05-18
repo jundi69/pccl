@@ -117,6 +117,18 @@ def all_reduce_multiple_with_retry__equivalent(communicator: Communicator,
                 )
                 in_flight += 1
 
+            # check if all handles have been launched
+            all_launched = True
+            for j in range(len(tensors)):
+                if handles[j] is None and j not in done_handles:
+                    all_launched = False
+                    break
+                
+            if in_flight < max_in_flight and not all_launched:
+                # we are not at the max in-flight limit yet, and still have more operations to launch
+                all_done = False
+                continue
+                
             is_success, status, info = handle.wait()
             world_size = communicator.get_attribute(Attribute.GLOBAL_WORLD_SIZE)
             if not is_success:
