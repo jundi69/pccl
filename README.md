@@ -9,7 +9,130 @@ The Prime Collective Communications Library (PCCL) implements efficient and faul
 operations such as reductions over IP and provides shared state synchronization mechanisms to keep peers in sync and
 allow for the dynamic joining and leaving of peers at any point during training along with automatic bandwidth-aware
 topology optimization.
-PCCL implements a novel TCP based network protocol "Collective Communications over IP" (CCoIP).
+PCCL implements a novel TCP-based network protocol "Collective Communications over IP" (CCoIP).
+
+# Example
+The Following is a simplified example of an application using PCCL in C++ and Python.
+Please refer to the documentation for more details and fault tolerance considerations.
+
+```c++
+#include <pccl.h>
+
+
+int main() {
+    PCCL_CHECK(pcclInit());
+    pcclCommCreateParams_t params {
+        .master_address = {
+            .inet = {
+                .protocol = inetIPv4,
+                .ipv4 = { 127, 0, 0, 1 } // localhost
+            },
+            .port = 48148
+        },
+        .peer_group = 0,
+        .p2p_connection_pool_size = 16
+    };
+    pcclComm_t* comm{};
+    PCCL_CHECK(pcclCreateCommunicator(&params, &comm));
+    PCCL_CHECK(pcclConnect(comm));
+    
+    // declare shared state
+    pcclTensorInfo_t tinfo{
+        .name                     = "myWeights",
+        .data                     = dummyWeights,
+        .count                    = 8,
+        .datatype                 = pcclFloat,
+        .device_type              = pcclDeviceCpu,
+        .allow_content_inequality = false
+    };
+    pcclSharedState_t sstate{
+        .revision = 0,
+        .count    = 1,
+        .infos    = &tinfo
+    };
+
+    // training loop
+    while (true) {
+        if (local_iter > 0) {
+            while (pcclUpdateTopology(comm) == pcclUpdateTopologyFailed) {
+                // wait and retry
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
+        }
+        int world_size{};
+        PCCL_CHECK(pcclGetAttribute(comm, PCCL_ATTRIBUTE_GLOBAL_WORLD_SIZE, &world_size));
+
+        // Synchronize shared state ( no-op if advanced correctly )
+        // ...
+        while (pcclSynchronizeSharedState(comm, &shared_state, &sync_info) == pcclSharedStateSyncFailed) {
+            // wait and retry
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+
+        // Do some work here, e.g. training step
+        float local_data[4];
+        for (int k = 0; k < 4; k++) {
+            local_data[k] = float(local_iter * 10 + (k + 1));
+        }
+        float result_data[4] = {};
+
+        // perform collective operation
+        while (world_size > 1 && pcclAllReduce(local_data, result_data, &desc, comm, &reduce_info) != pcclSuccess) {
+            PCCL_CHECK(pcclGetAttribute(comm, PCCL_ATTRIBUTE_GLOBAL_WORLD_SIZE, &world_size)); // re-obtain world size
+        }
+        
+        // advance shared state revision
+        sstate.revision++;
+        if (sstate.revision >= MAX_STEPS) {
+            break;
+        }
+        local_iter++;
+    }
+    PCCL_CHECK(pcclDestroyCommunicator(comm));
+    return 0;
+}
+```
+
+The following is a simplified example of an application using PCCL using the Python bindings.
+
+```python
+from pccl import Communicator, Attribute, TensorInfo, SharedState, PCCLError
+
+communicator: Communicator = Communicator("127.0.0.1:48148", peer_group=0, p2p_connection_pool_size=16)
+communicator.connect(n_attempts=15)
+
+shared_state_dict = {
+    "myWeights": torch.zeros(8, dtype=torch.float32).to(device),
+}
+
+# declare shared state
+entries = [TensorInfo.from_torch(tensor, name, allow_content_inequality=False) for name, tensor in
+           shared_state_dict.items()]
+shared_state: SharedState = SharedState(entries)
+
+local_iter = 0
+while True:
+    if local_iter > 1:
+        communicator.update_topology()
+    world_size = communicator.get_attribute(Attribute.GLOBAL_WORLD_SIZE)
+
+    # synchronize shared state
+    sync_info = communicator.sync_shared_state(shared_state)
+    
+    # Do some work here, e.g. training step
+    local_data = torch.rand(4).to(device)
+    
+    # perform collective operation
+    while world_size > 1:
+        try:
+            communicator.all_reduce(local_data, result_data, desc)
+            break
+        except PCCLError as e:
+            print(f"AllReduce failed => {e}. Retrying...")
+            world_size = communicator.get_attribute(Attribute.GLOBAL_WORLD_SIZE)  # re-obtain world size
+    
+    local_iter += 1
+```
 
 
 ## Prerequisites

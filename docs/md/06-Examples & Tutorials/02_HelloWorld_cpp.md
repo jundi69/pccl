@@ -99,7 +99,7 @@ int main() {
             // the world size may have changed after pcclOptimizeTopology, if a peer drops.
             PCCL_CHECK(pcclGetAttribute(comm, PCCL_ATTRIBUTE_GLOBAL_WORLD_SIZE, &world_size));
         } else {
-            // alone => no ring-based operation => wait
+            // alone => wait
             std::cout << "[Peer] alone => sleeping.\n";
             std::this_thread::sleep_for(std::chrono::seconds(1));
             // continue the loop to see if a new peer joined
@@ -126,8 +126,8 @@ int main() {
                       << " at revision=" << sstate.revision << "\n";
             break;
         }
-
-        // E) Example ring operation => a small All-Reduce
+        
+        // E) Do some work, e.g. Training step to derive all reduce contribution
         float local_data[4];
         for (int k = 0; k < 4; k++) {
             local_data[k] = float(local_iter * 10 + (k + 1)); // something unique each iteration
