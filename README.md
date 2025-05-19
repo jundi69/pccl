@@ -3,9 +3,9 @@
 
 <div align="center">
     <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/images/PCCL_Logo_Text.svg">
-    <source media="(prefers-color-scheme: light)" srcset="docs/images/PCCL_Logo_Text.svg">
-    <img alt="Project logo" src="docs/images/PCCL_Logo_Text.svg">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/pccl_logo_dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="docs/images/pccl_logo_light.png">
+    <img alt="Project logo" src="docs/images/pccl_logo_light.png">
     </picture>
 </div>
 
