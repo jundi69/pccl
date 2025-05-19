@@ -15,6 +15,8 @@ PCCL implements a novel TCP-based network protocol "Collective Communications ov
 The Following is a simplified example of an application using PCCL in C++.
 Please refer to the documentation for more details and fault tolerance considerations.
 
+## C++ Example
+
 ```c++
 #include <pccl.h>
 
@@ -76,6 +78,7 @@ int main() {
 }
 ```
 
+## Python Example
 The following is a simplified example of an application using PCCL using the Python bindings.
 
 ```python
