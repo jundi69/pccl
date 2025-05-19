@@ -138,9 +138,9 @@ typedef struct pcclReduceInfo_t {
 } pcclReduceInfo_t;
 
 typedef enum pcclDistributionHint_t {
-    PCCL_DISTRIBUTION_HINT_NONE = 0,
-    PCCL_NORMAL_DISTRIBUTION_HINT = 1,
-    PCCL_UNIFORM_DISTRIBUTION_HINT = 2
+    pcclDistributionNone = 0,
+    pcclDistributionNormal = 1,
+    pcclDistributionUniform = 2
 } pcclDistributionHint_t;
 
 typedef struct pcclReduceOperandDescriptor_t {

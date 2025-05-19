@@ -140,7 +140,7 @@ int main() {
             .tag   = 0,
             .src_descriptor = {
                 .datatype          = pcclFloat,
-                .distribution_hint = PCCL_DISTRIBUTION_HINT_NONE
+                .distribution_hint = pcclDistributionNone
             },
             .quantization_options = {
                 .quantized_datatype = pcclFloat,

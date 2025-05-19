@@ -88,7 +88,7 @@ int main() {
                     .tag = j,
                     .src_descriptor = pcclReduceOperandDescriptor_t {
                         .datatype = pcclFloat,
-                        .distribution_hint = PCCL_DISTRIBUTION_HINT_NONE
+                        .distribution_hint = pcclDistributionNone
                     }
                 }
             };

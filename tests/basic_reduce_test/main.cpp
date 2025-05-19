@@ -123,7 +123,7 @@ int main() {
                     .count = n_elements,
                     .op = pcclSum,
                     .tag = j,
-                    .src_descriptor = {.datatype = pcclFloat, .distribution_hint = PCCL_DISTRIBUTION_HINT_NONE},
+                    .src_descriptor = {.datatype = pcclFloat, .distribution_hint = pcclDistributionNone},
                     .quantization_options = {.quantized_datatype = pcclFloat, .algorithm = pcclQuantNone},
             };
             descriptors[j] =

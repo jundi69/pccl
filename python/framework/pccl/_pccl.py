@@ -224,9 +224,9 @@ class DeviceType(Enum):
 
 class DistributionHint(Enum):
     """PCCL distribution hints."""
-    NONE = C.PCCL_DISTRIBUTION_HINT_NONE
-    NORMAL = C.PCCL_NORMAL_DISTRIBUTION_HINT
-    UNIFORM = C.PCCL_UNIFORM_DISTRIBUTION_HINT
+    NONE = C.pcclDistributionNone
+    NORMAL = C.pcclDistributionNormal
+    UNIFORM = C.pcclDistributionUniform
 
 
 class QuantizationAlgorithm(Enum):
