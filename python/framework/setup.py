@@ -163,10 +163,10 @@ else:
 # Setup pccl package
 
 setup(
-    name='pccl',
-    author='Michael Keiblinger <mike@primeintellect.ai>, Mario Sieg <mario@primeintellect.ai>',
-    description='An IP-based collective communications library',
-    long_description='An IP-based collective communications library',
+    name='pypccl',
+    author='Michael Keiblinger',
+    description='Fault tolerant Collective Communications over IP',
+    long_description='Fault tolerant Collective Communications over IP',
     packages=['pccl'],
     package_data={
         'pccl': package_data_files,
