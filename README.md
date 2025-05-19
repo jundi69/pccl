@@ -5,7 +5,7 @@
     <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/pccl_logo_dark.png">
     <source media="(prefers-color-scheme: light)" srcset="docs/images/pccl_logo_light.png">
-    <img alt="Project logo" src="docs/images/pccl_logo_light.png">
+    <img alt="Project logo" src="docs/images/pccl_logo_light.png" width="7200">
     </picture>
 </div>
 
