@@ -119,7 +119,11 @@ while True:
     
     local_iter += 1
 ```
+To install pccl from PyPI, run the following command:
 
+```bash
+pip install pypccl
+```
 
 ## Prerequisites
 
