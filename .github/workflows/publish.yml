@@ -303,6 +303,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ needs.create_release.outputs.upload_url }}
-          asset_path: ${{ steps.strings-unix.outputs.build-output-dir }}/*pccl*
+          asset_path: artifacts/*
           asset_name: libpccl-${{ runner.os }}-${{ matrix.build_type }}-${{ matrix.pccl_build_cuda_support == 'ON' && 'cuda' || 'nocuda' }}-${{ matrix.is_host_arch && 'host' || 'cross' }}.zip
           asset_content_type: application/zip
