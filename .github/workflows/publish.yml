@@ -137,5 +137,5 @@ jobs:
       - name: Store the distribution packages
         uses: actions/upload-artifact@v4
         with:
-          name: pypccl-${{ runner.os }}-${{ matrix.build_type }}-${{ github.run_id }}
+          name: pypccl-${{ runner.os }}-${{ matrix.build_type }}-${{ matrix.pccl_build_cuda_support == 'ON' && 'cuda' || 'nocuda' }}-${{ github.run_id }}
           path: ./python/framework/dist/pypccl-*.whl
