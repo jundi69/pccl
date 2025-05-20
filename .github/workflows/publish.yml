@@ -3,8 +3,8 @@ name: Publish Release
 on:
   push:
     branches: [ "*" ]
-    tags:
-      - release/*
+    #tags:
+    #  - release/*
 
 jobs:
   build:
@@ -87,6 +87,74 @@ jobs:
           token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
           submodules: recursive
 
+      - name: Set reusable strings (Unix)
+        id: strings-unix
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          build_output_dir="${{ github.workspace }}/build"
+          echo "build-output-dir=$build_output_dir" >> "$GITHUB_OUTPUT"
+
+      - name: Set reusable strings (Windows)
+        id: strings-windows
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $build_output_dir = "${{ github.workspace }}/build"
+          echo "build-output-dir=$build_output_dir" >> $env:GITHUB_OUTPUT
+
+      - name: Configure CMake (Linux)
+        if: runner.os == 'Linux'
+        run: >
+          cmake -B ${{steps.strings-unix.outputs.build-output-dir }}
+          -G "${{ matrix.generator }}"
+          "-DPCCL_SANITIZE_TESTS=ON"
+          "-DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }}"
+          "-DCMAKE_C_COMPILER=${{ matrix.c_compiler }}"
+          "-DCMAKE_BUILD_TYPE=${{ matrix.build_type }}"
+          "-DPCCL_BUILD_STATIC_LIB=OFF"
+          "-DPCCL_BUILD_CUDA_SUPPORT=${{ matrix.pccl_build_cuda_support }}"
+          -S "${{ github.workspace }}"
+
+      - name: Configure CMake (macOS)
+        if: runner.os == 'macOS'
+        run: >
+          cmake -B ${{steps.strings-unix.outputs.build-output-dir }}
+          -G "${{ matrix.generator }}"
+          "-DPCCL_SANITIZE_TESTS=ON"
+          "-DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }}"
+          "-DCMAKE_C_COMPILER=${{ matrix.c_compiler }}"
+          "-DPCCL_BUILD_STATIC_LIB=OFF"
+          "-DCMAKE_BUILD_TYPE=Debug" # Release builds on macOS are prone to overzealous loads, causing ASAN false positives
+          "-DPCCL_BUILD_CUDA_SUPPORT=${{ matrix.pccl_build_cuda_support }}"
+          -S "${{ github.workspace }}"
+
+
+      - name: Configure CMake (Windows, cross-compile)
+        if: runner.os == 'Windows' && !matrix.is_host_arch
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat" ${{ matrix.msvc_cpu_arch }}
+          cmake -B ${{steps.strings-windows.outputs.build-output-dir }} -G ${{ matrix.generator }} "-DCMAKE_MAKE_PROGRAM=${{ matrix.make_program }}" "-DPCCL_BUILD_CUDA_SUPPORT=${{ matrix.pccl_build_cuda_support }}" "-DPCCL_BUILD_STATIC_LIB=OFF" "-DPCCL_SANITIZE_TESTS=OFF" -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/${{ matrix.toolchain_file }} -S "${{ github.workspace }}"
+
+      - name: Configure CMake (Windows, native)
+        if: runner.os == 'Windows' && matrix.is_host_arch
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat" ${{ matrix.msvc_cpu_arch }}
+          cmake -B ${{steps.strings-windows.outputs.build-output-dir }} -G ${{ matrix.generator }} "-DCMAKE_MAKE_PROGRAM=${{ matrix.make_program }}" "-DPCCL_BUILD_CUDA_SUPPORT=${{ matrix.pccl_build_cuda_support }}" "-DPCCL_BUILD_STATIC_LIB=OFF" "-DPCCL_SANITIZE_TESTS=OFF" -S "${{ github.workspace }}"
+
+      - name: Build (Unix)
+        if: runner.os != 'Windows'
+        run: cmake --build ${{ steps.strings-unix.outputs.build-output-dir }} --config ${{ matrix.build_type }} --parallel
+
+      - name: Build (Windows)
+        shell: cmd
+        if: runner.os == 'Windows'
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat" ${{ matrix.msvc_cpu_arch }}
+          cmake --build "${{ steps.strings-windows.outputs.build-output-dir }}" --config ${{ matrix.build_type }} --parallel
+
       - name: Compile Python wheel (Windows, cross-compile)
         if: runner.os == 'Windows' && !matrix.is_host_arch
         shell: cmd
@@ -136,16 +204,21 @@ jobs:
           source ${{ github.workspace }}/venv/bin/activate
           pip install --upgrade pip setuptools wheel twine
 
-      - name: Store the distribution packages
+      - name: Store build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: pypccl-${{ runner.os }}-${{ matrix.build_type }}-${{ matrix.pccl_build_cuda_support == 'ON' && 'cuda' || 'nocuda' }}-${{ github.run_id }}
+          # pattern for the pccl shared library on Linux, macOS, and Windows && include folder
+          path: |
+            ${{ steps.strings-unix.outputs.build-output-dir }}/libpccl.so
+            ${{ steps.strings-unix.outputs.build-output-dir }}/libpccl.dylib
+            ${{ steps.strings-windows.outputs.build-output-dir }}/Release/libpccl.dll
+            ${{ steps.strings-windows.outputs.build-output-dir }}/Release/libpccl.lib
+            ./include/
+
+
+      - name: Store the wheel packages
         uses: actions/upload-artifact@v4
         with:
           name: pypccl-${{ runner.os }}-${{ matrix.build_type }}-${{ matrix.pccl_build_cuda_support == 'ON' && 'cuda' || 'nocuda' }}-${{ github.run_id }}
           path: ./python/framework/dist/pypccl-*.whl
-
-      - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v1
-        with:
-          files: ./python/framework/dist/pypccl-*.whl
-          tag_name: pypccl-${{ runner.os }}-${{ matrix.build_type }}-${{ matrix.pccl_build_cuda_support == 'ON' && 'cuda' || 'nocuda' }}-${{ github.run_id }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
