@@ -286,7 +286,7 @@ jobs:
           asset_name: ${{ steps.find_wheel_unix.outputs.wheel_name }}
           asset_content_type: application/zip
 
-      - name: Upload Release Asset (Windows)
+      - name: Upload Wheel Release Asset (Windows)
         if: runner.os == 'Windows'
         uses: actions/upload-release-asset@v1
         env:
@@ -295,4 +295,14 @@ jobs:
           upload_url: ${{ needs.create_release.outputs.upload_url }}
           asset_path: ${{ steps.find_wheel_windows.outputs.wheel_path }}
           asset_name: ${{ steps.find_wheel_windows.outputs.wheel_name }}
+          asset_content_type: application/zip
+
+      - name: Upload Build Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create_release.outputs.upload_url }}
+          asset_path: ${{ steps.strings-unix.outputs.build-output-dir }}/*.pccl.*
+          asset_name: libpccl-${{ runner.os }}-${{ matrix.build_type }}-${{ matrix.pccl_build_cuda_support == 'ON' && 'cuda' || 'nocuda' }}-${{ matrix.is_host_arch && 'host' || 'cross' }}.zip
           asset_content_type: application/zip
