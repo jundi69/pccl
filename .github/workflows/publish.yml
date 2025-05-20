@@ -199,7 +199,7 @@ jobs:
       - name: Prepare local artifacts directory
         run: |
           mkdir -p artifacts/lib
-          cp "${{ steps.strings-unix.outputs.build-output-dir }}/*pccl."* artifacts/lib/
+          cp "${{ steps.strings-unix.outputs.build-output-dir }}"/*pccl.* artifacts/lib/
           mkdir -p artifacts/include
           cp ./include/*.h artifacts/include/
       - name: Upload build artifacts
