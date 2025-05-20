@@ -269,12 +269,12 @@ jobs:
           SUPPORT: ${{ matrix.pccl_build_cuda_support }}
         run: |
           $file = Get-ChildItem -Path "${{ github.workspace }}\python\framework\dist" -Filter "*pccl*.whl" | Select-Object -First 1
-          echo "wheel_path=$($file.FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "wheel_path=$($file.FullName)"
           $base = $file.Name
           $name = [System.IO.Path]::GetFileNameWithoutExtension($base)
           if ($env:SUPPORT -eq 'ON') { $suffix = 'cuda' } else { $suffix = 'nocuda' }
           $newName = "$name-$suffix.whl"
-          echo "wheel_name=$newName" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "wheel_name=$newName"
 
       - name: Upload Release Asset (Unix)
         if: runner.os != 'Windows'
