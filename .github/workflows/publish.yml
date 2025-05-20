@@ -2,9 +2,9 @@ name: Publish Release
 
 on:
   push:
-    branches: [ "*" ]
-    #tags:
-    #  - release/*
+    branches: [ "main" ]
+    tags:
+      - release/*
 
 jobs:
   build:
@@ -187,7 +187,7 @@ jobs:
       - name: Prepare local artifacts directory
         run: |
           mkdir -p artifacts/libpccl
-          cp "${{ steps.strings-unix.outputs.build-output-dir }}/libpccl."* artifacts/libpccl/
+          cp "${{ steps.strings-unix.outputs.build-output-dir }}/libpccl."* artifacts/lib/
           mkdir -p artifacts/include
           cp ./include/*.h artifacts/include/
       - name: Upload build artifacts
