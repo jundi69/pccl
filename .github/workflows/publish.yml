@@ -180,9 +180,17 @@ jobs:
         if: runner.os != 'Windows'
         run: cd ${{ github.workspace }}/python/framework && CMAKE_GENERATOR="${{ matrix.generator }}" PCCL_BUILD_CUDA_SUPPORT=${{ matrix.pccl_build_cuda_support }} pip3 wheel --verbose -w dist .
 
-      - name: Create Python virtual environment (Unix)
-        if: ${{ runner.os != 'Windows' && matrix.is_host_arch }}
-        run: python3 -m venv ${{ github.workspace }}/venv
+      - name: Prepare local artifacts directory
+        run: |
+          mkdir -p artifacts/libpccl
+          cp "${{ steps.strings-unix.outputs.build-output-dir }}/libpccl."* artifacts/libpccl/
+          mkdir -p artifacts/include
+          cp ./include/*.h artifacts/include/
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: libpccl-${{ runner.os }}-${{ matrix.build_type }}-${{ matrix.pccl_build_cuda_support == 'ON' && 'cuda' || 'nocuda' }}-${{ github.run_id }}
+          path: artifacts
 
       - name: Create Python virtual environment (Windows)
         if: ${{ runner.os == 'Windows' && matrix.is_host_arch }}
@@ -204,17 +212,6 @@ jobs:
           source ${{ github.workspace }}/venv/bin/activate
           pip install --upgrade pip setuptools wheel twine
 
-      - name: Store build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: libpccl-${{ runner.os }}-${{ matrix.build_type }}-${{ matrix.pccl_build_cuda_support == 'ON' && 'cuda' || 'nocuda' }}-${{ github.run_id }}
-          # pattern for the pccl shared library on Linux, macOS, and Windows && include folder
-          path: |
-            ${{ steps.strings-unix.outputs.build-output-dir }}/libpccl.so
-            ${{ steps.strings-unix.outputs.build-output-dir }}/libpccl.dylib
-            ${{ steps.strings-windows.outputs.build-output-dir }}/Release/libpccl.dll
-            ${{ steps.strings-windows.outputs.build-output-dir }}/Release/libpccl.lib
-            ./include/
 
 
       - name: Store the wheel packages
