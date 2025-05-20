@@ -92,7 +92,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
           submodules: recursive
 
       - name: Set reusable strings (Unix)
