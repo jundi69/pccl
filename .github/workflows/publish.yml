@@ -1,0 +1,151 @@
+name: CMake on multiple platforms
+
+on:
+  push:
+    branches: [ "*" ]
+
+jobs:
+  build:
+    runs-on: ${{ matrix.runs-on }}
+    env:
+      IS_CI: 1
+      IS_CPU_CI: 1
+      LSAN_OPTIONS: suppressions=${{ github.workspace }}/.github/workflows/lsan.supp
+      PCCL_LOG_LEVEL: DEBUG  # Global log level set to DEBUG
+
+    strategy:
+      fail-fast: false
+
+      matrix:
+        include:
+          # Linux configurations using self-hosted runners
+          - runs-on: [ self-hosted, Linux, X64, cpu ]
+            os: ubuntu-latest
+            c_compiler: gcc
+            cpp_compiler: g++
+            is_host_arch: true
+            generator: Ninja
+            build_type: Release
+            pccl_build_cuda_support: OFF
+
+          - runs-on: [ self-hosted, Linux, X64, cuda ]
+            os: ubuntu-latest
+            c_compiler: gcc
+            cpp_compiler: g++
+            is_host_arch: true
+            generator: Ninja
+            build_type: Release
+            pccl_build_cuda_support: ON
+
+          # Linux configurations using GitHub-hosted runners; We also want to check if Docker introduces weirdness
+          - runs-on: ubuntu-latest
+            os: ubuntu-latest
+            c_compiler: gcc
+            cpp_compiler: g++
+            is_host_arch: true
+            generator: Unix Makefiles
+            build_type: Release
+            pccl_build_cuda_support: OFF
+
+          # Windows configurations using self-hosted runners
+          # x86_64, no cuda
+          - runs-on: [ self-hosted, Windows, X64, cpu ]
+            os: windows-latest
+            msvc_cpu_arch: amd64
+            is_host_arch: true
+            make_program: C:/Program Files/NinjaBuild/bin/ninja.exe
+            generator: Ninja
+            build_type: Release
+            pccl_build_cuda_support: OFF
+
+          # x86_64 with cuda
+          - runs-on: [ self-hosted, Windows, X64, cuda ]
+            os: windows-latest
+            msvc_cpu_arch: amd64
+            is_host_arch: true
+            make_program: C:/Program Files/NinjaBuild/bin/ninja.exe
+            generator: Ninja
+            build_type: Release
+            pccl_build_cuda_support: ON
+
+          # aarch64, no cuda (cross-compile, no testing!)
+          - runs-on: [ self-hosted, Windows, X64, cpu ]
+            os: windows-latest
+            msvc_cpu_arch: amd64_arm64 # cross compile arm64 on x86_64
+            is_host_arch: false
+            make_program: C:/Program Files/NinjaBuild/bin/ninja.exe
+            toolchain_file: cmake/toolchains/x86_64-cross-arm64-toolchain.cmake
+            generator: Ninja
+            build_type: Release
+            pccl_build_cuda_support: OFF
+
+          # MacOS configuration using self-hosted runners
+          - runs-on: [ self-hosted, macOS, ARM64, cpu ]
+            os: macos-latest
+            c_compiler: clang
+            cpp_compiler: clang++
+            is_host_arch: true
+            generator: Ninja
+            build_type: Release
+            pccl_build_cuda_support: OFF
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          submodules: recursive
+
+      - name: Compile Python wheel (Windows, cross-compile)
+        if: runner.os == 'Windows' && !matrix.is_host_arch
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat" ${{ matrix.msvc_cpu_arch }}
+          set MAKE_PROGRAM${{ matrix.make_program }}
+          set CMAKE_GENERATOR=${{ matrix.generator }}
+          set CMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/${{ matrix.toolchain_file }}
+          set PCCL_BUILD_CUDA_SUPPORT=${{ matrix.pccl_build_cuda_support }}
+          cd ${{ github.workspace }}/python/framework && pip3 wheel --verbose -w dist .
+
+      - name: Compile Python wheel (Windows, native)
+        if: runner.os == 'Windows' && matrix.is_host_arch
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat" ${{ matrix.msvc_cpu_arch }}
+          set MAKE_PROGRAM${{ matrix.make_program }}
+          set CMAKE_GENERATOR=${{ matrix.generator }}
+          set PCCL_BUILD_CUDA_SUPPORT=${{ matrix.pccl_build_cuda_support }}
+          cd ${{ github.workspace }}/python/framework && pip3 wheel --verbose -w dist .
+
+      - name: Compile Python wheel (Unix)
+        if: runner.os != 'Windows'
+        run: cd ${{ github.workspace }}/python/framework && CMAKE_GENERATOR="${{ matrix.generator }}" PCCL_BUILD_CUDA_SUPPORT=${{ matrix.pccl_build_cuda_support }} pip3 wheel --verbose -w dist .
+
+      - name: Create Python virtual environment (Unix)
+        if: ${{ runner.os != 'Windows' && matrix.is_host_arch }}
+        run: python3 -m venv ${{ github.workspace }}/venv
+
+      - name: Create Python virtual environment (Windows)
+        if: ${{ runner.os == 'Windows' && matrix.is_host_arch }}
+        run: python -m venv ${{ github.workspace }}/venv
+
+      - name: Activate virtual environment (Unix)
+        if: ${{ runner.os != 'Windows' && matrix.is_host_arch }}
+        run: echo 'PATH=${{ github.workspace }}/venv/bin:$PATH' >> $GITHUB_ENV
+
+      - name: Activate virtual environment (Windows)
+        if: ${{ runner.os == 'Windows' && matrix.is_host_arch }}
+        shell: powershell
+        run: |
+          echo "${{ github.workspace }}\venv\Scripts" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Install packaging dependencies
+        if: runner.os != 'Windows' && matrix.is_host_arch
+        run: |
+          source ${{ github.workspace }}/venv/bin/activate
+          pip install --upgrade pip setuptools wheel twine
+
+      - name: Store the distribution packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist/pypi-*.whl
