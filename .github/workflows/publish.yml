@@ -242,7 +242,7 @@ jobs:
       - name: Store the wheel packages
         uses: actions/upload-artifact@v4
         with:
-          name: pypccl-${{ runner.os }}-${{ matrix.build_type }}-${{ matrix.pccl_build_cuda_support == 'ON' && 'cuda' || 'nocuda' }}-${{ github.run_id }}
+          name: pypccl-${{ runner.os }}-${{ matrix.build_type }}-${{ matrix.pccl_build_cuda_support == 'ON' && 'cuda' || 'nocuda' }}-${{ matrix.is_host_arch && 'host' || 'cross' }}
           path: ./python/framework/dist/pypccl-*.whl
 
       - name: Find Python wheel (Unix)
