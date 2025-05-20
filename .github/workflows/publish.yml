@@ -234,12 +234,19 @@ jobs:
           name: pypccl-${{ runner.os }}-${{ matrix.build_type }}-${{ matrix.pccl_build_cuda_support == 'ON' && 'cuda' || 'nocuda' }}-${{ github.run_id }}
           path: ./python/framework/dist/pypccl-*.whl
 
+      - name: Find Python wheel
+        id: find_wheel
+        run: |
+          path=$(ls "${{ github.workspace }}/python/framework/dist/"*pccl*.whl)
+          echo "wheel_path=$path" >> "$GITHUB_OUTPUT"
+          echo "wheel_name=$(basename "$path")" >> "$GITHUB_OUTPUT"
+
       - name: Upload Release Asset
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ needs.create_release.outputs.upload_url }}
-          asset_path: ./python/framework/dist/pypccl-*.whl
-          asset_name: pypccl-${{ matrix.os }}-${{ matrix.build_type }}-${{ matrix.pccl_build_cuda_support == 'ON' && 'cuda' || 'nocuda' }}-${{ github.run_id }}.whl
+          asset_path: ${{ steps.find_wheel.outputs.wheel_path }}
+          asset_name: ${{ steps.find_wheel.outputs.wheel_name }}
           asset_content_type: application/zip
