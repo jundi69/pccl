@@ -199,7 +199,7 @@ jobs:
       - name: Prepare local artifacts directory
         run: |
           mkdir -p artifacts/lib
-          cp "${{ steps.strings-unix.outputs.build-output-dir }}/libpccl."* artifacts/lib/
+          cp "${{ steps.strings-unix.outputs.build-output-dir }}/*pccl."* artifacts/lib/
           mkdir -p artifacts/include
           cp ./include/*.h artifacts/include/
       - name: Upload build artifacts
@@ -240,6 +240,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ needs.create_release.outputs.upload_url }}
-          asset_path: ${{ github.workspace }}/python/framework/dist/pypccl-*.whl
+          asset_path: ./python/framework/dist/pypccl-*.whl
           asset_name: pypccl-${{ matrix.os }}-${{ matrix.build_type }}-${{ matrix.pccl_build_cuda_support == 'ON' && 'cuda' || 'nocuda' }}-${{ github.run_id }}.whl
           asset_content_type: application/zip
