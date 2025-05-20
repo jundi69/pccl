@@ -276,12 +276,24 @@ jobs:
           $newName = "$name-$suffix.whl"
           echo "wheel_name=$newName" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8
 
-      - name: Upload Release Asset
+      - name: Upload Release Asset (Unix)
+        if: runner.os != 'Windows'
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ needs.create_release.outputs.upload_url }}
-          asset_path: ${{ runner.os == 'Windows' && steps.find_wheel_windows.outputs.wheel_path || steps.find_wheel_unix.outputs.wheel_path }}
-          asset_name: ${{ runner.os == 'Windows' && steps.find_wheel_windows.outputs.wheel_name || steps.find_wheel_unix.outputs.wheel_name }}
+          asset_path: ${{ steps.find_wheel_unix.outputs.wheel_path }}
+          asset_name: ${{ steps.find_wheel_unix.outputs.wheel_name }}
+          asset_content_type: application/zip
+
+      - name: Upload Release Asset (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create_release.outputs.upload_url }}
+          asset_path: ${{ steps.find_wheel_windows.outputs.wheel_path }}
+          asset_name: ${{ steps.find_wheel_windows.outputs.wheel_name }}
           asset_content_type: application/zip
