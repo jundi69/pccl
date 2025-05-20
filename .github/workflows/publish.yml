@@ -1,8 +1,10 @@
-name: Publish Python Wheel
+name: Publish Release
 
 on:
   push:
     branches: [ "*" ]
+    tags:
+      - release/*
 
 jobs:
   build:
@@ -139,3 +141,11 @@ jobs:
         with:
           name: pypccl-${{ runner.os }}-${{ matrix.build_type }}-${{ matrix.pccl_build_cuda_support == 'ON' && 'cuda' || 'nocuda' }}-${{ github.run_id }}
           path: ./python/framework/dist/pypccl-*.whl
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ./python/framework/dist/pypccl-*.whl
+          tag_name: pypccl-${{ runner.os }}-${{ matrix.build_type }}-${{ matrix.pccl_build_cuda_support == 'ON' && 'cuda' || 'nocuda' }}-${{ github.run_id }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
