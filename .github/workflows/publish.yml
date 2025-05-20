@@ -236,7 +236,7 @@ jobs:
 
       - name: Find Python wheel (Unix)
         if: runner.os != 'Windows'
-        id: find_wheel
+        id: find_wheel_unix
         shell: bash
         run: |
           for file in "${{ github.workspace }}/python/framework/dist/"*pccl*.whl; do
@@ -247,7 +247,7 @@ jobs:
 
       - name: Find Python wheel (Windows)
         if: runner.os == 'Windows'
-        id: find_wheel
+        id: find_wheel_windows
         shell: powershell
         run: |
           $file = Get-ChildItem -Path "${{ github.workspace }}\python\framework\dist" -Filter "*pccl*.whl" | Select-Object -First 1
@@ -260,6 +260,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ needs.create_release.outputs.upload_url }}
-          asset_path: ${{ steps.find_wheel.outputs.wheel_path }}
-          asset_name: ${{ steps.find_wheel.outputs.wheel_name }}
+          asset_path: ${{ runner.os == 'Windows' && steps.find_wheel_windows.outputs.wheel_path || steps.find_wheel_unix.outputs.wheel_path }}
+          asset_name: ${{ runner.os == 'Windows' && steps.find_wheel_windows.outputs.wheel_name || steps.find_wheel_unix.outputs.wheel_name }}
           asset_content_type: application/zip
