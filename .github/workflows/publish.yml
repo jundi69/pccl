@@ -37,16 +37,6 @@ jobs:
             build_type: Release
             pccl_build_cuda_support: ON
 
-          # Linux configurations using GitHub-hosted runners; We also want to check if Docker introduces weirdness
-          - runs-on: ubuntu-latest
-            os: ubuntu-latest
-            c_compiler: gcc
-            cpp_compiler: g++
-            is_host_arch: true
-            generator: Unix Makefiles
-            build_type: Release
-            pccl_build_cuda_support: OFF
-
           # Windows configurations using self-hosted runners
           # x86_64, no cuda
           - runs-on: [ self-hosted, Windows, X64, cpu ]
@@ -147,5 +137,5 @@ jobs:
       - name: Store the distribution packages
         uses: actions/upload-artifact@v4
         with:
-          name: python-package-distributions
+          name: pypccl-${{ runner.os }}-${{ matrix.build_type }}-${{ github.run_id }}
           path: ./python/framework/dist/pypccl-*.whl
