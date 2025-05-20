@@ -247,10 +247,15 @@ jobs:
         if: runner.os != 'Windows'
         id: find_wheel_unix
         shell: bash
+        env:
+          SUPPORT: ${{ matrix.pccl_build_cuda_support }}
         run: |
           for file in "${{ github.workspace }}/python/framework/dist/"*pccl*.whl; do
             echo "wheel_path=$file" >> "$GITHUB_OUTPUT"
-            echo "wheel_name=${file##*/}" >> "$GITHUB_OUTPUT"
+            base="${file##*/}"
+            name="${base%.whl}"
+            if [[ "$SUPPORT" == "ON" ]]; then suffix="cuda"; else suffix="nocuda"; fi
+            echo "wheel_name=${name}-${suffix}.whl" >> "$GITHUB_OUTPUT"
             break
           done
 
@@ -258,10 +263,16 @@ jobs:
         if: runner.os == 'Windows'
         id: find_wheel_windows
         shell: powershell
+        env:
+          SUPPORT: ${{ matrix.pccl_build_cuda_support }}
         run: |
           $file = Get-ChildItem -Path "${{ github.workspace }}\python\framework\dist" -Filter "*pccl*.whl" | Select-Object -First 1
           echo "wheel_path=$($file.FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8
-          echo "wheel_name=$($file.Name)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8
+          $base = $file.Name
+          $name = [System.IO.Path]::GetFileNameWithoutExtension($base)
+          if ($env:SUPPORT -eq 'ON') { $suffix = 'cuda' } else { $suffix = 'nocuda' }
+          $newName = "$name-$suffix.whl"
+          echo "wheel_name=$newName" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8
 
       - name: Upload Release Asset
         uses: actions/upload-release-asset@v1
@@ -270,5 +281,5 @@ jobs:
         with:
           upload_url: ${{ needs.create_release.outputs.upload_url }}
           asset_path: ${{ runner.os == 'Windows' && steps.find_wheel_windows.outputs.wheel_path || steps.find_wheel_unix.outputs.wheel_path }}
-          asset_name: ${{ replace(runner.os == 'Windows' && steps.find_wheel_windows.outputs.wheel_name || steps.find_wheel_unix.outputs.wheel_name, '.whl', matrix.pccl_build_cuda_support == 'ON' && 'cuda.whl' || 'nocuda.whl') }}
+          asset_name: ${{ runner.os == 'Windows' && steps.find_wheel_windows.outputs.wheel_name || steps.find_wheel_unix.outputs.wheel_name }}
           asset_content_type: application/zip
