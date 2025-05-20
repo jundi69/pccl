@@ -234,12 +234,25 @@ jobs:
           name: pypccl-${{ runner.os }}-${{ matrix.build_type }}-${{ matrix.pccl_build_cuda_support == 'ON' && 'cuda' || 'nocuda' }}-${{ github.run_id }}
           path: ./python/framework/dist/pypccl-*.whl
 
-      - name: Find Python wheel
+      - name: Find Python wheel (Unix)
+        if: runner.os != 'Windows'
         id: find_wheel
+        shell: bash
         run: |
-          path=$(ls "${{ github.workspace }}/python/framework/dist/"*pccl*.whl)
-          echo "wheel_path=$path" >> "$GITHUB_OUTPUT"
-          echo "wheel_name=$(basename "$path")" >> "$GITHUB_OUTPUT"
+          for file in "${{ github.workspace }}/python/framework/dist/"*pccl*.whl; do
+            echo "wheel_path=$file" >> "$GITHUB_OUTPUT"
+            echo "wheel_name=${file##*/}" >> "$GITHUB_OUTPUT"
+            break
+          done
+
+      - name: Find Python wheel (Windows)
+        if: runner.os == 'Windows'
+        id: find_wheel
+        shell: powershell
+        run: |
+          $file = Get-ChildItem -Path "${{ github.workspace }}\python\framework\dist" -Filter "*pccl*.whl" | Select-Object -First 1
+          echo "wheel_path=$($file.FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8
+          echo "wheel_name=$($file.Name)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8
 
       - name: Upload Release Asset
         uses: actions/upload-release-asset@v1
