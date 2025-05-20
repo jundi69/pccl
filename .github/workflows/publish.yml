@@ -206,6 +206,17 @@ jobs:
           Copy-Item -Path "${{ steps.strings-windows.outputs.build-output-dir }}\*pccl.*" -Destination artifacts\lib
           Copy-Item -Path ".\include\*.h" -Destination artifacts\include
 
+      - name: Zip artifacts (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          zip -r artifacts/libpccl.zip artifacts/lib artifacts/include
+
+      - name: Zip artifacts (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          Compress-Archive -Path artifacts\lib, artifacts\include -DestinationPath artifacts\libpccl.zip
+
       - name: Create Python virtual environment (Unix)
         if: ${{ runner.os != 'Windows' && matrix.is_host_arch }}
         run: python3 -m venv ${{ github.workspace }}/venv
@@ -303,6 +314,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ needs.create_release.outputs.upload_url }}
-          asset_path: artifacts/*
+          asset_path: artifacts/libpccl.zip
           asset_name: libpccl-${{ runner.os }}-${{ matrix.build_type }}-${{ matrix.pccl_build_cuda_support == 'ON' && 'cuda' || 'nocuda' }}-${{ matrix.is_host_arch && 'host' || 'cross' }}.zip
           asset_content_type: application/zip
