@@ -192,16 +192,25 @@ jobs:
         if: runner.os != 'Windows'
         run: cd ${{ github.workspace }}/python/framework && CMAKE_GENERATOR="${{ matrix.generator }}" PCCL_BUILD_CUDA_SUPPORT=${{ matrix.pccl_build_cuda_support }} pip3 wheel --verbose -w dist .
 
+      - name: Prepare artifacts directory (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          mkdir -p artifacts/lib artifacts/include
+          cp "${{ steps.strings-unix.outputs.build-output-dir }}"/*pccl.* artifacts/lib/
+          cp ./include/*.h artifacts/include/
+
+      - name: Prepare artifacts directory (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts\lib, artifacts\include
+          Copy-Item -Path "${{ steps.strings-windows.outputs.build-output-dir }}\*pccl.*" -Destination artifacts\lib
+          Copy-Item -Path ".\include\*.h" -Destination artifacts\include
+
       - name: Create Python virtual environment (Unix)
         if: ${{ runner.os != 'Windows' && matrix.is_host_arch }}
         run: python3 -m venv ${{ github.workspace }}/venv
 
-      - name: Prepare local artifacts directory
-        run: |
-          mkdir -p artifacts/lib
-          cp "${{ steps.strings-unix.outputs.build-output-dir }}"/*pccl.* artifacts/lib/
-          mkdir -p artifacts/include
-          cp ./include/*.h artifacts/include/
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -261,5 +270,5 @@ jobs:
         with:
           upload_url: ${{ needs.create_release.outputs.upload_url }}
           asset_path: ${{ runner.os == 'Windows' && steps.find_wheel_windows.outputs.wheel_path || steps.find_wheel_unix.outputs.wheel_path }}
-          asset_name: ${{ runner.os == 'Windows' && steps.find_wheel_windows.outputs.wheel_name || steps.find_wheel_unix.outputs.wheel_name }}
+          asset_name: ${{ replace(runner.os == 'Windows' && steps.find_wheel_windows.outputs.wheel_name || steps.find_wheel_unix.outputs.wheel_name, '.whl', matrix.pccl_build_cuda_support == 'ON' && 'cuda.whl' || 'nocuda.whl') }}
           asset_content_type: application/zip
