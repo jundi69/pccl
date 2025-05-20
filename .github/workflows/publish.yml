@@ -214,7 +214,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: libpccl-${{ runner.os }}-${{ matrix.build_type }}-${{ matrix.pccl_build_cuda_support == 'ON' && 'cuda' || 'nocuda' }}-${{ matrix.is_host_arch && 'host' || 'cross' }}
-          path: artifacts/lib/*.*,artifacts/include/*.*
+          path: |
+            artifacts/lib/
+            artifacts/include/
 
       - name: Create Python virtual environment (Windows)
         if: ${{ runner.os == 'Windows' && matrix.is_host_arch }}
