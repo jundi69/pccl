@@ -180,6 +180,10 @@ jobs:
         if: runner.os != 'Windows'
         run: cd ${{ github.workspace }}/python/framework && CMAKE_GENERATOR="${{ matrix.generator }}" PCCL_BUILD_CUDA_SUPPORT=${{ matrix.pccl_build_cuda_support }} pip3 wheel --verbose -w dist .
 
+      - name: Create Python virtual environment (Unix)
+        if: ${{ runner.os != 'Windows' && matrix.is_host_arch }}
+        run: python3 -m venv ${{ github.workspace }}/venv
+
       - name: Prepare local artifacts directory
         run: |
           mkdir -p artifacts/libpccl
@@ -211,8 +215,6 @@ jobs:
         run: |
           source ${{ github.workspace }}/venv/bin/activate
           pip install --upgrade pip setuptools wheel twine
-
-
 
       - name: Store the wheel packages
         uses: actions/upload-artifact@v4
