@@ -8,17 +8,19 @@ on:
 jobs:
   create_release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     outputs:
       upload_url: ${{ steps.create_release.outputs.upload_url }}
     steps:
       - name: Create GitHub Release
         id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: ncipollo/release-action@v1
         with:
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ github.ref }}
+          tag: ${{ github.ref }}
+          name: Release ${{ github.ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
   build:
     needs: create_release
     runs-on: ${{ matrix.runs-on }}
