@@ -42,6 +42,7 @@ jobs:
             generator: Ninja
             build_type: Release
             pccl_build_cuda_support: OFF
+            arch: x64
 
           - runs-on: [ self-hosted, Linux, X64, cuda ]
             os: ubuntu-latest
@@ -51,6 +52,7 @@ jobs:
             generator: Ninja
             build_type: Release
             pccl_build_cuda_support: ON
+            arch: x64
 
           # Windows configurations using self-hosted runners
           # x86_64, no cuda
@@ -62,6 +64,7 @@ jobs:
             generator: Ninja
             build_type: Release
             pccl_build_cuda_support: OFF
+            arch: x64
 
           # x86_64 with cuda
           - runs-on: [ self-hosted, Windows, X64, cuda ]
@@ -72,6 +75,7 @@ jobs:
             generator: Ninja
             build_type: Release
             pccl_build_cuda_support: ON
+            arch: x64
 
           # aarch64, no cuda (cross-compile, no testing!)
           - runs-on: [ self-hosted, Windows, X64, cpu ]
@@ -83,6 +87,7 @@ jobs:
             generator: Ninja
             build_type: Release
             pccl_build_cuda_support: OFF
+            arch: arm64
 
           # MacOS configuration using self-hosted runners
           - runs-on: [ self-hosted, macOS, ARM64, cpu ]
@@ -93,6 +98,7 @@ jobs:
             generator: Ninja
             build_type: Release
             pccl_build_cuda_support: OFF
+            arch: arm64
 
     steps:
       - uses: actions/checkout@v4
@@ -209,13 +215,15 @@ jobs:
       - name: Zip artifacts (Unix)
         if: runner.os != 'Windows'
         run: |
-          zip -r artifacts/libpccl.zip artifacts/lib artifacts/include
+          cd artifacts
+          zip -r libpccl.zip lib include
 
       - name: Zip artifacts (Windows)
         if: runner.os == 'Windows'
         shell: powershell
         run: |
-          Compress-Archive -Path artifacts\lib, artifacts\include -DestinationPath artifacts\libpccl.zip
+          cd artifacts
+          Compress-Archive -Path lib, include -DestinationPath libpccl.zip
 
       - name: Create Python virtual environment (Unix)
         if: ${{ runner.os != 'Windows' && matrix.is_host_arch }}
@@ -315,5 +323,5 @@ jobs:
         with:
           upload_url: ${{ needs.create_release.outputs.upload_url }}
           asset_path: artifacts/libpccl.zip
-          asset_name: libpccl-${{ runner.os }}-${{ matrix.build_type }}-${{ matrix.pccl_build_cuda_support == 'ON' && 'cuda' || 'nocuda' }}-${{ matrix.is_host_arch && 'host' || 'cross' }}.zip
+          asset_name: libpccl-${{ runner.os }}-${{ matrix.build_type }}-${{ matrix.pccl_build_cuda_support == 'ON' && 'cuda' || 'nocuda' }}-${{ matrix.arch }}.zip
           asset_content_type: application/zip
