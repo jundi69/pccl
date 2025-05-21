@@ -84,13 +84,13 @@ typedef enum pcclSharedStateSyncStrategy_t {
     /// all other peers must also specify this strategy.
     PCCL_SHARED_STATE_SYNC_STRATEGY_ENFORCE_POPULAR = 0,
 
-    /// The user has indicated that they expect to receive shared state only during this shared state sync.
+    /// The user has indicated that they expect to only receive shared state during this shared state sync.
     /// Never must the shared state synchronization result in bytes being transmitted from this peer.
     /// When this strategy is used, the peer's shared state contents are not considered for hash popularity.
     /// The shared state chosen can never be the shared state provided by this peer.
     PCCL_SHARED_STATE_SYNC_STRATEGY_RECEIVE_ONLY = 1,
 
-    /// The user has indicated that they expect to send shared state only during this shared state sync.
+    /// The user has indicated that they expect to only send shared state during this shared state sync.
     /// Never must the shared state synchronization result in bytes being received by this peer - meaning its shared
     /// state contents may not be overwritten by a different shared state content candidate.
     /// When this strategy is used, the peer's shared state contents must be the popular shared state.
