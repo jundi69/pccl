@@ -18,7 +18,7 @@ jobs:
         uses: ncipollo/release-action@v1
         with:
           tag: ${{ github.ref }}
-          name: Release ${{ github.ref }}
+          name: ${{ github.ref }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
   build:
@@ -238,6 +238,7 @@ jobs:
           path: |
             artifacts/lib/
             artifacts/include/
+          if-no-files-found: warn
 
       - name: Create Python virtual environment (Windows)
         if: ${{ runner.os == 'Windows' && matrix.is_host_arch }}
