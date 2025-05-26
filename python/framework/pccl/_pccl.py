@@ -457,20 +457,71 @@ def _create_ccoip_socket_address(address: Union[IPv4Address, IPv6Address], port:
 class Communicator:
     """PCCL communicator."""
 
-    def __init__(self, address: str, peer_group: int = 0, p2p_connection_pool_size: int = 0):
+    def __init__(self, 
+                 address: str, # Master address string, e.g., "ip:port"
+                 peer_group: int = 0, 
+                 p2p_connection_pool_size: int = 0,
+                 # New parameters for explicit P2P addressing:
+                 public_advertise_ip: Optional[str] = None,
+                 # With "identical port mapping", these are used for both internal listen
+                 # and for the port part of the advertised address.
+                 p2p_listen_port: int = 48149,
+                 shared_state_listen_port: int = 48150,
+                 benchmark_listen_port: int = 48151):
+                     
         assert ":" in address, f'Invalid address: {address}, expected format: ip:port'
         params: ffi.CData = ffi.new('pcclCommCreateParams_t*')
-        ip, port = address.split(":")
-        ip = ip_address(ip)
-        params.master_address = _create_ccoip_socket_address(ip, int(port))[0]
+                     
+        # 1. Master Address
+        master_ip_str, master_port_str = address.split(":")
+        master_ip_obj = ip_address(master_ip_str)
+        master_port_int = int(master_port_str)
+        # Use [0] to dereference the pointer returned by _create_ccoip_socket_address
+        # if assigning to a non-pointer struct member in CFFI.
+        params.master_address = _create_ccoip_socket_address(master_ip_obj, master_port_int)[0]
+
+        # 2. Peer Group and Pool Size
         params.peer_group = ffi.cast('uint32_t', peer_group)
         params.p2p_connection_pool_size = ffi.cast('uint32_t', p2p_connection_pool_size)
+
+        # 3. Handle Explicit P2P Address Configuration
+        if public_advertise_ip:
+            params.use_explicit_p2p_addresses = True
+            
+            adv_ip_obj = ip_address(public_advertise_ip)
+
+            # Populate advertised addresses (Public IP + Port)
+            # The .port will be the same as the internal listen port due to simplification
+            adv_p2p_addr_ptr = _create_ccoip_socket_address(adv_ip_obj, p2p_listen_port)
+            params.advertised_p2p_address = adv_p2p_addr_ptr[0]
+
+            adv_ss_addr_ptr = _create_ccoip_socket_address(adv_ip_obj, shared_state_listen_port)
+            params.advertised_shared_state_address = adv_ss_addr_ptr[0]
+
+            adv_bm_addr_ptr = _create_ccoip_socket_address(adv_ip_obj, benchmark_listen_port)
+            params.advertised_benchmark_address = adv_bm_addr_ptr[0]
+            
+            # Internal listen ports are the same as advertised ports in this simplified scenario
+            params.internal_p2p_listen_port = p2p_listen_port
+            params.internal_shared_state_listen_port = shared_state_listen_port
+            params.internal_benchmark_listen_port = benchmark_listen_port
+
+        else: # No public_advertise_ip provided, use default behavior
+            params.use_explicit_p2p_addresses = False
+            
+            # Internal listen ports will be used with master-detected IP
+            params.internal_p2p_listen_port = p2p_listen_port
+            params.internal_shared_state_listen_port = shared_state_listen_port
+            params.internal_benchmark_listen_port = benchmark_listen_port
+                     
         self._comm = ffi.new('pcclComm_t**')
         PCCLError.check(C.pcclCreateCommunicator(params, self._comm), "pcclCreateCommunicator")
 
     def __del__(self):
-        C.pcclDestroyCommunicator(self._comm[0])
-
+        if hasattr(self, '_comm') and self._comm[0] != ffi.NULL:
+            C.pcclDestroyCommunicator(self._comm[0])
+            self._comm[0] = ffi.NULL
+            
     def get_attribute(self, attribute: Attribute) -> int:
         """Get a communicator attribute."""
         value = ffi.new('int*')
