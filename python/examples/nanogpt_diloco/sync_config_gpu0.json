@@ -32,13 +32,13 @@
   "lr_decay_iters": 600000,
   "min_lr": 0.00006,
   "backend": "nccl",
-  "ccoip_host": "127.0.0.1:32130",
-  "device": "cuda:2",
+  "ccoip_host": "188.241.30.201:42249",
+  "device": "cuda:0",
   "dtype": "float16",
   "compile": false,
   "is_master_process": true,
-  "worker_public_advertise_ip": "104.167.17.7",
-  "worker_p2p_listen_port": "37051",
-  "worker_ss_listen_port": "48150",
-  "worker_bm_listen_port": "48151"
+  "worker_public_advertise_ip": "188.241.30.201",
+  "worker_p2p_listen_port": 42298,
+  "worker_ss_listen_port": 48150,
+  "worker_bm_listen_port": 48151
 }

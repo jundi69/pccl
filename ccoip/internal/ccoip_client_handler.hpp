@@ -71,7 +71,7 @@ namespace ccoip {
         ccoip_uuid_t benchmark_peer{};
 
     public:
-        explicit CCoIPClientHandler(const ccoip_socket_address_t &address, uint32_t peer_group, uint32_t p2p_connection_pool_size);
+        explicit CCoIPClientHandler(const ccoip_socket_address_t &master_address, uint32_t peer_group, uint32_t p2p_connection_pool_size, uint16_t internal_p2p_listen_port_param, uint16_t internal_ss_listen_port_param, uint16_t internal_bm_listen_port_param);
 
         [[nodiscard]] bool connect();
 

@@ -19,17 +19,16 @@
 #include <cuda.h>
 #endif
 
-ccoip::CCoIPClientHandler::CCoIPClientHandler(const ccoip_socket_address_t &address, const uint32_t peer_group,
-                                              const uint32_t p2p_connection_pool_size) :
-    master_socket(address),
+ccoip::CCoIPClientHandler::CCoIPClientHandler(const ccoip_socket_address_t &master_address_param, const uint32_t peer_group_param, const uint32_t p2p_connection_pool_size_param, uint16_t internal_p2p_port_param, uint16_t internal_ss_port_param, uint16_t internal_bm_port_param): master_socket(master_address_param),
     // Both p2p_socket and shared_state_socket listen to the first free port above the specified port number
     // as the constructor with inet_addr and above_port is called, which will bump on failure to bind.
     // this is by design and the chosen ports will be communicated to the master, which will then distribute
     // this information to clients to then correctly establish connections. The protocol does not assert these
     // ports to be static; The only asserted static port is the master listening port.
-    p2p_socket({address.inet.protocol, {}, {}}, CCOIP_PROTOCOL_PORT_P2P),
-    shared_state_socket({address.inet.protocol, {}, {}}, CCOIP_PROTOCOL_PORT_SHARED_STATE),
-    benchmark_socket({address.inet.protocol, {}, {}}, CCOIP_PROTOCOL_PORT_BANDWIDTH_BENCHMARK), peer_group(peer_group),
+    p2p_socket({master_address_param.inet.protocol, {}, {}}, internal_p2p_port_param),
+    shared_state_socket({master_address_param.inet.protocol, {}, {}}, internal_ss_port_param),
+    benchmark_socket({master_address_param.inet.protocol, {}, {}}, internal_bm_port_param),
+    peer_group(peer_group_param),
     p2p_connection_pool_size(p2p_connection_pool_size) {}
 
 bool ccoip::CCoIPClientHandler::connect() {

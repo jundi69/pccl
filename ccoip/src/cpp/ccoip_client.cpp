@@ -3,8 +3,9 @@
 #include <ccoip_client_handler.hpp>
 
 ccoip::CCoIPClient::CCoIPClient(const ccoip_socket_address_t &master_socket_address,
-                                const uint32_t peer_group, uint32_t p2p_connection_pool_size) : client(
-    new CCoIPClientHandler(master_socket_address, peer_group, p2p_connection_pool_size)) {
+                                const uint32_t peer_group, uint32_t p2p_connection_pool_size,
+                                uint16_t internal_p2p_port, uint16_t internal_ss_port, uint16_t internal_bm_port) : client(
+    new CCoIPClientHandler(master_socket_address, peer_group, p2p_connection_pool_size, internal_p2p_port, internal_ss_port, internal_bm_port)) {
 }
 
 bool ccoip::CCoIPClient::connect() const {
