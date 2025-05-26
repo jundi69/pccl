@@ -29,7 +29,7 @@ from pccl import (
 )
 
 from model import GPTConfig, GPT
-from python.examples.nanogptddp.profiler import Profiler, ProfilerCollection
+from profiler import Profiler, ProfilerCollection
 
 
 def all_reduce_multiple_with_retry(communicator: Communicator,
@@ -327,11 +327,11 @@ def main():
     # -------------------------------------------------------------------------
     # 7) Initialize PCCL communicator + SharedState for outer parameters
     # -------------------------------------------------------------------------
-    master_addr = config_args["ccoip_host"]
-    public_ip = config_args.get("worker_public_advertise_ip") # Will be None if not in config
-    p2p_port = config_args.get("worker_p2p_listen_port", 48149)
-    ss_port = config_args.get("worker_ss_listen_port", 48150)
-    bm_port = config_args.get("worker_bm_listen_port", 48151)
+    master_addr = args["ccoip_host"]
+    public_ip = args.get("worker_public_advertise_ip") # Will be None if not in config
+    p2p_port = args.get("worker_p2p_listen_port", 48149)
+    ss_port = args.get("worker_ss_listen_port", 48150)
+    bm_port = args.get("worker_bm_listen_port", 48151)
 
     communicator = Communicator(
         address=master_addr,
