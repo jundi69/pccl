@@ -102,28 +102,28 @@ typedef enum pcclSharedStateSyncStrategy_t {
     PCCL_SHARED_STATE_SYNC_STRATEGY_SEND_ONLY = 2,
 } pcclSharedStateSyncStrategy_t;
 
-typedef struct pcclCommCreateParams_t {
-    /**
-     * The address of the master node to connect to.
-     */
+typedef struct {
     ccoip_socket_address_t master_address;
-
-    /**
-     * The world is split into peer groups, where each peer group is a set of peers that can communicate with each other.
-     * Shared state distribution and collective communications operations will span only across peers in the same peer group.
-     * To allow all peers to communicate with each other, all peers must be in the same peer group, e.g. by setting this to 0.
-     * The peer group is a 32-bit unsigned integer whose identity determines the peer group the client is part of.
-     */
     uint32_t peer_group;
-
-    /**
-     * The number of p2p connections to create for each peer.
-     * This is relevant when using multiple concurrent all reduces.
-     * When sharing the same socket, the all reduces will be serialized.
-     * Increasing the number of p2p connections will drastically increase performance.
-     * When set to 0, the pool size will default to 1.
-     */
     uint32_t p2p_connection_pool_size;
+
+    // New fields for explicit P2P address configuration
+    bool use_explicit_p2p_addresses; // If true, the following advertised addresses are used by master
+
+    // Address this peer will advertise for P2P connections (e.g., public IP, port).
+    // The .port field here will be the same as internal_..._listen_port if use_explicit_p2p_addresses is true.
+    ccoip_socket_address_t advertised_p2p_address;
+    ccoip_socket_address_t advertised_shared_state_address;
+    ccoip_socket_address_t advertised_benchmark_address;
+
+    // Internal ports this peer will actually listen on (IP will be 0.0.0.0 or specific local IF).
+    // If use_explicit_p2p_addresses is true, these values are identical to the .port fields
+    // of the corresponding advertised_xxx_address structures.
+    // If use_explicit_p2p_addresses is false, these are used with the master-detected IP for P2P.
+    uint16_t internal_p2p_listen_port;             // Default: 48149
+    uint16_t internal_shared_state_listen_port;  // Default: 48150
+    uint16_t internal_benchmark_listen_port;     // Default: 48151
+
 } pcclCommCreateParams_t;
 
 typedef struct pcclComm_t pcclComm_t;
