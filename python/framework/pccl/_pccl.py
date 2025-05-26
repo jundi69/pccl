@@ -436,21 +436,24 @@ class AsyncReduceHandle:
         return self._info
 
 
-def _create_ccoip_socket_address(address: Union[IPv4Address, IPv6Address], port: int) -> ffi.CData:
+def _create_ccoip_socket_address(address_obj: Union[IPv4Address, IPv6Address], port: int) -> ffi.CData:
     socket_addr = ffi.new("ccoip_socket_address_t*")
-    if isinstance(address, IPv4Address):
-        socket_addr.inet.protocol = ffi.cast("ccoip_inet_protocol_t", C.inetIPv4)
-        packed_ipv4 = address.packed
-        for i, byte in enumerate(packed_ipv4):
-            socket_addr.inet.ipv4.data[i] = byte & 255
-    elif isinstance(address, IPv6Address):
-        socket_addr.inet6.protocol = ffi.cast("ccoip_inet_protocol_t", C.inetIPv6)
-        packed_ipv6 = address.packed
-        for i, byte in enumerate(packed_ipv6):
-            socket_addr.inet6.ipv6.data[i] = byte & 255
+
+    if isinstance(address_obj, IPv4Address):
+        socket_addr.inet.protocol = C.inetIPv4 # Access via .inet
+        packed_ipv4 = address_obj.packed
+        for i in range(4):
+            socket_addr.inet.ipv4.data[i] = packed_ipv4[i] # Access via .inet.ipv4
+
+    elif isinstance(address_obj, IPv6Address):
+        socket_addr.inet.protocol = C.inetIPv6 # Access via .inet
+        packed_ipv6 = address_obj.packed
+        for i in range(16): # Since ccoip_ipv6_address_t is uint8_t data[16]
+            socket_addr.inet.ipv6.data[i] = packed_ipv6[i] # Access via .inet.ipv6
     else:
-        raise ValueError(f'Unsupported IP address: {address}')
-    socket_addr.port = port & 0xffff
+        raise ValueError(f"Unsupported IP address type: {type(address_obj)}")
+
+    socket_addr.port = port & 0xFFFF
     return socket_addr
 
 
