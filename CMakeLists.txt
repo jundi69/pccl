@@ -142,4 +142,6 @@ if (NOT PCCL_BUILD_STATIC_LIB)
     fix_macos_abspaths(pccl)
 endif ()
 
-add_subdirectory(tests)
+if(BUILD_TESTING)
+    add_subdirectory(tests)
+endif()

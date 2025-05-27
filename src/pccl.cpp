@@ -88,7 +88,11 @@ pcclResult_t pcclConnect(pcclComm_t *communicator) {
     PCCL_VALIDATE(communicator->ccoip_client == nullptr, pcclInvalidUsage);
     communicator->ccoip_client = std::make_unique<ccoip::CCoIPClient>(communicator->params.master_address,
                                                                       communicator->params.peer_group,
-                                                                      std::max(1u, communicator->params.p2p_connection_pool_size));
+                                                                      std::max(1u, communicator->params.p2p_connection_pool_size),
+                                                                      communicator->params.internal_p2p_listen_port,
+                                                                      communicator->params.internal_shared_state_listen_port,
+                                                                      communicator->params.internal_benchmark_listen_port
+                                                                    );
 
     pcclResult_t status = pcclSuccess;
     if (!communicator->ccoip_client->connect()) {

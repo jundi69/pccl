@@ -1,3 +1,5 @@
-add_subdirectory(crc32)
-add_subdirectory(simple_hash)
-add_subdirectory(quantize)
+if(BUILD_TESTING)
+    add_subdirectory(crc32)
+    add_subdirectory(simple_hash)
+    add_subdirectory(quantize)
+endif()

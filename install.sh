@@ -6,6 +6,7 @@ sudo dpkg -i cuda-repo-ubuntu2204-12-9-local_12.9.0-575.51.03-1_amd64.deb
 sudo cp /var/cuda-repo-ubuntu2204-12-9-local/cuda-*-keyring.gpg /usr/share/keyrings/
 sudo apt-get update
 sudo apt-get -y install cuda-toolkit-12-9
+#sudo apt --fix-broken install 
 
 export PATH=/usr/local/cuda/bin${PATH:+:${PATH}}
 export LD_LIBRARY_PATH=/usr/local/cuda/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
@@ -33,7 +34,7 @@ git submodule update --init --recursive
 
 mkdir build
 cd build
-cmake -DCMAKE_BUILD_TYPE=Release -DPCCL_BUILD_CUDA_SUPPORT=ON ..
+cmake -DCMAKE_BUILD_TYPE=Release -DPCCL_BUILD_CUDA_SUPPORT=ON -DBUILD_TESTING=OFF ..
 cmake --build . --config Release --parallel $(nproc)
 
 cd ../python
@@ -41,5 +42,7 @@ python3.12 -m venv venv_pccl
 source venv_pccl/bin/activate
 
 pip install ./framework/
+
+pip install -r ./examples/nanogpt_diloco/requirements.txt
 
 python -c 'import pccl; print(pccl.__version__)'
