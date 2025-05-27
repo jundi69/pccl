@@ -23,11 +23,10 @@ void ccoip::C2MPacketRequestSessionRegistration::serialize(PacketWriteBuffer &bu
     buffer.write(use_explicit_addresses);
 
     if (use_explicit_addresses) {
-        buffer.write(advertised_p2p_address);
-        buffer.write(advertised_ss_address);
-        buffer.write(advertised_bm_address);
+        writeSocketAddress(buffer, advertised_p2p_address);
+        writeSocketAddress(buffer, advertised_ss_address);
+        writeSocketAddress(buffer, advertised_bm_address);
     } else {
-        // Fallback: send only the port numbers
         buffer.write(p2p_listen_port);
         buffer.write(shared_state_listen_port);
         buffer.write(bandwidth_benchmark_listen_port);
@@ -39,9 +38,9 @@ bool ccoip::C2MPacketRequestSessionRegistration::deserialize(PacketReadBuffer &b
     if (!buffer.read(use_explicit_addresses)) return false;
 
     if (use_explicit_addresses) {
-        if (!buffer.read(advertised_p2p_address)) return false;
-        if (!buffer.read(advertised_ss_address)) return false;
-        if (!buffer.read(advertised_bm_address)) return false;
+        advertised_p2p_address = readSocketAddress(buffer); // Assuming readSocketAddress handles errors internally or returns a bool
+        advertised_ss_address = readSocketAddress(buffer);
+        advertised_bm_address = readSocketAddress(buffer);
 
         // If you still want to populate the individual port members for consistency
         // when use_explicit_addresses is true:
