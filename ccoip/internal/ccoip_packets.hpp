@@ -75,10 +75,14 @@ namespace ccoip {
     class C2MPacketRequestSessionRegistration final : public Packet {
     public:
         static packetId_t packet_id;
+        uint32_t peer_group;
+        bool use_explicit_addresses;
+        ccoip_socket_address_t advertised_p2p_address;
+        ccoip_socket_address_t advertised_ss_address;
+        ccoip_socket_address_t advertised_bm_address;
         uint16_t p2p_listen_port;
         uint16_t shared_state_listen_port;
         uint16_t bandwidth_benchmark_listen_port;
-        uint32_t peer_group;
 
         void serialize(PacketWriteBuffer &buffer) const override;
 

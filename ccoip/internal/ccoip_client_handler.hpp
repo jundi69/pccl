@@ -47,6 +47,11 @@ namespace ccoip {
         /// Number of p2p connections to create for each peer
         uint32_t p2p_connection_pool_size;
 
+        bool use_explicit_addresses_config_; // From pcclCommCreateParams_t
+        ccoip_socket_address_t advertised_p2p_address_config_;
+        ccoip_socket_address_t advertised_ss_address_config_;
+        ccoip_socket_address_t advertised_bm_address_config_;
+
         bool interrupted = false;
 
         bool accepted = false;
@@ -71,7 +76,18 @@ namespace ccoip {
         ccoip_uuid_t benchmark_peer{};
 
     public:
-        explicit CCoIPClientHandler(const ccoip_socket_address_t &master_address, uint32_t peer_group, uint32_t p2p_connection_pool_size, uint16_t internal_p2p_listen_port_param, uint16_t internal_ss_listen_port_param, uint16_t internal_bm_listen_port_param);
+        explicit CCoIPClientHandler(
+            const ccoip_socket_address_t &master_address, 
+            uint32_t peer_group, 
+            uint32_t p2p_connection_pool_size, 
+            uint16_t internal_p2p_listen_port_param, 
+            uint16_t internal_ss_listen_port_param, 
+            uint16_t internal_bm_listen_port_param,
+            bool use_explicit_cfg,
+            const ccoip_socket_address_t& adv_p2p_cfg,
+            const ccoip_socket_address_t& adv_ss_cfg,
+            const ccoip_socket_address_t& adv_bm_cfg
+        );
 
         [[nodiscard]] bool connect();
 

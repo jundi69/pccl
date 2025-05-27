@@ -234,6 +234,11 @@ namespace ccoip {
         ccoip_socket_address_t socket_address{};
         CCoIPClientVariablePorts variable_ports{};
         uint32_t peer_group{};
+        bool uses_explicitly_advertised_addresses;
+        ccoip_socket_address_t effective_p2p_address;       // The address (IP+Port) to use for P2P
+        ccoip_socket_address_t effective_ss_address;        // The address (IP+Port) to use for Shared State
+        ccoip_socket_address_t effective_bm_address;        // The address (IP+Port) to use for Benchmark
+
     };
 
 #define CALLSITE_TOPOLOGY_OPTIMIZATION_COMPLETE 1
@@ -407,8 +412,14 @@ namespace ccoip {
     public:
         /// Registers a client
         [[nodiscard]] auto registerClient(const ccoip_socket_address_t &client_address,
-                                          const CCoIPClientVariablePorts &variable_ports, uint32_t peer_group,
-                                          ccoip_uuid_t uuid) -> bool;
+                                          bool use_explicit_addresses_param,
+                                          const ccoip_socket_address_t& advertised_p2p_param,
+                                          const ccoip_socket_address_t& advertised_ss_param,
+                                          const ccoip_socket_address_t& advertised_bm_param,
+                                          const CCoIPClientVariablePorts &variable_ports, 
+                                          uint32_t peer_group,
+                                          ccoip_uuid_t uuid
+                                        ) -> bool;
 
         /// Unregisters a client
         [[nodiscard]] bool unregisterClient(const ccoip_socket_address_t &client_address);

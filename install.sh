@@ -6,7 +6,8 @@ sudo dpkg -i cuda-repo-ubuntu2204-12-9-local_12.9.0-575.51.03-1_amd64.deb
 sudo cp /var/cuda-repo-ubuntu2204-12-9-local/cuda-*-keyring.gpg /usr/share/keyrings/
 sudo apt-get update
 sudo apt-get -y install cuda-toolkit-12-9
-#sudo apt --fix-broken install 
+sudo apt --fix-broken install -y
+sudo apt-get -y install cuda-toolkit-12-9
 
 export PATH=/usr/local/cuda/bin${PATH:+:${PATH}}
 export LD_LIBRARY_PATH=/usr/local/cuda/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
@@ -28,7 +29,7 @@ sudo apt install -y python3.12 python3.12-venv python3.12-dev python3-pip
 
 
 ###### PCCL:
-git clone https://github.com/PrimeIntellect-ai/pccl.git
+# git clone https://github.com/jundi/pccl.git
 cd pccl
 git submodule update --init --recursive
 
@@ -43,6 +44,6 @@ source venv_pccl/bin/activate
 
 pip install ./framework/
 
-pip install -r ./examples/nanogpt_diloco/requirements.txt
-
 python -c 'import pccl; print(pccl.__version__)'
+
+pip install -r ./examples/nanogpt_diloco/requirements.txt

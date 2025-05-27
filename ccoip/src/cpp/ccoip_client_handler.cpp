@@ -19,17 +19,29 @@
 #include <cuda.h>
 #endif
 
-ccoip::CCoIPClientHandler::CCoIPClientHandler(const ccoip_socket_address_t &master_address_param, const uint32_t peer_group_param, const uint32_t p2p_connection_pool_size_param, uint16_t internal_p2p_port_param, uint16_t internal_ss_port_param, uint16_t internal_bm_port_param): master_socket(master_address_param),
-    // Both p2p_socket and shared_state_socket listen to the first free port above the specified port number
-    // as the constructor with inet_addr and above_port is called, which will bump on failure to bind.
-    // this is by design and the chosen ports will be communicated to the master, which will then distribute
-    // this information to clients to then correctly establish connections. The protocol does not assert these
-    // ports to be static; The only asserted static port is the master listening port.
+ccoip::CCoIPClientHandler::CCoIPClientHandler(
+    const ccoip_socket_address_t &master_address_param, 
+    const uint32_t peer_group_param, 
+    const uint32_t p2p_connection_pool_size_param, 
+    uint16_t internal_p2p_port_param, 
+    uint16_t internal_ss_port_param, 
+    uint16_t internal_bm_port_param,
+    bool use_explicit_cfg,
+    const ccoip_socket_address_t& adv_p2p_cfg,
+    const ccoip_socket_address_t& adv_ss_cfg,
+    const ccoip_socket_address_t& adv_bm_cfg)
+    : master_socket(master_address_param),
+    
     p2p_socket({master_address_param.inet.protocol, {}, {}}, internal_p2p_port_param),
     shared_state_socket({master_address_param.inet.protocol, {}, {}}, internal_ss_port_param),
     benchmark_socket({master_address_param.inet.protocol, {}, {}}, internal_bm_port_param),
     peer_group(peer_group_param),
-    p2p_connection_pool_size(p2p_connection_pool_size) {}
+    p2p_connection_pool_size(p2p_connection_pool_size)
+    use_explicit_addresses_config_(use_explicit_cfg),
+    advertised_p2p_address_config_(adv_p2p_cfg),
+    advertised_ss_address_config_(adv_ss_cfg),
+    advertised_bm_address_config_(adv_bm_cfg)
+    {}
 
 bool ccoip::CCoIPClientHandler::connect() {
     setMainThread(std::this_thread::get_id());
@@ -209,13 +221,31 @@ bool ccoip::CCoIPClientHandler::connect() {
 
     // send join request packet to master
     C2MPacketRequestSessionRegistration join_request{};
-    join_request.p2p_listen_port = p2p_socket.getListenPort();
-    join_request.shared_state_listen_port = shared_state_socket.getListenPort();
-    join_request.bandwidth_benchmark_listen_port = benchmark_socket.getListenPort();
     join_request.peer_group = peer_group;
+    join_request.use_explicit_addresses = use_explicit_addresses_config_; // Use stored member
+    if (use_explicit_addresses_config_) {
+        join_request.advertised_p2p_address = advertised_p2p_address_config_; // Use stored member
+        join_request.advertised_ss_address = advertised_ss_address_config_;   // Use stored member
+        join_request.advertised_bm_address = advertised_bm_address_config_;   // Use stored member
+
+        // These port fields in the packet are now somewhat redundant if use_explicit_addresses is true,
+        // but we can fill them for completeness from the advertised addresses.
+        join_request.p2p_listen_port = advertised_p2p_address_config_.port;
+        join_request.shared_state_listen_port = advertised_ss_address_config_.port;
+        join_request.bandwidth_benchmark_listen_port = advertised_bm_address_config_.port;
+    } else {
+        // Fallback: master uses source IP, client sends its actual listen ports
+        join_request.p2p_listen_port = p2p_socket.getListenPort();
+        join_request.shared_state_listen_port = shared_state_socket.getListenPort();
+        join_request.bandwidth_benchmark_listen_port = benchmark_socket.getListenPort();
+        // Optionally zero out advertised_xxx_address fields in the packet
+        memset(&join_request.advertised_p2p_address, 0, sizeof(ccoip_socket_address_t));
+        memset(&join_request.advertised_ss_address, 0, sizeof(ccoip_socket_address_t));
+        memset(&join_request.advertised_bm_address, 0, sizeof(ccoip_socket_address_t));
+    }
 
     if (!master_socket.sendPacket<C2MPacketRequestSessionRegistration>(join_request)) {
-        LOG(ERR) << "Failed to send C2MPacketRequestSessionJoin to master";
+        LOG(ERR) << "Failed to send C2MPacketRequestSessionRegistration to master";
         return false;
     }
 

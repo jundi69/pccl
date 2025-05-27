@@ -91,7 +91,11 @@ pcclResult_t pcclConnect(pcclComm_t *communicator) {
                                                                       std::max(1u, communicator->params.p2p_connection_pool_size),
                                                                       communicator->params.internal_p2p_listen_port,
                                                                       communicator->params.internal_shared_state_listen_port,
-                                                                      communicator->params.internal_benchmark_listen_port
+                                                                      communicator->params.internal_benchmark_listen_port,
+                                                                      communicator->params.use_explicit_p2p_addresses,
+                                                                      communicator->params.advertised_p2p_address,
+                                                                      communicator->params.advertised_shared_state_address,
+                                                                      communicator->params.advertised_benchmark_address
                                                                     );
 
     pcclResult_t status = pcclSuccess;

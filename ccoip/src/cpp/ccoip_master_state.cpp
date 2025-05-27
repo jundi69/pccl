@@ -30,6 +30,10 @@ inline bool isLocalAddress(const ccoip_socket_address_t &client_address) {
 }
 
 bool ccoip::CCoIPMasterState::registerClient(const ccoip_socket_address_t &client_address,
+                                             bool use_explicit_addresses_param,
+                                             const ccoip_socket_address_t& advertised_p2p_param,
+                                             const ccoip_socket_address_t& advertised_ss_param,
+                                             const ccoip_socket_address_t& advertised_bm_param,
                                              const CCoIPClientVariablePorts &variable_ports,
                                              const uint32_t peer_group,
                                              const ccoip_uuid_t uuid) {
@@ -77,7 +81,18 @@ bool ccoip::CCoIPMasterState::registerClient(const ccoip_socket_address_t &clien
         .socket_address = client_address,
         .variable_ports = variable_ports,
         .peer_group = peer_group
+        .uses_explicitly_advertised_addresses = use_explicit_addresses_param
     };
+    if (use_explicit_addresses_param) {
+        client_info[uuid_param].effective_p2p_address = advertised_p2p_param;
+        client_info[uuid_param].effective_ss_address = advertised_ss_param;
+        client_info[uuid_param].effective_bm_address = advertised_bm_param;
+    } else {
+        // Fallback: use source IP from master connection + client's reported listen port numbers
+        client_info[uuid_param].effective_p2p_address = {client_address.inet, variable_ports_param.p2p_listen_port};
+        client_info[uuid_param].effective_ss_address = {client_address.inet, variable_ports_param.shared_dist_state_listen_port};
+        client_info[uuid_param].effective_bm_address = {client_address.inet, variable_ports_param.bandwidth_benchmark_listen_port};
+    }
 
     // set all callsites in peer_list_changed to true
     for (auto &[_, has_changed]: peer_list_changed) {

@@ -190,7 +190,27 @@ void ccoip::CCoIPMasterHandler::handleRequestSessionJoin(const ccoip_socket_addr
     const uint16_t p2p_listen_port = packet.p2p_listen_port;
     const uint16_t shared_state_listen_port = packet.shared_state_listen_port;
     const uint16_t bandwidth_benchmark_listen_port = packet.bandwidth_benchmark_listen_port;
+    
+    // Extract info from packet
+    const uint32_t peer_group = packet.peer_group;
+    const bool use_explicit = packet.use_explicit_addresses; // From packet
+    ccoip_socket_address_t adv_p2p, adv_ss, adv_bm;
+    CCoIPClientVariablePorts var_ports; // For fallback or if still needed
 
+    if (use_explicit) {
+        adv_p2p = packet.advertised_p2p_address;
+        adv_ss = packet.advertised_ss_address;
+        adv_bm = packet.advertised_bm_address;
+        // Populate var_ports from these if needed, or make var_ports itself store full addrs
+        var_ports.p2p_listen_port = adv_p2p.port;
+        var_ports.shared_dist_state_listen_port = adv_ss.port;
+        var_ports.bandwidth_benchmark_listen_port = adv_bm.port;
+    } else {
+        var_ports.p2p_listen_port = packet.p2p_listen_port;
+        var_ports.shared_dist_state_listen_port = packet.shared_state_listen_port;
+        var_ports.bandwidth_benchmark_listen_port = packet.bandwidth_benchmark_listen_port;
+        // Optionally zero out adv_p2p, adv_ss, adv_bm if they are passed by value
+    }
 
     // generate uuid for new peer
     ccoip_uuid_t new_uuid{};
@@ -203,13 +223,15 @@ void ccoip::CCoIPMasterHandler::handleRequestSessionJoin(const ccoip_socket_addr
 
     // register client uuid
     if (!server_state.registerClient(
-        client_address,
-        CCoIPClientVariablePorts{
-            .p2p_listen_port = p2p_listen_port,
-            .shared_dist_state_listen_port = shared_state_listen_port,
-            .bandwidth_benchmark_listen_port = bandwidth_benchmark_listen_port
-        },
-        packet.peer_group, new_uuid)) [[unlikely]] {
+        client_address, // Source IP of connection to master
+        use_explicit,   // The flag
+        adv_p2p,        // Full advertised P2P addr
+        adv_ss,         // Full advertised SS addr
+        adv_bm,         // Full advertised BM addr
+        var_ports,      // Original port numbers (might be redundant if full addrs are always used)
+        peer_group,
+        new_uuid
+    )) {
         LOG(ERR) << "Failed to register client " << ccoip_sockaddr_to_str(client_address);
         response.accepted = false;
     }
@@ -413,10 +435,7 @@ bool ccoip::CCoIPMasterHandler::checkTopologyOptimizationConsensus() {
                 }
                 BenchmarkRequest request{
                     from_peer_uuid, to_peer_uuid,
-                    ccoip_socket_address_t{
-                        .inet = peer_info.socket_address.inet,
-                        .port = peer_info.variable_ports.bandwidth_benchmark_listen_port,
-                    }
+                    to_peer_info.effective_bm_address
                 };
                 LOG(DEBUG) << "Requesting bandwidth information from " << uuid_to_string(from_peer_uuid) << " to "
                         << uuid_to_string(to_peer_uuid)
@@ -566,7 +585,8 @@ ccoip::CCoIPMasterHandler::findBestSharedStateTxPeer(const ccoip_uuid_t &peer_uu
             continue;
         }
         if (peer_info.connection_phase == PEER_ACCEPTED && peer_info.connection_state == DISTRIBUTE_SHARED_STATE) {
-            return ccoip_socket_address_t{peer_address.inet, peer_info.variable_ports.shared_dist_state_listen_port};
+            //return ccoip_socket_address_t{peer_address.inet, peer_info.variable_ports.shared_dist_state_listen_port};
+            return peer_info.effective_ss_address;
         }
     }
     return std::nullopt;
@@ -1449,10 +1469,7 @@ void ccoip::CCoIPMasterHandler::sendP2PConnectionInformation(const ClientInfo &p
             // construct a new peers packet
             new_peers.all_peers.push_back(
                 {
-                    .p2p_listen_addr = ccoip_socket_address_t{
-                        .inet = client_info.socket_address.inet,
-                        .port = client_info.variable_ports.p2p_listen_port
-                    },
+                    .p2p_listen_addr = client_info.effective_p2p_address,
                     .peer_uuid = client_info.client_uuid
                 });
         }

@@ -21,7 +21,18 @@ namespace ccoip {
         std::thread::id main_thread_id;
 
     public:
-        explicit CCoIPClient(const ccoip_socket_address_t &master_socket_address, uint32_t peer_group, uint32_t p2p_connection_pool_size, uint16_t internal_p2p_port, uint16_t internal_ss_port, uint16_t internal_bm_port);
+        explicit CCoIPClient(
+            const ccoip_socket_address_t &master_socket_address, 
+            uint32_t peer_group, 
+            uint32_t p2p_connection_pool_size, 
+            uint16_t internal_p2p_port, 
+            uint16_t internal_ss_port, 
+            uint16_t internal_bm_port,
+            bool use_explicit_cfg,
+            const ccoip_socket_address_t& adv_p2p_cfg,
+            const ccoip_socket_address_t& adv_ss_cfg,
+            const ccoip_socket_address_t& adv_bm_cfg
+        );
 
         CCoIPClient(const CCoIPClient &other) = delete;
 

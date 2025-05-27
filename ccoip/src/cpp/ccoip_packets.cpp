@@ -19,17 +19,44 @@ bool ccoip::EmptyPacket::deserialize(PacketReadBuffer &buffer) {
 ccoip::packetId_t ccoip::C2MPacketRequestSessionRegistration::packet_id = C2M_PACKET_REQUEST_SESSION_REGISTRATION_ID;
 
 void ccoip::C2MPacketRequestSessionRegistration::serialize(PacketWriteBuffer &buffer) const {
-    buffer.write<uint16_t>(p2p_listen_port);
-    buffer.write<uint16_t>(shared_state_listen_port);
-    buffer.write<uint16_t>(bandwidth_benchmark_listen_port);
     buffer.write<uint32_t>(peer_group);
+    buffer.write(use_explicit_addresses);
+
+    if (use_explicit_addresses) {
+        buffer.write(advertised_p2p_address);
+        buffer.write(advertised_ss_address);
+        buffer.write(advertised_bm_address);
+    } else {
+        // Fallback: send only the port numbers
+        buffer.write(p2p_listen_port);
+        buffer.write(shared_state_listen_port);
+        buffer.write(bandwidth_benchmark_listen_port);
+    }
 }
 
 bool ccoip::C2MPacketRequestSessionRegistration::deserialize(PacketReadBuffer &buffer) {
-    p2p_listen_port = buffer.read<uint16_t>();
-    shared_state_listen_port = buffer.read<uint16_t>();
-    bandwidth_benchmark_listen_port = buffer.read<uint16_t>();
-    peer_group = buffer.read<uint32_t>();
+    if (!buffer.read(peer_group)) return false;
+    if (!buffer.read(use_explicit_addresses)) return false;
+
+    if (use_explicit_addresses) {
+        if (!buffer.read(advertised_p2p_address)) return false;
+        if (!buffer.read(advertised_ss_address)) return false;
+        if (!buffer.read(advertised_bm_address)) return false;
+
+        // If you still want to populate the individual port members for consistency
+        // when use_explicit_addresses is true:
+        p2p_listen_port = advertised_p2p_address.port;
+        shared_state_listen_port = advertised_ss_address.port;
+        bandwidth_benchmark_listen_port = advertised_bm_address.port;
+    } else {
+        if (!buffer.read(p2p_listen_port)) return false;
+        if (!buffer.read(shared_state_listen_port)) return false;
+        if (!buffer.read(bandwidth_benchmark_listen_port)) return false;
+        // Optionally zero out the ccoip_socket_address_t members if not used
+        memset(&advertised_p2p_address, 0, sizeof(ccoip_socket_address_t));
+        memset(&advertised_ss_address, 0, sizeof(ccoip_socket_address_t));
+        memset(&advertised_bm_address, 0, sizeof(ccoip_socket_address_t));
+    }
     return true;
 }
 
