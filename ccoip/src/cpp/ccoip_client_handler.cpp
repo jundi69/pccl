@@ -36,7 +36,7 @@ ccoip::CCoIPClientHandler::CCoIPClientHandler(
     shared_state_socket({master_address_param.inet.protocol, {}, {}}, internal_ss_port_param),
     benchmark_socket({master_address_param.inet.protocol, {}, {}}, internal_bm_port_param),
     peer_group(peer_group_param),
-    p2p_connection_pool_size(p2p_connection_pool_size)
+    p2p_connection_pool_size(p2p_connection_pool_size_param)
     use_explicit_addresses_config_(use_explicit_cfg),
     advertised_p2p_address_config_(adv_p2p_cfg),
     advertised_ss_address_config_(adv_ss_cfg),

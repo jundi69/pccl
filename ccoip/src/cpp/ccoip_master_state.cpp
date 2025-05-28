@@ -35,8 +35,8 @@ bool ccoip::CCoIPMasterState::registerClient(const ccoip_socket_address_t &clien
                                              const ccoip_socket_address_t& advertised_ss_param,
                                              const ccoip_socket_address_t& advertised_bm_param,
                                              const CCoIPClientVariablePorts &variable_ports,
-                                             const uint32_t peer_group,
-                                             const ccoip_uuid_t uuid) {
+                                             const uint32_t peer_group_param,
+                                             const ccoip_uuid_t uuid_param) {
     // If it is a local address, only allow it to join if only local clients have joined.
     // If only local clients have joined, do not allow any non-local clients to join.
     // This is crucial because the clients would have to talk to the peers through a different IP
@@ -79,8 +79,8 @@ bool ccoip::CCoIPMasterState::registerClient(const ccoip_socket_address_t &clien
         .connection_phase = PEER_REGISTERED,
         .connection_state = IDLE,
         .socket_address = client_address,
-        .variable_ports = variable_ports,
-        .peer_group = peer_group
+        .variable_ports = variable_ports_param,
+        .peer_group = peer_group_param
         .uses_explicitly_advertised_addresses = use_explicit_addresses_param
     };
     if (use_explicit_addresses_param) {
