@@ -72,15 +72,15 @@ bool ccoip::CCoIPMasterState::registerClient(const ccoip_socket_address_t &clien
     }
 
     const auto internal_address = ccoip_socket_to_internal(client_address);
-    client_uuids[internal_address] = uuid;
-    uuid_clients[uuid] = internal_address;
-    client_info[uuid] = ClientInfo{
-        .client_uuid = uuid,
+    client_uuids[internal_address] = uuid_param;
+    uuid_clients[uuid_param] = internal_address;
+    client_info[uuid_param] = ClientInfo{
+        .client_uuid = uuid_param,
         .connection_phase = PEER_REGISTERED,
         .connection_state = IDLE,
         .socket_address = client_address,
-        .variable_ports = variable_ports_param,
-        .peer_group = peer_group_param
+        .variable_ports = variable_ports,
+        .peer_group = peer_group_param,
         .uses_explicitly_advertised_addresses = use_explicit_addresses_param
     };
     if (use_explicit_addresses_param) {
@@ -88,10 +88,20 @@ bool ccoip::CCoIPMasterState::registerClient(const ccoip_socket_address_t &clien
         client_info[uuid_param].effective_ss_address = advertised_ss_param;
         client_info[uuid_param].effective_bm_address = advertised_bm_param;
     } else {
-        // Fallback: use source IP from master connection + client's reported listen port numbers
-        client_info[uuid_param].effective_p2p_address = {client_address.inet, variable_ports_param.p2p_listen_port};
-        client_info[uuid_param].effective_ss_address = {client_address.inet, variable_ports_param.shared_dist_state_listen_port};
-        client_info[uuid_param].effective_bm_address = {client_address.inet, variable_ports_param.bandwidth_benchmark_listen_port};
+        ccoip_socket_address_t temp_p2p_addr;
+        temp_p2p_addr.inet = client_address.inet;
+        temp_p2p_addr.port = variable_ports.p2p_listen_port;
+        client_info[uuid_param].effective_p2p_address = temp_p2p_addr;
+
+        ccoip_socket_address_t temp_ss_addr;
+        temp_ss_addr.inet = client_address.inet;
+        temp_ss_addr.port = variable_ports.shared_dist_state_listen_port;
+        client_info[uuid_param].effective_ss_address = temp_ss_addr;
+
+        ccoip_socket_address_t temp_bm_addr;
+        temp_bm_addr.inet = client_address.inet;
+        temp_bm_addr.port = variable_ports.bandwidth_benchmark_listen_port;
+        client_info[uuid_param].effective_bm_address = temp_bm_addr;
     }
 
     // set all callsites in peer_list_changed to true
@@ -101,10 +111,10 @@ bool ccoip::CCoIPMasterState::registerClient(const ccoip_socket_address_t &clien
 
     // if this is the first client, consider it as voting to accept new peers
     if (client_uuids.size() == 1) {
-        auto &info = client_info[uuid];
+        auto &info = client_info[uuid_param];
         info.connection_phase = PEER_ACCEPTED; // consider it accepted
         onPeerAccepted(info);
-        if (!voteEstablishP2PConnections(uuid, true)) [[unlikely]] {
+        if (!voteEstablishP2PConnections(uuid_param, true)) [[unlikely]] {
             LOG(WARN) << "Failed to vote to accept new peers for first client "
                     << ccoip_sockaddr_to_str(client_address);
             return false;

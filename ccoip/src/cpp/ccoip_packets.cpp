@@ -18,6 +18,43 @@ bool ccoip::EmptyPacket::deserialize(PacketReadBuffer &buffer) {
 // C2MPacketRequestSessionRegistration
 ccoip::packetId_t ccoip::C2MPacketRequestSessionRegistration::packet_id = C2M_PACKET_REQUEST_SESSION_REGISTRATION_ID;
 
+static void writeSocketAddress(PacketWriteBuffer &buffer, const ccoip_socket_address_t &socket_address) {
+    buffer.write<bool>(socket_address.inet.protocol == inetIPv4);
+    if (socket_address.inet.protocol == inetIPv4) {
+        std::array<uint8_t, 4> ipv4_data{};
+        for (size_t i = 0; i < 4; i++) {
+            ipv4_data[i] = socket_address.inet.ipv4.data[i];
+        }
+        buffer.writeFixedArray(ipv4_data);
+    } else if (socket_address.inet.protocol == inetIPv6) {
+        std::array<uint8_t, 16> ipv6_data{};
+        for (size_t i = 0; i < 16; i++) {
+            ipv6_data[i] = socket_address.inet.ipv6.data[i];
+        }
+        buffer.writeFixedArray(ipv6_data);
+    }
+    buffer.write<uint16_t>(socket_address.port);
+}
+
+static ccoip_socket_address_t readSocketAddress(PacketReadBuffer &buffer) {
+    ccoip_socket_address_t address{};
+    if (buffer.read<bool>()) {
+        address.inet.protocol = inetIPv4;
+        for (unsigned char &octet: address.inet.ipv4.data) {
+            octet = buffer.read<uint8_t>();
+        }
+    } else {
+        address.inet.protocol = inetIPv6;
+        for (unsigned char &octet: address.inet.ipv6.data) {
+            octet = buffer.read<uint8_t>();
+        }
+    }
+
+    const auto port = buffer.read<uint16_t>();
+    address.port = port;
+    return address;
+}
+
 void ccoip::C2MPacketRequestSessionRegistration::serialize(PacketWriteBuffer &buffer) const {
     buffer.write<uint32_t>(peer_group);
     buffer.write(use_explicit_addresses);
@@ -34,8 +71,8 @@ void ccoip::C2MPacketRequestSessionRegistration::serialize(PacketWriteBuffer &bu
 }
 
 bool ccoip::C2MPacketRequestSessionRegistration::deserialize(PacketReadBuffer &buffer) {
-    if (!buffer.read(peer_group)) return false;
-    if (!buffer.read(use_explicit_addresses)) return false;
+    peer_group = buffer.read<uint32_t>();
+    use_explicit_addresses = buffer.read<bool>();
 
     if (use_explicit_addresses) {
         advertised_p2p_address = readSocketAddress(buffer); // Assuming readSocketAddress handles errors internally or returns a bool
@@ -48,9 +85,9 @@ bool ccoip::C2MPacketRequestSessionRegistration::deserialize(PacketReadBuffer &b
         shared_state_listen_port = advertised_ss_address.port;
         bandwidth_benchmark_listen_port = advertised_bm_address.port;
     } else {
-        if (!buffer.read(p2p_listen_port)) return false;
-        if (!buffer.read(shared_state_listen_port)) return false;
-        if (!buffer.read(bandwidth_benchmark_listen_port)) return false;
+        p2p_listen_port = buffer.read<uint16_t>();
+        shared_state_listen_port = buffer.read<uint16_t>();
+        bandwidth_benchmark_listen_port = buffer.read<uint16_t>();
         // Optionally zero out the ccoip_socket_address_t members if not used
         memset(&advertised_p2p_address, 0, sizeof(ccoip_socket_address_t));
         memset(&advertised_ss_address, 0, sizeof(ccoip_socket_address_t));
@@ -204,24 +241,6 @@ bool ccoip::M2CPacketSessionRegistrationResponse::deserialize(PacketReadBuffer &
     return true;
 }
 
-static void writeSocketAddress(PacketWriteBuffer &buffer, const ccoip_socket_address_t &socket_address) {
-    buffer.write<bool>(socket_address.inet.protocol == inetIPv4);
-    if (socket_address.inet.protocol == inetIPv4) {
-        std::array<uint8_t, 4> ipv4_data{};
-        for (size_t i = 0; i < 4; i++) {
-            ipv4_data[i] = socket_address.inet.ipv4.data[i];
-        }
-        buffer.writeFixedArray(ipv4_data);
-    } else if (socket_address.inet.protocol == inetIPv6) {
-        std::array<uint8_t, 16> ipv6_data{};
-        for (size_t i = 0; i < 16; i++) {
-            ipv6_data[i] = socket_address.inet.ipv6.data[i];
-        }
-        buffer.writeFixedArray(ipv6_data);
-    }
-    buffer.write<uint16_t>(socket_address.port);
-}
-
 // M2CPacketNewPeers
 void ccoip::M2CPacketP2PConnectionInfo::serialize(PacketWriteBuffer &buffer) const {
     buffer.write<boolean>(unchanged);
@@ -239,24 +258,7 @@ void ccoip::M2CPacketP2PConnectionInfo::serialize(PacketWriteBuffer &buffer) con
     }
 }
 
-static ccoip_socket_address_t readSocketAddress(PacketReadBuffer &buffer) {
-    ccoip_socket_address_t address{};
-    if (buffer.read<bool>()) {
-        address.inet.protocol = inetIPv4;
-        for (unsigned char &octet: address.inet.ipv4.data) {
-            octet = buffer.read<uint8_t>();
-        }
-    } else {
-        address.inet.protocol = inetIPv6;
-        for (unsigned char &octet: address.inet.ipv6.data) {
-            octet = buffer.read<uint8_t>();
-        }
-    }
 
-    const auto port = buffer.read<uint16_t>();
-    address.port = port;
-    return address;
-}
 
 bool ccoip::M2CPacketP2PConnectionInfo::deserialize(PacketReadBuffer &buffer) {
     unchanged = buffer.read<boolean>();

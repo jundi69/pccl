@@ -435,7 +435,7 @@ bool ccoip::CCoIPMasterHandler::checkTopologyOptimizationConsensus() {
                 }
                 BenchmarkRequest request{
                     from_peer_uuid, to_peer_uuid,
-                    to_peer_info.effective_bm_address
+                    peer_info.effective_bm_address
                 };
                 LOG(DEBUG) << "Requesting bandwidth information from " << uuid_to_string(from_peer_uuid) << " to "
                         << uuid_to_string(to_peer_uuid)
